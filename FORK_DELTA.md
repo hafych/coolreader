@@ -20,7 +20,7 @@ original repository above as `upstream`.
 | --- | --- | --- | --- |
 | CMake C++17 repair and `fb2props` smoke test | upstreamable | Restores reproducible native configuration and testing | Remove after an equivalent upstream change lands |
 | Android API 21 minimum, pinned NDK, least-privilege manifest, blocking lint and CI | fork-only for now | Establishes the downstream support and privacy baseline | Reclassify when upstream adopts the same support matrix and permission policy |
-| OPDS/LitRes TLS, redirect, XML and response limits | upstreamable | Removes stop-ship network vulnerabilities and locks platform TLS validation with negative handshake tests | Keep until an audited upstream equivalent lands |
+| Shared OPDS/LitRes HTTP policy, TLS and response limits | upstreamable | Enforces platform TLS, fixed timeouts/deadlines, explicit redirects, origin-scoped secrets and bounded decompressed responses with regression and source-policy tests | Keep until an audited upstream equivalent lands |
 | Plaintext OPDS/LitRes credential purge | temporary-delta | Authenticated OPDS catalogs stay disabled until secure storage exists | Replace with a Keystore-backed credential reference and an explicit migration |
 | SAF file-descriptor loading and bounded, evicting cache fallback | upstreamable | Avoids loading large `content://` documents into Java heap without unbounded disk growth | Remove after upstream accepts an equivalent implementation |
 | Shared, fixture-tested database migrations and schema 36 compatibility repair | fork-only | Enforces migration postconditions, repairs early downstream schema 34 databases and physically removes legacy OPDS secret columns | Retain while legacy schemas can still be upgraded |

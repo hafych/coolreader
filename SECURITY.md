@@ -47,3 +47,27 @@ parity in CI.
 
 Unsafe paths and duplicate archive entries use codes `1107` and `1108`.
 Limit failures must not include document contents, credentials or local paths.
+
+## Android network policy
+
+All active production HTTP connections are opened through `SecureHttp`; CI
+rejects direct connection creation or caller-specific TLS, redirect,
+authorization, referrer and timeout overrides.
+
+- Connect and read timeouts are 60 seconds; total response-body transfer time is
+  limited to 15 minutes.
+- Automatic redirects are disabled. OPDS may follow at most five explicit
+  HTTP(S) redirects and never follows HTTPS to HTTP. LitRes API requests do not
+  follow redirects.
+- OPDS Basic authorization is sent only to the original HTTPS origin. Referrers
+  are same-origin only and omit credentials, query parameters and fragments.
+- LitRes POST parameters are sent only to the pinned
+  `https://robot.litres.ru` origin. Unauthenticated trial downloads may use
+  another HTTPS origin.
+- Declared response lengths are parsed as 64-bit values. Decompressed OPDS
+  feeds are limited to 8 MiB, LitRes API XML to 5 MiB and downloaded books to
+  the 512 MiB document input budget.
+
+Cloud sync currently has no active remote transport in this GPL build; the old
+Google Drive integration is disabled. A new sync transport must define its
+threat model and use the same network policy before it can be enabled.

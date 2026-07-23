@@ -23,6 +23,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   certificates, plus redirects to an untrusted origin.
 - A shared Java/native parse budget with stable safe-failure codes and
   regression coverage for oversized and deeply nested hostile documents.
+- An Android source-policy gate that prevents production HTTP callers from
+  bypassing the shared connection policy.
 - Weekly read-only compatibility check against `buggins/coolreader`.
 
 ### Changed
@@ -48,6 +50,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   database schemas are verified on every open.
 - OPDS and LitRes now share an explicit no-auto-redirect connection factory that
   retains the platform trust manager and hostname verifier for every origin.
+- All active Android HTTP paths now share mandatory 60-second connect/read
+  timeouts, a 15-minute transfer deadline and checked response-size limits.
 - SAF, OPDS, LitRes and the private document cache now apply the same 512 MiB
   document ingress limit as the native parser.
 
@@ -57,6 +61,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Hardened redirect handling, XML parsing, OPDS response limits, ZIP/image
   limits and sensitive URL logging. ZIP archives now also enforce entry-count,
   aggregate-size and path-depth limits and reject traversal or duplicate names.
+- OPDS authorization and sanitized referrers stay on their original HTTPS
+  origin; authenticated LitRes POSTs stay on the pinned LitRes API origin.
 - XML/HTML depth and decoded text, individual and aggregate ZIP expansion,
   compression ratio, recursive containers and image dimensions now consume one
   `ParseBudget`; stream wrappers preserve container depth.

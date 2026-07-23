@@ -59,6 +59,9 @@ jobs:
       - name: Verify Java/native ParseBudget contract
         run: python3 tools/verify_parse_budget_contract.py
 
+      - name: Verify Android HTTP policy
+        run: python3 tools/verify_android_http_policy.py
+
       - name: Build, lint and test Android
         run: |
           cd android

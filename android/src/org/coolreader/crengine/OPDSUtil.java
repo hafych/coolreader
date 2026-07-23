@@ -56,13 +56,16 @@ import javax.xml.parsers.SAXParser;
 public class OPDSUtil {
 
 	public static final boolean EXTENDED_LOG = false; // set to false for production
-    public static final int CONNECT_TIMEOUT = 60000;
-    public static final int READ_TIMEOUT = 60000;
-	public static final int MAX_REDIRECTS = 5;
+    public static final int CONNECT_TIMEOUT =
+			SecureHttp.CONNECT_TIMEOUT_MILLIS;
+    public static final int READ_TIMEOUT =
+			SecureHttp.READ_TIMEOUT_MILLIS;
+	public static final int MAX_REDIRECTS = SecureHttp.MAX_REDIRECTS;
 	public static final long MAX_FEED_BYTES = 8L * 1024L * 1024L;
 	public static final long MAX_BOOK_DOWNLOAD_BYTES =
 			ParseBudget.MAX_DOCUMENT_INPUT_BYTES;
-	public static final long MAX_TRANSFER_TIME_MS = 15L * 60L * 1000L;
+	public static final long MAX_TRANSFER_TIME_MS =
+			SecureHttp.MAX_TRANSFER_TIME_MILLIS;
 	public static final long MIN_FREE_STORAGE_BYTES = 32L * 1024L * 1024L;
 	/*
 <?xml version="1.0" encoding="utf-8"?>
@@ -791,17 +794,13 @@ xml:base="http://lib.ololo.cc/opds/">
 				    
 					connection = SecureHttp.open(newURL, proxy);
 		            connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
-		            if ( referer!=null )
-		            	connection.setRequestProperty("Referer", referer);
-	                connection.setUseCaches(false);
+		            SecureHttp.applyOriginReferrer(connection, referer);
 		            
-	                if (hasCredentials && isSameOrigin(credentialOrigin, newURL)) {
-	                	connection.setRequestProperty("Authorization", encodePassword(username, password));
-	                }
+					if (hasCredentials)
+						SecureHttp.applyOriginAuthorization(
+								connection, credentialOrigin,
+								encodePassword(username, password));
 		            
-		            connection.setAllowUserInteraction(false);
-		            connection.setConnectTimeout(CONNECT_TIMEOUT);
-		            connection.setReadTimeout(READ_TIMEOUT);
 		            connection.setDoInput(true);
 		            String fileName = null;
 		            String disp = connection.getHeaderField("Content-Disposition");
@@ -818,24 +817,16 @@ xml:base="http://lib.ololo.cc/opds/">
 					
 					response = connection.getResponseCode();
 					if (EXTENDED_LOG) L.d("Response: " + response);
-					if (response == 301 || response == 302 || response == 303
-							|| response == 307 || response == 308) {
+					if (SecureHttp.isRedirect(response)) {
 						// redirects
 						String redirect = connection.getHeaderField("Location");
 						if (null == redirect) {
 							onError("Invalid redirect " + response);
 							return;
 						}
-						if (++redirectCount > MAX_REDIRECTS) {
-							onError("Too many redirects");
-							return;
-						}
-						URL redirectUrl = resolveRedirect(newURL, redirect);
-						if ("https".equalsIgnoreCase(newURL.getProtocol())
-								&& !"https".equalsIgnoreCase(redirectUrl.getProtocol())) {
-							onError("HTTPS downgrade redirect is not allowed");
-							return;
-						}
+						URL redirectUrl = SecureHttp.resolveRedirect(
+								newURL, redirect, redirectCount);
+						redirectCount++;
 						L.d("continue with redirect: " + safeUrlForLog(redirectUrl));
 						url = redirectUrl;
 						if (visited.contains(url.toString())) {
@@ -856,12 +847,12 @@ xml:base="http://lib.ololo.cc/opds/">
 					
 					String contentType = connection.getContentType();
 					String contentEncoding = connection.getContentEncoding();
-					int contentLen = connection.getContentLength();
 					long maxResponseBytes = expectedType == null ? MAX_FEED_BYTES : MAX_BOOK_DOWNLOAD_BYTES;
-					if (contentLen > maxResponseBytes) {
-						onError("Response exceeds configured size limit");
-						return;
-					}
+					long declaredContentLength =
+							SecureHttp.requireContentLengthWithin(
+									connection, maxResponseBytes);
+					int contentLen = declaredContentLength < 0
+							? -1 : (int)declaredContentLength;
 					//connection.getC
 					if (EXTENDED_LOG) L.d("Entity content length: " + contentLen);
 					if (EXTENDED_LOG) L.d("Entity content type: " + contentType);
@@ -875,6 +866,8 @@ xml:base="http://lib.ololo.cc/opds/">
 						// budgets below apply to decompressed content.
 						contentLen = -1;
 					}
+					is = new DeadlineInputStream(
+							is, MAX_TRANSFER_TIME_MS);
 					if (delayedProgress != null)
 						delayedProgress.cancel();
 					is = new ProgressInputStream(is, startTimeStamp, progressMessage, contentLen, 80);
@@ -1025,8 +1018,6 @@ xml:base="http://lib.ololo.cc/opds/">
 			private void ensureActive() throws IOException {
 				if (cancelled)
 					throw new InterruptedIOException("OPDS transfer cancelled");
-				if (System.currentTimeMillis() - startTime > MAX_TRANSFER_TIME_MS)
-					throw new InterruptedIOException("OPDS transfer time limit exceeded");
 			}
 
 			private void updateProgress() throws IOException {
@@ -1104,23 +1095,11 @@ xml:base="http://lib.ololo.cc/opds/">
 	public static final int MAX_XML_DEPTH = 128;
 
 	static boolean isSameOrigin(URL first, URL second) {
-		return first != null && second != null
-				&& first.getProtocol().equalsIgnoreCase(second.getProtocol())
-				&& first.getHost().equalsIgnoreCase(second.getHost())
-				&& effectivePort(first) == effectivePort(second);
+		return SecureHttp.isSameOrigin(first, second);
 	}
 
 	static URL resolveRedirect(URL current, String location) throws IOException {
-		URL resolved = new URL(current, location);
-		String protocol = resolved.getProtocol();
-		if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol))
-			throw new IOException("Unsupported redirect protocol: " + protocol);
-		return resolved;
-	}
-
-	private static int effectivePort(URL url) {
-		int port = url.getPort();
-		return port >= 0 ? port : url.getDefaultPort();
+		return SecureHttp.resolveRedirect(current, location, 0);
 	}
 
 	public static String safeUrlForLog(URL url) {

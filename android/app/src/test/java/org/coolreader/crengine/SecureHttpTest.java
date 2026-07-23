@@ -8,8 +8,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.net.Proxy;
 import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLStreamHandler;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyStore;
@@ -34,7 +38,9 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -118,6 +124,116 @@ public class SecureHttpTest {
 			fail("Plain HTTP must not be accepted by the HTTPS-only path");
 		} catch (IOException expected) {
 			assertTrue(expected.getMessage().contains("HTTPS"));
+		}
+	}
+
+	@Test
+	public void openAppliesMandatoryConnectionPolicy() throws Exception {
+		URL url = new URL(null, "http://catalog.example/feed",
+				new URLStreamHandler() {
+					@Override
+					protected URLConnection openConnection(URL target) {
+						return new FakeHttpConnection(target, null);
+					}
+
+					@Override
+					protected URLConnection openConnection(
+							URL target, Proxy proxy) {
+						return openConnection(target);
+					}
+				});
+		HttpURLConnection connection = SecureHttp.open(url, null);
+		assertFalse(connection.getInstanceFollowRedirects());
+		assertFalse(connection.getAllowUserInteraction());
+		assertFalse(connection.getUseCaches());
+		assertEquals(
+				SecureHttp.CONNECT_TIMEOUT_MILLIS,
+				connection.getConnectTimeout());
+		assertEquals(
+				SecureHttp.READ_TIMEOUT_MILLIS,
+				connection.getReadTimeout());
+	}
+
+	@Test
+	public void authorizationIsRestrictedToSameHttpsOrigin() throws Exception {
+		URL origin = new URL("https://catalog.example/feed");
+		FakeHttpConnection sameOrigin = new FakeHttpConnection(
+				new URL("https://CATALOG.example:443/next"), null);
+		assertTrue(SecureHttp.applyOriginAuthorization(
+				sameOrigin, origin, "Basic secret"));
+		assertEquals(
+				"Basic secret",
+				sameOrigin.getRequestProperty("Authorization"));
+
+		FakeHttpConnection crossOrigin = new FakeHttpConnection(
+				new URL("https://evil.example/next"), null);
+		assertFalse(SecureHttp.applyOriginAuthorization(
+				crossOrigin, origin, "Basic secret"));
+		assertNull(crossOrigin.getRequestProperty("Authorization"));
+
+		FakeHttpConnection plaintext = new FakeHttpConnection(
+				new URL("http://catalog.example/next"), null);
+		assertFalse(SecureHttp.applyOriginAuthorization(
+				plaintext, origin, "Basic secret"));
+		assertNull(plaintext.getRequestProperty("Authorization"));
+	}
+
+	@Test
+	public void referrerIsSameOriginAndDropsSensitiveComponents()
+			throws Exception {
+		FakeHttpConnection sameOrigin = new FakeHttpConnection(
+				new URL("https://catalog.example/book"), null);
+		assertTrue(SecureHttp.applyOriginReferrer(
+				sameOrigin,
+				"https://user:pass@catalog.example/feed?sid=secret#part"));
+		assertEquals(
+				"https://catalog.example/feed",
+				sameOrigin.getRequestProperty("Referer"));
+
+		FakeHttpConnection crossOrigin = new FakeHttpConnection(
+				new URL("https://evil.example/book"), null);
+		assertFalse(SecureHttp.applyOriginReferrer(
+				crossOrigin,
+				"https://catalog.example/feed?sid=secret"));
+		assertNull(crossOrigin.getRequestProperty("Referer"));
+	}
+
+	@Test
+	public void redirectPolicyRejectsDowngradeAndExcessHops()
+			throws Exception {
+		try {
+			SecureHttp.resolveRedirect(
+					new URL("https://catalog.example/feed"),
+					"http://catalog.example/next", 0);
+			fail("HTTPS downgrade must be rejected");
+		} catch (IOException expected) {
+			assertTrue(expected.getMessage().contains("downgrade"));
+		}
+		try {
+			SecureHttp.resolveRedirect(
+					new URL("https://catalog.example/feed"),
+					"/next", SecureHttp.MAX_REDIRECTS);
+			fail("Redirects beyond the configured hop limit must be rejected");
+		} catch (IOException expected) {
+			assertTrue(expected.getMessage().contains("Too many"));
+		}
+	}
+
+	@Test
+	public void declaredResponseLengthIsValidatedAsLong() throws Exception {
+		FakeHttpConnection accepted = new FakeHttpConnection(
+				new URL("https://catalog.example/feed"), "1024");
+		assertEquals(
+				1024L,
+				SecureHttp.requireContentLengthWithin(accepted, 1024));
+
+		FakeHttpConnection oversized = new FakeHttpConnection(
+				new URL("https://catalog.example/feed"), "4294967296");
+		try {
+			SecureHttp.requireContentLengthWithin(oversized, 1024);
+			fail("Oversized Content-Length must be rejected");
+		} catch (IOException expected) {
+			assertTrue(expected.getMessage().contains("size limit"));
 		}
 	}
 
@@ -211,6 +327,36 @@ public class SecureHttpTest {
 		while ((count = input.read(buffer)) >= 0)
 			output.write(buffer, 0, count);
 		return output.toByteArray();
+	}
+
+	private static final class FakeHttpConnection
+			extends HttpURLConnection {
+		private final String contentLength;
+
+		FakeHttpConnection(URL url, String contentLength) {
+			super(url);
+			this.contentLength = contentLength;
+		}
+
+		@Override
+		public String getHeaderField(String name) {
+			if ("Content-Length".equalsIgnoreCase(name))
+				return contentLength;
+			return null;
+		}
+
+		@Override
+		public void disconnect() {
+		}
+
+		@Override
+		public boolean usingProxy() {
+			return false;
+		}
+
+		@Override
+		public void connect() {
+		}
 	}
 
 	private static final class TestHttpsServer implements AutoCloseable {

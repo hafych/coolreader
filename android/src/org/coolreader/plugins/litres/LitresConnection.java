@@ -41,6 +41,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 
 import org.coolreader.crengine.BoundedInputStream;
+import org.coolreader.crengine.DeadlineInputStream;
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.OPDSUtil;
 import org.coolreader.crengine.ParseBudget;
@@ -95,11 +96,17 @@ public class LitresConnection {
 		void onResponse(AsyncResponse response);
 	}
 
-	private static final int CONNECT_TIMEOUT = 60000;
-	private static final int READ_TIMEOUT = 60000;
-	private static final int MAX_CONTENT_LEN_TO_BUFFER = 5242880;
+	private static final long MAX_API_RESPONSE_BYTES = 5L * 1024L * 1024L;
 	private static final long MAX_FILE_DOWNLOAD_BYTES =
 			ParseBudget.MAX_DOCUMENT_INPUT_BYTES;
+
+	static boolean isTrustedApiUrl(URL url) {
+		try {
+			return SecureHttp.isSameOrigin(new URL(AUTHORIZE_URL), url);
+		} catch (Exception e) {
+			return false;
+		}
+	}
 
 	private String mapParamsToEncodedString(final Map<String, String> params) {
 		Iterator<Map.Entry<String, String>> iterator = params.entrySet().iterator();
@@ -142,6 +149,10 @@ public class LitresConnection {
 				HttpURLConnection connection = null;
 				try {
 					URL u = new URL(url);
+					if (!isTrustedApiUrl(u)) {
+						onError(0, "Untrusted LitRes API origin");
+						return;
+					}
 					try {
 						connection = SecureHttp.openHttps(u);
 					} catch (IOException e) {
@@ -150,9 +161,6 @@ public class LitresConnection {
 					}
 					Log.i(TAG, "opened connection");
 					connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
-					connection.setAllowUserInteraction(false);
-					connection.setConnectTimeout(CONNECT_TIMEOUT);
-					connection.setReadTimeout(READ_TIMEOUT);
 					//connection.setDoInput(true);
 					connection.setDoOutput(true);
 					connection.setRequestMethod("POST");
@@ -178,13 +186,14 @@ public class LitresConnection {
 					}
 					String contentType = connection.getContentType();
 					String contentEncoding = connection.getContentEncoding();
-					int contentLen = connection.getContentLength();
+					long contentLen = SecureHttp.requireContentLengthWithin(
+							connection, MAX_API_RESPONSE_BYTES);
 					//connection.getC
 					L.d("Entity content length: " + contentLen);
 					L.d("Entity content type: " + contentType);
 					L.d("Entity content encoding: " + contentEncoding);
 
-					if ((contentLen <= 0 && contentLen != -1) || contentLen > MAX_CONTENT_LEN_TO_BUFFER) {
+					if (contentLen == 0) {
 						onError(0, "Wrong content length");
 						return;
 					}
@@ -195,6 +204,8 @@ public class LitresConnection {
 						L.d("Stream is compressed with GZIP");
 						is = new GZIPInputStream(new BufferedInputStream(is, 8192));
 					}
+					is = new DeadlineInputStream(
+							is, SecureHttp.MAX_TRANSFER_TIME_MILLIS);
 
 //					byte[] buf = new byte[contentLen];
 //					if (is.read(buf) != contentLen) {
@@ -205,7 +216,8 @@ public class LitresConnection {
 //					is = null;
 //					is = new ByteArrayInputStream(buf);
 
-					try (InputStream inputStream = new BoundedInputStream(is, MAX_CONTENT_LEN_TO_BUFFER)) {
+					try (InputStream inputStream = new BoundedInputStream(
+							is, MAX_API_RESPONSE_BYTES)) {
 						SAXParser sp = SecureXml.newSaxParser();
 						//XMLReader xr = sp.getXMLReader();
 						sp.parse(inputStream, contentHandler);
@@ -215,7 +227,8 @@ public class LitresConnection {
 				} catch (SAXException e) {
 					contentHandler.onError(0, "Error while parsing response");
 				} catch (IOException e) {
-					contentHandler.onError(0, "Error while accessing litres server, e=" + e);
+					contentHandler.onError(
+							0, "Error while accessing LitRes server");
 				} finally {
 					if (connection != null) {
 						try {
@@ -244,6 +257,10 @@ public class LitresConnection {
 				HttpURLConnection connection = null;
 				try {
 					URL u = new URL(url);
+					if (params != null && !isTrustedApiUrl(u)) {
+						onError(0, "Untrusted LitRes API origin");
+						return;
+					}
 					try {
 						connection = SecureHttp.openHttps(u);
 					} catch (IOException e) {
@@ -252,9 +269,6 @@ public class LitresConnection {
 					}
 					Log.i(TAG, "opened connection");
 					connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
-					connection.setAllowUserInteraction(false);
-					connection.setConnectTimeout(CONNECT_TIMEOUT);
-					connection.setReadTimeout(READ_TIMEOUT);
 					if (params != null) {
 						connection.setDoOutput(true);
 						connection.setRequestMethod("POST");
@@ -282,13 +296,14 @@ public class LitresConnection {
 					}
 					String contentType = connection.getContentType();
 					String contentEncoding = connection.getContentEncoding();
-					int contentLen = connection.getContentLength();
+					long contentLen = SecureHttp.requireContentLengthWithin(
+							connection, MAX_FILE_DOWNLOAD_BYTES);
 					//connection.getC
 					L.d("Entity content length: " + contentLen);
 					L.d("Entity content type: " + contentType);
 					L.d("Entity content encoding: " + contentEncoding);
 
-					if ((contentLen <= 0 && contentLen != -1) || contentLen > MAX_FILE_DOWNLOAD_BYTES) {
+					if (contentLen == 0) {
 						onError(0, "Wrong content length");
 						return;
 					}
@@ -299,6 +314,8 @@ public class LitresConnection {
 						L.d("Stream is compressed with GZIP");
 						is = new GZIPInputStream(new BufferedInputStream(is, 8192));
 					}
+					is = new DeadlineInputStream(
+							is, SecureHttp.MAX_TRANSFER_TIME_MILLIS);
 
 					Log.i(TAG, "downloading file to " + contentHandler.fileToSave + "  contentLen=" + contentLen);
 
