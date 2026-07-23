@@ -10,6 +10,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Linux, macOS and Android build verification, native smoke tests and
   ASan/UBSan CI.
 - Release AAB and native debug-symbol generation in Android CI.
+- Stable, checksum-equivalent zlib release retrieval from the official GitHub
+  release asset.
 - Storage Access Framework loading through file descriptors with a bounded
   private-cache fallback for non-seekable providers.
 - Unit and native regression tests for XML, OPDS, stream and hostile document
