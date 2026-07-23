@@ -86,8 +86,6 @@
   совместимости Linux/macOS/Android jobs.
 - [ ] Добавить Android instrumentation smoke tests: запуск, открытие файла и
   `content://`, повторный запуск, TTS notification actions.
-- [ ] ~~Проверять release-like Android variant, AAB, native symbols и размер
-  артефактов в CI.~~
 - [ ] Добавить dependency/SBOM job, лицензионный allowlist и проверку известных
   уязвимостей с правилами обновления исключений.
 - [ ] Ввести явные performance budgets для холодного старта, открытия большой
@@ -95,8 +93,6 @@
 
 ### Upstream и GitHub
 
-- [ ] Настроить защиту `master`: запрет force-push/delete и обязательные актуальные
-  CI checks; не блокировать владельца до проверки рабочего PR-процесса.
 - [ ] Каждый PR классифицировать как `upstreamable`, `fork-only` или
   `temporary-delta` и обновлять `FORK_DELTA.md`, если меняется постоянная дельта.
 - [ ] Подготовить минимальные upstream PR для самостоятельных исправлений без
