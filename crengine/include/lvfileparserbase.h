@@ -40,6 +40,7 @@ protected:
     int      m_progressLastPercent;
     int      m_progressUpdateCounter;
     int      m_firstPageTextCounter;
+    ParseBudget m_parseBudget;
     /// fills buffer, to provide specified number of bytes for read
     bool FillBuffer( int bytesToRead );
     /// seek to specified stream position
@@ -67,6 +68,11 @@ public:
     virtual void Reset();
     /// stops parsing in the middle of file, to read header only
     virtual void Stop();
+    virtual ParseBudgetErrorCode GetParseBudgetError() const
+    {
+        return m_parseBudget.error();
+    }
+    void SetParseBudgetLimits(const ParseBudgetLimits &limits);
 };
 
 #endif  // __LVFILEPARSERBASE_H_INCLUDED__

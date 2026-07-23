@@ -8049,6 +8049,14 @@ void ldomDocumentWriter::OnStop()
         _currNode = pop( _currNode, _currNode->getElement()->getNodeId() );
 }
 
+int ldomDocumentWriter::GetCurrentElementDepth() const
+{
+    int depth = -1; // Exclude the synthetic document root writer.
+    for (ldomElementWriter *node = _currNode; node; node = node->_parent)
+        ++depth;
+    return depth;
+}
+
 /// called after > of opening tag (when entering tag body)
 // Note to avoid confusion: all tags HAVE a body (their content), so this
 // is called on all tags.

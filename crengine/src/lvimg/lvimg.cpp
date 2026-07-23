@@ -43,6 +43,7 @@
 #include "lvdrawbufimgsource.h"
 #include "lvstreamutils.h"
 #include "crlog.h"
+#include "parsebudget.h"
 
 
 LVImageSourceRef LVCreateXPMImageSource( const char * data[] )
@@ -101,13 +102,15 @@ LVImageSourceRef LVCreateStreamImageSource( ldomNode * node, LVStreamRef stream 
     {
         return LVImageSourceRef();
     }
-    const lUInt64 pixelCount = (lUInt64)img->GetWidth() * (lUInt64)img->GetHeight();
-    const lUInt64 maxImagePixels = 64ULL * 1024ULL * 1024ULL;
-    if ( img->GetWidth() > 16384 || img->GetHeight() > 16384
-            || pixelCount > maxImagePixels )
+    ParseBudget budget;
+    if (!budget.checkImageDimensions(
+            static_cast<unsigned>(img->GetWidth()),
+            static_cast<unsigned>(img->GetHeight())))
     {
-        CRLog::error("LVCreateStreamImageSource: Image dimensions (%dx%d, %llu pixels) exceed safety limits",
-                     img->GetWidth(), img->GetHeight(), (unsigned long long)pixelCount);
+        CRLog::error("ParseBudget[%d:%s]: image dimensions rejected (%dx%d)",
+                     static_cast<int>(budget.error()),
+                     parseBudgetErrorName(budget.error()),
+                     img->GetWidth(), img->GetHeight());
         return LVImageSourceRef();
     }
     return ref;

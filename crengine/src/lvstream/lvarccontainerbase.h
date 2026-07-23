@@ -23,12 +23,14 @@
 #define __LVARCCONTAINERBASE_H_INCLUDED__
 
 #include "lvnamedcontainer.h"
+#include "lvstream.h"
 
 class LVArcContainerBase : public LVNamedContainer
 {
 protected:
     LVContainer * m_parent;
     LVStreamRef m_stream;
+    unsigned m_containerDepth;
 public:
     virtual LVStreamRef OpenStream( const char32_t *, lvopen_mode_t )
     {
@@ -37,6 +39,10 @@ public:
     virtual LVContainer * GetParentContainer()
     {
         return (LVContainer*)m_parent;
+    }
+    virtual unsigned GetContainerDepth()
+    {
+        return m_containerDepth;
     }
     virtual const LVContainerItemInfo * GetObjectInfo(int index)
     {
@@ -62,7 +68,10 @@ public:
         *pSize = GetObjectCount();
         return LVERR_OK;
     }
-    LVArcContainerBase( LVStreamRef stream ) : m_parent(NULL), m_stream(stream)
+    LVArcContainerBase( LVStreamRef stream )
+        : m_parent(NULL)
+        , m_stream(stream)
+        , m_containerDepth(stream.isNull() ? 1 : stream->GetContainerDepth() + 1)
     {
     }
     virtual ~LVArcContainerBase()

@@ -81,6 +81,11 @@ public:
         return m_stream->getcrc32( dst );
     }
 
+    virtual unsigned GetContainerDepth()
+    {
+        return m_stream->GetContainerDepth();
+    }
+
     virtual bool Eof()
     {
         return m_pos >= m_size;

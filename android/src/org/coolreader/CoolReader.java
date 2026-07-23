@@ -77,6 +77,7 @@ import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.N2EpdController;
 import org.coolreader.crengine.OPDSCatalogEditDialog;
 import org.coolreader.crengine.OptionsDialog;
+import org.coolreader.crengine.ParseBudget;
 import org.coolreader.crengine.PositionProperties;
 import org.coolreader.crengine.Properties;
 import org.coolreader.crengine.ReaderAction;
@@ -1524,6 +1525,8 @@ public class CoolReader extends BaseActivity {
 				if (pfd == null)
 					throw new IOException("Content provider returned no file descriptor");
 				long statSize = pfd.getStatSize();
+				if (statSize >= 0)
+					ParseBudget.requireDocumentBytes(statSize);
 				if (isSeekable(pfd) && statSize >= 0) {
 					mReaderView.loadDocumentFromFileDescriptor(
 							pfd, uri.toString(), metadata.displayName, metadata.mimeType,
@@ -1532,8 +1535,6 @@ public class CoolReader extends BaseActivity {
 					return;
 				}
 
-				if (statSize > MAX_NONSEEKABLE_SAF_BYTES)
-					throw new IOException("Document is too large for non-seekable SAF fallback");
 				if (statSize > 0 && getCacheDir().getUsableSpace() < statSize + SAF_DISK_RESERVE_BYTES)
 					throw new IOException("Not enough free space to cache SAF document");
 
@@ -1556,7 +1557,6 @@ public class CoolReader extends BaseActivity {
 		});
 	}
 
-	private static final long MAX_NONSEEKABLE_SAF_BYTES = 512L * 1024L * 1024L;
 	private static final long SAF_DISK_RESERVE_BYTES = 32L * 1024L * 1024L;
 
 	private boolean isSeekable(ParcelFileDescriptor pfd) {
@@ -1582,7 +1582,7 @@ public class CoolReader extends BaseActivity {
 		ParcelFileDescriptor cachedPfd = null;
 		try (InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
 			cachedBook = Services.getDocumentCache().saveStream(
-					sourceInfo, inputStream, MAX_NONSEEKABLE_SAF_BYTES);
+					sourceInfo, inputStream, ParseBudget.MAX_DOCUMENT_INPUT_BYTES);
 			if (cachedBook != null) {
 				File cachedFile = new File(cachedBook.getFileInfo().pathname);
 				cachedPfd = ParcelFileDescriptor.open(

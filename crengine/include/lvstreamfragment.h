@@ -30,10 +30,19 @@ private:
     lvsize_t    m_start;
     lvsize_t    m_size;
     lvpos_t     m_pos;
+    unsigned    m_containerDepth;
 public:
-    LVStreamFragment( LVStreamRef stream, lvsize_t start, lvsize_t size )
-        : m_stream(stream), m_start(start), m_size(size), m_pos(0)
+    LVStreamFragment( LVStreamRef stream, lvsize_t start, lvsize_t size,
+                      unsigned containerDepth = 0 )
+        : m_stream(stream), m_start(start), m_size(size), m_pos(0),
+          m_containerDepth(containerDepth != 0 || stream.isNull()
+                                   ? containerDepth
+                                   : stream->GetContainerDepth())
     {
+    }
+    virtual unsigned GetContainerDepth()
+    {
+        return m_containerDepth;
     }
     virtual bool Eof()
     {

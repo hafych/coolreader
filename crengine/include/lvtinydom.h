@@ -2663,6 +2663,8 @@ public:
     virtual lUInt32 getFlags() { return _flags; }
     /// sets flags
     virtual void setFlags( lUInt32 flags ) { _flags = flags; }
+    /// returns the actual open DOM depth after HTML autoclose processing
+    virtual int GetCurrentElementDepth() const;
     // overrides
     /// called when encoding directive found in document
     virtual void OnEncoding( const lChar32 * name, const lChar32 * table );
@@ -2800,6 +2802,10 @@ public:
     virtual lUInt32 getFlags() { return parent->getFlags(); }
     /// sets flags
     virtual void setFlags( lUInt32 flags ) { parent->setFlags(flags); }
+    virtual int GetCurrentElementDepth() const
+    {
+        return parent->GetCurrentElementDepth();
+    }
     // overrides
     /// called when encoding directive found in document
     virtual void OnEncoding( const lChar32 * name, const lChar32 * table )

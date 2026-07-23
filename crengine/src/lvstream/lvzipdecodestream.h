@@ -47,9 +47,12 @@ private:
     lUInt32     m_CRC;
     lUInt32     m_originalCRC;
     lUInt32     m_decodedCRC;
+    unsigned    m_containerDepth;
 
 
-    LVZipDecodeStream( LVStreamRef stream, lvsize_t start, lvsize_t packsize, lvsize_t unpacksize, lUInt32 crc );
+    LVZipDecodeStream( LVStreamRef stream, lvsize_t start, lvsize_t packsize,
+                       lvsize_t unpacksize, lUInt32 crc,
+                       unsigned containerDepth );
 
     ~LVZipDecodeStream();
 
@@ -78,6 +81,10 @@ private:
     /// decode bytes
     int read( lUInt8 * buf, int bytesToRead );
 public:
+    virtual unsigned GetContainerDepth()
+    {
+        return m_containerDepth;
+    }
 
     /// fastly return already known CRC
     virtual lverror_t getcrc32( lUInt32 & dst );
@@ -110,7 +117,9 @@ public:
     {
         return LVERR_NOTIMPL;
     }
-    static LVStream * Create( LVStreamRef stream, lvpos_t pos, lString32 name, lvsize_t srcPackSize, lvsize_t srcUnpSize );
+    static LVStream * Create( LVStreamRef stream, lvpos_t pos, lString32 name,
+                              lvsize_t srcPackSize, lvsize_t srcUnpSize,
+                              unsigned containerDepth );
 };
 
 #endif  // (USE_ZLIB==1)

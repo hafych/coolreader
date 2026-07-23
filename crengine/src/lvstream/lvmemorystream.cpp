@@ -158,6 +158,7 @@ lverror_t LVMemoryStream::Close()
     m_size = 0;
     m_bufsize = 0;
     m_pos = 0;
+    m_containerDepth = 0;
     return LVERR_OK;
 }
 
@@ -200,12 +201,14 @@ lverror_t LVMemoryStream::CreateCopy(LVStreamRef srcStream, lvopen_mode_t mode)
     m_size = sz;
     m_own_buffer = true;
     m_mode = mode;
+    m_containerDepth = srcStream->GetContainerDepth();
     return LVERR_OK;
 }
 
 lverror_t LVMemoryStream::CreateCopy(const lUInt8 *pBuf, lvsize_t size, lvopen_mode_t mode)
 {
     Close();
+    m_containerDepth = 0;
     m_bufsize = size;
     m_pos = 0;
     m_pBuffer = (lUInt8*) malloc((int)m_bufsize);
@@ -231,11 +234,14 @@ lverror_t LVMemoryStream::Open(lUInt8 *pBuf, lvsize_t size)
     m_pos = 0;
     m_size = size;
     m_mode = LVOM_READ;
+    m_containerDepth = 0;
     
     return LVERR_OK;
 }
 
-LVMemoryStream::LVMemoryStream() : m_pBuffer(NULL), m_own_buffer(false), m_parent(NULL), m_size(0), m_pos(0)
+LVMemoryStream::LVMemoryStream()
+    : m_pBuffer(NULL), m_own_buffer(false), m_parent(NULL), m_size(0),
+      m_pos(0), m_containerDepth(0)
 {
 }
 

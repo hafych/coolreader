@@ -22,6 +22,7 @@
  ***************************************************************************/
 
 #include "lvstreamutils.h"
+#include "parsebudget.h"
 #include "lvassetcontainerfactory.h"
 #include "lvfilestream.h"
 #include "lvmemorystream.h"
@@ -154,6 +155,13 @@ LVContainerRef LVOpenArchieve( LVStreamRef stream )
     LVContainerRef ref;
     if (stream.isNull())
         return ref;
+    ParseBudget budget;
+    if (!budget.checkContainerDepth(stream->GetContainerDepth() + 1)) {
+        CRLog::error("ParseBudget[%d:%s]: nested archive rejected",
+                     static_cast<int>(budget.error()),
+                     parseBudgetErrorName(budget.error()));
+        return ref;
+    }
 
 #if (USE_ZLIB==1)
     // try ZIP

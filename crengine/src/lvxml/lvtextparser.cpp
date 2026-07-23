@@ -92,6 +92,8 @@ bool LVTextParser::CheckFormat()
 /// parses input stream
 bool LVTextParser::Parse()
 {
+    if (m_parseBudget.failed())
+        return false;
     LVTextLineQueue queue( this, 2000 );
     queue.ReadLines( 2000 );
     if ( !m_isPreFormatted )

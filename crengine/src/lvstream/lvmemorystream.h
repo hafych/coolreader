@@ -34,6 +34,7 @@ protected:
     lvsize_t m_bufsize;
     lvpos_t m_pos;
     lvopen_mode_t m_mode;
+    unsigned m_containerDepth;
 public:
     /// Check whether end of file is reached
     /**
@@ -52,6 +53,10 @@ public:
 
     virtual LVContainer *GetParentContainer() {
         return (LVContainer *) m_parent;
+    }
+
+    virtual unsigned GetContainerDepth() {
+        return m_containerDepth;
     }
 
     virtual lverror_t Read(void *buf, lvsize_t count, lvsize_t *nBytesRead);

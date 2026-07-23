@@ -22,6 +22,7 @@
 #define __LVFILEFORMATPARSER_H_INCLUDED__
 
 #include "lvtypes.h"
+#include "parsebudget.h"
 
 class LVDocViewCallback;
 
@@ -51,6 +52,11 @@ public:
     virtual void SetSpaceMode( bool ) { }
     /// returns space mode
     virtual bool GetSpaceMode() { return false; }
+    /// Returns a stable resource-limit error code after a safe parse failure.
+    virtual ParseBudgetErrorCode GetParseBudgetError() const
+    {
+        return PARSE_BUDGET_OK;
+    }
     /// virtual destructor
     virtual ~LVFileFormatParser() {}
 };

@@ -64,6 +64,11 @@ public:
     bool init();
     static LVStreamRef create( LVStreamRef stream, int mode );
 
+    virtual unsigned GetContainerDepth()
+    {
+        return _stream->GetContainerDepth();
+    }
+
     /// Get stream open mode
     /** \return lvopen_mode_t open mode */
     virtual lvopen_mode_t GetMode()

@@ -27,6 +27,7 @@
 #include "lvstreamfragment.h"
 #include "ziphdr.h"
 #include "crlog.h"
+#include "parsebudget.h"
 
 //#define ARC_INBUF_SIZE  4096
 //#define ARC_OUTBUF_SIZE 16384
@@ -34,10 +35,13 @@
 #define ARC_OUTBUF_SIZE 10000
 
 
-LVZipDecodeStream::LVZipDecodeStream(LVStreamRef stream, lvsize_t start, lvsize_t packsize, lvsize_t unpacksize, lUInt32 crc)
+LVZipDecodeStream::LVZipDecodeStream(LVStreamRef stream, lvsize_t start,
+                                     lvsize_t packsize, lvsize_t unpacksize,
+                                     lUInt32 crc, unsigned containerDepth)
     : m_stream(stream), m_start(start), m_packsize(packsize), m_unpacksize(unpacksize),
       m_inbytesleft(0), m_outbytesleft(0), m_zInitialized(false), m_decodedpos(0),
-      m_inbuf(NULL), m_outbuf(NULL), m_CRC(0), m_originalCRC(crc), m_decodedCRC(0)
+      m_inbuf(NULL), m_outbuf(NULL), m_CRC(0), m_originalCRC(crc), m_decodedCRC(0),
+      m_containerDepth(containerDepth)
 {
     m_inbuf = new lUInt8[ARC_INBUF_SIZE];
     m_outbuf = new lUInt8[ARC_OUTBUF_SIZE];
@@ -316,7 +320,10 @@ lverror_t LVZipDecodeStream::Read(void *buf, lvsize_t count, lvsize_t *bytesRead
     return LVERR_OK;
 }
 
-LVStream *LVZipDecodeStream::Create(LVStreamRef stream, lvpos_t pos, lString32 name, lvsize_t srcPackSize, lvsize_t srcUnpSize)
+LVStream *LVZipDecodeStream::Create(LVStreamRef stream, lvpos_t pos,
+                                    lString32 name, lvsize_t srcPackSize,
+                                    lvsize_t srcUnpSize,
+                                    unsigned containerDepth)
 {
     ZipLocalFileHdr hdr;
     unsigned hdr_size = 0x1E; //sizeof(hdr);
@@ -398,32 +405,29 @@ LVStream *LVZipDecodeStream::Create(LVStreamRef stream, lvpos_t pos, lString32 n
     if (pos > (lvpos_t)streamSize
             || packSize > streamSize - (lvsize_t)pos)
         return NULL;
-    const lvsize_t maxUncompressedEntrySize = 256UL * 1024UL * 1024UL;
-    const lvsize_t maxCompressionRatio = 200;
-    if ( unpSize > maxUncompressedEntrySize ) {
-        CRLog::error("LVZipDecodeStream::Create: uncompressed file size exceeds safety limit (%lu bytes)", (unsigned long)unpSize);
-        return NULL;
-    }
-    const lvsize_t compressionRatio = packSize > 0 ? unpSize / packSize : 0;
-    if (packSize > 0 && unpSize > 1024UL * 1024UL
-            && (compressionRatio > maxCompressionRatio
-                || (compressionRatio == maxCompressionRatio && unpSize % packSize != 0))) {
-        CRLog::error("LVZipDecodeStream::Create: suspicious compression ratio (%lu/%lu)",
-                     (unsigned long)unpSize, (unsigned long)packSize);
+    ParseBudget budget;
+    if (!budget.consumeArchiveEntry(static_cast<lUInt64>(unpSize))
+            || !budget.checkArchiveCompression(static_cast<lUInt64>(packSize),
+                                               static_cast<lUInt64>(unpSize))) {
+        CRLog::error("ParseBudget[%d:%s]: ZIP entry rejected",
+                     static_cast<int>(budget.error()),
+                     parseBudgetErrorName(budget.error()));
         return NULL;
     }
     if (hdr.getMethod() == 0) {
         // store method, copy as is
         if ( packSize != unpSize )
             return NULL;
-        LVStreamFragment * fragment = new LVStreamFragment( stream, pos, packSize);
+        LVStreamFragment * fragment = new LVStreamFragment(
+                stream, pos, packSize, containerDepth);
         fragment->SetName( name.c_str() );
         return fragment;
     } else if (hdr.getMethod() == 8) {
         // deflate
         LVStreamRef srcStream( new LVStreamFragment( stream, pos, packSize) );
-        LVZipDecodeStream * res = new LVZipDecodeStream( srcStream, pos,
-                                                         packSize, unpSize, hdr.getCRC() );
+        LVZipDecodeStream * res = new LVZipDecodeStream(
+                srcStream, pos, packSize, unpSize, hdr.getCRC(),
+                containerDepth);
         res->SetName( name.c_str() );
         return res;
     } else {

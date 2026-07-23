@@ -28,19 +28,17 @@
 #include "ziphdr.h"
 #include "crtxtenc.h"
 #include "crlog.h"
+#include "parsebudget.h"
 
 #include <set>
 #include <string>
 
 namespace {
 
-const int MAX_ZIP_ENTRY_COUNT = 10000;
-const lUInt64 MAX_ZIP_TOTAL_UNCOMPRESSED_SIZE = 1024ULL * 1024ULL * 1024ULL;
-const int MAX_ZIP_PATH_DEPTH = 64;
-
 typedef std::basic_string<lChar32> ZipEntryKey;
 
-bool makeSafeZipEntryKey(const lString32 &name, ZipEntryKey &key) {
+bool makeSafeZipEntryKey(const lString32 &name, ZipEntryKey &key,
+                         ParseBudget &budget) {
     const int length = name.length();
     if (length <= 0)
         return false;
@@ -67,7 +65,8 @@ bool makeSafeZipEntryKey(const lString32 &name, ZipEntryKey &key) {
             if (segmentLength == 2 && chars[segmentStart] == '.'
                     && chars[segmentStart + 1] == '.')
                 return false;
-            if (segmentLength > 0 && ++depth > MAX_ZIP_PATH_DEPTH)
+            if (segmentLength > 0
+                    && !budget.checkArchivePathDepth(++depth))
                 return false;
             if (isSeparator)
                 key.push_back('/');
@@ -116,7 +115,8 @@ LVStreamRef LVZipArc::OpenStream(const char32_t *fname, lvopen_mode_t)
                     m_list[found_index]->GetSrcPos(),
                     fn,
                     m_list[found_index]->GetSrcSize(),
-                    m_list[found_index]->GetSize() )
+                    m_list[found_index]->GetSize(),
+                    GetContainerDepth() )
                 );
     if (!stream.isNull()) {
         stream->SetName(m_list[found_index]->GetName());
@@ -142,6 +142,13 @@ int LVZipArc::ReadContents() {
     lvsize_t fileSize = 0;
     if (m_stream->GetSize(&fileSize) != LVERR_OK)
         return -1;
+    ParseBudget budget;
+    if (!budget.checkInputBytes(static_cast<lUInt64>(fileSize))) {
+        CRLog::error("ParseBudget[%d:%s]: ZIP input rejected",
+                     static_cast<int>(budget.error()),
+                     parseBudgetErrorName(budget.error()));
+        return 0;
+    }
 
     char ReadBuf[1024];
     lUInt32 NextPosition;
@@ -153,7 +160,6 @@ int LVZipArc::ReadContents() {
     bool require64 = false;
     bool zip64 = false;
     lUInt64 NextPosition64 = 0;
-    lUInt64 totalUncompressedSize = 0;
     std::set<ZipEntryKey> entryNames;
     CurPos = 0;
     NextPosition = 0;
@@ -414,25 +420,30 @@ int LVZipArc::ReadContents() {
 #endif
 
         ZipEntryKey entryKey;
-        if (!makeSafeZipEntryKey(fName, entryKey)) {
-            CRLog::error("Unsafe ZIP entry name rejected: %s", LCSTR(fName));
+        if (!makeSafeZipEntryKey(fName, entryKey, budget)) {
+            if (!budget.failed())
+                budget.reject(PARSE_BUDGET_ARCHIVE_PATH);
+            CRLog::error("ParseBudget[%d:%s]: ZIP entry name rejected",
+                         static_cast<int>(budget.error()),
+                         parseBudgetErrorName(budget.error()));
             return 0;
         }
         if (!entryNames.insert(entryKey).second) {
-            CRLog::error("Duplicate ZIP entry name rejected: %s", LCSTR(fName));
+            budget.reject(PARSE_BUDGET_ARCHIVE_DUPLICATE_ENTRY);
+            CRLog::error("ParseBudget[%d:%s]: duplicate ZIP entry rejected",
+                         static_cast<int>(budget.error()),
+                         parseBudgetErrorName(budget.error()));
             return 0;
         }
-        if (m_list.length() >= MAX_ZIP_ENTRY_COUNT) {
-            CRLog::error("ZIP archive exceeds entry count limit (%d)",
-                         MAX_ZIP_ENTRY_COUNT);
+        if (!budget.consumeArchiveEntry(static_cast<lUInt64>(fileUnpSize))
+                || !budget.checkArchiveCompression(
+                        static_cast<lUInt64>(filePackSize),
+                        static_cast<lUInt64>(fileUnpSize))) {
+            CRLog::error("ParseBudget[%d:%s]: ZIP entry rejected",
+                         static_cast<int>(budget.error()),
+                         parseBudgetErrorName(budget.error()));
             return 0;
         }
-        if ((lUInt64)fileUnpSize > MAX_ZIP_TOTAL_UNCOMPRESSED_SIZE
-                - totalUncompressedSize) {
-            CRLog::error("ZIP archive exceeds total uncompressed size limit");
-            return 0;
-        }
-        totalUncompressedSize += (lUInt64)fileUnpSize;
 
         LVCommonContainerItemInfo *item = new LVCommonContainerItemInfo();
         item->SetItemInfo(fName.c_str(), fileUnpSize, (ZipHeader.getAttr() & 0x3f));

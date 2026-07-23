@@ -56,6 +56,9 @@ jobs:
       - name: Deploy verified third-party sources
         run: ./thirdparty-deploy.sh
 
+      - name: Verify Java/native ParseBudget contract
+        run: python3 tools/verify_parse_budget_contract.py
+
       - name: Build, lint and test Android
         run: |
           cd android

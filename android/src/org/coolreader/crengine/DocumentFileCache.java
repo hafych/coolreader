@@ -53,7 +53,7 @@ public final class DocumentFileCache {
 	}
 
 	public BookInfo saveStream(FileInfo fileInfo, InputStream inputStream) {
-		return saveStream(fileInfo, inputStream, Long.MAX_VALUE);
+		return saveStream(fileInfo, inputStream, ParseBudget.MAX_DOCUMENT_INPUT_BYTES);
 	}
 
 	public BookInfo saveStream(FileInfo fileInfo, InputStream inputStream, long maxBytes) {
@@ -124,7 +124,8 @@ public final class DocumentFileCache {
 			int count;
 			while ((count = inputStream.read(buffer)) != -1) {
 				if (count > maxBytes - size)
-					throw new IOException("Document exceeds cache limit of " + maxBytes + " bytes");
+					throw new ParseBudget.LimitExceededException(
+							ParseBudget.Error.INPUT_BYTES);
 				outputStream.write(buffer, 0, count);
 				size += count;
 			}

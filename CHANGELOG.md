@@ -21,6 +21,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   future-version rejection.
 - Local HTTPS regression fixtures for self-signed, expired and hostname-mismatch
   certificates, plus redirects to an untrusted origin.
+- A shared Java/native parse budget with stable safe-failure codes and
+  regression coverage for oversized and deeply nested hostile documents.
 - Weekly read-only compatibility check against `buggins/coolreader`.
 
 ### Changed
@@ -46,6 +48,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   database schemas are verified on every open.
 - OPDS and LitRes now share an explicit no-auto-redirect connection factory that
   retains the platform trust manager and hostname verifier for every origin.
+- SAF, OPDS, LitRes and the private document cache now apply the same 512 MiB
+  document ingress limit as the native parser.
 
 ### Security
 
@@ -53,6 +57,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Hardened redirect handling, XML parsing, OPDS response limits, ZIP/image
   limits and sensitive URL logging. ZIP archives now also enforce entry-count,
   aggregate-size and path-depth limits and reject traversal or duplicate names.
+- XML/HTML depth and decoded text, individual and aggregate ZIP expansion,
+  compression ratio, recursive containers and image dimensions now consume one
+  `ParseBudget`; stream wrappers preserve container depth.
 - Purged legacy plaintext OPDS/LitRes credentials and stopped accepting new
   plaintext credential persistence.
 - Disabled Android cloud backup and device transfer until a safe explicit

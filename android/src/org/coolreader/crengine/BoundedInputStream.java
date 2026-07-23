@@ -58,6 +58,6 @@ public final class BoundedInputStream extends FilterInputStream {
 	private int ensureEndOfStream() throws IOException {
 		if (super.read() == -1)
 			return -1;
-		throw new IOException("Input exceeds configured byte limit");
+		throw new ParseBudget.LimitExceededException(ParseBudget.Error.INPUT_BYTES);
 	}
 }

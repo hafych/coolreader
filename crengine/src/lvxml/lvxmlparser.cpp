@@ -25,6 +25,7 @@
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
 #include "lvxmlutils.h"
+#include "crlog.h"
 
 /// states of XML parser
 enum parser_state_t {
@@ -187,6 +188,15 @@ bool LVXMLParser::Parse()
 //    int txt_count = 0;
     bool inXmlTag = false;
     m_callback->OnStart(this);
+    const bool callbackReportsElementDepth =
+            m_callback->GetCurrentElementDepth() >= 0;
+    if (m_parseBudget.failed()) {
+        CRLog::error("ParseBudget[%d:%s]: XML/HTML input rejected",
+                     static_cast<int>(m_parseBudget.error()),
+                     parseBudgetErrorName(m_parseBudget.error()));
+        m_callback->OnStop();
+        return false;
+    }
     bool closeFlag = false;
     bool qFlag = false;
     bool bodyStarted = false;
@@ -286,7 +296,9 @@ bool LVXMLParser::Parse()
 //                    } else if ( tagname==U"section" ) {
 //                        dumpActive = false;
 //                    }
-                        m_callback->OnTagClose(tagns.c_str(), tagname.c_str());
+                    m_callback->OnTagClose(tagns.c_str(), tagname.c_str());
+                    if (!callbackReportsElementDepth)
+                        m_parseBudget.leaveXmlElement();
 //                    if ( dumpActive )
 //                        CRLog::trace("</%s>", LCSTR(tagname) );
                     if (SkipTillChar('>'))
@@ -303,7 +315,18 @@ bool LVXMLParser::Parse()
                 } else {
                     inXmlTag = false;
                 }
+                if (!callbackReportsElementDepth
+                        && !m_parseBudget.enterXmlElement()) {
+                    errorFlag = true;
+                    break;
+                }
                 m_callback->OnTagOpen(tagns.c_str(), tagname.c_str());
+                if (callbackReportsElementDepth
+                        && !m_parseBudget.checkXmlDepth(static_cast<unsigned>(
+                                m_callback->GetCurrentElementDepth()))) {
+                    errorFlag = true;
+                    break;
+                }
 //                if ( dumpActive )
 //                    CRLog::trace("<%s>", LCSTR(tagname) );
                 if (!bodyStarted && tagname == "body")
@@ -335,6 +358,8 @@ bool LVXMLParser::Parse()
                     // end of tag
                     if ( ch!='>' ) { // '/' in '<hr/>' : self closing tag
                         m_callback->OnTagClose(tagns.c_str(), tagname.c_str(), true);
+                        if (!callbackReportsElementDepth)
+                            m_parseBudget.leaveXmlElement();
                         if ( m_in_html_script_tag )
                             m_in_html_script_tag = false;
                     }
@@ -434,6 +459,10 @@ bool LVXMLParser::Parse()
 //                    }
 //                }
                 ReadText();
+                if (m_parseBudget.failed()) {
+                    errorFlag = true;
+                    break;
+                }
                 if ( bodyStarted )
                     updateProgress();
                 m_state = ps_lt;
@@ -455,6 +484,10 @@ bool LVXMLParser::Parse()
     }
     //CRLog::trace("LVXMLParser::Parse() is finished, m_stopped=%s", m_stopped?"true":"false");
     m_callback->OnStop();
+    if (m_parseBudget.failed())
+        CRLog::error("ParseBudget[%d:%s]: XML/HTML parse rejected",
+                     static_cast<int>(m_parseBudget.error()),
+                     parseBudgetErrorName(m_parseBudget.error()));
     return !errorFlag;
 }
 
@@ -632,11 +665,20 @@ bool LVXMLParser::ReadText()
                     lString32 tmp;
                     tmp.reserve(nlen + tabCount * 8);
                     ExpandTabs(tmp, buf, nlen);
+                    if (!m_parseBudget.consumeTextCharacters(
+                            static_cast<lUInt64>(tmp.length())))
+                        return false;
                     m_callback->OnText(tmp.c_str(), tmp.length(), flags);
                 } else {
+                    if (!m_parseBudget.consumeTextCharacters(
+                            static_cast<lUInt64>(nlen)))
+                        return false;
                     m_callback->OnText(buf, nlen, flags);
                 }
             } else {
+                if (!m_parseBudget.consumeTextCharacters(
+                        static_cast<lUInt64>(nlen)))
+                    return false;
                 m_callback->OnText(buf, nlen, flags);
             }
 

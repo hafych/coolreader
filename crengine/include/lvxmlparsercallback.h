@@ -39,6 +39,8 @@ public:
     virtual lUInt32 getFlags() { return 0; }
     /// sets flags
     virtual void setFlags( lUInt32 ) { }
+    /// Current DOM element depth, or -1 when the callback cannot report it.
+    virtual int GetCurrentElementDepth() const { return -1; }
     /// called on document encoding definition
     virtual void OnEncoding( const lChar32 *, const lChar32 * ) { }
     /// called on parsing start

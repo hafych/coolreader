@@ -43,6 +43,7 @@ import javax.xml.parsers.SAXParser;
 import org.coolreader.crengine.BoundedInputStream;
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.OPDSUtil;
+import org.coolreader.crengine.ParseBudget;
 import org.coolreader.crengine.SecureHttp;
 import org.coolreader.crengine.SecureXml;
 import org.coolreader.crengine.Utils;
@@ -97,7 +98,8 @@ public class LitresConnection {
 	private static final int CONNECT_TIMEOUT = 60000;
 	private static final int READ_TIMEOUT = 60000;
 	private static final int MAX_CONTENT_LEN_TO_BUFFER = 5242880;
-	private static final long MAX_FILE_DOWNLOAD_BYTES = 512L * 1024L * 1024L;
+	private static final long MAX_FILE_DOWNLOAD_BYTES =
+			ParseBudget.MAX_DOCUMENT_INPUT_BYTES;
 
 	private String mapParamsToEncodedString(final Map<String, String> params) {
 		Iterator<Map.Entry<String, String>> iterator = params.entrySet().iterator();

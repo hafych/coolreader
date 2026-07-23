@@ -53,6 +53,11 @@ public:
     {
         return NULL;
     }
+    /// Number of archive containers surrounding this object.
+    virtual unsigned GetContainerDepth()
+    {
+        return 0;
+    }
     /// returns object size (file size or directory entry count)
     virtual lverror_t GetSize( lvsize_t * pSize ) = 0;
     /// returns object size (file size or directory entry count)

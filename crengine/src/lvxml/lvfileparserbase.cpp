@@ -46,6 +46,7 @@ LVFileParserBase::LVFileParserBase( LVStreamRef stream )
 
 {
     m_stream_size = stream.isNull()?0:stream->GetSize();
+    m_parseBudget.checkInputBytes(static_cast<lUInt64>(m_stream_size));
 }
 
 /// returns pointer to loading progress callback object
@@ -137,6 +138,8 @@ LVFileParserBase::~LVFileParserBase()
 /// seek to specified stream position
 bool LVFileParserBase::Seek( lvpos_t pos, int bytesToPrefetch )
 {
+    if (m_parseBudget.failed())
+        return false;
     if ( pos >= m_buf_fpos && pos+bytesToPrefetch <= (m_buf_fpos+m_buf_len) ) {
         m_buf_pos = (pos - m_buf_fpos);
         return true;
@@ -170,6 +173,8 @@ bool LVFileParserBase::Seek( lvpos_t pos, int bytesToPrefetch )
 
 bool LVFileParserBase::FillBuffer( int bytesToRead )
 {
+    if (m_parseBudget.failed())
+        return false;
     lvoffset_t bytesleft = (lvoffset_t) (m_stream_size - (m_buf_fpos+m_buf_len));
     if (bytesleft<=0)
         return true; //FIX
@@ -220,4 +225,12 @@ void LVFileParserBase::Reset()
     m_buf_pos = 0;
     m_buf_len = 0;
     m_stream_size = m_stream->GetSize();
+    m_parseBudget.reset();
+    m_parseBudget.checkInputBytes(static_cast<lUInt64>(m_stream_size));
+}
+
+void LVFileParserBase::SetParseBudgetLimits(const ParseBudgetLimits &limits)
+{
+    m_parseBudget = ParseBudget(limits);
+    m_parseBudget.checkInputBytes(static_cast<lUInt64>(m_stream_size));
 }

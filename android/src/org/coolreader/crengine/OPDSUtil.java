@@ -60,7 +60,8 @@ public class OPDSUtil {
     public static final int READ_TIMEOUT = 60000;
 	public static final int MAX_REDIRECTS = 5;
 	public static final long MAX_FEED_BYTES = 8L * 1024L * 1024L;
-	public static final long MAX_BOOK_DOWNLOAD_BYTES = 512L * 1024L * 1024L;
+	public static final long MAX_BOOK_DOWNLOAD_BYTES =
+			ParseBudget.MAX_DOCUMENT_INPUT_BYTES;
 	public static final long MAX_TRANSFER_TIME_MS = 15L * 60L * 1000L;
 	public static final long MIN_FREE_STORAGE_BYTES = 32L * 1024L * 1024L;
 	/*
@@ -678,7 +679,8 @@ xml:base="http://lib.ololo.cc/opds/">
 					if (cancelled)
 						throw new InterruptedIOException("OPDS download cancelled");
 					if (totalWritten + bytesRead > MAX_BOOK_DOWNLOAD_BYTES)
-						throw new IOException("OPDS download exceeds configured size limit");
+						throw new ParseBudget.LimitExceededException(
+								ParseBudget.Error.INPUT_BYTES);
 					if (totalWritten >= nextSpaceCheck) {
 						usableSpace = outDir.getUsableSpace();
 						if (usableSpace > 0 && usableSpace < MIN_FREE_STORAGE_BYTES + bytesRead)
