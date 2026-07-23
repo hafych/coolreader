@@ -29,6 +29,58 @@
 #include "crtxtenc.h"
 #include "crlog.h"
 
+#include <set>
+#include <string>
+
+namespace {
+
+const int MAX_ZIP_ENTRY_COUNT = 10000;
+const lUInt64 MAX_ZIP_TOTAL_UNCOMPRESSED_SIZE = 1024ULL * 1024ULL * 1024ULL;
+const int MAX_ZIP_PATH_DEPTH = 64;
+
+typedef std::basic_string<lChar32> ZipEntryKey;
+
+bool makeSafeZipEntryKey(const lString32 &name, ZipEntryKey &key) {
+    const int length = name.length();
+    if (length <= 0)
+        return false;
+    const lChar32 *chars = name.c_str();
+    if (chars[0] == '/' || chars[0] == '\\')
+        return false;
+    if (length >= 2 && chars[1] == ':')
+        return false;
+
+    key.clear();
+    key.reserve(length);
+    int segmentStart = 0;
+    int depth = 0;
+    for (int i = 0; i <= length; i++) {
+        const bool atEnd = i == length;
+        const bool isSeparator = !atEnd && (chars[i] == '/' || chars[i] == '\\');
+        if (isSeparator || atEnd) {
+            const int segmentLength = i - segmentStart;
+            const bool trailingSeparator = atEnd && segmentLength == 0;
+            if (segmentLength == 0 && !trailingSeparator)
+                return false;
+            if (segmentLength == 1 && chars[segmentStart] == '.')
+                return false;
+            if (segmentLength == 2 && chars[segmentStart] == '.'
+                    && chars[segmentStart + 1] == '.')
+                return false;
+            if (segmentLength > 0 && ++depth > MAX_ZIP_PATH_DEPTH)
+                return false;
+            if (isSeparator)
+                key.push_back('/');
+            segmentStart = i + 1;
+        } else {
+            key.push_back(chars[i]);
+        }
+    }
+    return !key.empty();
+}
+
+} // namespace
+
 LVZipArc::LVZipArc(LVStreamRef stream) : LVArcContainerBase(stream)
 {
     SetName(stream->GetName());
@@ -101,6 +153,8 @@ int LVZipArc::ReadContents() {
     bool require64 = false;
     bool zip64 = false;
     lUInt64 NextPosition64 = 0;
+    lUInt64 totalUncompressedSize = 0;
+    std::set<ZipEntryKey> entryNames;
     CurPos = 0;
     NextPosition = 0;
     if (fileSize < sizeof(ReadBuf) - 18)
@@ -264,11 +318,11 @@ int LVZipArc::ReadContents() {
         //const lvsize_t NM = 513;
         const lvsize_t max_NM = 4096;
         if (ZipHeader.NameLen > max_NM) {
-            CRLog::error("ZIP entry name length is too big: %d, trunc to %d",
-                         (int)ZipHeader.NameLen, (int)max_NM);
+            CRLog::error("ZIP entry name length exceeds safety limit: %d",
+                         (int)ZipHeader.NameLen);
+            return 0;
         }
-        lvsize_t fnameSizeToRead = (ZipHeader.NameLen < max_NM) ? ZipHeader.NameLen : max_NM;
-        lvoffset_t NM_skipped_sz = (ZipHeader.NameLen > max_NM) ? (lvoffset_t)(ZipHeader.NameLen - max_NM) : 0;
+        lvsize_t fnameSizeToRead = ZipHeader.NameLen;
         char fnbuf[max_NM + 1];
         err = m_stream->Read(fnbuf, fnameSizeToRead, &ReadSize);
         if (err != LVERR_OK || ReadSize != fnameSizeToRead) {
@@ -276,13 +330,10 @@ int LVZipArc::ReadContents() {
             return 0;
         }
         fnbuf[fnameSizeToRead] = 0;
-        if (NM_skipped_sz > 0) {
-            if (m_stream->Seek(NM_skipped_sz, LVSEEK_CUR, NULL) != LVERR_OK) {
-                CRLog::error("error while skipping the long zip entry name");
-                return 0;
-            }
+        if (memchr(fnbuf, 0, fnameSizeToRead) != NULL) {
+            CRLog::error("ZIP entry name contains an embedded NUL byte");
+            return 0;
         }
-
         // read extra data
         const lvsize_t max_EXTRA = 512;
         if (ZipHeader.AddLen > max_EXTRA) {
@@ -348,11 +399,10 @@ int LVZipArc::ReadContents() {
             }
         }
 
-        LVCommonContainerItemInfo *item = new LVCommonContainerItemInfo();
-#if LVLONG_FILE_SUPPORT == 1
         lvsize_t fileUnpSize = (lvsize_t)ZipHeader.UnpSize;
         lvsize_t filePackSize = (lvsize_t)ZipHeader.PackSize;
         lvpos_t fileOffset = (lvpos_t)ZipHeader.getOffset();
+#if LVLONG_FILE_SUPPORT == 1
         if (zip64ExtInfo != NULL) {
             if (extraPosUnpSize >= 0)
                 fileUnpSize = zip64ExtInfo->getField64(extraPosUnpSize);
@@ -361,12 +411,32 @@ int LVZipArc::ReadContents() {
             if (extraPosOffset >= 0)
                 fileOffset = zip64ExtInfo->getField64(extraPosOffset);
         }
+#endif
+
+        ZipEntryKey entryKey;
+        if (!makeSafeZipEntryKey(fName, entryKey)) {
+            CRLog::error("Unsafe ZIP entry name rejected: %s", LCSTR(fName));
+            return 0;
+        }
+        if (!entryNames.insert(entryKey).second) {
+            CRLog::error("Duplicate ZIP entry name rejected: %s", LCSTR(fName));
+            return 0;
+        }
+        if (m_list.length() >= MAX_ZIP_ENTRY_COUNT) {
+            CRLog::error("ZIP archive exceeds entry count limit (%d)",
+                         MAX_ZIP_ENTRY_COUNT);
+            return 0;
+        }
+        if ((lUInt64)fileUnpSize > MAX_ZIP_TOTAL_UNCOMPRESSED_SIZE
+                - totalUncompressedSize) {
+            CRLog::error("ZIP archive exceeds total uncompressed size limit");
+            return 0;
+        }
+        totalUncompressedSize += (lUInt64)fileUnpSize;
+
+        LVCommonContainerItemInfo *item = new LVCommonContainerItemInfo();
         item->SetItemInfo(fName.c_str(), fileUnpSize, (ZipHeader.getAttr() & 0x3f));
         item->SetSrc(fileOffset, filePackSize, ZipHeader.Method);
-#else
-        item->SetItemInfo(fName.c_str(), ZipHeader.UnpSize, (ZipHeader.getAttr() & 0x3f));
-        item->SetSrc(ZipHeader.getOffset(), ZipHeader.PackSize, ZipHeader.Method);
-#endif
         m_list.add(item);
 
         //#define DUMP_ZIP_HEADERS

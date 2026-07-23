@@ -9,6 +9,7 @@ The historical Debian changelog remains in [`changelog`](changelog).
 
 - Linux, macOS and Android build verification, native smoke tests and
   ASan/UBSan CI.
+- Release AAB and native debug-symbol generation in Android CI.
 - Storage Access Framework loading through file descriptors with a bounded
   private-cache fallback for non-seekable providers.
 - Unit and native regression tests for XML, OPDS, stream and hostile document
@@ -30,7 +31,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 
 - Restored platform TLS and hostname validation; LitRes uses HTTPS.
 - Hardened redirect handling, XML parsing, OPDS response limits, ZIP/image
-  limits and sensitive URL logging.
+  limits and sensitive URL logging. ZIP archives now also enforce entry-count,
+  aggregate-size and path-depth limits and reject traversal or duplicate names.
 - Purged legacy plaintext OPDS/LitRes credentials and stopped accepting new
   plaintext credential persistence.
 - Disabled Android cloud backup and device transfer until a safe explicit

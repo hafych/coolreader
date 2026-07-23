@@ -5,8 +5,11 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <cstdint>
 #include <fcntl.h>
+#include <string>
 #include <unistd.h>
+#include <vector>
 
 static int fail(const char *message) {
     std::fprintf(stderr, "%s\n", message);
@@ -98,10 +101,123 @@ static int testBorrowedDescriptor() {
     return 0;
 }
 
+struct ZipEntrySpec {
+    std::string name;
+    std::uint32_t unpackedSize;
+};
+
+static void appendLe16(std::vector<unsigned char> &bytes, std::uint16_t value) {
+    bytes.push_back(static_cast<unsigned char>(value));
+    bytes.push_back(static_cast<unsigned char>(value >> 8));
+}
+
+static void appendLe32(std::vector<unsigned char> &bytes, std::uint32_t value) {
+    bytes.push_back(static_cast<unsigned char>(value));
+    bytes.push_back(static_cast<unsigned char>(value >> 8));
+    bytes.push_back(static_cast<unsigned char>(value >> 16));
+    bytes.push_back(static_cast<unsigned char>(value >> 24));
+}
+
+static std::vector<unsigned char> buildHeaderOnlyZip(
+        const std::vector<ZipEntrySpec> &entries) {
+    std::vector<unsigned char> bytes;
+    std::vector<std::uint32_t> offsets;
+    for (const ZipEntrySpec &entry : entries) {
+        offsets.push_back(static_cast<std::uint32_t>(bytes.size()));
+        appendLe32(bytes, 0x04034b50);
+        appendLe16(bytes, 20);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 8);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(bytes, entry.unpackedSize);
+        appendLe16(bytes, static_cast<std::uint16_t>(entry.name.size()));
+        appendLe16(bytes, 0);
+        bytes.insert(bytes.end(), entry.name.begin(), entry.name.end());
+    }
+
+    const std::uint32_t centralOffset = static_cast<std::uint32_t>(bytes.size());
+    for (std::size_t i = 0; i < entries.size(); i++) {
+        const ZipEntrySpec &entry = entries[i];
+        appendLe32(bytes, 0x02014b50);
+        appendLe16(bytes, 20);
+        appendLe16(bytes, 20);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 8);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(bytes, entry.unpackedSize);
+        appendLe16(bytes, static_cast<std::uint16_t>(entry.name.size()));
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(bytes, offsets[i]);
+        bytes.insert(bytes.end(), entry.name.begin(), entry.name.end());
+    }
+
+    const std::uint32_t centralSize =
+            static_cast<std::uint32_t>(bytes.size()) - centralOffset;
+    appendLe32(bytes, 0x06054b50);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, static_cast<std::uint16_t>(entries.size()));
+    appendLe16(bytes, static_cast<std::uint16_t>(entries.size()));
+    appendLe32(bytes, centralSize);
+    appendLe32(bytes, centralOffset);
+    appendLe16(bytes, 0);
+    return bytes;
+}
+
+static bool zipOpens(const std::vector<ZipEntrySpec> &entries) {
+    std::vector<unsigned char> bytes = buildHeaderOnlyZip(entries);
+    LVStreamRef stream = LVCreateMemoryStream(
+            bytes.data(), static_cast<int>(bytes.size()), true, LVOM_READ);
+    LVContainerRef archive = LVOpenArchieve(stream);
+    return !archive.isNull();
+}
+
+static int testZipArchiveBudgets() {
+    if (!zipOpens({{"OPS/content.opf", 0}}))
+        return fail("safe ZIP archive was rejected");
+    if (zipOpens({{"../secret", 0}}))
+        return fail("ZIP traversal entry was accepted");
+    if (zipOpens({{"/absolute/path", 0}}))
+        return fail("absolute ZIP entry was accepted");
+    if (zipOpens({{std::string("safe\0hidden", 11), 0}}))
+        return fail("ZIP entry with embedded NUL was accepted");
+    if (zipOpens({{"OPS/content.opf", 0}, {"OPS/content.opf", 0}}))
+        return fail("duplicate ZIP entry was accepted");
+    if (zipOpens({{"part-1", 600U * 1024U * 1024U},
+                  {"part-2", 600U * 1024U * 1024U}}))
+        return fail("ZIP total uncompressed size limit was not enforced");
+
+    std::vector<ZipEntrySpec> tooManyEntries;
+    tooManyEntries.reserve(10001);
+    for (int i = 0; i < 10001; i++)
+        tooManyEntries.push_back({"entry-" + std::to_string(i), 0});
+    if (zipOpens(tooManyEntries))
+        return fail("ZIP entry count limit was not enforced");
+
+    std::string tooDeepPath;
+    for (int i = 0; i < 65; i++)
+        tooDeepPath += (i == 0 ? "" : "/") + std::string("level");
+    if (zipOpens({{tooDeepPath, 0}}))
+        return fail("ZIP path depth limit was not enforced");
+    return 0;
+}
+
 int main() {
     if (testMutex() != 0)
         return 1;
     if (testOwnedDescriptor() != 0)
         return 1;
-    return testBorrowedDescriptor();
+    if (testBorrowedDescriptor() != 0)
+        return 1;
+    return testZipArchiveBudgets();
 }

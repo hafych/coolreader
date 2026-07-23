@@ -60,15 +60,24 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug lintDebug testDebugUnitTest --stacktrace
+          ./gradlew assembleDebug lintDebug testDebugUnitTest packageNativeDebugSymbols --stacktrace
 
-      - name: Upload APK and lint reports
+      - name: Report Android artifact sizes
+        run: |
+          find android/app/build/outputs/apk/debug \
+               android/app/build/outputs/bundle/release \
+               android/app/build/outputs/native-debug-symbols/release \
+               -type f -exec du -h {} \;
+
+      - name: Upload APK, AAB, symbols and lint reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: android-debug-${{ github.sha }}
+          name: android-build-${{ github.sha }}
           path: |
             android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/native-debug-symbols/release/*.zip
             android/app/build/reports/lint-results-debug.*
           if-no-files-found: warn
 

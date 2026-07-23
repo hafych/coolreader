@@ -34,3 +34,8 @@ original repository above as `upstream`.
 4. Run native CTest, Android assemble/lint/unit tests, and sanitizer CI.
 5. Update the base commit and delta classifications in this file.
 6. Merge the sync through a reviewed pull request.
+
+The read-only compatibility workflow runs weekly. If upstream has not advanced,
+no sync branch or pull request is created. When it advances, open one dedicated
+sync pull request within 14 days; prioritize security fixes without waiting for
+that window. Never mix product work into an upstream-sync pull request.
