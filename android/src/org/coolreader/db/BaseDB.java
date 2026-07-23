@@ -26,6 +26,7 @@ import org.coolreader.crengine.L;
 import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.Utils;
 
+import android.database.Cursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
@@ -64,6 +65,30 @@ public abstract class BaseDB {
 		if (mDB == null) {
 			return false;
 		}
+		if (!isDatabaseIntegrityOk()) {
+			log.e("Database quick integrity check failed; attempting recovery");
+			close();
+			Utils.moveCorruptedFileToBackup(dbFile);
+			Utils.restoreFromBackup(dbFile);
+			mDB = openDB(dbFile);
+			if (mDB == null || !isDatabaseIntegrityOk()) {
+				close();
+				return false;
+			}
+		}
+		int currentVersion = mDB.getVersion();
+		if (currentVersion > 0 && currentVersion < schemaVersion()) {
+			close();
+			if (!Utils.backupFile(dbFile)) {
+				log.e("Refusing schema upgrade without a verified database backup");
+				return false;
+			}
+			mDB = openDB(dbFile);
+			if (mDB == null || !isDatabaseIntegrityOk()) {
+				close();
+				return false;
+			}
+		}
 		boolean res = checkSchema();
 		if (!res) {
 			log.e("Closing DB due error while upgrade of schema: " + dbFile.getAbsolutePath());
@@ -76,7 +101,7 @@ public abstract class BaseDB {
 			if (!restoredFromBackup)
 				Utils.restoreFromBackup(dbFile);
 			mDB = openDB(dbFile);
-			res = checkSchema();
+			res = mDB != null && isDatabaseIntegrityOk() && checkSchema();
 			if (!res)
 				close();
 		}
@@ -126,6 +151,17 @@ public abstract class BaseDB {
 	protected abstract boolean upgradeSchema();
 
 	protected abstract String dbFileName();
+
+	protected abstract int schemaVersion();
+
+	private boolean isDatabaseIntegrityOk() {
+		try (Cursor cursor = mDB.rawQuery("PRAGMA quick_check(1)", null)) {
+			return cursor.moveToFirst() && "ok".equalsIgnoreCase(cursor.getString(0));
+		} catch (SQLiteException e) {
+			log.e("Database quick integrity check failed", e);
+			return false;
+		}
+	}
 	
 	private SQLiteDatabase openDB(File dbFile) {
 		restoredFromBackup = false;

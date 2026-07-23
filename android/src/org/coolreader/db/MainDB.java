@@ -57,7 +57,7 @@ public class MainDB extends BaseDB {
 	public static final Logger vlog = L.create("mdb", Log.VERBOSE);
 	
 	private boolean pathCorrectionRequired = false;
-	public final int DB_VERSION = 35;
+	public final int DB_VERSION = 36;
 	@Override
 	protected boolean upgradeSchema() {
 		// When the database is just created, its version is 0.
@@ -170,20 +170,8 @@ public class MainDB extends BaseDB {
 						"genre_code_index ON genre (code) ");
 				execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
 						"book_genre_index ON book_genre (book_fk, genre_fk) ");
-				execSQL("CREATE TABLE IF NOT EXISTS opds_catalog (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-						"name VARCHAR NOT NULL, " +
-						"url VARCHAR NOT NULL, " +
-						"username VARCHAR DEFAULT NULL, " +
-						"password VARCHAR DEFAULT NULL, " +
-						"last_usage INTEGER DEFAULT 0" +
-						")");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"opds_catalog_name_index ON opds_catalog (name) ");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"opds_catalog_url_index ON opds_catalog (url) ");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"opds_catalog_last_usage_index ON opds_catalog (last_usage) ");
+				execSQL(OpdsCatalogSchema.CREATE_CURRENT_TABLE);
+				execSQL(OpdsCatalogSchema.CREATE_INDEXES);
 				execSQL("CREATE TABLE IF NOT EXISTS favorite_folders (" +
 						"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
 						"path VARCHAR NOT NULL, " +
@@ -194,14 +182,7 @@ public class MainDB extends BaseDB {
 				if (currentVersion < 4)
 					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN flags INTEGER DEFAULT 0");
 				if (currentVersion < 6)
-					execSQL("CREATE TABLE IF NOT EXISTS opds_catalog (" +
-							"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-							"name VARCHAR NOT NULL COLLATE NOCASE, " +
-							"url VARCHAR NOT NULL COLLATE NOCASE, " +
-							"last_usage INTEGER DEFAULT 0, " +
-							"username VARCHAR DEFAULT NULL, " +
-							"password VARCHAR DEFAULT NULL" +
-							")");
+					execSQL(OpdsCatalogSchema.CREATE_CURRENT_TABLE);
 				if (currentVersion < 7)
 					addOPDSCatalogs(DEF_OPDS_URLS1);
 				if (currentVersion < 13)
@@ -222,10 +203,6 @@ public class MainDB extends BaseDB {
 							"path VARCHAR NOT NULL, " +
 							"position INTEGER NOT NULL default 0" +
 							")");
-				if (currentVersion < 23) {
-					execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN username VARCHAR DEFAULT NULL");
-					execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN password VARCHAR DEFAULT NULL");
-				}
 				if (currentVersion < 26) {
 					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS search_history (" +
 							"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -326,10 +303,9 @@ public class MainDB extends BaseDB {
 					// accidentally omitted these legacy columns.
 					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN arcsize INTEGER");
 					execSQLIgnoreErrors("ALTER TABLE bookmark ADD COLUMN time_elapsed INTEGER DEFAULT 0");
-					// Legacy releases stored OPDS credentials as plaintext.
-					// Keep the columns for schema compatibility, but purge their contents.
-					execSQL("UPDATE opds_catalog SET username=NULL, password=NULL");
 				}
+				if (currentVersion < 36)
+					removeLegacyOpdsCredentialColumns();
 
 				// set current version
 				mDB.setVersion(DB_VERSION);
@@ -346,6 +322,53 @@ public class MainDB extends BaseDB {
 		dumpStatistics();
 		
 		return true;
+	}
+
+	private void removeLegacyOpdsCredentialColumns() {
+		if (!tableHasColumn("opds_catalog", "username")
+				&& !tableHasColumn("opds_catalog", "password")) {
+			verifyOpdsCatalogSchema();
+			return;
+		}
+
+		long sourceCount;
+		try (SQLiteStatement statement =
+					 mDB.compileStatement("SELECT count(*) FROM opds_catalog")) {
+			sourceCount = statement.simpleQueryForLong();
+		}
+
+		execSQL(OpdsCatalogSchema.REMOVE_CREDENTIAL_COLUMNS);
+
+		long migratedCount;
+		try (SQLiteStatement statement =
+					 mDB.compileStatement("SELECT count(*) FROM opds_catalog")) {
+			migratedCount = statement.simpleQueryForLong();
+		}
+		if (migratedCount != sourceCount)
+			throw new SQLiteException("OPDS catalog migration lost records");
+		verifyOpdsCatalogSchema();
+	}
+
+	private void verifyOpdsCatalogSchema() {
+		if (!tableHasColumn("opds_catalog", "id")
+				|| !tableHasColumn("opds_catalog", "name")
+				|| !tableHasColumn("opds_catalog", "url")
+				|| !tableHasColumn("opds_catalog", "last_usage"))
+			throw new SQLiteException("OPDS catalog schema is incomplete");
+		if (tableHasColumn("opds_catalog", "username")
+				|| tableHasColumn("opds_catalog", "password"))
+			throw new SQLiteException("Legacy OPDS credential columns still exist");
+	}
+
+	private boolean tableHasColumn(String tableName, String columnName) {
+		try (Cursor cursor = mDB.rawQuery("PRAGMA table_info(" + tableName + ")", null)) {
+			int nameColumn = cursor.getColumnIndexOrThrow("name");
+			while (cursor.moveToNext()) {
+				if (columnName.equalsIgnoreCase(cursor.getString(nameColumn)))
+					return true;
+			}
+		}
+		return false;
 	}
 
 	private void dumpStatistics() {
@@ -418,6 +441,11 @@ public class MainDB extends BaseDB {
 	@Override
 	protected String dbFileName() {
 		return "cr3db.sqlite";
+	}
+
+	@Override
+	protected int schemaVersion() {
+		return DB_VERSION;
 	}
 	
 	public void clearCaches() {
@@ -499,7 +527,7 @@ public class MainDB extends BaseDB {
 		for (int i=0; i<catalogs.length-1; i+=2) {
 			String url = catalogs[i];
 			String name = catalogs[i+1];
-			saveOPDSCatalog(null, url, name, null, null);
+			saveOPDSCatalog(null, url, name);
 		}
 	}
 
@@ -535,7 +563,7 @@ public class MainDB extends BaseDB {
 	}
 
 	
-	public boolean saveOPDSCatalog(Long id, String url, String name, String username, String password) {
+	public boolean saveOPDSCatalog(Long id, String url, String name) {
 		if (!isOpened())
 			return false;
 		if (url==null || name==null)
@@ -544,9 +572,6 @@ public class MainDB extends BaseDB {
 		name = name.trim();
 		if (url.length()==0 || name.length()==0)
 			return false;
-		if ((username != null && username.length() > 0)
-				|| (password != null && password.length() > 0))
-			log.w("OPDS credentials are not persisted until secure credential storage is available");
 		try {
 			Long existingIdByUrl = longQuery("SELECT id FROM opds_catalog WHERE url=" + quoteSqlString(url));
 			Long existingIdByName = longQuery("SELECT id FROM opds_catalog WHERE name=" + quoteSqlString(name));
@@ -559,13 +584,12 @@ public class MainDB extends BaseDB {
 			}
 			if (id==null) {
 				// insert new
-				execSQL("INSERT INTO opds_catalog (name, url, username, password) VALUES ("
-						+ quoteSqlString(name) + ", " + quoteSqlString(url) + ", NULL, NULL)");
+				execSQL("INSERT INTO opds_catalog (name, url) VALUES ("
+						+ quoteSqlString(name) + ", " + quoteSqlString(url) + ")");
 			} else {
 				// update existing
 				execSQL("UPDATE opds_catalog SET name=" + quoteSqlString(name)
-						+ ", url=" + quoteSqlString(url)
-						+ ", username=NULL, password=NULL WHERE id=" + id);
+						+ ", url=" + quoteSqlString(url) + " WHERE id=" + id);
 			}
 			updateOPDSCatalogLastUsage(url);
 				

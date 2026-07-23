@@ -227,11 +227,11 @@ public class CRDBService extends BaseService {
     	void onOPDSCatalogsLoaded(ArrayList<FileInfo> catalogs);
     }
     
-	public void saveOPDSCatalog(final Long id, final String url, final String name, final String username, final String password) {
+	public void saveOPDSCatalog(final Long id, final String url, final String name) {
 		execTask(new Task("saveOPDSCatalog") {
 			@Override
 			public void work() {
-				mainDB.saveOPDSCatalog(id, url, name, username, password);
+				mainDB.saveOPDSCatalog(id, url, name);
 			}
 		});
 	}
@@ -637,9 +637,9 @@ public class CRDBService extends BaseService {
     		getService().loadOPDSCatalogs(callback, new Handler());
     	}
 
-    	public void saveOPDSCatalog(final Long id, final String url, final String name, final String username, final String password) {
-    		getService().saveOPDSCatalog(id, url, name, username, password);
-    	}
+		public void saveOPDSCatalog(final Long id, final String url, final String name) {
+			getService().saveOPDSCatalog(id, url, name);
+		}
 
     	public void updateOPDSCatalogLastUsage(final String url) {
     		getService().updateOPDSCatalogLastUsage(url);

@@ -71,6 +71,11 @@ public class CoverDB extends BaseDB {
 		return "cr3db_cover.sqlite";
 	}
 
+	@Override
+	protected int schemaVersion() {
+		return DB_VERSION;
+	}
+
 	private void dumpStatistics() {
 		log.i("coverDB: " + longQuery("SELECT count(*) FROM coverpages") + " coverpages");
 	}

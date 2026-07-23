@@ -28,6 +28,12 @@ The historical Debian changelog remains in [`changelog`](changelog).
   deterministic oldest-first eviction.
 - Database schema 35 rejects unknown future schemas and repairs early
   downstream schema 34 installations.
+- Database schema 36 preserves OPDS catalogs while physically removing legacy
+  plaintext username and password columns; the catalog editor no longer
+  collects credentials that cannot be stored safely.
+- Database upgrades now create a SHA-256-verified, `fsync`ed backup through a
+  same-directory temporary file, retain four generations and restore without
+  deleting the current database before the replacement is ready.
 
 ### Security
 

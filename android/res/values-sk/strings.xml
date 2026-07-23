@@ -277,8 +277,6 @@
     <string name="menu_title_catalog">OPDS katalóg</string>
     <string name="dlg_catalog_edit_name">Názov</string>
     <string name="dlg_catalog_edit_title">OPDS katalóg</string>
-    <string name="dlg_catalog_edit_username">Prihl. meno</string>
-    <string name="dlg_catalog_edit_password">Heslo</string>
     <string name="dlg_catalog_add_title">Pridať katalóg</string>
     <string formatted="false" name="options_format_min_space_width_percent">Min. šírka medzery v %</string>
     <string name="options_selection_keep_selection_after_dictionary">Udržať výber po slovníku</string>

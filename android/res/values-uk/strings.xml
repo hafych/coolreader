@@ -282,8 +282,6 @@
     <string name="dlg_catalog_edit_name">Назва</string>
     <string name="dlg_catalog_edit_url">URL</string>
     <string name="dlg_catalog_edit_title">Тека OPDS</string>
-    <string name="dlg_catalog_edit_username">Ім\'я користувача</string>
-    <string name="dlg_catalog_edit_password">Пароль</string>
     <string name="dlg_catalog_add_title">Додати теку</string>
     <string formatted="false" name="options_format_min_space_width_percent">Мін. ширина пробілу</string>
     <string name="options_selection_keep_selection_after_dictionary">Зберігати виділення після словника</string>

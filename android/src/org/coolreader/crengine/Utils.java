@@ -164,8 +164,11 @@ public class Utils {
 			try (FileOutputStream os = new FileOutputStream(newPlace);
 				 FileInputStream is = new FileInputStream(oldPlace)) {
 				copyStreamContent(os, is);
+				os.flush();
+				os.getFD().sync();
 				removeNewFile = false;
-				oldPlace.delete();
+				if (removeOld && !oldPlace.delete())
+					return false;
 				return true;
 			}
 		} catch ( IOException e ) {
@@ -177,25 +180,16 @@ public class Utils {
 	}
 	
 	public static boolean restoreFromBackup(File f) {
-		File backup = new File(f.getAbsolutePath() + ".good.bak.2");
-		if (f.exists())
-			f.delete();
-		if (backup.exists()) {
-			if (backup.renameTo(f))
-				return true; 
-		}
-		return false;
+		return AtomicFileBackup.restore(f);
 	}
 	
-	public static void backupFile(File f) {
+	public static boolean backupFile(File f) {
 		if (!f.exists())
-			return;
-		File backup = getBackupFileName(f, true);
-		L.i("Creating backup of file " + f + " as " + backup);
-		if (Utils.copyFile(f, backup)) {
-			L.w("copying of DB has been failed");
-		}
-		f.renameTo(backup);
+			return false;
+		boolean result = AtomicFileBackup.create(f);
+		if (!result)
+			L.e("Cannot create verified file backup");
+		return result;
 	}
 	
 	public static void moveCorruptedFileToBackup(File f) {
