@@ -19,6 +19,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.
+- Local HTTPS regression fixtures for self-signed, expired and hostname-mismatch
+  certificates, plus redirects to an untrusted origin.
 - Weekly read-only compatibility check against `buggins/coolreader`.
 
 ### Changed
@@ -42,6 +44,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   errors.
 - The Android and JDBC test paths now share one migration runner, and current
   database schemas are verified on every open.
+- OPDS and LitRes now share an explicit no-auto-redirect connection factory that
+  retains the platform trust manager and hostname verifier for every origin.
 
 ### Security
 

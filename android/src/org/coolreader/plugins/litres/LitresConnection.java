@@ -30,7 +30,6 @@ import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLConnection;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,13 +37,13 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
-import javax.net.ssl.HttpsURLConnection;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 
 import org.coolreader.crengine.BoundedInputStream;
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.OPDSUtil;
+import org.coolreader.crengine.SecureHttp;
 import org.coolreader.crengine.SecureXml;
 import org.coolreader.crengine.Utils;
 import org.coolreader.db.ServiceThread;
@@ -141,21 +140,14 @@ public class LitresConnection {
 				HttpURLConnection connection = null;
 				try {
 					URL u = new URL(url);
-					URLConnection conn = null;
 					try {
-						conn = u.openConnection();
+						connection = SecureHttp.openHttps(u);
 					} catch (IOException e) {
 						onError(0, "Cannot open connection");
 						return;
 					}
-					if (!(conn instanceof HttpsURLConnection)) {
-						onError(0, "HTTPS is required");
-						return;
-					}
-					connection = (HttpURLConnection) conn;
 					Log.i(TAG, "opened connection");
 					connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
-					connection.setInstanceFollowRedirects(false);
 					connection.setAllowUserInteraction(false);
 					connection.setConnectTimeout(CONNECT_TIMEOUT);
 					connection.setReadTimeout(READ_TIMEOUT);
@@ -250,21 +242,14 @@ public class LitresConnection {
 				HttpURLConnection connection = null;
 				try {
 					URL u = new URL(url);
-					URLConnection conn = null;
 					try {
-						conn = u.openConnection();
+						connection = SecureHttp.openHttps(u);
 					} catch (IOException e) {
 						onError(0, "Cannot open connection");
 						return;
 					}
-					if (!(conn instanceof HttpsURLConnection)) {
-						onError(0, "HTTPS is required");
-						return;
-					}
-					connection = (HttpURLConnection) conn;
 					Log.i(TAG, "opened connection");
 					connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
-					connection.setInstanceFollowRedirects(false);
 					connection.setAllowUserInteraction(false);
 					connection.setConnectTimeout(CONNECT_TIMEOUT);
 					connection.setReadTimeout(READ_TIMEOUT);

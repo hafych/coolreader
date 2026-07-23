@@ -40,7 +40,6 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URL;
-import java.net.URLConnection;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
@@ -788,16 +787,10 @@ xml:base="http://lib.ololo.cc/opds/">
                         //System.clearProperty("http.proxyPort");
 					}
 				    
-					URLConnection conn = proxy == null ? newURL.openConnection() : newURL.openConnection(proxy);
-					if ( !(conn instanceof HttpURLConnection) ) {
-						onError("Only HTTP supported");
-						return;
-					}
-					connection = (HttpURLConnection)conn;
+					connection = SecureHttp.open(newURL, proxy);
 		            connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
 		            if ( referer!=null )
 		            	connection.setRequestProperty("Referer", referer);
-		            connection.setInstanceFollowRedirects(false);
 	                connection.setUseCaches(false);
 		            
 	                if (hasCredentials && isSameOrigin(credentialOrigin, newURL)) {
