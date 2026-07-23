@@ -246,8 +246,8 @@ enum CacheFileBlockType {
 #include "../include/lvstring.h"
 #include "../include/lvtinydom.h"
 #include "../include/fb2def.h"
-#if BUILD_LITE!=1
 #include "../include/lvrend.h"
+#if BUILD_LITE!=1
 #include "../include/chmfmt.h"
 #endif
 #include "../include/crtest.h"
@@ -4919,7 +4919,9 @@ ldomDocument::~ldomDocument()
 #if BUILD_LITE!=1
     updateMap(); // NOLINT: Call to virtual function during destruction
 #endif
-    fontMan->UnregisterDocumentFonts(_docIndex);
+    // Metadata-only tools such as fb2props do not initialize a font manager.
+    if (fontMan)
+        fontMan->UnregisterDocumentFonts(_docIndex);
     ldomNode::unregisterDocument(this);
 }
 
@@ -16177,8 +16179,8 @@ public:
             fn << "_noname";
         if (fn.length() > 25)
             fn = fn.substr(0, 12) + "-" + fn.substr(fn.length()-12, 12);
-        char s[16];
-        sprintf(s, ".%08x.%d.cr3", (unsigned)crc, (int)docFlags);
+        char s[32];
+        snprintf(s, sizeof(s), ".%08x.%d.cr3", (unsigned)crc, (int)docFlags);
         return fn + lString32( s ); //_cacheDir +
     }
 

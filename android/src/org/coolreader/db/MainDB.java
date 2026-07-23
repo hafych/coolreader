@@ -57,7 +57,7 @@ public class MainDB extends BaseDB {
 	public static final Logger vlog = L.create("mdb", Log.VERBOSE);
 	
 	private boolean pathCorrectionRequired = false;
-	public final int DB_VERSION = 34;
+	public final int DB_VERSION = 35;
 	@Override
 	protected boolean upgradeSchema() {
 		// When the database is just created, its version is 0.
@@ -65,265 +65,280 @@ public class MainDB extends BaseDB {
 		//int currentVersion = 32;
 		// TODO: check database structure consistency regardless of its version.
 		if (currentVersion > DB_VERSION) {
-			// trying to update the structure of a database that has been modified by some kind of inconsistent fork of the program.
-			log.v("MainDB: incompatible database version found (" + currentVersion + "), forced setting to 26.");
-			currentVersion = 26;
+			return rejectIncompatibleSchema(currentVersion, DB_VERSION);
 		}
 		if (mDB.needUpgrade(DB_VERSION) || currentVersion < DB_VERSION) {
-			execSQL("CREATE TABLE IF NOT EXISTS author (" +
-					"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-					"name VARCHAR NOT NULL COLLATE NOCASE" +
-					")");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-	                "author_name_index ON author (name) ");
-			execSQL("CREATE TABLE IF NOT EXISTS series (" +
-					"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-					"name VARCHAR NOT NULL COLLATE NOCASE" +
-					")");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-			        "series_name_index ON series (name) ");
-			execSQL("CREATE TABLE IF NOT EXISTS folder (" +
-					"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-					"name VARCHAR NOT NULL" +
-					")");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"folder_name_index ON folder (name) ");
-			execSQL("CREATE TABLE IF NOT EXISTS book (" +
-					"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-					"pathname VARCHAR NOT NULL," +
-					"folder_fk INTEGER REFERENCES folder (id)," +
-					"filename VARCHAR NOT NULL," +
-					"arcname VARCHAR," +
-					"title VARCHAR COLLATE NOCASE," +
-					"series_fk INTEGER REFERENCES series (id)," +
-					"series_number INTEGER," +
-					"format INTEGER," +
-					"filesize INTEGER," +
-					"arcsize INTEGER," +
-					"create_time INTEGER," +
-					"last_access_time INTEGER, " +
-					"flags INTEGER DEFAULT 0, " +
-					"language VARCHAR DEFAULT NULL, " +
-					"description TEXT DEFAULT NULL, " +
-					"crc32 INTEGER DEFAULT NULL, " +
-					"domVersion INTEGER DEFAULT 0, " +
-					"rendFlags INTEGER DEFAULT 0" +
-					")");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"book_folder_index ON book (folder_fk) ");
-			execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
-					"book_pathname_index ON book (pathname) ");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"book_filename_index ON book (filename) ");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"book_title_index ON book (title) ");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"book_last_access_time_index ON book (last_access_time) ");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"book_title_index ON book (title) ");
-			execSQL("CREATE TABLE IF NOT EXISTS book_author (" +
-					"book_fk INTEGER NOT NULL REFERENCES book (id)," +
-					"author_fk INTEGER NOT NULL REFERENCES author (id)," +
-					"PRIMARY KEY (book_fk, author_fk)" +
-					")");
-			execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
-					"author_book_index ON book_author (author_fk, book_fk) ");
-			execSQL("CREATE TABLE IF NOT EXISTS bookmark (" +
-					"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-					"book_fk INTEGER NOT NULL REFERENCES book (id)," +
-					"type INTEGER NOT NULL DEFAULT 0," +
-					"percent INTEGER DEFAULT 0," +
-					"shortcut INTEGER DEFAULT 0," +
-					"time_stamp INTEGER DEFAULT 0," +
-					"start_pos VARCHAR NOT NULL," +
-					"end_pos VARCHAR," +
-					"title_text VARCHAR," +
-					"pos_text VARCHAR," +
-					"comment_text VARCHAR, " +
-					"time_elapsed INTEGER DEFAULT 0" +
-					")");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-			"bookmark_book_index ON bookmark (book_fk) ");
-			execSQL("CREATE TABLE IF NOT EXISTS metadata (" +
-					"param VARCHAR NOT NULL PRIMARY KEY, " +
-					"value VARCHAR NOT NULL)");
-			execSQL("CREATE TABLE IF NOT EXISTS genre_group (" +
-					"id INTEGER NOT NULL PRIMARY KEY, " +
-					"code VARCHAR NOT NULL)");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"genre_group_code_index ON genre_group (code) ");
-			execSQL("CREATE TABLE IF NOT EXISTS genre (" +
-					"id INTEGER NOT NULL PRIMARY KEY, " +
-					"code VARCHAR NOT NULL)");
-			execSQL("CREATE INDEX IF NOT EXISTS " +
-					"genre_code_index ON genre (code) ");
-			execSQL("CREATE TABLE IF NOT EXISTS genre_hier (" +
-					"group_fk INTEGER NOT NULL REFERENCES genre_group(id), " +
-					"genre_fk INTEGER NOT NULL REFERENCES genre(id), " +
-					"UNIQUE (group_fk, genre_fk))");
-			execSQL("CREATE TABLE IF NOT EXISTS book_genre (" +
-					"book_fk INTEGER NOT NULL REFERENCES book(id), " +
-					"genre_fk INTEGER NOT NULL REFERENCES genre(id), " +
-					"UNIQUE (book_fk, genre_fk))");
-			execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
-					"book_genre_index ON book_genre (book_fk, genre_fk) ");
-			// ====================================================================
-			if ( currentVersion<1 )
-				execSQLIgnoreErrors("ALTER TABLE bookmark ADD COLUMN shortcut INTEGER DEFAULT 0");
-			if ( currentVersion<4 )
-				execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN flags INTEGER DEFAULT 0");
-			if ( currentVersion<6 )
-				execSQL("CREATE TABLE IF NOT EXISTS opds_catalog (" +
-                        "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                        "name VARCHAR NOT NULL COLLATE NOCASE, " +
-                        "url VARCHAR NOT NULL COLLATE NOCASE, " +
-                        "last_usage INTEGER DEFAULT 0," +
-                        "username VARCHAR DEFAULT NULL, " +
-                        "password VARCHAR DEFAULT NULL" +
-                        ")");
-			if (currentVersion < 7) {
-				addOPDSCatalogs(DEF_OPDS_URLS1);
-			}
-			if (currentVersion < 13)
-			    execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN language VARCHAR DEFAULT NULL");
-			if (currentVersion < 14)
-				pathCorrectionRequired = true;
-			if (currentVersion < 15)
-			    execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN last_usage INTEGER DEFAULT 0");
-			if (currentVersion < 16)
-				execSQLIgnoreErrors("ALTER TABLE bookmark ADD COLUMN time_elapsed INTEGER DEFAULT 0");
-			if (currentVersion < 17)
-				pathCorrectionRequired = true; // chance to correct paths under Android 4.2
-			if (currentVersion < 20)
-				removeOPDSCatalogsFromBlackList(); // BLACK LIST enforcement, by LitRes request
-            if (currentVersion < 21)
-                execSQL("CREATE TABLE IF NOT EXISTS favorite_folders (" +
-                        "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                        "path VARCHAR NOT NULL, " +
-                        "position INTEGER NOT NULL default 0" +
-                        ")");
-			if (currentVersion < 23) {
-			    execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN username VARCHAR DEFAULT NULL");
-			    execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN password VARCHAR DEFAULT NULL");
-			}
-			if (currentVersion < 26) {
-				execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS search_history (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-						"book_fk INTEGER NOT NULL REFERENCES book (id), " +
-						"search_text VARCHAR " +
+			Long foreignKeys = longQuery("PRAGMA foreign_keys");
+			boolean restoreForeignKeys = currentVersion < 34 && foreignKeys != null && foreignKeys != 0;
+			if (restoreForeignKeys)
+				execSQL("PRAGMA foreign_keys=OFF");
+			mDB.beginTransaction();
+			try {
+				execSQL("CREATE TABLE IF NOT EXISTS author (" +
+						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
+						"name VARCHAR NOT NULL COLLATE NOCASE" +
 						")");
-				execSQLIgnoreErrors("CREATE INDEX IF NOT EXISTS " +
-						"search_history_index ON search_history (book_fk) ");
-			}
-			if (currentVersion < 27) {
-				removeOPDSCatalogsByURLs(OBSOLETE_OPDS_URLS);
-				addOPDSCatalogs(DEF_OPDS_URLS3);
-			}
-			if (currentVersion < 28) {
-				execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN crc32 INTEGER DEFAULT NULL");
-				execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN domVersion INTEGER DEFAULT 0");
-				execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN rendFlags INTEGER DEFAULT 0");
-			}
-			if (currentVersion < 29) {
-				// After adding support for the 'fb3' and 'docx' formats in version 3.2.33,
-				// the 'format' field in the 'book' table becomes invalid because the enum DocumentFormat has been changed.
-				// So, after reading this field from the database, we must recheck the format by pathname.
-				// TODO: check format by mime-type or file contents...
-				log.i("Update 'format' field in table 'book'...");
-				String sql = "SELECT id, pathname, format FROM book";
-				HashMap<Long, Long> formatsMap = new HashMap<>();
-				try (Cursor rs = mDB.rawQuery(sql, null)) {
-					if (rs.moveToFirst()) {
-						do {
-							Long id = rs.getLong(0);
-							String pathname = rs.getString(1);
-							long old_format = rs.getLong(2);
-							if (old_format > 1) {        // skip 'none', 'fb2' - ordinal is not changed
-								DocumentFormat new_format = DocumentFormat.byExtension(pathname);
-								if (null != new_format && old_format != new_format.ordinal())
-									formatsMap.put(id, (long) new_format.ordinal());
-							}
-						} while (rs.moveToNext());
-					}
-				} catch (Exception e) {
-					Log.e("cr3", "exception while reading format", e);
-				}
-				// Save new format in table 'book'...
-				if (!formatsMap.isEmpty()) {
-					int updatedCount = 0;
-					mDB.beginTransaction();
-					try (SQLiteStatement stmt = mDB.compileStatement("UPDATE book SET format = ? WHERE id = ?")) {
-						for (Map.Entry<Long, Long> record : formatsMap.entrySet()) {
-							stmt.clearBindings();
-							stmt.bindLong(1, record.getValue());
-							stmt.bindLong(2, record.getKey());
-							stmt.execute();
-							updatedCount++;
-						}
-						mDB.setTransactionSuccessful();
-						vlog.i("Updated " + updatedCount + " records with invalid format.");
-					} catch (Exception e) {
-						Log.e("cr3", "exception while reading format", e);
-					} finally {
-						mDB.endTransaction();
-					}
-				}
-			}
-			if (currentVersion < 30) {
-				// Forced update DOM version from previous latest (20200223) to current (20200824).
-				execSQLIgnoreErrors("UPDATE book SET domVersion=20200824 WHERE domVersion=20200223");
-			}
-			if (currentVersion < 31) {
-				execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN description TEXT DEFAULT NULL");
-			}
-			if (currentVersion < 33) {
-				execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS metadata (" +
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"author_name_index ON author (name) ");
+				execSQL("CREATE TABLE IF NOT EXISTS series (" +
+						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
+						"name VARCHAR NOT NULL COLLATE NOCASE" +
+						")");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"series_name_index ON series (name) ");
+				execSQL("CREATE TABLE IF NOT EXISTS folder (" +
+						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
+						"name VARCHAR NOT NULL" +
+						")");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"folder_name_index ON folder (name) ");
+				execSQL("CREATE TABLE IF NOT EXISTS book (" +
+						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
+						"pathname VARCHAR NOT NULL," +
+						"folder_fk INTEGER REFERENCES folder (id)," +
+						"filename VARCHAR NOT NULL," +
+						"arcname VARCHAR," +
+						"title VARCHAR COLLATE NOCASE," +
+						"series_fk INTEGER REFERENCES series (id)," +
+						"series_number INTEGER," +
+						"format INTEGER," +
+						"filesize INTEGER," +
+						"arcsize INTEGER," +
+						"create_time INTEGER," +
+						"last_access_time INTEGER, " +
+						"flags INTEGER DEFAULT 0, " +
+						"language VARCHAR DEFAULT NULL, " +
+						"description TEXT DEFAULT NULL, " +
+						"crc32 INTEGER DEFAULT NULL, " +
+						"domVersion INTEGER DEFAULT 0, " +
+						"rendFlags INTEGER DEFAULT 0" +
+						")");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"book_folder_index ON book (folder_fk) ");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"book_filename_index ON book (filename) ");
+				execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
+						"book_pathname_index ON book (pathname) ");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"book_title_index ON book (title) ");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"book_last_access_time_index ON book (last_access_time) ");
+				execSQL("CREATE TABLE IF NOT EXISTS book_author (" +
+						"book_fk INTEGER NOT NULL REFERENCES book (id)," +
+						"author_fk INTEGER NOT NULL REFERENCES author (id)," +
+						"PRIMARY KEY (book_fk, author_fk)" +
+						")");
+				execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
+						"author_book_index ON book_author (author_fk, book_fk) ");
+				execSQL("CREATE TABLE IF NOT EXISTS bookmark (" +
+						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
+						"book_fk INTEGER NOT NULL REFERENCES book (id)," +
+						"type INTEGER NOT NULL DEFAULT 0," +
+						"percent INTEGER DEFAULT 0," +
+						"shortcut INTEGER DEFAULT 0," +
+						"time_stamp INTEGER DEFAULT 0," +
+						"start_pos VARCHAR NOT NULL," +
+						"end_pos VARCHAR," +
+						"title_text VARCHAR," +
+						"pos_text VARCHAR," +
+						"comment_text VARCHAR," +
+						"time_elapsed INTEGER DEFAULT 0" +
+						")");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"bookmark_book_index ON bookmark (book_fk) ");
+				execSQL("CREATE TABLE IF NOT EXISTS metadata (" +
 						"param VARCHAR NOT NULL PRIMARY KEY, " +
 						"value VARCHAR NOT NULL)");
-				execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre_group (" +
+				execSQL("CREATE TABLE IF NOT EXISTS genre_group (" +
 						"id INTEGER NOT NULL PRIMARY KEY, " +
 						"code VARCHAR NOT NULL)");
-				execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre (" +
+				execSQL("CREATE TABLE IF NOT EXISTS genre (" +
 						"id INTEGER NOT NULL, " +
 						"parent INTEGER NOT NULL REFERENCES genre_group(id), " +
 						"code VARCHAR NOT NULL, " +
 						"PRIMARY KEY (id, parent))");
-				execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS book_genre (" +
+				execSQL("CREATE TABLE IF NOT EXISTS genre_hier (" +
+						"group_fk INTEGER NOT NULL REFERENCES genre_group(id), " +
+						"genre_fk INTEGER NOT NULL REFERENCES genre(id) )");
+				execSQL("CREATE TABLE IF NOT EXISTS book_genre (" +
 						"book_fk INTEGER NOT NULL REFERENCES book(id), " +
 						"genre_fk INTEGER NOT NULL REFERENCES genre(id), " +
 						"UNIQUE (book_fk, genre_fk))");
-				execSQLIgnoreErrors("CREATE INDEX IF NOT EXISTS " +
+				execSQL("CREATE INDEX IF NOT EXISTS " +
 						"genre_group_code_index ON genre_group (code) ");
-				execSQLIgnoreErrors("CREATE INDEX IF NOT EXISTS " +
+				execSQL("CREATE INDEX IF NOT EXISTS " +
 						"genre_code_index ON genre (code) ");
-				execSQLIgnoreErrors("CREATE UNIQUE INDEX IF NOT EXISTS " +
+				execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
 						"book_genre_index ON book_genre (book_fk, genre_fk) ");
-			}
-			if (currentVersion < 34) {
-				execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre_hier (" +
-						"group_fk INTEGER NOT NULL REFERENCES genre_group(id), " +
-						"genre_fk INTEGER NOT NULL REFERENCES genre(id) )");
-				execSQLIgnoreErrors("INSERT INTO genre_hier (group_fk, genre_fk) SELECT parent as group_fk, id as genre_fk FROM genre ORDER BY parent, id");
-				execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre_new (" +
-						"id INTEGER NOT NULL PRIMARY KEY," +
-						"code VARCHAR NOT NULL UNIQUE)");
-				execSQLIgnoreErrors("INSERT INTO genre_new (id, code) SELECT id, code FROM genre GROUP BY id");
-				Long pragma_foreign_keys = longQuery("PRAGMA foreign_keys");
-				if (null == pragma_foreign_keys)
-					pragma_foreign_keys = 0L;
-				if (pragma_foreign_keys != 0L)
-					execSQLIgnoreErrors("PRAGMA foreign_keys=OFF");
-				execSQLIgnoreErrors("DROP TABLE genre");
-				execSQLIgnoreErrors("ALTER TABLE genre_new RENAME TO genre");
-				if (pragma_foreign_keys != 0L)
-					execSQLIgnoreErrors("PRAGMA foreign_keys=ON");
-			}
+				execSQL("CREATE TABLE IF NOT EXISTS opds_catalog (" +
+						"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+						"name VARCHAR NOT NULL, " +
+						"url VARCHAR NOT NULL, " +
+						"username VARCHAR DEFAULT NULL, " +
+						"password VARCHAR DEFAULT NULL, " +
+						"last_usage INTEGER DEFAULT 0" +
+						")");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"opds_catalog_name_index ON opds_catalog (name) ");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"opds_catalog_url_index ON opds_catalog (url) ");
+				execSQL("CREATE INDEX IF NOT EXISTS " +
+						"opds_catalog_last_usage_index ON opds_catalog (last_usage) ");
+				execSQL("CREATE TABLE IF NOT EXISTS favorite_folders (" +
+						"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+						"path VARCHAR NOT NULL, " +
+						"position INTEGER NOT NULL default 0" +
+						")");
+				if (currentVersion < 1)
+					execSQLIgnoreErrors("ALTER TABLE bookmark ADD COLUMN shortcut INTEGER DEFAULT 0");
+				if (currentVersion < 4)
+					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN flags INTEGER DEFAULT 0");
+				if (currentVersion < 6)
+					execSQL("CREATE TABLE IF NOT EXISTS opds_catalog (" +
+							"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+							"name VARCHAR NOT NULL COLLATE NOCASE, " +
+							"url VARCHAR NOT NULL COLLATE NOCASE, " +
+							"last_usage INTEGER DEFAULT 0, " +
+							"username VARCHAR DEFAULT NULL, " +
+							"password VARCHAR DEFAULT NULL" +
+							")");
+				if (currentVersion < 7)
+					addOPDSCatalogs(DEF_OPDS_URLS1);
+				if (currentVersion < 13)
+					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN language VARCHAR DEFAULT NULL");
+				if (currentVersion < 14)
+					pathCorrectionRequired = true;
+				if (currentVersion < 15)
+					execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN last_usage INTEGER DEFAULT 0");
+				if (currentVersion < 16)
+					execSQLIgnoreErrors("ALTER TABLE bookmark ADD COLUMN time_elapsed INTEGER DEFAULT 0");
+				if (currentVersion < 17)
+					pathCorrectionRequired = true;
+				if (currentVersion < 20)
+					removeOPDSCatalogsFromBlackList();
+				if (currentVersion < 21)
+					execSQL("CREATE TABLE IF NOT EXISTS favorite_folders (" +
+							"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+							"path VARCHAR NOT NULL, " +
+							"position INTEGER NOT NULL default 0" +
+							")");
+				if (currentVersion < 23) {
+					execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN username VARCHAR DEFAULT NULL");
+					execSQLIgnoreErrors("ALTER TABLE opds_catalog ADD COLUMN password VARCHAR DEFAULT NULL");
+				}
+				if (currentVersion < 26) {
+					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS search_history (" +
+							"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+							"book_fk INTEGER NOT NULL REFERENCES book (id), " +
+							"search_text VARCHAR " +
+							")");
+					execSQLIgnoreErrors("CREATE INDEX IF NOT EXISTS " +
+							"search_history_index ON search_history (book_fk) ");
+				}
+				if (currentVersion < 27) {
+					removeOPDSCatalogsByURLs(OBSOLETE_OPDS_URLS);
+					addOPDSCatalogs(DEF_OPDS_URLS3);
+				}
+				if (currentVersion < 28) {
+					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN crc32 INTEGER DEFAULT NULL");
+					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN domVersion INTEGER DEFAULT 0");
+					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN rendFlags INTEGER DEFAULT 0");
+				}
+				if (currentVersion < 29) {
+					log.i("Update 'format' field in table 'book'...");
+					String sql = "SELECT id, pathname, format FROM book";
+					HashMap<Long, Long> formatsMap = new HashMap<>();
+					try (Cursor rs = mDB.rawQuery(sql, null)) {
+						if (rs.moveToFirst()) {
+							do {
+								Long id = rs.getLong(0);
+								String pathname = rs.getString(1);
+								long old_format = rs.getLong(2);
+								if (old_format > 1) {
+									DocumentFormat new_format = DocumentFormat.byExtension(pathname);
+									if (null != new_format && old_format != new_format.ordinal())
+										formatsMap.put(id, (long) new_format.ordinal());
+								}
+							} while (rs.moveToNext());
+						}
+					} catch (Exception e) {
+						Log.e("cr3", "exception while reading format", e);
+					}
+					if (!formatsMap.isEmpty()) {
+						int updatedCount = 0;
+						try (SQLiteStatement stmt = mDB.compileStatement("UPDATE book SET format = ? WHERE id = ?")) {
+							for (Map.Entry<Long, Long> record : formatsMap.entrySet()) {
+								stmt.clearBindings();
+								stmt.bindLong(1, record.getValue());
+								stmt.bindLong(2, record.getKey());
+								stmt.execute();
+								updatedCount++;
+							}
+							vlog.i("Updated " + updatedCount + " records with invalid format.");
+						} catch (Exception e) {
+							Log.e("cr3", "exception while reading format", e);
+						}
+					}
+				}
+				if (currentVersion < 30) {
+					execSQLIgnoreErrors("UPDATE book SET domVersion=20200824 WHERE domVersion=20200223");
+				}
+				if (currentVersion < 31) {
+					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN description TEXT DEFAULT NULL");
+				}
+				if (currentVersion < 33) {
+					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS metadata (" +
+							"param VARCHAR NOT NULL PRIMARY KEY, " +
+							"value VARCHAR NOT NULL)");
+					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre_group (" +
+							"id INTEGER NOT NULL PRIMARY KEY, " +
+							"code VARCHAR NOT NULL)");
+					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre (" +
+							"id INTEGER NOT NULL, " +
+							"parent INTEGER NOT NULL REFERENCES genre_group(id), " +
+							"code VARCHAR NOT NULL, " +
+							"PRIMARY KEY (id, parent))");
+					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS book_genre (" +
+							"book_fk INTEGER NOT NULL REFERENCES book(id), " +
+							"genre_fk INTEGER NOT NULL REFERENCES genre(id), " +
+							"UNIQUE (book_fk, genre_fk))");
+					execSQLIgnoreErrors("CREATE INDEX IF NOT EXISTS " +
+							"genre_group_code_index ON genre_group (code) ");
+					execSQLIgnoreErrors("CREATE INDEX IF NOT EXISTS " +
+							"genre_code_index ON genre (code) ");
+					execSQLIgnoreErrors("CREATE UNIQUE INDEX IF NOT EXISTS " +
+							"book_genre_index ON book_genre (book_fk, genre_fk) ");
+				}
+				if (currentVersion < 34) {
+					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre_hier (" +
+							"group_fk INTEGER NOT NULL REFERENCES genre_group(id), " +
+							"genre_fk INTEGER NOT NULL REFERENCES genre(id) )");
+					execSQLIgnoreErrors("INSERT INTO genre_hier (group_fk, genre_fk) SELECT parent as group_fk, id as genre_fk FROM genre ORDER BY parent, id");
+					execSQLIgnoreErrors("CREATE TABLE IF NOT EXISTS genre_new (" +
+							"id INTEGER NOT NULL PRIMARY KEY," +
+							"code VARCHAR NOT NULL UNIQUE)");
+					execSQLIgnoreErrors("INSERT INTO genre_new (id, code) SELECT id, code FROM genre GROUP BY id");
+					execSQLIgnoreErrors("DROP TABLE genre");
+					execSQLIgnoreErrors("ALTER TABLE genre_new RENAME TO genre");
+				}
+				if (currentVersion < 35) {
+					// Repair databases created by early downstream builds which
+					// accidentally omitted these legacy columns.
+					execSQLIgnoreErrors("ALTER TABLE book ADD COLUMN arcsize INTEGER");
+					execSQLIgnoreErrors("ALTER TABLE bookmark ADD COLUMN time_elapsed INTEGER DEFAULT 0");
+					// Legacy releases stored OPDS credentials as plaintext.
+					// Keep the columns for schema compatibility, but purge their contents.
+					execSQL("UPDATE opds_catalog SET username=NULL, password=NULL");
+				}
 
-			//==============================================================
-			// add more updates above this line
-				
-			// set current version
-			mDB.setVersion(DB_VERSION);
+				// set current version
+				mDB.setVersion(DB_VERSION);
+				mDB.setTransactionSuccessful();
+			} finally {
+				mDB.endTransaction();
+				if (restoreForeignKeys)
+					execSQL("PRAGMA foreign_keys=ON");
+			}
 		}
 
 		checkOrUpgradeGenresHandbook();
@@ -529,6 +544,9 @@ public class MainDB extends BaseDB {
 		name = name.trim();
 		if (url.length()==0 || name.length()==0)
 			return false;
+		if ((username != null && username.length() > 0)
+				|| (password != null && password.length() > 0))
+			log.w("OPDS credentials are not persisted until secure credential storage is available");
 		try {
 			Long existingIdByUrl = longQuery("SELECT id FROM opds_catalog WHERE url=" + quoteSqlString(url));
 			Long existingIdByName = longQuery("SELECT id FROM opds_catalog WHERE name=" + quoteSqlString(name));
@@ -541,10 +559,13 @@ public class MainDB extends BaseDB {
 			}
 			if (id==null) {
 				// insert new
-				execSQL("INSERT INTO opds_catalog (name, url, username, password) VALUES ("+quoteSqlString(name)+", "+quoteSqlString(url)+", "+quoteSqlString(username)+", "+quoteSqlString(password)+")");
+				execSQL("INSERT INTO opds_catalog (name, url, username, password) VALUES ("
+						+ quoteSqlString(name) + ", " + quoteSqlString(url) + ", NULL, NULL)");
 			} else {
 				// update existing
-				execSQL("UPDATE opds_catalog SET name="+quoteSqlString(name)+", url="+quoteSqlString(url)+", username="+quoteSqlString(username)+", password="+quoteSqlString(password)+" WHERE id=" + id);
+				execSQL("UPDATE opds_catalog SET name=" + quoteSqlString(name)
+						+ ", url=" + quoteSqlString(url)
+						+ ", username=NULL, password=NULL WHERE id=" + id);
 			}
 			updateOPDSCatalogLastUsage(url);
 				
@@ -597,7 +618,7 @@ public class MainDB extends BaseDB {
 	public boolean loadOPDSCatalogs(ArrayList<FileInfo> list) {
 		log.i("loadOPDSCatalogs()");
 		boolean found = false;
-		String sql = "SELECT id, name, url, username, password FROM opds_catalog ORDER BY last_usage DESC, name";
+		String sql = "SELECT id, name, url FROM opds_catalog ORDER BY last_usage DESC, name";
 		try (Cursor rs = mDB.rawQuery(sql, null)) {
 			if (rs.moveToFirst()) {
 				// remove existing entries
@@ -607,14 +628,12 @@ public class MainDB extends BaseDB {
 					long id = rs.getLong(0);
 					String name = rs.getString(1);
 					String url = rs.getString(2);
-					String username = rs.getString(3);
-					String password = rs.getString(4);
 					FileInfo opds = new FileInfo();
 					opds.isDirectory = true;
 					opds.pathname = FileInfo.OPDS_DIR_PREFIX + url;
 					opds.filename = name;
-					opds.username = username;
-					opds.password = password;
+					opds.username = null;
+					opds.password = null;
 					opds.isListed = true;
 					opds.isScanned = true;
 					opds.id = id;
@@ -1520,7 +1539,6 @@ public class MainDB extends BaseDB {
 			if ( fields.size()==0 )
 				return null;
 			beginChanges();
-			StringBuilder valueBuf = new StringBuilder();
 			try {
 				String ignoreOption = ""; //"OR IGNORE ";
 				StringBuilder buf = new StringBuilder("INSERT " + ignoreOption + " INTO ");
@@ -1542,8 +1560,6 @@ public class MainDB extends BaseDB {
 				try (SQLiteStatement stmt = mDB.compileStatement(sql)) {
 					for (int i = 1; i <= values.size(); i++) {
 						Object v = values.get(i - 1);
-						valueBuf.append(v != null ? v.toString() : "null");
-						valueBuf.append(",");
 						if (v == null)
 							stmt.bindNull(i);
 						else if (v instanceof String)
@@ -1558,8 +1574,8 @@ public class MainDB extends BaseDB {
 				}
 				return id;
 			} catch ( Exception e ) {
-				Log.e("cr3db", "insert failed: " + e.getMessage());
-				Log.e("cr3db", "values: " + valueBuf.toString());
+				Log.e("cr3db", "insert into " + tableName + " failed for fields "
+						+ fields + ": " + e.getClass().getSimpleName());
 				return null;
 			}
 		}

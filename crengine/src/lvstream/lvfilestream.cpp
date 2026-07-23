@@ -171,6 +171,8 @@ extern "C" {
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <stdio.h>
 #endif
 
 
@@ -178,7 +180,7 @@ extern "C" {
 // Since we have defined own types 'lvoffset_t', 'lvpos_t' and do not use the system type 'off_t'
 // it is logical to define our own wrapper function 'lseek'.
 static inline lvpos_t cr3_lseek(int fd, lvoffset_t offset, int whence) {
-#if LVLONG_FILE_SUPPORT == 1
+#if LVLONG_FILE_SUPPORT == 1 && !defined(__APPLE__) && !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
     return (lvpos_t)::lseek64(fd, (off64_t)offset, whence);
 #else
     return (lvpos_t)::lseek(fd, (off_t)offset, whence);
@@ -422,8 +424,10 @@ lverror_t LVFileStream::Close()
     CloseHandle( m_hFile );
     m_hFile = INVALID_HANDLE_VALUE;
 #else
-    if ( m_fd!= -1 ) {
-        close(m_fd);
+    if ( m_fd != -1 ) {
+        if ( m_autoClose ) {
+            close(m_fd);
+        }
         m_fd = -1;
     }
 #endif
@@ -442,8 +446,68 @@ LVFileStream *LVFileStream::CreateFileStream(lString32 fname, lvopen_mode_t mode
     }
 }
 
+LVFileStream *LVFileStream::CreateFileStream(int fd, lvopen_mode_t mode, bool autoClose)
+{
+    LVFileStream * f = new LVFileStream;
+    if (f->OpenFile( fd, (int)mode, autoClose )==LVERR_OK) {
+        return f;
+    } else {
+        delete f;
+        return NULL;
+    }
+}
+
+lverror_t LVFileStream::OpenFile(int fd, int mode, bool autoClose)
+{
+    Close();
+    if (fd < 0)
+        return LVERR_FAIL;
+#if defined(_WIN32)
+    CR_UNUSED(autoClose);
+    CR_UNUSED(mode);
+    return LVERR_FAIL;
+#else
+    m_autoClose = autoClose;
+    if (autoClose) {
+        m_fd = dup(fd);
+        if (m_fd < 0) {
+            CRLog::error("LVFileStream::OpenFile(fd=%d): dup failed, errno=%d", fd, errno);
+            return LVERR_FAIL;
+        }
+    } else {
+        m_fd = fd;
+    }
+    struct stat st;
+    if (fstat(m_fd, &st)) {
+        CRLog::error("LVFileStream::OpenFile(fd=%d): fstat failed", fd);
+        if (autoClose && m_fd >= 0) {
+            close(m_fd);
+            m_fd = -1;
+        }
+        return LVERR_FAIL;
+    }
+    m_mode = (lvopen_mode_t)(mode & LVOM_MASK);
+    m_size = (lvsize_t)st.st_size;
+    m_pos = (lvpos_t)::lseek(m_fd, 0, SEEK_SET);
+    if (m_pos == (lvpos_t)-1) {
+        CRLog::error("LVFileStream::OpenFile(fd=%d): descriptor is not seekable", fd);
+        if (autoClose) {
+            close(m_fd);
+            m_fd = -1;
+        }
+        return LVERR_FAIL;
+    }
+    char fname[64];
+    snprintf(fname, sizeof(fname), "/proc/self/fd/%d", fd);
+    SetName(lString32(fname).c_str());
+    return LVERR_OK;
+#endif
+}
+
 lverror_t LVFileStream::OpenFile(lString32 fname, int mode)
 {
+    Close();
+    m_autoClose = true;
     mode = mode & LVOM_MASK;
 #if defined(_WIN32)
     lUInt32 m = 0;
@@ -522,6 +586,8 @@ lverror_t LVFileStream::OpenFile(lString32 fname, int mode)
     struct stat stat;
     if ( fstat( m_fd, &stat ) ) {
         CRLog::error( "Cannot get file size for %s", fn8.c_str() );
+        close(m_fd);
+        m_fd = -1;
         return LVERR_FAIL;
     }
     m_mode = (lvopen_mode_t)mode;
@@ -539,7 +605,7 @@ LVFileStream::LVFileStream() :
     m_fd(-1),
     #endif
     //m_parent(NULL),
-    m_size(0), m_pos(0)
+    m_size(0), m_pos(0), m_autoClose(true)
 {
 }
 

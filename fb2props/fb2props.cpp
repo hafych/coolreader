@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <crengine.h>
+#include <lvxmlparser.h>
 #include <fb2def.h>
 #include <sys/stat.h>
 
@@ -36,7 +37,7 @@
 #define XS_IMPLEMENT_SCHEME 1
 #include <fb2def.h>
 
-static void SetFieldValue( char * dst, lString16 src )
+static void SetFieldValue( char * dst, lString32 src )
 {
     *dst = 0;
     if ( src.empty() )
@@ -47,7 +48,7 @@ static void SetFieldValue( char * dst, lString16 src )
 }
 
 /// returns current time representation string
-static lString16 getDateTimeString( time_t t, int langId )
+static lString32 getDateTimeString( time_t t, int langId )
 {
     tm * bt = localtime(&t);
     char str[32];
@@ -61,22 +62,22 @@ static lString16 getDateTimeString( time_t t, int langId )
     return Utf8ToUnicode( lString8( str ) );
 }
 
-lString16 extractDocSeriesReverse( ldomDocument * doc )
+lString32 extractDocSeriesReverse( ldomDocument * doc )
 {
-    lString16 res;
-    ldomXPointer p = doc->createXPointer(L"/FictionBook/description/title-info/sequence");
+    lString32 res;
+    ldomXPointer p = doc->createXPointer(U"/FictionBook/description/title-info/sequence");
     if ( p.isNull() )
         return res;
     ldomNode * series = p.getNode();
     if ( series ) {
-        lString16 sname = series->getAttributeValue( attr_name );
-        lString16 snumber = series->getAttributeValue( attr_number );
+        lString32 sname = series->getAttributeValue( attr_name );
+        lString32 snumber = series->getAttributeValue( attr_number );
         if ( !sname.empty() ) {
-            res << "(";
+            res << U"(";
             if ( !snumber.empty() )
-                res << "#" << snumber << L" ";
+                res << U"#" << snumber << U" ";
             res << sname;
-            res << ")";
+            res << U")";
         }
     }
     return res;
@@ -117,11 +118,11 @@ int GetBookProperties(char *name,  struct BookProperties* pBookProps, int localL
             {
                 if ( !item->IsContainer() )
                 {
-                    lString16 name( item->GetName() );
+                    lString32 name( item->GetName() );
                     if ( name.length() > 5 )
                     {
                         name.lowercase();
-                        const lChar16 * pext = name.c_str() + name.length() - 4;
+                        const lChar32 * pext = name.c_str() + name.length() - 4;
                         if ( pext[0]=='.' && pext[1]=='f' && pext[2]=='b' && pext[3]=='2') {
                             fb2item = item;
                         } else if ( pext[0]=='.' && pext[1]=='f' && pext[2]=='b' && pext[3]=='d') {
@@ -180,9 +181,9 @@ int GetBookProperties(char *name,  struct BookProperties* pBookProps, int localL
         LVStreamRef out = LVOpenFileStream(ofname, LVOM_WRITE);
         doc.saveToStream(out, "utf16");
     #endif
-    lString16 authors = extractDocAuthors( &doc );
-    lString16 title = extractDocTitle( &doc );
-    lString16 series = extractDocSeriesReverse( &doc );
+    lString32 authors = extractDocAuthors( &doc );
+    lString32 title = extractDocTitle( &doc );
+    lString32 series = extractDocSeriesReverse( &doc );
 #if SERIES_IN_AUTHORS==1
     if ( !series.empty() )
         authors << "    " << series;

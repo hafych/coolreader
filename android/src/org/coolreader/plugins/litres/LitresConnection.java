@@ -41,9 +41,11 @@ import java.util.zip.GZIPInputStream;
 import javax.net.ssl.HttpsURLConnection;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.SAXParserFactory;
 
+import org.coolreader.crengine.BoundedInputStream;
 import org.coolreader.crengine.L;
+import org.coolreader.crengine.OPDSUtil;
+import org.coolreader.crengine.SecureXml;
 import org.coolreader.crengine.Utils;
 import org.coolreader.db.ServiceThread;
 import org.coolreader.plugins.AsyncResponse;
@@ -64,14 +66,14 @@ import android.util.Log;
 public class LitresConnection {
 	final static String TAG = "litres";
 
-	public static final String AUTHORIZE_URL = "http://robot.litres.ru/pages/catalit_authorise/";
-	public static final String REGISTER_URL = "http://robot.litres.ru/pages/catalit_register_user/";
-	public static final String GENRES_URL = "http://robot.litres.ru/pages/catalit_genres/";
-	public static final String AUTHORS_URL = "http://robot.litres.ru/pages/catalit_persons/";
-	public static final String CATALOG_URL = "http://robot.litres.ru/pages/catalit_browser/";
-	public static final String TRIALS_URL = "http://robot.litres.ru/static/trials/";
-	public static final String PURCHASE_URL = "http://robot.litres.ru/pages/purchase_book/";
-	public static final String DOWNLOAD_BOOK_URL = "http://robot.litres.ru/pages/catalit_download_book/";
+	public static final String AUTHORIZE_URL = "https://robot.litres.ru/pages/catalit_authorise/";
+	public static final String REGISTER_URL = "https://robot.litres.ru/pages/catalit_register_user/";
+	public static final String GENRES_URL = "https://robot.litres.ru/pages/catalit_genres/";
+	public static final String AUTHORS_URL = "https://robot.litres.ru/pages/catalit_persons/";
+	public static final String CATALOG_URL = "https://robot.litres.ru/pages/catalit_browser/";
+	public static final String TRIALS_URL = "https://robot.litres.ru/static/trials/";
+	public static final String PURCHASE_URL = "https://robot.litres.ru/pages/purchase_book/";
+	public static final String DOWNLOAD_BOOK_URL = "https://robot.litres.ru/pages/catalit_download_book/";
 	public static final String P_ID = "8786915";
 
 	ServiceThread workerThread;
@@ -96,6 +98,7 @@ public class LitresConnection {
 	private static final int CONNECT_TIMEOUT = 60000;
 	private static final int READ_TIMEOUT = 60000;
 	private static final int MAX_CONTENT_LEN_TO_BUFFER = 5242880;
+	private static final long MAX_FILE_DOWNLOAD_BYTES = 512L * 1024L * 1024L;
 
 	private String mapParamsToEncodedString(final Map<String, String> params) {
 		Iterator<Map.Entry<String, String>> iterator = params.entrySet().iterator();
@@ -125,7 +128,7 @@ public class LitresConnection {
 	}
 
 	public void sendXMLRequest(final String url, final Map<String, String> params, final ResponseHandler contentHandler, final ResultHandler resultHandler) {
-		Log.i(TAG, "sending request to " + url);
+		Log.i(TAG, "sending request to " + OPDSUtil.safeUrlForLog(url));
 		final Handler callbackHandler = new Handler();
 		workerThread.post(new Runnable() {
 			void onError(int errorCode, String errorMessage) {
@@ -145,18 +148,14 @@ public class LitresConnection {
 						onError(0, "Cannot open connection");
 						return;
 					}
-					if (conn instanceof HttpsURLConnection) {
-						onError(0, "HTTPs is not supported yet");
-						return;
-					}
-					if (!(conn instanceof HttpURLConnection)) {
-						onError(0, "Only HTTP supported");
+					if (!(conn instanceof HttpsURLConnection)) {
+						onError(0, "HTTPS is required");
 						return;
 					}
 					connection = (HttpURLConnection) conn;
 					Log.i(TAG, "opened connection");
 					connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
-					connection.setInstanceFollowRedirects(true);
+					connection.setInstanceFollowRedirects(false);
 					connection.setAllowUserInteraction(false);
 					connection.setConnectTimeout(CONNECT_TIMEOUT);
 					connection.setReadTimeout(READ_TIMEOUT);
@@ -212,12 +211,8 @@ public class LitresConnection {
 //					is = null;
 //					is = new ByteArrayInputStream(buf);
 
-					try (InputStream inputStream = is) {
-						SAXParserFactory spf = SAXParserFactory.newInstance();
-						spf.setValidating(false);
-//					    spf.setNamespaceAware(true);
-//					    spf.setFeature("http://xml.org/sax/features/namespaces", false);
-						SAXParser sp = spf.newSAXParser();
+					try (InputStream inputStream = new BoundedInputStream(is, MAX_CONTENT_LEN_TO_BUFFER)) {
+						SAXParser sp = SecureXml.newSaxParser();
 						//XMLReader xr = sp.getXMLReader();
 						sp.parse(inputStream, contentHandler);
 					}
@@ -242,7 +237,7 @@ public class LitresConnection {
 	}
 
 	public void sendFileRequest(final String url, final Map<String, String> params, final File fileToStore, final FileResponse contentHandler, final ResultHandler resultHandler) {
-		Log.i(TAG, "sending request to " + url);
+		Log.i(TAG, "sending request to " + OPDSUtil.safeUrlForLog(url));
 		final Handler callbackHandler = new Handler();
 		workerThread.post(new Runnable() {
 			void onError(int errorCode, String errorMessage) {
@@ -262,18 +257,14 @@ public class LitresConnection {
 						onError(0, "Cannot open connection");
 						return;
 					}
-					if (conn instanceof HttpsURLConnection) {
-						onError(0, "HTTPs is not supported yet");
-						return;
-					}
-					if (!(conn instanceof HttpURLConnection)) {
-						onError(0, "Only HTTP supported");
+					if (!(conn instanceof HttpsURLConnection)) {
+						onError(0, "HTTPS is required");
 						return;
 					}
 					connection = (HttpURLConnection) conn;
 					Log.i(TAG, "opened connection");
 					connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
-					connection.setInstanceFollowRedirects(true);
+					connection.setInstanceFollowRedirects(false);
 					connection.setAllowUserInteraction(false);
 					connection.setConnectTimeout(CONNECT_TIMEOUT);
 					connection.setReadTimeout(READ_TIMEOUT);
@@ -310,7 +301,7 @@ public class LitresConnection {
 					L.d("Entity content type: " + contentType);
 					L.d("Entity content encoding: " + contentEncoding);
 
-					if (contentLen <= 0 || contentLen > MAX_CONTENT_LEN_TO_BUFFER) {
+					if ((contentLen <= 0 && contentLen != -1) || contentLen > MAX_FILE_DOWNLOAD_BYTES) {
 						onError(0, "Wrong content length");
 						return;
 					}
@@ -324,7 +315,7 @@ public class LitresConnection {
 
 					Log.i(TAG, "downloading file to " + contentHandler.fileToSave + "  contentLen=" + contentLen);
 
-					try (InputStream inputStream = is;
+					try (InputStream inputStream = new BoundedInputStream(is, MAX_FILE_DOWNLOAD_BYTES);
 						 OutputStream outputStream = new FileOutputStream(contentHandler.fileToSave)) {
 						long bytesRead = Utils.copyStreamContent(outputStream, inputStream);
 						Log.i(TAG, "downloaded bytes: " + bytesRead);
@@ -711,9 +702,7 @@ public class LitresConnection {
 
 		@Override
 		public String toString() {
-			return "LitresAuthInfo [id=" + id + ", sid=" + sid + ", login="
-					+ login + ", lastName=" + lastName + ", firstName="
-					+ firstName + ", middleName=" + middleName + ", bookCount="
+			return "LitresAuthInfo [authenticated=" + (sid != null) + ", bookCount="
 					+ bookCount + ", authorCount="
 					+ authorCount + ", userCount=" + userCount + ", canRebill="
 					+ canRebill + "]";
@@ -750,22 +739,21 @@ public class LitresConnection {
 	}
 
 	private void saveLoginInfo(String login, String password) {
-		if (login != null && password != null && preferences != null) {
-			SharedPreferences.Editor editor = preferences.edit();
-			editor.putString("litres.login", login);
-			editor.putString("litres.password", password);
-			editor.commit();
-		}
+		if (preferences != null)
+			preferences.edit()
+					.remove("litres.login")
+					.remove("litres.password")
+					.apply();
 	}
 
 	private void restorLoginInfo() {
 		if (preferences != null) {
-			String l = preferences.getString("litres.login", null);
-			String p = preferences.getString("litres.password", null);
-			if (l != null && p != null) {
-				lastLogin = l;
-				lastPwd = p;
-			}
+			// Purge credentials written by legacy releases. Authentication state
+			// is intentionally kept in memory only until a Keystore-backed store exists.
+			preferences.edit()
+					.remove("litres.login")
+					.remove("litres.password")
+					.apply();
 		}
 	}
 
@@ -943,7 +931,7 @@ public class LitresConnection {
 		String url = null;
 		if (trial) {
 			url = book.trialUrl;
-			Log.d(TAG, "trialUrl=" + url);
+			Log.d(TAG, "trialUrl=" + OPDSUtil.safeUrlForLog(url));
 		} else {
 			params = new HashMap<String, String>();
 			url = DOWNLOAD_BOOK_URL;

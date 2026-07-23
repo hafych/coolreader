@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible problem in CoolReader Next
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not attach private or copyrighted books, credentials, or unredacted logs.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release name or full commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Platform and device
+      description: OS/Android version, device model, architecture and frontend
+    validations:
+      required: true
+  - type: dropdown
+    id: format
+    attributes:
+      label: Ebook format
+      options:
+        - EPUB
+        - FB2 / FB3
+        - MOBI
+        - TXT / RTF
+        - HTML / CHM
+        - DOC / ODT
+        - Other / not format-specific
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open…
+        2. Choose…
+        3. Observe…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+      description: Redact credentials, tokens, personal paths and library data.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues in this fork and upstream.
+          required: true
+        - label: The sample or reproduction does not disclose private or copyrighted content.
+          required: true

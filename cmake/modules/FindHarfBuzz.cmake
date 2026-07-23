@@ -41,6 +41,12 @@ else (HarfBuzz_LIBRARY AND HarfBuzz_INCLUDE_DIR)
   find_path(HarfBuzz_INCLUDE_DIR hb.h
     PATH_SUFFIXES harfbuzz
     PATHS
+    /opt/homebrew/include/harfbuzz
+    /opt/homebrew/include
+    /usr/local/include/harfbuzz
+    /usr/local/include
+    /usr/include/harfbuzz
+    /usr/include
     ${PC_HARFBUZZ_INCLUDEDIR}
     ${PC_HARFBUZZ_INCLUDE_DIRS}
   )

@@ -707,7 +707,8 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 					public File onDownloadStart(String type, String url) {
 						//mEngine.showProgress(0, "Downloading " + url);
 						//mActivity.showToast("Starting download of " + type + " from " + url);
-						log.d("onDownloadStart: called for " + type + " " + url );
+						log.d("onDownloadStart: called for " + type + " "
+								+ OPDSUtil.safeUrlForLog(url));
 						downloadDir = Services.getScanner().getDownloadDirectory();
 						log.d("onDownloadStart: after getDownloadDirectory()" );
 						String subdir = null;
@@ -763,7 +764,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						myCurrDirectory.getOPDSUrl(), callback, fileOrDir.username, fileOrDir.password);
 				downloadTask.run();
 			} catch (MalformedURLException e) {
-				log.e("MalformedURLException: " + url);
+				log.e("MalformedURLException: " + OPDSUtil.safeUrlForLog(url));
 				mActivity.showToast("Wrong URI: " + url);
 			}
 		}
@@ -1522,4 +1523,3 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
         return super.onKeyDown(keyCode, event);
     }
 }
-

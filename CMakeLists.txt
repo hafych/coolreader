@@ -8,7 +8,9 @@ endif()
 
 PROJECT(cr3)
 
-set(CMAKE_CXX_STANDARD 17`)
+include(CTest)
+
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules/")
@@ -53,10 +55,10 @@ if(MSVC)
   else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
   endif()
-elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
+elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   # Update if necessary
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-long-long -pedantic -std=gnu11 -fPIC -Wno-misleading-indentation")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -std=c++11 -fPIC -Wno-misleading-indentation -Wno-reorder -Wno-format-overflow")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -fPIC -Wno-misleading-indentation -Wno-reorder -Wno-format-overflow")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fomit-frame-pointer")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fomit-frame-pointer")
 endif()
@@ -148,6 +150,7 @@ endif (NOT DEFINED ENABLE_DBUS_VIEWER_EVENTS)
 SET (CRGUI_DEFS -DCOLOR_BACKBUFFER=0 -DLDOM_USE_OWN_MEM_MAN=0 -DGRAY_BACKBUFFER_BITS=${GRAY_BACKBUFFER_BITS}
 	  -DENABLE_DBUS_VIEWER_EVENTS=${ENABLE_DBUS_VIEWER_EVENTS})
 SET (DESKTOP_DEFS -DCOLOR_BACKBUFFER=1 -DLDOM_USE_OWN_MEM_MAN=1 -DUSE_FREETYPE=1 )
+SET (FB2PROPS_DEFS -DCOLOR_BACKBUFFER=1 -DLDOM_USE_OWN_MEM_MAN=0 -DUSE_FREETYPE=1 )
 # Uncomment to test e-ink style color palette on Desktop
 #SET (DESKTOP_DEFS -DCOLOR_BACKBUFFER=0 -DGRAY_BACKBUFFER_BITS=4 -DLDOM_USE_OWN_MEM_MAN=1 -DUSE_FREETYPE=1 )
 
@@ -223,9 +226,6 @@ endif (NOT ZLIB_FOUND)
 endif(DEFINED USE_QT_ZLIB)
 endif(NOT MAC)
 
-if (NOT ${GUI} STREQUAL FB2PROPS )
-if (NOT MAC)
-
 if (NOT MSVC AND NOT CR3_PNG)
 FIND_PACKAGE(PNG)
 endif (NOT MSVC AND NOT CR3_PNG)
@@ -263,8 +263,20 @@ if (NOT JPEG_FOUND)
 endif (NOT JPEG_FOUND)
 
 if (NOT MSVC AND NOT CR3_FREETYPE)
+find_package(PkgConfig QUIET)
+if (PKG_CONFIG_FOUND)
+    pkg_check_modules(HARFBUZZ harfbuzz)
+    if (HARFBUZZ_FOUND)
+        set(HarfBuzz_FOUND TRUE)
+        set(HarfBuzz_INCLUDE_DIRS ${HARFBUZZ_INCLUDE_DIRS})
+        set(HarfBuzz_INCLUDE_DIR ${HARFBUZZ_INCLUDE_DIRS})
+        set(HarfBuzz_LIBRARY ${HARFBUZZ_LIBRARIES})
+    endif()
+endif()
+if (NOT HarfBuzz_FOUND)
+    FIND_PACKAGE(HarfBuzz 2.6.0)
+endif()
 FIND_PACKAGE(Freetype 2.10.0)
-FIND_PACKAGE(HarfBuzz 2.6.0)
 endif (NOT MSVC AND NOT CR3_FREETYPE)
 
 ADD_SUBDIRECTORY(thirdparty_unman/qimagescale)
@@ -357,8 +369,6 @@ else()
 	set(DESKTOP_DEFS ${DESKTOP_DEFS} -DUSE_UTF8PROC=0)
 endif (UTF8PROC_FOUND)
 
-endif (NOT MAC)
-
 #if (ENABLE_CHM)
 message("Will build patched LIBCHM library\n")
 ADD_SUBDIRECTORY(thirdparty_unman/chmlib)
@@ -376,7 +386,6 @@ SET(ANTIWORD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty_unman/antiword)
 SET(ANTIWORD_LIBRARIES antiword)
 ADD_DEFINITIONS(-DENABLE_ANTIWORD=1)
 INCLUDE_DIRECTORIES( ${ANTIWORD_INCLUDE_DIR} )
-endif ( NOT ${GUI} STREQUAL FB2PROPS )
 
 
 INCLUDE_DIRECTORIES(
@@ -385,6 +394,7 @@ INCLUDE_DIRECTORIES(
   ${ZLIB_INCLUDE_DIR}
   ${FREETYPE_INCLUDE_DIRS}
   ${HarfBuzz_INCLUDE_DIRS}
+  ${HarfBuzz_INCLUDE_DIR}
   ${ANTIWORD_INCLUDE_DIR}
   ${CHM_INCLUDE_DIR}
   ${FRIBIDI_INCLUDE_DIR}
@@ -392,11 +402,6 @@ INCLUDE_DIRECTORIES(
   ${ZSTD_INCLUDE_DIRS}
 )
 
-if ( ${GUI} STREQUAL FB2PROPS )
-SET(STD_LIBS
-  ${ZLIB_LIBRARIES}
-)
-else()
 SET(STD_LIBS
   ${JPEG_LIBRARIES}
   ${FREETYPE_LIBRARIES}
@@ -404,12 +409,10 @@ SET(STD_LIBS
   ${PNG_LIBRARIES}
   ${ZLIB_LIBRARIES}
   ${CHM_LIBRARIES}
-  ${ZLIB_LIBRARIES}
   ${ANTIWORD_LIBRARIES}
   ${FRIBIDI_LIBRARIES}
   ${LIBUNIBREAK_LIBRARIES}
   ${ZSTD_LIBRARIES}
-  qimagescale
 )
 if (FONTCONFIG_FOUND)
 	set(STD_LIBS ${STD_LIBS} ${FONTCONFIG_LIBRARIES})
@@ -417,8 +420,9 @@ endif (FONTCONFIG_FOUND)
 if (UTF8PROC_FOUND)
 	set(STD_LIBS ${STD_LIBS} ${UTF8PROC_LIBRARIES})
 endif (UTF8PROC_FOUND)
+if ( NOT ${GUI} STREQUAL FB2PROPS )
 include_directories(${FT_INCLUDE_PATH})
-endif ( ${GUI} STREQUAL FB2PROPS )
+endif()
 
 include_directories(crengine/include)
 
@@ -456,8 +460,11 @@ elseif ( ${GUI} STREQUAL CRGUI_JINKE_PLUGIN )
   ADD_SUBDIRECTORY(crengine)
   ADD_SUBDIRECTORY(cr3gui)
 elseif ( ${GUI} STREQUAL FB2PROPS )
-  message("Will make LIBFB2PROPS plugin for Jinke Bookshelf")
-  ADD_DEFINITIONS( -DLBOOK=1 -DWITH_JINKE=1 -DCR_USE_JINKE=1 -DBUILD_LITE=1 ${CRGUI_DEFS} )
+  message("Will make LIBFB2PROPS plugin")
+  # The metadata plugin is short-lived and does not benefit from the custom
+  # DOM/string allocator. Avoiding it also makes the shared plugin safe on
+  # platforms where executable and dylib symbols may be interposed.
+  ADD_DEFINITIONS( ${FB2PROPS_DEFS} )
   ADD_SUBDIRECTORY(crengine)
   ADD_SUBDIRECTORY(fb2props)
 elseif ( ${GUI} STREQUAL CRGUI_WIN32 )

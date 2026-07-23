@@ -101,6 +101,15 @@ LVImageSourceRef LVCreateStreamImageSource( ldomNode * node, LVStreamRef stream 
     {
         return LVImageSourceRef();
     }
+    const lUInt64 pixelCount = (lUInt64)img->GetWidth() * (lUInt64)img->GetHeight();
+    const lUInt64 maxImagePixels = 64ULL * 1024ULL * 1024ULL;
+    if ( img->GetWidth() > 16384 || img->GetHeight() > 16384
+            || pixelCount > maxImagePixels )
+    {
+        CRLog::error("LVCreateStreamImageSource: Image dimensions (%dx%d, %llu pixels) exceed safety limits",
+                     img->GetWidth(), img->GetHeight(), (unsigned long long)pixelCount);
+        return LVImageSourceRef();
+    }
     return ref;
 }
 

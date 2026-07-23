@@ -30,6 +30,7 @@
 
 package org.coolreader.crengine;
 
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -42,6 +43,7 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
+import android.os.ParcelFileDescriptor;
 import android.text.ClipboardManager;
 import android.util.Log;
 import android.util.SparseArray;
@@ -3155,6 +3157,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public boolean loadDocumentFromStream(final InputStream inputStream, final FileInfo fileInfo, final Runnable doneHandler, final Runnable errorHandler) {
+		if (inputStream == null || fileInfo == null) {
+			if (errorHandler != null)
+				errorHandler.run();
+			return false;
+		}
 		log.v("loadDocumentFromStream(" + fileInfo.getPathName() + ")");
 		// When the document is opened from the stream at this moment,
 		// we do not know the real path to the file, since it will be
@@ -3163,17 +3170,23 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		// open with the fileinfo argument.
 
 		// Copy data from input stream to byte array
+		final int maxMemoryStreamBytes = 16 * 1024 * 1024;
 		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 		boolean copyOk = false;
-		try {
+		try (InputStream source = inputStream) {
 			byte [] buf = new byte [4096];
+			int totalBytes = 0;
 			int readBytes;
 			while (true) {
-				readBytes = inputStream.read(buf);
-				if (readBytes > 0)
+				readBytes = source.read(buf);
+				if (readBytes > 0) {
+					if (totalBytes > maxMemoryStreamBytes - readBytes)
+						throw new IOException("Memory stream exceeds 16 MiB limit");
 					outputStream.write(buf, 0, readBytes);
-				else
+					totalBytes += readBytes;
+				} else if (readBytes < 0) {
 					break;
+				}
 			}
 			copyOk = true;
 		} catch (IOException e1) {
@@ -3195,7 +3208,64 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			});
 			return true;
 		}
+		if (errorHandler != null)
+			errorHandler.run();
 		return false;
+	}
+
+	public boolean loadDocumentFromFileDescriptor(final ParcelFileDescriptor pfd,
+												 String contentPath,
+												 String displayName,
+												 String mimeType,
+												 final Runnable doneHandler,
+												 final Runnable errorHandler) {
+		BackgroundThread.ensureGUI();
+		save();
+		log.i("loadDocumentFromFileDescriptor(" + safeDocumentPathForLog(contentPath) + ")");
+		if (pfd == null || contentPath == null || contentPath.length() == 0) {
+			if (pfd != null) {
+				try {
+					pfd.close();
+				} catch (IOException ignored) {
+				}
+			}
+			if (errorHandler != null)
+				errorHandler.run();
+			return false;
+		}
+
+		BookInfo bookInfo = Services.getHistory().getBookInfo(contentPath);
+		if (bookInfo == null) {
+			FileInfo fileInfo = new FileInfo();
+			fileInfo.pathname = contentPath;
+			fileInfo.filename = displayName;
+			if (fileInfo.filename == null || fileInfo.filename.length() == 0)
+				fileInfo.filename = "document";
+			fileInfo.format = DocumentFormat.byMimeType(mimeType);
+			if (fileInfo.format == null)
+				fileInfo.format = DocumentFormat.byExtension(fileInfo.filename);
+			long statSize = pfd.getStatSize();
+			if (statSize >= 0)
+				fileInfo.size = statSize;
+			bookInfo = new BookInfo(fileInfo);
+		}
+
+		final BookInfo finalBookInfo = bookInfo;
+		final String streamName = displayName;
+		BackgroundThread.instance().postBackground(() ->
+				BackgroundThread.instance().postGUI(() ->
+						post(new LoadDocumentTask(
+								finalBookInfo, null, pfd, streamName, doneHandler, errorHandler))));
+		return true;
+	}
+
+	private static String safeDocumentPathForLog(String path) {
+		if (path == null)
+			return "<null>";
+		Uri uri = Uri.parse(path);
+		if (ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(uri.getScheme()))
+			return uri.buildUpon().clearQuery().fragment(null).build().toString();
+		return path;
 	}
 
 	public boolean loadDocument(String fileName, final Runnable doneHandler, final Runnable errorHandler) {
@@ -5177,6 +5247,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		String filename;
 		String path;
 		byte[] docBuffer;
+		ParcelFileDescriptor parcelFileDescriptor;
+		String streamName;
 		Runnable doneHandler;
 		Runnable errorHandler;
 		String pos;
@@ -5185,11 +5257,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		boolean disableTextAutoformat;
 
 		LoadDocumentTask(BookInfo bookInfo, byte[] docBuffer, Runnable doneHandler, Runnable errorHandler) {
+			this(bookInfo, docBuffer, null, null, doneHandler, errorHandler);
+		}
+
+		LoadDocumentTask(BookInfo bookInfo, byte[] docBuffer, ParcelFileDescriptor parcelFileDescriptor,
+						 String streamName,
+						 Runnable doneHandler, Runnable errorHandler) {
 			BackgroundThread.ensureGUI();
 			mBookInfo = bookInfo;
+			this.parcelFileDescriptor = parcelFileDescriptor;
+			this.streamName = streamName;
 			FileInfo fileInfo = bookInfo.getFileInfo();
-			log.v("LoadDocumentTask for " + fileInfo);
-			if (fileInfo.getTitle() == null && docBuffer == null) {
+			log.v("LoadDocumentTask for " + safeDocumentPathForLog(fileInfo.getPathName()));
+			if (fileInfo.getTitle() == null && docBuffer == null && parcelFileDescriptor == null) {
 				// As a book 'should' have a title, no title means we should
 				// retrieve the book metadata from the engine to get the
 				// book language.
@@ -5216,7 +5296,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				lastPos = mBookInfo.getLastPosition();
 			if (lastPos != null)
 				pos = lastPos.getStartPos();
-			log.v("LoadDocumentTask : book info " + mBookInfo);
+			log.v("LoadDocumentTask : book " + safeDocumentPathForLog(filename));
 			log.v("LoadDocumentTask : last position = " + pos);
 			if (lastPos != null)
 				setTimeElapsed(lastPos.getTimeElapsed());
@@ -5242,7 +5322,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		public void work() throws IOException {
 			BackgroundThread.ensureBackground();
 			coverPageBytes = null;
-			log.i("Loading document " + filename);
+			log.i("Loading document " + safeDocumentPathForLog(filename));
 			doc.doCommand(ReaderCommand.DCMD_SET_INTERNAL_STYLES.nativeId, disableInternalStyles ? 0 : 1);
 			doc.doCommand(ReaderCommand.DCMD_SET_TEXT_FORMAT.nativeId, disableTextAutoformat ? 0 : 1);
 			doc.doCommand(ReaderCommand.DCMD_SET_REQUESTED_DOM_VERSION.nativeId, mBookInfo.getFileInfo().domVersion);
@@ -5252,10 +5332,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				doc.doCommand(ReaderCommand.DCMD_SET_RENDER_BLOCK_RENDERING_FLAGS.nativeId, mBookInfo.getFileInfo().blockRenderingFlags);
 			}
 			boolean success;
-			if (null != docBuffer)
-				success = doc.loadDocumentFromBuffer(docBuffer, filename);
-			else
-				success = doc.loadDocument(filename);
+			try {
+				if (parcelFileDescriptor != null)
+					success = doc.loadDocumentFromFD(
+							parcelFileDescriptor,
+							streamName != null && streamName.length() > 0 ? streamName : filename);
+				else if (docBuffer != null)
+					success = doc.loadDocumentFromBuffer(docBuffer, filename);
+				else
+					success = doc.loadDocument(filename);
+			} finally {
+				closeParcelFileDescriptor();
+			}
 			if (success) {
 				log.v("loadDocumentInternal completed successfully");
 
@@ -5274,14 +5362,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				updateLoadedBookInfo(null != docBuffer);
 				if (null == docBuffer) {
 					// Opened existing file
-					log.i("Document " + filename + " is loaded successfully");
+					log.i("Document " + safeDocumentPathForLog(filename) + " is loaded successfully");
 					if (pos != null) {
 						log.i("Restoring position : " + pos);
 						restorePositionBackground(pos);
 					}
 				} else {
 					// Opened from memory buffer
-					log.i("Stream " + filename + " loaded successfully");
+					log.i("Stream " + safeDocumentPathForLog(filename) + " loaded successfully");
 					// restore the last read position and other tasks are
 					// performed in the done () function, since we must
 					// receive data from the database through callbacks
@@ -5289,7 +5377,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 				CoolReader.dumpHeapAllocation();
 			} else {
-				log.e("Error occurred while trying to load document " + filename);
+				log.e("Error occurred while trying to load document " + safeDocumentPathForLog(filename));
 				throw new IOException("Cannot read document");
 			}
 		}
@@ -5297,6 +5385,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		@Override
 		public void done() {
 			BackgroundThread.ensureGUI();
+			closeParcelFileDescriptor();
 			log.d("LoadDocumentTask, GUI thread is finished successfully");
 			if (!Services.isStopped()) {
 				if (null == docBuffer) {
@@ -5420,6 +5509,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		public void fail(Exception e) {
 			BackgroundThread.ensureGUI();
+			closeParcelFileDescriptor();
 			close();
 			log.v("LoadDocumentTask failed for " + mBookInfo, e);
 			final FileInfo finalFileInfo = new FileInfo(mBookInfo.getFileInfo());
@@ -5442,6 +5532,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				log.e("LoadDocumentTask: Calling error handler");
 				errorHandler.run();
 			}
+		}
+
+		private void closeParcelFileDescriptor() {
+			if (parcelFileDescriptor == null)
+				return;
+			try {
+				parcelFileDescriptor.close();
+			} catch (IOException e) {
+				log.w("Failed to close document file descriptor", e);
+			}
+			parcelFileDescriptor = null;
 		}
 	}
 

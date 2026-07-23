@@ -197,6 +197,24 @@ public class DocView {
 	}
 
 	/**
+	 * Load document from native file descriptor (Storage Access Framework).
+	 * @param fd file descriptor int
+	 * @param contentPath Non empty stream name
+	 * @return true if operation successful, false otherwise.
+	 */
+	public boolean loadDocumentFromFD(int fd, String contentPath) {
+		synchronized (mutex) {
+			return loadDocumentFromFDInternal(fd, contentPath);
+		}
+	}
+
+	public boolean loadDocumentFromFD(android.os.ParcelFileDescriptor pfd, String contentPath) {
+		if (pfd == null)
+			return false;
+		return loadDocumentFromFD(pfd.getFd(), contentPath);
+	}
+
+	/**
 	 * Get settings from native object.
 	 * @return
 	 */
@@ -464,6 +482,8 @@ public class DocView {
 	private native boolean loadDocumentInternal(String fileName);
 
 	private native boolean loadDocumentFromMemoryInternal(byte [] buf, String contentPath);
+
+	private native boolean loadDocumentFromFDInternal(int fd, String contentPath);
 
 	private native java.util.Properties getSettingsInternal();
 

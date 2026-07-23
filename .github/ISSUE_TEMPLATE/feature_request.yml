@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a focused improvement to CoolReader Next
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Reader problem
+      description: What user problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful outcome.
+    validations:
+      required: true
+  - type: input
+    id: platforms
+    attributes:
+      label: Platforms and devices
+      description: Android, desktop, E-Ink device families, or all
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and alternatives
+      description: Note format, storage, migration or upstream compatibility concerns.
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I can help test this feature.
+        - label: I can help implement this feature.

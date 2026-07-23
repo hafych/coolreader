@@ -338,7 +338,7 @@ int CRPropAccessor::getIntDef( const char * propName, int defValue ) const
 void CRPropAccessor::setHex( const char * propName, lUInt32 value )
 {
     char s[16];
-    sprintf(s, "0x%08lX", value);
+    snprintf(s, sizeof(s), "0x%08X", (unsigned int)value);
     setString( propName, Utf8ToUnicode(lString8(s)) );
 }
 
@@ -395,7 +395,7 @@ lUInt32 CRPropAccessor::getColorDef( const char * propName, lUInt32 defValue ) c
 void CRPropAccessor::setColor( const char * propName, lUInt32 value )
 {
     char s[12];
-    sprintf( s, "#%06x", (int)value );
+    snprintf( s, sizeof(s), "#%06x", (int)value );
     setString( propName, lString32( s ) );
 }
 
@@ -437,7 +437,7 @@ lvRect CRPropAccessor::getRectDef( const char * propName, const lvRect & defValu
 void CRPropAccessor::setRect( const char * propName, const lvRect & value )
 {
     char s[64];
-    sprintf( s, "{%d,%d,%d,%d}", value.left, value.top, value.right, value.bottom );
+    snprintf( s, sizeof(s), "{%d,%d,%d,%d}", value.left, value.top, value.right, value.bottom );
     setString( propName, lString32( s ) );
 }
 
@@ -470,7 +470,7 @@ lvPoint CRPropAccessor::getPointDef( const char * propName, const lvPoint & defV
 void CRPropAccessor::setPoint( const char * propName, const lvPoint & value )
 {
     char s[64];
-    sprintf( s, "{%d,%d}", value.x, value.y );
+    snprintf( s, sizeof(s), "{%d,%d}", value.x, value.y );
     setString( propName, lString32( s ) );
 }
 

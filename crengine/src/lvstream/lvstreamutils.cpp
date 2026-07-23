@@ -137,6 +137,18 @@ LVStreamRef LVOpenFileStream( const lChar8 * pathname, int mode )
     return LVOpenFileStream( fn.c_str(), mode );
 }
 
+LVStreamRef LVOpenFileDescriptorStream( int fd, const lString32 & name,
+        lvopen_mode_t mode, bool autoClose )
+{
+    LVFileStream * stream = LVFileStream::CreateFileStream( fd, mode, autoClose );
+    if ( stream != NULL )
+    {
+        stream->SetName(name.c_str());
+        return LVStreamRef( stream );
+    }
+    return LVStreamRef();
+}
+
 LVContainerRef LVOpenArchieve( LVStreamRef stream )
 {
     LVContainerRef ref;

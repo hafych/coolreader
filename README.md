@@ -1,10 +1,84 @@
-CoolReader 3 - cross platform open source e-book reader
-=======================================================
+# CoolReader Next
 
-(c) Vadim Lopatin, 1998-2026
+[![Build and verification](https://github.com/hafych/coolreader/actions/workflows/build.yml/badge.svg)](https://github.com/hafych/coolreader/actions/workflows/build.yml)
+[![License: GPL-2.0-or-later](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
+[![Android API 21+](https://img.shields.io/badge/Android-API%2021%2B-3DDC84.svg)](android)
 
-This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+<img src="android/res/mipmap-xxxhdpi/cr3_logo.png" width="112" align="right" alt="CoolReader logo">
+
+CoolReader Next is a security-focused downstream fork of
+[CoolReader](https://github.com/buggins/coolreader), the fast, highly
+customizable open-source ebook reader for Android, Linux, Windows, macOS and
+E-Ink devices.
+
+It keeps the proven C++ rendering engine and broad ebook format support while
+modernizing Android storage, network security, build reproducibility and hostile
+document handling. Supported formats include EPUB, FB2/FB3, MOBI, TXT, RTF,
+HTML, CHM, PDB and more.
+
+> **Project status:** active development preview. The source and CI are ready for
+> contributors, but no stable downstream APK release is published yet.
+
+## Why this fork
+
+| Focus | What is already implemented |
+| --- | --- |
+| Modern Android | API 35 build, API 21 minimum, pinned toolchain and Storage Access Framework file-descriptor loading |
+| Privacy and security | Normal TLS validation, HTTPS-only LitRes flows, bounded responses, hardened XML parsing and plaintext credential cleanup |
+| Untrusted ebooks | ZIP, image and document resource budgets plus native safety regression tests |
+| Reliability | Database schema 35 repair, Android unit tests, native CTest and Linux/macOS/Android CI |
+| Upstream compatibility | Explicit downstream delta tracking and a documented upstream-sync process |
+
+The complete modernization program is in [MASTER_PLAN.md](MASTER_PLAN.md).
+Implemented differences from upstream are tracked in
+[FORK_DELTA.md](FORK_DELTA.md).
+
+## Build and verify
+
+### Android
+
+Requirements: JDK 17, Android SDK 35 and the NDK version declared in
+`android/app/build.gradle`.
+
+```bash
+cd android
+./gradlew assembleDebug lintDebug testDebugUnitTest
+```
+
+The debug APK is written to `android/app/build/outputs/apk/debug/`.
+
+### Native engine smoke tests
+
+```bash
+cmake -S . -B build -DGUI=FB2PROPS -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+## Contributing
+
+Bug reports, reproducible ebook samples, device compatibility results and
+focused pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md)
+and use the issue templates.
+
+If a maintained, privacy-conscious Android and E-Ink ebook reader is useful to
+you, starring the repository is the simplest way to help other readers discover
+it.
+
+## Fork relationship and license
+
+CoolReader Next is not presented as the original CoolReader distribution. It is
+a downstream fork based on
+[`buggins/coolreader`](https://github.com/buggins/coolreader), with full upstream
+history and attribution retained.
+
+Copyright © Vadim Lopatin and CoolReader contributors, 1998–2026.
+Downstream changes copyright © their respective contributors.
+
+This project is free software distributed under the GNU General Public License,
+version 2 or (at your option) any later version. See [LICENSE](LICENSE).
+
+## Repository layout
 
 Directories
 -----------

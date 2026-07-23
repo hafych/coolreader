@@ -86,7 +86,7 @@ public class LitresPlugin implements OnlineStorePlugin {
 	@Override
 	public String getUrl() {
 		String sidParam = connection.getSID();
-		String res = "http://www.litres.ru/?lfrom=" + LitresConnection.P_ID;
+		String res = "https://www.litres.ru/?lfrom=" + LitresConnection.P_ID;
 		if (sidParam != null && sidParam.length() > 0)
 			res = res + "&sid=" + sidParam;
 		return res;
@@ -96,7 +96,7 @@ public class LitresPlugin implements OnlineStorePlugin {
 	public String getAccountRefillUrl() {
 		String sid = connection.getSID();
 		if (sid != null && sid.length() > 0)
-			return "http://www.litres.ru/pages/put_money_on_account/?lfrom=" + LitresConnection.P_ID + "&sid=" + sid;
+			return "https://www.litres.ru/pages/put_money_on_account/?lfrom=" + LitresConnection.P_ID + "&sid=" + sid;
 		return null;
 	}
 

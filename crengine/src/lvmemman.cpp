@@ -155,7 +155,7 @@ void crSetSignalHandler()
 void lvDefFatalErrorHandler (int errorCode, const char * errorText )
 {
     char strbuff[10];
-    sprintf(strbuff, "%d", errorCode);
+    snprintf(strbuff, sizeof(strbuff), "%d", errorCode);
     fprintf( stderr, "FATAL ERROR #%s: %s\n", strbuff, errorText );
 #ifdef _DEBUG
     std::string errstr = std::string("FATAL ERROR #") + std::string(strbuff) + std::string(": ") + std::string(errorText);

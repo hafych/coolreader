@@ -14,7 +14,7 @@
         android:anyDensity="true"
     />
     
-    <uses-sdk android:minSdkVersion="3" android:targetSdkVersion="17" />
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
     
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
@@ -25,6 +25,7 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <!-- foreground TTS control service, for API >= 28 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <!-- Hide Android3 soft buttons on Archos -->
     <!--uses-permission android:name="archos.permission.FULLSCREEN.FULL"/-->
     <!-- Required permission to use in-app billing. -->
@@ -33,7 +34,7 @@
         android:icon="@mipmap/cr3_logo"
         android:allowClearUserData="true"
         android:process="org.coolreader"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         >
 <!--
             android:configChanges="orientation|keyboardHidden|locale|screenSize"

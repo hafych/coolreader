@@ -72,6 +72,7 @@ protected:
     //LVDirectoryContainer * m_parent;
     lvsize_t               m_size;
     lvpos_t                m_pos;
+    bool                   m_autoClose;
 public:
     /// flushes unsaved data from buffers to file, with optional flush of OS buffers
     virtual lverror_t Flush( bool sync );
@@ -88,7 +89,9 @@ public:
     virtual lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin, lvpos_t * pNewPos );
     lverror_t Close();
     static LVFileStream * CreateFileStream( lString32 fname, lvopen_mode_t mode );
+    static LVFileStream * CreateFileStream( int fd, lvopen_mode_t mode = LVOM_READ, bool autoClose = true );
     lverror_t OpenFile( lString32 fname, int mode );
+    lverror_t OpenFile( int fd, int mode, bool autoClose = true );
     LVFileStream();
     virtual ~LVFileStream();
 };

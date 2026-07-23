@@ -394,8 +394,24 @@ LVStream *LVZipDecodeStream::Create(LVStreamRef stream, lvpos_t pos, lString32 n
     if ( packSize==0 ) packSize = srcPackSize;
     if ( unpSize==0 ) unpSize = srcUnpSize;
 
-    if ((lvpos_t)(pos + packSize) > (lvpos_t)stream->GetSize())
+    const lvsize_t streamSize = stream->GetSize();
+    if (pos > (lvpos_t)streamSize
+            || packSize > streamSize - (lvsize_t)pos)
         return NULL;
+    const lvsize_t maxUncompressedEntrySize = 256UL * 1024UL * 1024UL;
+    const lvsize_t maxCompressionRatio = 200;
+    if ( unpSize > maxUncompressedEntrySize ) {
+        CRLog::error("LVZipDecodeStream::Create: uncompressed file size exceeds safety limit (%lu bytes)", (unsigned long)unpSize);
+        return NULL;
+    }
+    const lvsize_t compressionRatio = packSize > 0 ? unpSize / packSize : 0;
+    if (packSize > 0 && unpSize > 1024UL * 1024UL
+            && (compressionRatio > maxCompressionRatio
+                || (compressionRatio == maxCompressionRatio && unpSize % packSize != 0))) {
+        CRLog::error("LVZipDecodeStream::Create: suspicious compression ratio (%lu/%lu)",
+                     (unsigned long)unpSize, (unsigned long)packSize);
+        return NULL;
+    }
     if (hdr.getMethod() == 0) {
         // store method, copy as is
         if ( packSize != unpSize )

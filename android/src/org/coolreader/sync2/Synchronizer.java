@@ -35,6 +35,7 @@ import org.coolreader.crengine.L;
 import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.Properties;
 import org.coolreader.crengine.Scanner;
+import org.coolreader.crengine.SecureXml;
 import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Settings;
 import org.coolreader.crengine.Utils;
@@ -58,7 +59,6 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.SAXParserFactory;
 
 @TargetApi(Build.VERSION_CODES.GINGERBREAD)
 public class Synchronizer {
@@ -1922,8 +1922,7 @@ public class Synchronizer {
 		FileInfo fileInfo = null;
 		List<Bookmark> bookmarks = null;
 		try {
-			SAXParserFactory saxParserFactory = SAXParserFactory.newInstance();
-			SAXParser saxParser = saxParserFactory.newSAXParser();
+			SAXParser saxParser = SecureXml.newSaxParser();
 			XMLReader xmlReader = saxParser.getXMLReader();
 			BookmarksContentHandler contentHandler = new BookmarksContentHandler();
 			xmlReader.setContentHandler(contentHandler);

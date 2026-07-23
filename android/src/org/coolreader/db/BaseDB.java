@@ -41,6 +41,7 @@ public abstract class BaseDB {
 	private File mFileName;
 	private boolean restoredFromBackup;
 	private boolean error = false;
+	private boolean incompatibleSchema = false;
 
 	public File getFileName() {
 		return mFileName;
@@ -55,6 +56,7 @@ public abstract class BaseDB {
 
 	public boolean open(File dir) {
 		error = false;
+		incompatibleSchema = false;
 		File dbFile = new File(dir, dbFileName());
 		log.i("opening DB " + dbFile);
 		mFileName = dbFile;
@@ -66,6 +68,10 @@ public abstract class BaseDB {
 		if (!res) {
 			log.e("Closing DB due error while upgrade of schema: " + dbFile.getAbsolutePath());
 			close();
+			if (incompatibleSchema) {
+				log.e("Database schema is newer than this application supports; leaving it untouched");
+				return false;
+			}
 			Utils.moveCorruptedFileToBackup(dbFile);
 			if (!restoredFromBackup)
 				Utils.restoreFromBackup(dbFile);
@@ -99,11 +105,22 @@ public abstract class BaseDB {
 
 	protected boolean checkSchema() {
 		try {
-			upgradeSchema();
-			return true;
+			return upgradeSchema();
 		} catch (SQLiteException e) {
+			log.e("Schema upgrade failed", e);
 			return false;
 		}
+	}
+
+	/**
+	 * Reject a database created by a newer application without treating it as
+	 * corrupt and moving or replacing the user's file.
+	 */
+	protected boolean rejectIncompatibleSchema(int currentVersion, int supportedVersion) {
+		incompatibleSchema = true;
+		log.e("Unsupported database version " + currentVersion
+				+ " (maximum supported version is " + supportedVersion + ")");
+		return false;
 	}
 
 	protected abstract boolean upgradeSchema();

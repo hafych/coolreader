@@ -48,72 +48,87 @@ SET (CRENGINE_SOURCES
     src/lvxml/lvxmlutils.cpp
     src/locale_data/fc-lang-data.c
     src/locale_data/crlocaledata.cpp
+    src/lvbmpbuf.cpp
+    src/hyphman.cpp
+    src/crgui.cpp
+    src/crskin.cpp
+    src/lvdocview.cpp
+    src/lvpagesplitter.cpp
+    src/lvtextfm.cpp
+    src/lvrend.cpp
+    src/wolutil.cpp
+    src/hist.cpp
+    src/chmfmt.cpp
+    src/epubfmt.cpp
+    src/pdbfmt.cpp
+    src/wordfmt.cpp
+    src/lvopc.cpp
+    src/docxfmt.cpp
+    src/fb3fmt.cpp
+    src/odtfmt.cpp
+    src/odxutil.cpp
+    src/crconcurrent.cpp
+    src/mathml.cpp
+    src/lvimg/lvcacheableobject.cpp
+    src/lvimg/lvimagesource.cpp
+    src/lvimg/crninepatchdecoder.cpp
+    src/lvimg/lvjpegimagesource.cpp
+    src/lvimg/lvpngimagesource.cpp
+    src/lvimg/lvxpmimagesource.cpp
+    src/lvimg/lvgifimagesource.cpp
+    src/lvimg/lvgifframe.cpp
+    src/lvimg/clzwdecoder.cpp
+    src/lvimg/lvsvgimagesource.cpp
+    src/lvimg/lvstretchimgsource.cpp
+    src/lvimg/lvcolortransformimgsource.cpp
+    src/lvimg/lvalphatransformimgsource.cpp
+    src/lvimg/lvunpackedimgsource.cpp
+    src/lvimg/lvdrawbufimgsource.cpp
+    src/lvimg/lvimg.cpp
+    src/lvfont/lvfont.cpp
+    src/lvfont/lvfntman.cpp
+    src/lvfont/lvfnt.cpp
+    src/lvfont/lvembeddedfont.cpp
+    src/lvfont/lvbasefont.cpp
+    src/lvfont/lvbitmapfont.cpp
+    src/lvfont/lvbitmapfontman.cpp
+    src/lvfont/lvfontglyphcache.cpp
+    src/lvfont/lvfontcache.cpp
+    src/lvfont/lvfontboldtransform.cpp
+    src/lvfont/lvfontdef.cpp
+    src/lvfont/lvwin32font.cpp
+    src/lvfont/lvwin32fontman.cpp
+    src/lvfont/lvfreetypeface.cpp
+    src/lvfont/lvfreetypefontman.cpp
+    src/lvdrawbuf/lvbasedrawbuf.cpp
+    src/lvdrawbuf/lvgraydrawbuf.cpp
+    src/lvdrawbuf/lvcolordrawbuf.cpp
+    src/lvdrawbuf/lvinkmeasurementdrawbuf.cpp
+    src/lvdrawbuf/lvimagescaleddrawcallback.cpp
+    src/lvdrawbuf/lvdrawbuf_utils.cpp
 )
 
-if ( NOT ${GUI} STREQUAL FB2PROPS )
-    SET (CRENGINE_SOURCES ${CRENGINE_SOURCES}
-        src/lvbmpbuf.cpp   
-        src/hyphman.cpp  
-        src/crgui.cpp     
-        src/crskin.cpp    
-        src/lvdocview.cpp  
-        src/lvpagesplitter.cpp  
-        src/lvtextfm.cpp
-        src/lvrend.cpp
-        src/wolutil.cpp
-        src/hist.cpp      
-        src/chmfmt.cpp     
-        src/epubfmt.cpp     
-        src/pdbfmt.cpp     
-        src/wordfmt.cpp
-        src/lvopc.cpp
-        src/docxfmt.cpp
-        src/fb3fmt.cpp
-        src/odtfmt.cpp
-        src/odxutil.cpp
-        src/crconcurrent.cpp
-        src/mathml.cpp
-        src/lvimg/lvcacheableobject.cpp
-        src/lvimg/lvimagesource.cpp
-        src/lvimg/crninepatchdecoder.cpp
-        src/lvimg/lvjpegimagesource.cpp
-        src/lvimg/lvpngimagesource.cpp
-        src/lvimg/lvxpmimagesource.cpp
-        src/lvimg/lvgifimagesource.cpp
-        src/lvimg/lvgifframe.cpp
-        src/lvimg/clzwdecoder.cpp
-        src/lvimg/lvsvgimagesource.cpp
-        src/lvimg/lvstretchimgsource.cpp
-        src/lvimg/lvcolortransformimgsource.cpp
-        src/lvimg/lvalphatransformimgsource.cpp
-        src/lvimg/lvunpackedimgsource.cpp
-        src/lvimg/lvdrawbufimgsource.cpp
-        src/lvimg/lvimg.cpp
-        src/lvfont/lvfont.cpp
-        src/lvfont/lvfntman.cpp
-        src/lvfont/lvfnt.cpp
-        src/lvfont/lvembeddedfont.cpp
-        src/lvfont/lvbasefont.cpp
-        src/lvfont/lvbitmapfont.cpp
-        src/lvfont/lvbitmapfontman.cpp
-        src/lvfont/lvfontglyphcache.cpp
-        src/lvfont/lvfontcache.cpp
-        src/lvfont/lvfontboldtransform.cpp
-        src/lvfont/lvfontdef.cpp
-        src/lvfont/lvwin32font.cpp
-        src/lvfont/lvwin32fontman.cpp
-        src/lvfont/lvfreetypeface.cpp
-        src/lvfont/lvfreetypefontman.cpp
-        src/lvdrawbuf/lvbasedrawbuf.cpp
-        src/lvdrawbuf/lvgraydrawbuf.cpp
-        src/lvdrawbuf/lvcolordrawbuf.cpp
-        src/lvdrawbuf/lvinkmeasurementdrawbuf.cpp
-        src/lvdrawbuf/lvimagescaleddrawcallback.cpp
-        src/lvdrawbuf/lvdrawbuf_utils.cpp
-    )
-endif (NOT ${GUI} STREQUAL FB2PROPS)
-
 ADD_LIBRARY(crengine STATIC ${CRENGINE_SOURCES})
+target_include_directories(crengine PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${HarfBuzz_INCLUDE_DIRS}
+    ${HarfBuzz_INCLUDE_DIR}
+    /opt/homebrew/include/harfbuzz
+    /opt/homebrew/include
+    /usr/local/include/harfbuzz
+    /usr/local/include
+    ${FREETYPE_INCLUDE_DIRS}
+    ${FREETYPE_INCLUDE_DIRS}/freetype2
+    /opt/homebrew/include/freetype2
+    /usr/local/include/freetype2
+    /usr/include/freetype2
+    ${PNG_INCLUDE_DIR}
+    ${JPEG_INCLUDE_DIR}
+    ${ZLIB_INCLUDE_DIR}
+    ${FRIBIDI_INCLUDE_DIR}
+    ${ZSTD_INCLUDE_DIRS}
+)
+target_link_libraries(crengine PUBLIC qimagescale)
 
 if(BUILD_TOOLS)
     add_subdirectory(Tools)

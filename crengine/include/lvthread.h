@@ -85,7 +85,13 @@ private:
 public:
     LVMutex()
     {
-        _valid = ( pthread_mutex_init(&_mutex, NULL) !=0 );
+        pthread_mutexattr_t attr;
+        _valid = false;
+        if (pthread_mutexattr_init(&attr) == 0) {
+            if (pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE) == 0)
+                _valid = (pthread_mutex_init(&_mutex, &attr) == 0);
+            pthread_mutexattr_destroy(&attr);
+        }
     }
     ~LVMutex()
     {

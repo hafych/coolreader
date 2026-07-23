@@ -23,6 +23,7 @@ import android.app.Activity;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 
 public final class DocumentFileCache {
@@ -45,11 +46,16 @@ public final class DocumentFileCache {
 	}
 
 	public BookInfo saveStream(FileInfo fileInfo, InputStream inputStream) {
+		return saveStream(fileInfo, inputStream, Long.MAX_VALUE);
+	}
+
+	public BookInfo saveStream(FileInfo fileInfo, InputStream inputStream, long maxBytes) {
 		if (null == mBasePath) {
 			log.e("Attempt to save stream while private app cache directory uninitialized!");
 			return null;
 		}
 		BookInfo bookInfo = null;
+		File file = null;
 		String extension;
 		long codebase;
 		if (0 != fileInfo.crc32)
@@ -66,11 +72,19 @@ public final class DocumentFileCache {
 		}
 		String filename = Long.valueOf(codebase).toString() + extension;
 		try {
-			File file = new File(mBasePath, filename);
-			FileOutputStream outputStream = new FileOutputStream(file);
-			inputStream.reset();
-			long size = Utils.copyStreamContent(outputStream, inputStream);
-			outputStream.close();
+			file = new File(mBasePath, filename);
+			long size = 0;
+			byte[] buffer = new byte[64 * 1024];
+			try (FileOutputStream outputStream = new FileOutputStream(file)) {
+				int count;
+				while ((count = inputStream.read(buffer)) != -1) {
+					if (size + count > maxBytes)
+						throw new IOException("Document exceeds cache limit of " + maxBytes + " bytes");
+					outputStream.write(buffer, 0, count);
+					size += count;
+				}
+				outputStream.getFD().sync();
+			}
 			if (size > 0) {
 				FileInfo newFileInfo = new FileInfo(fileInfo);
 				// Set new path & name
@@ -88,6 +102,8 @@ public final class DocumentFileCache {
 			}
 		} catch (Exception e) {
 			log.e("Exception while saving stream: " + e.getMessage());
+			if (file != null && file.exists() && !file.delete())
+				log.w("Cannot delete incomplete cache file " + file);
 		}
 		return bookInfo;
 	}

@@ -1577,6 +1577,32 @@ JNIEXPORT jboolean JNICALL Java_org_coolreader_crengine_DocView_loadDocumentFrom
 
 /*
  * Class:     org_coolreader_crengine_DocView
+ * Method:    loadDocumentFromFDInternal
+ * Signature: (ILjava/lang/String;)Z
+ */
+JNIEXPORT jboolean JNICALL Java_org_coolreader_crengine_DocView_loadDocumentFromFDInternal
+		(JNIEnv * _env, jobject _this, jint fd, jstring contentPath)
+{
+	CRJNIEnv env(_env);
+	DocViewNative * p = getNative(_env, _this);
+	if (!p) {
+		CRLog::error("Cannot get native view");
+		return JNI_FALSE;
+	}
+	DocViewCallback callback( _env, p->_docview, _this );
+	lString32 contentPath32 = env.fromJavaString(contentPath);
+	LVStreamRef stream = LVOpenFileDescriptorStream(
+			(int)fd, contentPath32, LVOM_READ, true);
+	if (stream.isNull()) {
+		CRLog::error("Cannot open stream from file descriptor %d", (int)fd);
+		return JNI_FALSE;
+	}
+	bool res = p->loadDocument(stream, contentPath32);
+	return res ? JNI_TRUE : JNI_FALSE;
+}
+
+/*
+ * Class:     org_coolreader_crengine_DocView
  * Method:    getSettings
  * Signature: ()Ljava/util/Properties;
  */

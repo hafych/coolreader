@@ -29,3 +29,4 @@ cr3gui/data/tessdata/
 /clang-analyzer-reports/
 /thirdparty
 /thirdparty_tmp
+/build_test/

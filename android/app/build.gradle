@@ -4,9 +4,10 @@ android {
     namespace 'org.coolreader'
     compileSdkVersion 35
     buildToolsVersion "35.0.0"
+    ndkVersion "27.0.12077973"
     defaultConfig {
         applicationId "org.coolreader"
-        minSdkVersion 4
+        minSdkVersion 21
         targetSdkVersion 35
         // When new version released, version code must be incremented at least by 8
         // for compatibility with ABI versioning of split apk (see below).
@@ -112,10 +113,9 @@ android {
     }
     lintOptions {
         disable 'MissingTranslation'
-        checkReleaseBuilds false
-        // Or, if you prefer, you can continue to check for errors in release builds,
-        // but continue the build even when errors are found:
-        abortOnError false
+        baseline file("lint-baseline.xml")
+        checkReleaseBuilds true
+        abortOnError true
     }
     compileOptions {
         // Sets Java compatibility to Java 8
@@ -136,8 +136,18 @@ android {
 
 task prepareKotlinBuildScriptModel {}
 
+configurations.all {
+    resolutionStrategy {
+        force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+    }
+}
+
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core:1.13.1'
     implementation project(path: ':genrescollection')
+    testImplementation 'junit:junit:4.13.2'
 }

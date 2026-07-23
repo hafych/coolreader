@@ -160,7 +160,7 @@ public class OnlineStoreNewAccountDialog extends BaseDialog {
 		params.put(OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_SUBSCRIBE, subscribe ? "1" : "0");
 		
 		progress.show();
-		L.i("trying to register new LitRes account " + login);
+		L.i("trying to register new LitRes account");
 		mPlugin.registerNewAccount(params, new AuthenticationCallback() {
 			@Override
 			public void onError(int errorCode, String errorMessage) {
@@ -184,4 +184,3 @@ public class OnlineStoreNewAccountDialog extends BaseDialog {
 		super.onNegativeButtonClick();
 	}
 }
-

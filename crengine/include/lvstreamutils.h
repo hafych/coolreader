@@ -46,6 +46,17 @@
 */
 LVStreamRef LVOpenFileStream( const lChar32 * pathname, int mode );
 
+/// Open file stream from file descriptor
+/**
+    \param fd is native file descriptor
+    \param name is logical stream name used for format detection
+    \param mode is mode file should be opened in
+    \param autoClose if true, dup(fd) and close on destroy
+    \return reference to opened stream if success, NULL if error
+*/
+LVStreamRef LVOpenFileDescriptorStream( int fd, const lString32 & name,
+        lvopen_mode_t mode = LVOM_READ, bool autoClose = true );
+
 /// Open file stream
 /**
     \param pathname is file name to open (utf8 codepage)

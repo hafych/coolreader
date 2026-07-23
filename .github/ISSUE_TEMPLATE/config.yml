@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Upstream CoolReader issues
+    url: https://github.com/buggins/coolreader/issues
+    about: Check whether the issue also affects the original project.
+  - name: Private security report
+    url: https://github.com/hafych/coolreader/security/advisories/new
+    about: Report a vulnerability without publishing exploit details.

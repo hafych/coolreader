@@ -34,12 +34,18 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Debug;
+import android.os.ParcelFileDescriptor;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
+import android.provider.OpenableColumns;
 import android.view.LayoutInflater;
 import android.view.Surface;
 import android.view.View;
@@ -58,6 +64,7 @@ import org.coolreader.crengine.CRRootView;
 import org.coolreader.crengine.CRToolBar;
 import org.coolreader.crengine.DeviceInfo;
 import org.coolreader.crengine.DocumentsContractWrapper;
+import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.ErrorDialog;
 import org.coolreader.crengine.FileBrowser;
@@ -85,6 +92,7 @@ import org.koekak.android.ebookdownloader.SonyBookSelector;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
@@ -759,6 +767,7 @@ public class CoolReader extends BaseActivity {
 		Uri uri = null;
 		if (Intent.ACTION_VIEW.equals(intent.getAction())) {
 			uri = intent.getData();
+			persistReadPermission(uri, intent.getFlags());
 			intent.setData(null);
 			if (uri != null) {
 				fileToOpen = filePathFromUri(uri);
@@ -774,12 +783,12 @@ public class CoolReader extends BaseActivity {
 		}
 
 		if (fileToOpen == null && intent.getExtras() != null) {
-			log.d("extras=" + intent.getExtras());
+			log.d("Open intent contains extras");
 			fileToOpen = intent.getExtras().getString(OPEN_FILE_PARAM);
 		}
 		if (fileToOpen != null) {
 			mFileToOpenFromExt = fileToOpen;
-			log.d("FILE_TO_OPEN = " + fileToOpen);
+			log.d("FILE_TO_OPEN = " + safePathForLog(fileToOpen));
 			final String finalFileToOpen = fileToOpen;
 			loadDocument(fileToOpen, null, () -> BackgroundThread.instance().postGUI(() -> {
 				// if document not loaded show error & then root window
@@ -789,7 +798,7 @@ public class CoolReader extends BaseActivity {
 			}, 500), true);
 			return true;
 		} else if (null != uri) {
-			log.d("URI_TO_OPEN = " + uri);
+			log.d("URI_TO_OPEN = " + safeUriForLog(uri));
 			final String uriString = uri.toString();
 			mFileToOpenFromExt = uriString;
 			loadDocumentFromUri(uri, null, () -> BackgroundThread.instance().postGUI(() -> {
@@ -1504,6 +1513,13 @@ public class CoolReader extends BaseActivity {
 	public static final String OPEN_FILE_PARAM = "FILE_TO_OPEN";
 
 	public void loadDocument(final String item, final Runnable doneCallback, final Runnable errorCallback, final boolean forceSync) {
+		if (item != null) {
+			Uri itemUri = Uri.parse(item);
+			if (ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(itemUri.getScheme())) {
+				loadDocumentFromUri(itemUri, doneCallback, errorCallback);
+				return;
+			}
+		}
 		runInReader(() -> mReaderView.loadDocument(item, forceSync ? () -> {
 			if (null != doneCallback)
 				doneCallback.run();
@@ -1534,16 +1550,161 @@ public class CoolReader extends BaseActivity {
 	public void loadDocumentFromUri(Uri uri, Runnable doneCallback, Runnable errorCallback) {
 		runInReader(() -> {
 			ContentResolver contentResolver = getContentResolver();
-			InputStream inputStream;
+			ParcelFileDescriptor pfd = null;
 			try {
-				inputStream = contentResolver.openInputStream(uri);
-				// TODO: Fix this
-				// Don't save the last opened document from the stream in the cloud, since we still cannot open it later in this program.
-				mReaderView.loadDocumentFromStream(inputStream, uri.getPath(), doneCallback, errorCallback);
+				SafDocumentMetadata metadata = readSafDocumentMetadata(contentResolver, uri);
+				pfd = contentResolver.openFileDescriptor(uri, "r");
+				if (pfd == null)
+					throw new IOException("Content provider returned no file descriptor");
+				long statSize = pfd.getStatSize();
+				if (isSeekable(pfd) && statSize >= 0) {
+					mReaderView.loadDocumentFromFileDescriptor(
+							pfd, uri.toString(), metadata.displayName, metadata.mimeType,
+							doneCallback, errorCallback);
+					pfd = null; // ownership transferred to ReaderView
+					return;
+				}
+
+				if (statSize > MAX_NONSEEKABLE_SAF_BYTES)
+					throw new IOException("Document is too large for non-seekable SAF fallback");
+				if (statSize > 0 && getCacheDir().getUsableSpace() < statSize + SAF_DISK_RESERVE_BYTES)
+					throw new IOException("Not enough free space to cache SAF document");
+
+				final ParcelFileDescriptor fallbackPfd = pfd;
+				pfd = null; // AutoCloseInputStream owns it from here
+				BackgroundThread.instance().postBackground(() -> cacheAndOpenSafDocument(
+						uri, metadata, fallbackPfd, doneCallback, errorCallback));
 			} catch (Exception e) {
-				errorCallback.run();
+				log.e("Cannot open SAF document " + safeUriForLog(uri), e);
+				runOpenError(errorCallback);
+			} finally {
+				if (pfd != null) {
+					try {
+						pfd.close();
+					} catch (IOException e) {
+						log.w("Cannot close failed SAF descriptor", e);
+					}
+				}
 			}
 		});
+	}
+
+	private static final long MAX_NONSEEKABLE_SAF_BYTES = 512L * 1024L * 1024L;
+	private static final long SAF_DISK_RESERVE_BYTES = 32L * 1024L * 1024L;
+
+	private boolean isSeekable(ParcelFileDescriptor pfd) {
+		try {
+			Os.lseek(pfd.getFileDescriptor(), 0, OsConstants.SEEK_CUR);
+			return true;
+		} catch (ErrnoException e) {
+			return false;
+		}
+	}
+
+	private void cacheAndOpenSafDocument(Uri uri, SafDocumentMetadata metadata,
+										ParcelFileDescriptor pfd,
+										Runnable doneCallback, Runnable errorCallback) {
+		FileInfo sourceInfo = new FileInfo();
+		sourceInfo.pathname = uri.toString();
+		sourceInfo.filename = metadata.displayName;
+		sourceInfo.format = DocumentFormat.byMimeType(metadata.mimeType);
+		if (sourceInfo.format == null)
+			sourceInfo.format = DocumentFormat.byExtension(sourceInfo.filename);
+
+		BookInfo cachedBook;
+		ParcelFileDescriptor cachedPfd = null;
+		try (InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
+			cachedBook = Services.getDocumentCache().saveStream(
+					sourceInfo, inputStream, MAX_NONSEEKABLE_SAF_BYTES);
+			if (cachedBook != null) {
+				File cachedFile = new File(cachedBook.getFileInfo().pathname);
+				cachedPfd = ParcelFileDescriptor.open(
+						cachedFile, ParcelFileDescriptor.MODE_READ_ONLY);
+			}
+		} catch (Exception e) {
+			log.e("Cannot cache non-seekable SAF document " + safeUriForLog(uri), e);
+			cachedBook = null;
+		}
+
+		final ParcelFileDescriptor resultPfd = cachedPfd;
+		BackgroundThread.instance().postGUI(() -> {
+			if (resultPfd == null) {
+				runOpenError(errorCallback);
+				return;
+			}
+			runInReader(() -> mReaderView.loadDocumentFromFileDescriptor(
+					resultPfd, uri.toString(), metadata.displayName, metadata.mimeType,
+					doneCallback, errorCallback));
+		});
+	}
+
+	private SafDocumentMetadata readSafDocumentMetadata(ContentResolver resolver, Uri uri) {
+		String displayName = null;
+		String mimeType = resolver.getType(uri);
+		try (Cursor cursor = resolver.query(
+				uri, new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+			if (cursor != null && cursor.moveToFirst()) {
+				int nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+				if (nameColumn >= 0)
+					displayName = cursor.getString(nameColumn);
+			}
+		} catch (Exception e) {
+			log.w("Cannot read SAF document metadata for " + safeUriForLog(uri), e);
+		}
+		if (displayName == null || displayName.length() == 0)
+			displayName = uri.getLastPathSegment();
+		if (displayName == null || displayName.length() == 0)
+			displayName = "document";
+		return new SafDocumentMetadata(displayName, mimeType);
+	}
+
+	private static final class SafDocumentMetadata {
+		final String displayName;
+		final String mimeType;
+
+		SafDocumentMetadata(String displayName, String mimeType) {
+			this.displayName = displayName;
+			this.mimeType = mimeType;
+		}
+	}
+
+	private void persistReadPermission(Uri uri, int intentFlags) {
+		if (uri == null || !ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(uri.getScheme()))
+			return;
+		if ((intentFlags & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) == 0
+				|| (intentFlags & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0)
+			return;
+		try {
+			getContentResolver().takePersistableUriPermission(
+					uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+		} catch (SecurityException e) {
+			log.w("Provider did not grant persistable read access for " + safeUriForLog(uri), e);
+		}
+	}
+
+	private String safeUriForLog(Uri uri) {
+		if (uri == null)
+			return "<null>";
+		Uri.Builder builder = uri.buildUpon().clearQuery().fragment(null);
+		if (uri.getUserInfo() != null && uri.getHost() != null) {
+			String authority = uri.getHost();
+			if (uri.getPort() >= 0)
+				authority += ":" + uri.getPort();
+			builder.encodedAuthority(authority);
+		}
+		return builder.build().toString();
+	}
+
+	private String safePathForLog(String path) {
+		if (path == null)
+			return "<null>";
+		Uri uri = Uri.parse(path);
+		return uri.getScheme() != null ? safeUriForLog(uri) : path;
+	}
+
+	private void runOpenError(Runnable errorCallback) {
+		if (errorCallback != null)
+			BackgroundThread.instance().postGUI(errorCallback);
 	}
 
 	public void loadDocument(FileInfo item, boolean forceSync) {
@@ -1928,7 +2089,8 @@ public class CoolReader extends BaseActivity {
 			i.setData(Uri.parse(url));
 			startActivity(i);
 		} catch (Exception e) {
-			log.e("Exception " + e + " while trying to open URL " + url);
+			log.e("Exception while trying to open URL "
+					+ safeUriForLog(Uri.parse(url)), e);
 			showToast("Cannot open URL " + url);
 		}
 	}

@@ -459,6 +459,8 @@ protected:
     bool _mapped;
     bool _maperror;
     int  _mapSavingStage;
+    int calcFinalBlocks();
+#endif
 
     img_scaling_options_t _imgScalingOptions;
     int  _spaceWidthScalePercent;
@@ -471,9 +473,7 @@ protected:
     lUInt32 _nodeDisplayStyleHashInitial;
     bool _nodeStylesInvalidIfLoading;
 
-    int calcFinalBlocks();
     void dropStyles();
-#endif
     bool _hangingPunctuationEnabled;
     lUInt32 _renderBlockRenderingFlags;
     lUInt32 _DOMVersionRequested;
@@ -1030,7 +1030,6 @@ public:
     lvdom_element_render_method getRendMethod();
     /// sets rendering method
     void setRendMethod( lvdom_element_render_method );
-#if BUILD_LITE!=1
     /// returns element style record
     css_style_ref_t getStyle() const;
     /// returns element font
@@ -1039,7 +1038,6 @@ public:
     void setFont( font_ref_t );
     /// sets element style record
     void setStyle( css_style_ref_t & );
-#endif
     /// returns first child node
     ldomNode * getFirstChild() const;
     /// returns last child node
@@ -2396,10 +2394,11 @@ private:
     bool _rendered;
     bool _just_rendered_from_cache;
     bool _toc_from_cache_valid;
-    lUInt32 _warnings_seen_bitmap;
     ldomXRangeList _selections;
     lUInt32 _doc_rendering_hash;
 #endif
+
+    lUInt32 _warnings_seen_bitmap;
 
     lString32 _docStylesheetFileName;
 

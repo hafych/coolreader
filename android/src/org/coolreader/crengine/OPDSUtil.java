@@ -30,32 +30,28 @@ import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
 import java.io.ByteArrayInputStream;
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Authenticator;
+import java.io.InterruptedIOException;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
-import java.net.PasswordAuthentication;
 import java.net.Proxy;
 import java.net.URL;
 import java.net.URLConnection;
-import java.security.cert.X509Certificate;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Stack;
 import java.util.concurrent.Callable;
+import java.util.zip.GZIPInputStream;
 
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.SAXParserFactory;
 
 @SuppressLint("SimpleDateFormat")
 public class OPDSUtil {
@@ -63,6 +59,11 @@ public class OPDSUtil {
 	public static final boolean EXTENDED_LOG = false; // set to false for production
     public static final int CONNECT_TIMEOUT = 60000;
     public static final int READ_TIMEOUT = 60000;
+	public static final int MAX_REDIRECTS = 5;
+	public static final long MAX_FEED_BYTES = 8L * 1024L * 1024L;
+	public static final long MAX_BOOK_DOWNLOAD_BYTES = 512L * 1024L * 1024L;
+	public static final long MAX_TRANSFER_TIME_MS = 15L * 60L * 1000L;
+	public static final long MIN_FREE_STORAGE_BYTES = 32L * 1024L * 1024L;
 	/*
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:relevance="http://a9.com/-/opensearch/extensions/relevance/1.0/" 
@@ -155,18 +156,15 @@ xml:base="http://lib.ololo.cc/opds/">
 		public static String convertHref( URL baseURL, String href ) {
 			if ( href==null )
 				return href;
-			String port = "";
-			if (baseURL.getPort() != 80 && baseURL.getPort() > 0)
-				port = ":" + baseURL.getPort();
-			String hostPort = baseURL.getHost() + port;
-			if ( href.startsWith("//") )
-				return baseURL.getProtocol() + ":" + href;
-			if ( href.startsWith("/") )
-				return baseURL.getProtocol() + "://" + hostPort + href;
-			if ( !href.startsWith("http://") && !href.startsWith("https://") ) {
-				return baseURL.getProtocol() + "://" + hostPort + dirPath(baseURL.getPath()) + "/" + href;
+			try {
+				URL resolved = new URL(baseURL, href);
+				String protocol = resolved.getProtocol();
+				if ("http".equalsIgnoreCase(protocol) || "https".equalsIgnoreCase(protocol))
+					return resolved.toExternalForm();
+			} catch (Exception e) {
+				// Invalid catalog links are ignored by isValid().
 			}
-			return href;
+			return null;
 		}
 		public boolean isValid() {
 			return href!=null && href.length()!=0;
@@ -183,7 +181,7 @@ xml:base="http://lib.ololo.cc/opds/">
 		@Override
 		public String toString() {
 			return "[ rel=" + rel + ", type=" + type
-					+ ", title=" + title + ", href=" + href + "]";
+					+ ", title=" + title + ", href=" + safeUrlForLog(href) + "]";
 		}
 		
 	}
@@ -369,6 +367,8 @@ xml:base="http://lib.ololo.cc/opds/">
 			if ( qName!=null && qName.length()>0 )
 				localName = qName;
 			level++;
+			if (level > MAX_XML_DEPTH)
+				throw new SAXException("OPDS XML nesting limit exceeded");
 			//L.d(tab() + "<" + localName + ">");
 			//currentAttributes = attributes;
 			elements.push(localName);
@@ -446,6 +446,8 @@ xml:base="http://lib.ololo.cc/opds/">
 				if ( !insideFeed || !insideEntry )
 					throw new SAXException("unexpected element " + localName);
 				if ( entryInfo.link!=null || entryInfo.getBestAcquisitionLink()!=null ) {
+					if (entries.size() >= MAX_OPDS_ITEMS)
+						throw new SAXException("OPDS item limit exceeded");
 					entries.add(entryInfo);
 				}
 				insideEntry = false;
@@ -492,10 +494,10 @@ xml:base="http://lib.ololo.cc/opds/">
 			this.defaultFileName = defaultFileName;
 			this.username = username;
 			this.password = password;
-			L.d("Created DownloadTask for " + url);
+			L.d("Created DownloadTask for " + safeUrlForLog(url));
 		}
 		private void setProgressMessage( String url, int totalSize ) {
-			progressMessage = coolReader.getString(org.coolreader.R.string.progress_downloading) + " " + url;
+			progressMessage = coolReader.getString(org.coolreader.R.string.progress_downloading) + " " + safeUrlForLog(url);
 			if ( totalSize>0 )
 				progressMessage = progressMessage + " (" + totalSize + ")";
 		}
@@ -592,11 +594,7 @@ xml:base="http://lib.ololo.cc/opds/">
 				};
 				for ( int i=0; i<namespaces.length-1; i+=2 )
 					handler.startPrefixMapping(namespaces[i], namespaces[i+1]);
-				SAXParserFactory spf = SAXParserFactory.newInstance();
-				spf.setValidating(false);
-//				spf.setNamespaceAware(true);
-//				spf.setFeature("http://xml.org/sax/features/namespaces", false);
-				SAXParser sp = spf.newSAXParser();
+				SAXParser sp = SecureXml.newSaxParser();
 				//XMLReader xr = sp.getXMLReader();				
 				sp.parse(is, handler);
 			} catch (SAXException se) {
@@ -634,7 +632,7 @@ xml:base="http://lib.ololo.cc/opds/">
 			return null;
 		}
 		private void downloadBook( final String type, final String url, InputStream is, int contentLength, final String fileName, final boolean isZip ) throws Exception {
-			L.d("Download requested: " + type + " " + url + " " + contentLength);
+			L.d("Download requested: " + type + " " + safeUrlForLog(url) + " " + contentLength);
 			DocumentFormat fmt = DocumentFormat.byMimeType(type);
 			if ( fmt==null ) {
 				L.d("Download: unknown type " + type);
@@ -647,8 +645,8 @@ xml:base="http://lib.ololo.cc/opds/">
 				}
 			});
 			if ( outDir==null ) {
-				L.d("Cannot find writable location for downloaded file " + url);
-				throw new Exception("Cannot save file " + url);
+				L.d("Cannot find writable location for downloaded file " + safeUrlForLog(url));
+				throw new Exception("Cannot save file from " + safeUrlForLog(url));
 			}
 			final File outFile = generateFileName( outDir, fileName, type, isZip );
 			if ( outFile==null ) {
@@ -660,6 +658,13 @@ xml:base="http://lib.ololo.cc/opds/">
 				L.d("Cannot create file " + outFile.getAbsolutePath());
 				throw new Exception("Cannot create file");
 			}
+			long requiredSpace = MIN_FREE_STORAGE_BYTES
+					+ (contentLength >= 0 ? contentLength : 0);
+			long usableSpace = outDir.getUsableSpace();
+			if (usableSpace > 0 && usableSpace < requiredSpace) {
+				outFile.delete();
+				throw new IOException("Not enough free space for OPDS download");
+			}
 			
 			L.d("Download started: " + outFile.getAbsolutePath());
 //			long lastTs = System.currentTimeMillis(); 
@@ -667,11 +672,20 @@ xml:base="http://lib.ololo.cc/opds/">
 			boolean success = false;
 			try (FileOutputStream os = new FileOutputStream(outFile)) {
 				byte[] buf = new byte[16384];
-				int totalWritten = 0;
-				while (totalWritten<contentLength || contentLength==-1) {
-					int bytesRead = is.read(buf);
-					if ( bytesRead<=0 )
-						break;
+				long totalWritten = 0;
+				long nextSpaceCheck = 0;
+				int bytesRead;
+				while ((bytesRead = is.read(buf)) != -1) {
+					if (cancelled)
+						throw new InterruptedIOException("OPDS download cancelled");
+					if (totalWritten + bytesRead > MAX_BOOK_DOWNLOAD_BYTES)
+						throw new IOException("OPDS download exceeds configured size limit");
+					if (totalWritten >= nextSpaceCheck) {
+						usableSpace = outDir.getUsableSpace();
+						if (usableSpace > 0 && usableSpace < MIN_FREE_STORAGE_BYTES + bytesRead)
+							throw new IOException("Not enough free space for OPDS download");
+						nextSpaceCheck = totalWritten + 4L * 1024L * 1024L;
+					}
 					os.write(buf, 0, bytesRead);
 					totalWritten += bytesRead;
 //					final int percent = totalWritten * 100 / contentLength;
@@ -686,6 +700,8 @@ xml:base="http://lib.ololo.cc/opds/">
 //						});
 //					}
 				}
+				if (contentLength >= 0 && totalWritten != contentLength)
+					throw new IOException("Wrong content length");
 				success = true;
 			} finally {
 				if ( !success ) {
@@ -713,17 +729,27 @@ xml:base="http://lib.ololo.cc/opds/">
 		}
 		
 		public static String encodePassword(String username, String password) {
-			return Base64.encodeToString((username + ":" + password).getBytes(), Base64.NO_WRAP);
+			return "Basic " + Base64.encodeToString(
+					(username + ":" + password).getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
 		}
 
 		public void runInternal() {
 			connection = null;
+			final URL credentialOrigin = url;
+			final boolean hasCredentials = username != null && username.length() > 0
+					&& password != null && password.length() > 0;
+			if (hasCredentials && !"https".equalsIgnoreCase(credentialOrigin.getProtocol())) {
+				onError("Credentials require HTTPS");
+				return;
+			}
 			
 			boolean itemsLoadedPartially = false;
 			boolean loadNext = false;
 			HashSet<String> visited = new HashSet<String>();
+			int redirectCount = 0;
 
 			do {
+				InputStream responseStream = null;
 				try {
 					setProgressMessage( url.toString(), -1 );
 					visited.add(url.toString());
@@ -742,11 +768,11 @@ xml:base="http://lib.ololo.cc/opds/">
 					if (oldAddress.startsWith("orobot://")) {
 					    newURL = new URL("http://" + oldAddress.substring(9)); // skip orobot://
 					    useOrobotProxy = true;
-					    L.d("Converting url - " + oldAddress + " to " + newURL + " for using ORobot proxy");
+					    L.d("Converting URL to " + safeUrlForLog(newURL) + " for using ORobot proxy");
 					} else if (oldAddress.startsWith("orobots://")) {
 					    newURL = new URL("https://" + oldAddress.substring(10)); // skip orobots://
 					    useOrobotProxy = true;
-					    L.d("Converting url - " + oldAddress + " to " + newURL + " for using ORobot proxy");
+					    L.d("Converting URL to " + safeUrlForLog(newURL) + " for using ORobot proxy");
 					}
 					Proxy proxy = null;
                     System.setProperty("http.keepAlive", "false");					
@@ -763,26 +789,6 @@ xml:base="http://lib.ololo.cc/opds/">
 					}
 				    
 					URLConnection conn = proxy == null ? newURL.openConnection() : newURL.openConnection(proxy);
-					if ( conn instanceof HttpsURLConnection ) {
-	                	HttpsURLConnection https = (HttpsURLConnection)conn;
-
-	                    // Create a trust manager that does not validate certificate chains
-	                    TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
-	                        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-	                            return null;
-	                        }
-	                        public void checkClientTrusted(X509Certificate[] certs, String authType) {
-	                        }
-	                        public void checkServerTrusted(X509Certificate[] certs, String authType) {
-	                        }
-	                    } };
-	                    // Install the all-trusting trust manager
-	                    final SSLContext sc = SSLContext.getInstance("SSL");
-	                    sc.init(null, trustAllCerts, new java.security.SecureRandom());
-	                    HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
-	                    
-	                	https.setHostnameVerifier((arg0, arg1) -> true);
-					}
 					if ( !(conn instanceof HttpURLConnection) ) {
 						onError("Only HTTP supported");
 						return;
@@ -791,15 +797,11 @@ xml:base="http://lib.ololo.cc/opds/">
 		            connection.setRequestProperty("User-Agent", "CoolReader/3(Android)");
 		            if ( referer!=null )
 		            	connection.setRequestProperty("Referer", referer);
-		            connection.setInstanceFollowRedirects(true);
+		            connection.setInstanceFollowRedirects(false);
 	                connection.setUseCaches(false);
 		            
-	                if (username != null && username.length() > 0 && password != null && password.length() > 0) {
+	                if (hasCredentials && isSameOrigin(credentialOrigin, newURL)) {
 	                	connection.setRequestProperty("Authorization", encodePassword(username, password));
-	                	Authenticator.setDefault(new Authenticator() {
-	                	    protected PasswordAuthentication getPasswordAuthentication() {
-	                	        return new PasswordAuthentication(username, password.toCharArray());
-	                	    }});	            	
 	                }
 		            
 		            connection.setAllowUserInteraction(false);
@@ -821,21 +823,32 @@ xml:base="http://lib.ololo.cc/opds/">
 					
 					response = connection.getResponseCode();
 					if (EXTENDED_LOG) L.d("Response: " + response);
-					if ( response == 301 || response == 302 || response == 307 || response == 303 ) {
+					if (response == 301 || response == 302 || response == 303
+							|| response == 307 || response == 308) {
 						// redirects
 						String redirect = connection.getHeaderField("Location");
 						if (null == redirect) {
 							onError("Invalid redirect " + response);
 							return;
 						}
-						L.d("continue with next part: " + url);
-						url = new URL(redirect);
+						if (++redirectCount > MAX_REDIRECTS) {
+							onError("Too many redirects");
+							return;
+						}
+						URL redirectUrl = resolveRedirect(newURL, redirect);
+						if ("https".equalsIgnoreCase(newURL.getProtocol())
+								&& !"https".equalsIgnoreCase(redirectUrl.getProtocol())) {
+							onError("HTTPS downgrade redirect is not allowed");
+							return;
+						}
+						L.d("continue with redirect: " + safeUrlForLog(redirectUrl));
+						url = redirectUrl;
 						if (visited.contains(url.toString())) {
-							onError("Duplicate redirect " + url);
+							onError("Duplicate redirect " + safeUrlForLog(url));
 							return;
 						}
 						loadNext = true;
-						L.d("Response " + response + ": redirect to " + url);
+						L.d("Response " + response + ": redirect to " + safeUrlForLog(url));
 						continue;
 					}
 					if ( response != 200 ) {
@@ -849,12 +862,24 @@ xml:base="http://lib.ololo.cc/opds/">
 					String contentType = connection.getContentType();
 					String contentEncoding = connection.getContentEncoding();
 					int contentLen = connection.getContentLength();
+					long maxResponseBytes = expectedType == null ? MAX_FEED_BYTES : MAX_BOOK_DOWNLOAD_BYTES;
+					if (contentLen > maxResponseBytes) {
+						onError("Response exceeds configured size limit");
+						return;
+					}
 					//connection.getC
 					if (EXTENDED_LOG) L.d("Entity content length: " + contentLen);
 					if (EXTENDED_LOG) L.d("Entity content type: " + contentType);
 					if (EXTENDED_LOG) L.d("Entity content encoding: " + contentEncoding);
 					setProgressMessage( url.toString(), contentLen );
-					InputStream is = connection.getInputStream();
+					responseStream = connection.getInputStream();
+					InputStream is = responseStream;
+					if ("gzip".equalsIgnoreCase(contentEncoding)) {
+						is = new GZIPInputStream(new BufferedInputStream(is, 8192));
+						// Content-Length describes compressed bytes, while all
+						// budgets below apply to decompressed content.
+						contentLen = -1;
+					}
 					if (delayedProgress != null)
 						delayedProgress.cancel();
 					is = new ProgressInputStream(is, startTimeStamp, progressMessage, contentLen, 80);
@@ -864,7 +889,14 @@ xml:base="http://lib.ololo.cc/opds/">
 						contentType = expectedType;
 					else if ( contentLen>0 && contentLen<MAX_CONTENT_LEN_TO_BUFFER) { // autodetect type
 						byte[] buf = new byte[contentLen];
-						if ( is.read(buf)!=contentLen ) {
+						int offset = 0;
+						while (offset < contentLen) {
+							int count = is.read(buf, offset, contentLen - offset);
+							if (count < 0)
+								break;
+							offset += count;
+						}
+						if (offset != contentLen) {
 							onError("Wrong content length");
 							return;
 						}
@@ -874,15 +906,15 @@ xml:base="http://lib.ololo.cc/opds/">
 						if ( findSubstring(buf, "<?xml version=")>=0 && findSubstring(buf, "<feed")>=0  )
 							contentType = "application/atom+xml"; // override type
 					}
-					if ( contentType.startsWith("application/atom+xml") ) {
+					if (contentType != null && contentType.startsWith("application/atom+xml")) {
 						if (EXTENDED_LOG) L.d("Parsing feed");
-						parseFeed( is );
+						parseFeed(new BoundedInputStream(is, MAX_FEED_BYTES));
 						itemsLoadedPartially = true;
 						if (handler.docInfo.nextLink!=null && handler.docInfo.nextLink.type.startsWith("application/atom+xml;profile=opds-catalog")) {
 							if (handler.entries.size() < MAX_OPDS_ITEMS) {
-								url = new URL(handler.docInfo.nextLink.href);
+								url = new URL(url, handler.docInfo.nextLink.href);
 								loadNext = !visited.contains(url.toString());
-								L.d("continue with next part: " + url);
+								L.d("continue with next part: " + safeUrlForLog(url));
 							} else {
 								L.d("max item count reached: " + handler.entries.size());
 								loadNext = false;
@@ -901,12 +933,19 @@ xml:base="http://lib.ololo.cc/opds/">
 						itemsLoadedPartially = false;
 					}
 				} catch (Exception e) {
-					L.e("Exception while trying to open URI " + url.toString(), e);
+					L.e("Exception while trying to open URI " + safeUrlForLog(url), e);
 					if ( progressShown )
 						Services.getEngine().hideProgress();
 					onError("Error occured while reading OPDS catalog");
 					break;
 				} finally {
+					if (responseStream != null) {
+						try {
+							responseStream.close();
+						} catch (IOException e) {
+							// Connection cleanup below is the final fallback.
+						}
+					}
 					if ( connection!=null )
 						try {
 							connection.disconnect();
@@ -972,28 +1011,38 @@ xml:base="http://lib.ololo.cc/opds/">
 			private final InputStream sourceStream;
 			private final int totalSize;
 			private final String progressMessage;
+			private final long startTime;
 			private long lastUpdate;
 			private int lastPercent;
 			private int maxPercentToStartShowingProgress;
-			private int bytesRead;
+			private long bytesRead;
 			
 			public ProgressInputStream( InputStream sourceStream, long startTimeStamp, String progressMessage, int totalSize, int maxPercentToStartShowingProgress ) {
 				this.sourceStream = sourceStream;
 				this.totalSize = totalSize;
 				this.maxPercentToStartShowingProgress = maxPercentToStartShowingProgress * 100;
 				this.progressMessage = progressMessage;
+				this.startTime = startTimeStamp;
 				this.lastUpdate = startTimeStamp;
 				this.bytesRead = 0;
 			}
 
-			private void updateProgress() {
+			private void ensureActive() throws IOException {
+				if (cancelled)
+					throw new InterruptedIOException("OPDS transfer cancelled");
+				if (System.currentTimeMillis() - startTime > MAX_TRANSFER_TIME_MS)
+					throw new InterruptedIOException("OPDS transfer time limit exceeded");
+			}
+
+			private void updateProgress() throws IOException {
+				ensureActive();
 				long ts = System.currentTimeMillis();
 				long delay = ts - lastUpdate;
 				if ( delay > TIMEOUT ) {
 					lastUpdate = ts;
 					int percent = 0;
 					if ( totalSize>0 ) {
-						percent = bytesRead * 100 / totalSize * 100;
+						percent = (int)(bytesRead * 10000L / totalSize);
 					}
 					if ( !partialDownloadCompleted && (!progressShown || percent!=lastPercent) && (progressShown || percent<maxPercentToStartShowingProgress || delay > TIMEOUT*2 ) ) {
 						Services.getEngine().showProgress(percent, progressMessage);
@@ -1006,14 +1055,27 @@ xml:base="http://lib.ololo.cc/opds/">
 			
 			@Override
 			public int read() throws IOException {
-				bytesRead++;
+				ensureActive();
+				int value = sourceStream.read();
+				if (value >= 0)
+					bytesRead++;
 				updateProgress();
-				return sourceStream.read();
+				return value;
+			}
+
+			@Override
+			public int read(byte[] buffer, int offset, int length) throws IOException {
+				ensureActive();
+				int count = sourceStream.read(buffer, offset, length);
+				if (count > 0)
+					bytesRead += count;
+				updateProgress();
+				return count;
 			}
 
 			@Override
 			public void close() throws IOException {
-				super.close();
+				sourceStream.close();
 			}
 		}
 		
@@ -1044,4 +1106,44 @@ xml:base="http://lib.ololo.cc/opds/">
 	
 	public static final int PROGRESS_DELAY_MILLIS = 2000;
 	public static final int MAX_OPDS_ITEMS = 1000;
+	public static final int MAX_XML_DEPTH = 128;
+
+	static boolean isSameOrigin(URL first, URL second) {
+		return first != null && second != null
+				&& first.getProtocol().equalsIgnoreCase(second.getProtocol())
+				&& first.getHost().equalsIgnoreCase(second.getHost())
+				&& effectivePort(first) == effectivePort(second);
+	}
+
+	static URL resolveRedirect(URL current, String location) throws IOException {
+		URL resolved = new URL(current, location);
+		String protocol = resolved.getProtocol();
+		if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol))
+			throw new IOException("Unsupported redirect protocol: " + protocol);
+		return resolved;
+	}
+
+	private static int effectivePort(URL url) {
+		int port = url.getPort();
+		return port >= 0 ? port : url.getDefaultPort();
+	}
+
+	public static String safeUrlForLog(URL url) {
+		if (url == null)
+			return "<null>";
+		StringBuilder value = new StringBuilder();
+		value.append(url.getProtocol()).append("://").append(url.getHost());
+		if (url.getPort() >= 0)
+			value.append(':').append(url.getPort());
+		value.append(url.getPath());
+		return value.toString();
+	}
+
+	public static String safeUrlForLog(String url) {
+		try {
+			return safeUrlForLog(new URL(url));
+		} catch (Exception e) {
+			return "<invalid-url>";
+		}
+	}
 }

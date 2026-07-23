@@ -743,22 +743,26 @@ public class BaseActivity extends Activity implements Settings {
 	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	@SuppressLint("NewApi")
 	public boolean setSystemUiVisibility() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			androidx.core.view.WindowInsetsControllerCompat controller = androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+			if (controller != null) {
+				if (isFullscreen()) {
+					controller.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars() | androidx.core.view.WindowInsetsCompat.Type.navigationBars());
+					controller.setSystemBarsBehavior(androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+				} else {
+					controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars() | androidx.core.view.WindowInsetsCompat.Type.navigationBars());
+				}
+				return true;
+			}
+		}
 		if (DeviceInfo.getSDKLevel() >= DeviceInfo.HONEYCOMB) {
 			int flags = 0;
 			if (getKeyBacklight() == 0) {
 				if (DeviceInfo.getSDKLevel() < 19)
-					// backlight of hardware buttons enabled/disabled
-					// in updateButtonsBrightness(), turnOffKeyBacklight(), turnOnKeyBacklight()
-					// entry point onUserActivity().
-					// This flag just shade software navigation bar and system UI
 					flags |= View.SYSTEM_UI_FLAG_LOW_PROFILE;
 			}
-			if (isFullscreen() /*&& wantHideNavbarInFullscreen() && isSmartphone()*/) {
+			if (isFullscreen()) {
 				if (DeviceInfo.getSDKLevel() >= 19)
-					// Flag View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY added in API 19
-					// without this flag  SYSTEM_UI_FLAG_HIDE_NAVIGATION will be force cleared by the system on any user interaction,
-					// and SYSTEM_UI_FLAG_FULLSCREEN will be force-cleared by the system if the user swipes from the top of the screen.
-					// So use this flags only on API >= 19
 					flags |= View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
 							View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
 							View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
@@ -769,8 +773,6 @@ public class BaseActivity extends Activity implements Settings {
 					flags |= View.SYSTEM_UI_FLAG_LOW_PROFILE;
 			}
 			setSystemUiVisibility(flags);
-//			if (isFullscreen() && DeviceInfo.getSDKLevel() >= DeviceInfo.ICE_CREAM_SANDWICH)
-//				simulateTouch();
 			return true;
 		}
 		return false;

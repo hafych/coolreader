@@ -1,0 +1,91 @@
+name: CoolReader Next Build & Verification CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-desktop-crengine:
+    name: Build crengine & fb2props (Linux & macOS)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libzstd-dev libutf8proc-dev
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake pkg-config freetype harfbuzz fribidi zstd utf8proc libpng jpeg
+
+      - name: Configure CMake (crengine & fb2props)
+        run: cmake -S . -B build -DGUI=FB2PROPS -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build crengine & fb2props
+        run: cmake --build build --config Release --parallel
+
+      - name: Run native smoke tests
+        run: ctest --test-dir build --output-on-failure
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, lint and test Android
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug lintDebug testDebugUnitTest --stacktrace
+
+      - name: Upload APK and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-${{ github.sha }}
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
+
+  sanitizer-smoke:
+    name: ASan & UBSan smoke (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libzstd-dev libutf8proc-dev
+
+      - name: Configure sanitizer build
+        run: cmake -S . -B build-sanitized -DGUI=FB2PROPS -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DUSE_DEBUG_EXTRA_OPTS=ON
+
+      - name: Build sanitizer targets
+        run: cmake --build build-sanitized --parallel
+
+      - name: Run sanitizer smoke
+        run: ctest --test-dir build-sanitized --output-on-failure
