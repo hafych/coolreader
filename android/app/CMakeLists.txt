@@ -67,6 +67,7 @@ set(CRENGINE_SRC_FILES
     ${CR3_ROOT}/crengine/src/lvstring32collection.cpp
     ${CR3_ROOT}/crengine/src/lvstring32hashedcollection.cpp
     ${CR3_ROOT}/crengine/src/crlog.cpp
+    ${CR3_ROOT}/crengine/src/logredactor.cpp
     ${CR3_ROOT}/crengine/src/serialbuf.cpp
     ${CR3_ROOT}/crengine/src/props.cpp
     ${CR3_ROOT}/crengine/src/lstridmap.cpp
@@ -172,6 +173,7 @@ set(JNI_SRC_FILES
     ${CR3_ROOT}/android/jni/cr3engine.cpp
     ${CR3_ROOT}/android/jni/cr3java.cpp
     ${CR3_ROOT}/android/jni/docview.cpp
+    ${CR3_ROOT}/android/jni/secure_log.cpp
 )
 
 set(LOCAL_SRC_FILES

@@ -72,6 +72,26 @@ Cloud sync currently has no active remote transport in this GPL build; the old
 Google Drive integration is disabled. A new sync transport must define its
 threat model and use the same network policy before it can be enabled.
 
+## Diagnostic privacy
+
+Production Java logging is routed through `org.coolreader.crengine.Log`; direct
+`android.util.Log`, stdout/stderr and `printStackTrace` calls are rejected by
+CI. The wrapper removes credentials, authorization values, URLs, URL
+query/fragment data, local paths and private book filenames. Exception messages
+and source file names are not copied into log stack traces.
+
+The Android application installs a default uncaught-exception boundary that
+passes a detached, message-free throwable to the platform handler. Native
+engine messages use a conservative sink: any message containing a credential
+marker, URL/query syntax, path separator or supported document filename is
+replaced in full. User-exported logcat data is filtered again line by line
+before it is written.
+
+This policy intentionally favors privacy over verbose diagnostics. Sanitized
+exception class/method identifiers, source line numbers and non-sensitive
+engine status messages remain available. CI policy changes or redaction
+suppressions require a documented security review.
+
 ## Native dynamic analysis
 
 Linux CI builds and runs the native smoke suite under AddressSanitizer,

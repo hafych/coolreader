@@ -28,7 +28,6 @@ package org.coolreader.crengine;
 
 import android.graphics.PixelFormat;
 import android.os.Build;
-import android.util.Log;
 
 import java.lang.reflect.Field;
 

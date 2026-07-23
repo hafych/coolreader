@@ -22,7 +22,6 @@ package org.coolreader.genrescollection;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
-import android.util.Log;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -36,8 +35,6 @@ import java.util.Map;
 import java.util.Stack;
 
 public class GenresCollection {
-
-	private static final String TAG = "genre";
 
 	static public final class GenreRecord {
 		private final int m_id;
@@ -152,19 +149,12 @@ public class GenresCollection {
 			// add new child
 			GenreRecord record = m_allGenres.get(code);
 			if (null != record) {
-				if (id != record.getId()) {
-					Log.w(TAG, "genres: trying to add already existing genre '" + code + "' with different id: " + id + " != " + record.getId() + "!");
-					Log.w(TAG, "genres: new id will be ignored.");
-				//} else {
-				//	Log.d(TAG, "genres: for genre '" + code + "' duplicate found.");
-				}
+				// Keep the first registered record and identifier.
 			} else {
 				record = new GenreRecord(id, code, name, 1);
 				m_allGenres.put(code, record);
 			}
 			groupChilds.add(record);
-		} else {
-			Log.w(TAG, "genres: genre with code '" + code + "' already exist in genre group '" + groupCode + "', skipped.");
 		}
 	}
 
@@ -175,8 +165,6 @@ public class GenresCollection {
 				if (genre.addAlias(alias))
 					m_allGenres.put(alias, genre);
 			}
-		} else {
-			Log.w(TAG, "No such genre '" + genreCode + "' to register aliases!");
 		}
 	}
 
@@ -418,16 +406,9 @@ public class GenresCollection {
 				addAliases(entry.getKey(), entry.getValue());
 			}
 			res = count > 0;
-		} catch (IndexOutOfBoundsException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (XmlPullParserException e) {
-			e.printStackTrace();
-		} catch (Resources.NotFoundException e) {
-			e.printStackTrace();
-		} catch (NullPointerException e) {
-			e.printStackTrace();
+		} catch (IndexOutOfBoundsException | IOException |
+				 XmlPullParserException | Resources.NotFoundException |
+				 NullPointerException ignored) {
 		}
 		return res;
 	}

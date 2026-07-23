@@ -22,7 +22,7 @@ package org.coolreader.db;
 
 import android.app.Service;
 import android.os.Handler;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.Logger;

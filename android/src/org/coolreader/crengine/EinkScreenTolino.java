@@ -26,7 +26,6 @@ public class EinkScreenTolino extends EinkScreenNook {
 
 	@Override
 	public void prepareController(View view, boolean isPartially) {
-		//System.err.println("Sleep = " + isPartially);
 		if (isPartially || mIsSleep != isPartially) {
 			tolinoSleepController(isPartially, view);
 //			if (isPartially)

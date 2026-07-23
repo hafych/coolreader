@@ -19,7 +19,7 @@
 
 package org.coolreader.db;
 
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.Logger;

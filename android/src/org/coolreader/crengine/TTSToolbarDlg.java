@@ -33,7 +33,6 @@ import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -190,8 +189,7 @@ public class TTSToolbarDlg implements Settings {
 						| View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 			);
 		}catch(Exception e){
-			log.e("ERROR: failed to hide system nav bar\n" + e);
-			e.printStackTrace();
+			log.e("Failed to hide system navigation bar", e);
 		}
 	}
 	private void setReaderMode() {

@@ -23,7 +23,6 @@
 package org.coolreader.crengine;
 
 import android.content.Context;
-import android.util.Log;
 import android.view.View;
 
 import java.util.List;
@@ -66,7 +65,6 @@ public class EinkScreenNook implements EinkScreen {
 
 	@Override
 	public void prepareController(View view, boolean isPartially) {
-		//System.err.println("Sleep = " + isPartially);
 		if (isPartially || mIsSleep != isPartially) {
 			nookSleepController(isPartially, view);
 //				if (isPartially)

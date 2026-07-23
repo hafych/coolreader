@@ -74,7 +74,7 @@
 int z_verbose=0;
 extern "C" void z_error(char * msg);
 void z_error(char * msg) {
-	fprintf(stderr, "%s\n", msg);
+	cr3_secure_log_print(ANDROID_LOG_ERROR, LOG_TAG, "%s", msg);
 	exit(1);
 }
 #endif
@@ -452,7 +452,7 @@ protected:
             level = ANDROID_LOG_DEBUG;
         else if (!strcmp(lvl, "TRACE"))
             level = ANDROID_LOG_VERBOSE;
-        __android_log_write(level, LOG_TAG, buffer);
+        cr3_secure_log_write(level, LOG_TAG, buffer);
     }
 };
 

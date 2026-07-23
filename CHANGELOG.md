@@ -25,6 +25,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   regression coverage for oversized and deeply nested hostile documents.
 - An Android source-policy gate that prevents production HTTP callers from
   bypassing the shared connection policy.
+- A diagnostic privacy gate that prevents Java and native logging callers from
+  bypassing redaction.
 - A Clang ThreadSanitizer CI job and a real-thread native smoke test for the
   engine's thread and recursive-mutex primitives.
 - Weekly read-only compatibility check against `buggins/coolreader`.
@@ -58,6 +60,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   document ingress limit as the native parser.
 - Native thread completion state is published atomically instead of racing
   between the worker and polling threads.
+- Android log messages, uncaught Java exceptions and explicitly exported
+  logcat files now remove credentials, URLs, query/fragment data, book names
+  and local paths while preserving safe stack frame identifiers.
 
 ### Security
 
@@ -76,3 +81,5 @@ The historical Debian changelog remains in [`changelog`](changelog).
   export model is implemented.
 - Removed phone-state permission and the exported telephony receiver; TTS
   interruption is handled through Android Audio Focus.
+- Routed every production Java/NDK log call through privacy filters and removed
+  direct stack-trace/stdout/stderr diagnostics.

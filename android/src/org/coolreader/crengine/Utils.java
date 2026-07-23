@@ -34,7 +34,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.text.format.DateFormat;
-import android.util.Log;
 import android.view.View;
 
 import org.coolreader.R;

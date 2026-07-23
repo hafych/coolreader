@@ -31,7 +31,7 @@ import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 public abstract class BaseDB {
 

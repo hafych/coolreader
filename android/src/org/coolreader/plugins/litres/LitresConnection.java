@@ -62,7 +62,7 @@ import org.xml.sax.SAXException;
 
 import android.content.SharedPreferences;
 import android.os.Handler;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 public class LitresConnection {
 	final static String TAG = "litres";

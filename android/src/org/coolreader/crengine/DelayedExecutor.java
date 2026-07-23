@@ -20,7 +20,6 @@
 package org.coolreader.crengine;
 
 import android.os.Handler;
-import android.util.Log;
 
 /**
  * Schedulable cancelable replaceable task.

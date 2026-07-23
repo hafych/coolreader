@@ -24,7 +24,6 @@ package org.coolreader.crengine;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.Log;
 
 import org.coolreader.R;
 import org.coolreader.plugins.OnlineStoreBook;

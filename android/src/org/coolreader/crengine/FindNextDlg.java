@@ -20,7 +20,6 @@
 package org.coolreader.crengine;
 
 import android.graphics.drawable.BitmapDrawable;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;

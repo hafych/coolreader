@@ -100,10 +100,9 @@ public class N2EpdController {
 				
 				strN2EpdInit += "Ok!";
 			} catch (Exception e) {
-				System.err.println("Failed to init refresh EPD");
-				System.err.println(e.toString());
-				strN2EpdInit += "Failed: " + e.toString();
-				e.printStackTrace();
+				Log.e("cr3", "Failed to initialize EPD refresh", e);
+				strN2EpdInit += "Failed: "
+						+ e.getClass().getSimpleName();
 			}
 		}
 	}
@@ -116,10 +115,9 @@ public class N2EpdController {
 				Object regionParams =  RegionParamsConstructor.newInstance(new Object[] { 0, 0, 600, 800, enumsWave[wave]});
 				mtSetRegion.invoke(mEpdController, "CoolReader", enumsRegion[region], regionParams, enumsMode[mode]);
 			} catch (Exception e) {
-				System.err.println("Failed: SetMode");
-				System.err.println(e.toString());
-				strN2EpdInit += "Failed: setMode: " + e.toString();
-				e.printStackTrace();
+				Log.e("cr3", "Failed to set EPD mode", e);
+				strN2EpdInit += "Failed: setMode: "
+						+ e.getClass().getSimpleName();
 			}
 		}
 	}

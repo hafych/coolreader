@@ -24,7 +24,6 @@ import android.content.Context;
 import android.database.DataSetObserver;
 import android.graphics.Paint;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.KeyEvent;

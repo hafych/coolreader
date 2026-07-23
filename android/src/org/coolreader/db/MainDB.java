@@ -29,7 +29,7 @@ import android.database.DatabaseUtils;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 import org.coolreader.crengine.BookInfo;
 import org.coolreader.crengine.Bookmark;
@@ -238,7 +238,7 @@ public class MainDB extends BaseDB {
 				mDB.setTransactionSuccessful();
 			} catch (SQLException e) {
 				res = false;
-				e.printStackTrace();
+				Log.e("cr3db", "Failed to update genre schema", e);
 			}
 			mDB.endTransaction();
 		}

@@ -20,7 +20,6 @@
 
 package org.coolreader.crengine;
 
-import android.util.Log;
 
 import java.util.HashSet;
 import java.util.Map;

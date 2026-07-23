@@ -28,13 +28,14 @@
 
 #include <jni.h>
 #include <android/log.h>
+#include "secure_log.h"
 
 #define  LOG_TAG    "cr3eng"
-#define  LOGI(...)  __android_log_print(ANDROID_LOG_INFO,LOG_TAG,__VA_ARGS__)
-#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR,LOG_TAG,__VA_ARGS__)
-#define  LOGV(...)  __android_log_print(ANDROID_LOG_VERBOSE,LOG_TAG,__VA_ARGS__)
-#define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,LOG_TAG,__VA_ARGS__)
-#define  LOGASSERTFAILED(cond,...)  __android_log_assert(cond,LOG_TAG,__VA_ARGS__)
+#define  LOGI(...)  cr3_secure_log_print(ANDROID_LOG_INFO,LOG_TAG,__VA_ARGS__)
+#define  LOGE(...)  cr3_secure_log_print(ANDROID_LOG_ERROR,LOG_TAG,__VA_ARGS__)
+#define  LOGV(...)  cr3_secure_log_print(ANDROID_LOG_VERBOSE,LOG_TAG,__VA_ARGS__)
+#define  LOGD(...)  cr3_secure_log_print(ANDROID_LOG_DEBUG,LOG_TAG,__VA_ARGS__)
+#define  LOGASSERTFAILED(cond,...)  cr3_secure_log_assert(cond,LOG_TAG,__VA_ARGS__)
 
 #include "../../crengine/include/lvstring.h"
 #include "../../crengine/include/lvdrawbuf.h"

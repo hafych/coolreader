@@ -31,7 +31,6 @@ import java.util.Comparator;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.Log;
 
 public class BookInfo implements Parcelable {
 	private FileInfo fileInfo;

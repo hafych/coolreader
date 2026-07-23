@@ -29,7 +29,6 @@ import org.coolreader.CoolReader;
 import org.coolreader.R;
 
 import android.content.Context;
-import android.util.Log;
 
 public class HelpFileGenerator {
 

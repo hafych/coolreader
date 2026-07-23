@@ -62,6 +62,9 @@ jobs:
       - name: Verify Android HTTP policy
         run: python3 tools/verify_android_http_policy.py
 
+      - name: Verify Android diagnostic privacy policy
+        run: python3 tools/verify_android_log_privacy.py
+
       - name: Build, lint and test Android
         run: |
           cd android

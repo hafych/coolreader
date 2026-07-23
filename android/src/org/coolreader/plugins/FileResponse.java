@@ -23,7 +23,7 @@ import java.io.File;
 
 import org.coolreader.plugins.litres.ResponseCallback;
 
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 public class FileResponse implements ResponseCallback, AsyncResponse {
 	private int errorCode = -1;

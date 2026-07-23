@@ -9,6 +9,7 @@ SET (CRENGINE_SOURCES
     src/lvstring32hashedcollection.cpp
     src/serialbuf.cpp
     src/crlog.cpp
+    src/logredactor.cpp
     src/props.cpp
     src/lstridmap.cpp
     src/rtfimp.cpp

@@ -19,7 +19,6 @@
 
 package org.coolreader.crengine;
 
-import android.util.Log;
 
 public class L {
 	public static final String TAG = "cr3"; 

@@ -23,7 +23,7 @@ import org.coolreader.plugins.AsyncResponse;
 import org.coolreader.plugins.ErrorResponse;
 import org.xml.sax.helpers.DefaultHandler;
 
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 public abstract class ResponseHandler extends DefaultHandler implements ResponseCallback {
 	private int errorCode = -1;

@@ -31,7 +31,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 import org.coolreader.CoolReader;
 import org.coolreader.crengine.TTSToolbarDlg;

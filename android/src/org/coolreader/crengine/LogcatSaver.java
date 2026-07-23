@@ -19,10 +19,10 @@
 
 package org.coolreader.crengine;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -146,13 +146,10 @@ public class LogcatSaver {
 				// If exits code != 0 then in outputStream saved logcat error message
 				byte [] data = processIOWithTimeout.receivedData();
 				if (null != data) {
-					ByteArrayInputStream inputStream = new ByteArrayInputStream(data);
-					byte[] buffer = new byte[1024];
-					int rb;
-					while ((rb = inputStream.read(buffer)) > 0) {
-						outputStream.write(buffer, 0, rb);
-					}
-					inputStream.close();
+					String diagnostic = new String(data, StandardCharsets.UTF_8);
+					byte[] safeDiagnostic = LogRedactor.redactArtifact(diagnostic)
+							.getBytes(StandardCharsets.UTF_8);
+					outputStream.write(safeDiagnostic);
 					res = (0 == exitCode);
 				}
 			}

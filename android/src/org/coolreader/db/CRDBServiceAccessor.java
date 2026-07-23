@@ -30,7 +30,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 public class CRDBServiceAccessor {
 	private final static String TAG = "cr3db";

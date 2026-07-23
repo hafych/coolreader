@@ -13,7 +13,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 /**
  * @author Michael Berganovsky [mike0berg at gmail.com]

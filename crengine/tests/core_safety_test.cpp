@@ -2,6 +2,7 @@
 #include "lvthread.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
+#include "logredactor.h"
 #include "parsebudget.h"
 
 #include <cerrno>
@@ -33,6 +34,29 @@ static int testMutex() {
         if (!mutex.trylock())
             return fail("LVLock did not leave the mutex usable");
         mutex.unlock();
+    }
+    return 0;
+}
+
+static int testLogRedactor() {
+    if (CRRedactLogMessage("Rendered 42 pages") != "Rendered 42 pages")
+        return fail("safe native diagnostic was unexpectedly changed");
+    const char *sensitiveMessages[] = {
+        "password=native-password-secret",
+        "access_token=native-access-token-secret",
+        "Authorization: Bearer native-token-secret",
+        "GET https://example.test/book?token=native-query-secret",
+        "Opening /storage/emulated/0/Books/private-title.fb2",
+        "Opening C:\\Users\\alice\\Books\\private-title.epub",
+        "Opening relative/private-title.mobi"
+    };
+    for (const char *message : sensitiveMessages) {
+        std::string safe = CRRedactLogMessage(message);
+        if (safe != "[redacted native diagnostic]")
+            return fail("sensitive native diagnostic was not redacted");
+        if (safe.find("secret") != std::string::npos
+                || safe.find("private-title") != std::string::npos)
+            return fail("native diagnostic leaked its canary");
     }
     return 0;
 }
@@ -511,6 +535,8 @@ static int testRecursiveContainerBudget() {
 
 int main() {
     if (testMutex() != 0)
+        return 1;
+    if (testLogRedactor() != 0)
         return 1;
     if (testOwnedDescriptor() != 0)
         return 1;

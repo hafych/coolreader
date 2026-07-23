@@ -25,7 +25,7 @@ import org.coolreader.crengine.Logger;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 public class CoverDB extends BaseDB {
 

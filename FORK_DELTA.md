@@ -27,6 +27,7 @@ original repository above as `upstream`.
 | Verified pre-migration database backups | upstreamable | Makes schema upgrades and recovery atomic while retaining bounded history | Remove after an equivalent upstream backup policy lands |
 | Shared Java/native document `ParseBudget` | upstreamable | Applies stable safe-failure codes and common limits to ingress, XML/HTML, ZIP, decoded text, images and recursive containers | Replace only with an audited upstream budget of equal or stricter coverage |
 | Native sanitizer CI and atomic thread completion | upstreamable | Runs ASan/UBSan/TSan smoke coverage, exercises the real thread abstraction and removes its completion-state data race | Remove after equivalent upstream tests and synchronization land |
+| Privacy-filtered Java/native diagnostics | upstreamable | Prevents credentials, URLs, query data, private book names and local paths from reaching app logs, uncaught Java crash reports or exported logcat files | Remove only after upstream has an equivalent enforced boundary and regression corpus |
 
 ## Upstream sync procedure
 

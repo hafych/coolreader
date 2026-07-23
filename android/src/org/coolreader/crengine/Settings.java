@@ -25,7 +25,6 @@
 
 package org.coolreader.crengine;
 
-import android.util.Log;
 
 import org.coolreader.R;
 

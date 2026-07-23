@@ -75,7 +75,8 @@ public class ToastView {
         try {
             queue.put(new Toast(anchor, msg, duration));
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
+            Log.w("cr3", "Toast queue interrupted", e);
         }
         if (showing.compareAndSet(false, true)) {
             show();

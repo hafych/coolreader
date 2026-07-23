@@ -27,7 +27,7 @@ import android.os.Binder;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 
 import org.coolreader.crengine.BookInfo;
 import org.coolreader.crengine.Bookmark;

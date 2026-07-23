@@ -29,7 +29,6 @@ import android.app.AlertDialog;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.os.Environment;
-import android.util.Log;
 
 import org.coolreader.R;
 
@@ -1272,7 +1271,7 @@ public class Engine {
 				}
 				s = processIOWithTimeout.receivedText();
 			} catch (final Exception e) {
-				e.printStackTrace();
+				log.e("Failed to inspect mount entries", e);
 			}
 
 			// parse output

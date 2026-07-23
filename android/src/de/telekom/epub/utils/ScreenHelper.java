@@ -20,7 +20,7 @@
 package de.telekom.epub.utils;
 
 //import android.graphics.Rect;
-import android.util.Log;
+import org.coolreader.crengine.Log;
 //import android.view.View;
 
 public class ScreenHelper {

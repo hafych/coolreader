@@ -22,7 +22,6 @@ package org.coolreader.crengine;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-import android.util.Log;
 
 public class VMRuntimeHack {
 	private Object runtime = null;

@@ -28,7 +28,6 @@ import org.coolreader.R;
 import android.content.Context;
 import android.database.DataSetObserver;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;

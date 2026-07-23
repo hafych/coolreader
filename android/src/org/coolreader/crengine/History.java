@@ -25,7 +25,6 @@ import java.util.ArrayList;
 
 import org.coolreader.db.CRDBService;
 
-import android.util.Log;
 
 public class History extends FileInfoChangeSource {
 	private ArrayList<BookInfo> mBooks = new ArrayList<>();
