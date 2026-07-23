@@ -26,7 +26,7 @@ jobs:
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: |
-          brew install cmake pkg-config freetype harfbuzz fribidi zstd utf8proc libpng jpeg
+          brew install cmake pkg-config freetype harfbuzz fribidi libunibreak zstd utf8proc libpng jpeg
 
       - name: Configure CMake (crengine & fb2props)
         run: cmake -S . -B build -DGUI=FB2PROPS -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
