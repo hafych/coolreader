@@ -34,6 +34,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Database upgrades now create a SHA-256-verified, `fsync`ed backup through a
   same-directory temporary file, retain four generations and restore without
   deleting the current database before the replacement is ready.
+- Main and cover database upgrades now run as named transactional steps with
+  mandatory schema and data postconditions instead of suppressing migration
+  errors.
 
 ### Security
 

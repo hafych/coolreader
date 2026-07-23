@@ -162,6 +162,70 @@ public abstract class BaseDB {
 			return false;
 		}
 	}
+
+	protected final boolean tableExists(String tableName) {
+		try (Cursor cursor = mDB.rawQuery(
+				"SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+				new String[] { tableName })) {
+			return cursor.moveToFirst();
+		}
+	}
+
+	protected final boolean tableHasColumn(String tableName, String columnName) {
+		try (Cursor cursor = mDB.rawQuery("PRAGMA table_info(" + tableName + ")", null)) {
+			int nameColumn = cursor.getColumnIndexOrThrow("name");
+			while (cursor.moveToNext()) {
+				if (columnName.equalsIgnoreCase(cursor.getString(nameColumn)))
+					return true;
+			}
+		}
+		return false;
+	}
+
+	protected final boolean indexExists(String indexName) {
+		try (Cursor cursor = mDB.rawQuery(
+				"SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+				new String[] { indexName })) {
+			return cursor.moveToFirst();
+		}
+	}
+
+	protected final void requireTable(String tableName) {
+		if (!tableExists(tableName))
+			throw new SQLiteException("Required table is missing: " + tableName);
+	}
+
+	protected final void requireColumn(String tableName, String columnName) {
+		if (!tableHasColumn(tableName, columnName))
+			throw new SQLiteException(
+					"Required column is missing: " + tableName + "." + columnName);
+	}
+
+	protected final void requireNoColumn(String tableName, String columnName) {
+		if (tableHasColumn(tableName, columnName))
+			throw new SQLiteException(
+					"Forbidden column still exists: " + tableName + "." + columnName);
+	}
+
+	protected final void requireIndex(String indexName) {
+		if (!indexExists(indexName))
+			throw new SQLiteException("Required index is missing: " + indexName);
+	}
+
+	protected final void requireNoRows(String query, String failureMessage) {
+		try (Cursor cursor = mDB.rawQuery(query, null)) {
+			if (cursor.moveToFirst())
+				throw new SQLiteException(failureMessage);
+		}
+	}
+
+	protected final void addColumnIfMissing(
+			String tableName, String columnName, String sql) {
+		requireTable(tableName);
+		if (!tableHasColumn(tableName, columnName))
+			execSQL(sql);
+		requireColumn(tableName, columnName);
+	}
 	
 	private SQLiteDatabase openDB(File dbFile) {
 		restoredFromBackup = false;

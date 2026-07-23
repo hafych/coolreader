@@ -42,25 +42,30 @@ public class CoverDB extends BaseDB {
 	
 	@Override
 	protected boolean upgradeSchema() {
-		if (mDB.needUpgrade(DB_VERSION)) {
-			execSQL(COVERPAGE_SCHEMA);
-			int currentVersion = mDB.getVersion();
-			// ====================================================================
-			// add more updates here
-			
-			if (currentVersion < 9)
-				execSQLIgnoreErrors("DROP TABLE coverpage");
-			// ====================================================================
-			// set current version
-			if ( currentVersion<DB_VERSION )
+		int currentVersion = mDB.getVersion();
+		if (currentVersion > DB_VERSION)
+			return rejectIncompatibleSchema(currentVersion, DB_VERSION);
+		if (currentVersion < DB_VERSION) {
+			mDB.beginTransaction();
+			try {
+				log.i("Applying cover database migration 9 (current cover schema)");
+				execSQL(COVERPAGE_SCHEMA);
+				execSQL("DROP TABLE IF EXISTS coverpage");
+				requireTable("coverpages");
+				requireColumn("coverpages", "book_path");
+				requireColumn("coverpages", "imagedata");
 				mDB.setVersion(DB_VERSION);
+				mDB.setTransactionSuccessful();
+			} finally {
+				mDB.endTransaction();
+			}
 		}
 
 		dumpStatistics();
 	
 		if (CLEAR_ON_START) {
 			log.w("CLEAR_ON_START is ON: removing all coverpages from DB");
-			execSQLIgnoreErrors("DELETE FROM coverpages");
+			execSQL("DELETE FROM coverpages");
 		}
 		
 		return true;
