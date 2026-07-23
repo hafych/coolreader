@@ -163,7 +163,7 @@ Use some bash console, e.g. "Git Bash"
 
 First, clone CoolReader repository:
 
-        $ git clone https://github.com/buggins/coolreader.git
+        $ git clone https://github.com/hafych/coolreader.git
         $ cd coolreader
 
 Now you can download source code for third party dependencies.
@@ -241,7 +241,7 @@ Using pacman package manager install required packages:
 
 Run "MSYS2 MinGW 64-bit" from start menu
 
-        $ git clone https://github.com/buggins/coolreader.git
+        $ git clone https://github.com/hafych/coolreader.git
         $ cd coolreader
 
 Since package libunibreak not exists in MSYS2, we must build static version of this library, to do this, we need to call the script thirdparty-deploy.sh to download sources:
@@ -286,7 +286,7 @@ Environment setup:
 Run Qt SDK / Qt Command Prompt. Execute:
 
         > sh
-        > git clone https://github.com/buggins/coolreader.git
+        > git clone https://github.com/hafych/coolreader.git
         > cd coolreader
         > mkdir qtbuild
         > cd qtbuild
