@@ -190,43 +190,6 @@ public abstract class BaseDB {
 		}
 	}
 
-	protected final void requireTable(String tableName) {
-		if (!tableExists(tableName))
-			throw new SQLiteException("Required table is missing: " + tableName);
-	}
-
-	protected final void requireColumn(String tableName, String columnName) {
-		if (!tableHasColumn(tableName, columnName))
-			throw new SQLiteException(
-					"Required column is missing: " + tableName + "." + columnName);
-	}
-
-	protected final void requireNoColumn(String tableName, String columnName) {
-		if (tableHasColumn(tableName, columnName))
-			throw new SQLiteException(
-					"Forbidden column still exists: " + tableName + "." + columnName);
-	}
-
-	protected final void requireIndex(String indexName) {
-		if (!indexExists(indexName))
-			throw new SQLiteException("Required index is missing: " + indexName);
-	}
-
-	protected final void requireNoRows(String query, String failureMessage) {
-		try (Cursor cursor = mDB.rawQuery(query, null)) {
-			if (cursor.moveToFirst())
-				throw new SQLiteException(failureMessage);
-		}
-	}
-
-	protected final void addColumnIfMissing(
-			String tableName, String columnName, String sql) {
-		requireTable(tableName);
-		if (!tableHasColumn(tableName, columnName))
-			execSQL(sql);
-		requireColumn(tableName, columnName);
-	}
-	
 	private SQLiteDatabase openDB(File dbFile) {
 		restoredFromBackup = false;
 		SQLiteDatabase db = null;

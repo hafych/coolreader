@@ -23,7 +23,7 @@ original repository above as `upstream`.
 | OPDS/LitRes TLS, redirect, XML and response limits | upstreamable | Removes stop-ship network vulnerabilities | Keep until an audited upstream equivalent lands |
 | Plaintext OPDS/LitRes credential purge | temporary-delta | Authenticated OPDS catalogs stay disabled until secure storage exists | Replace with a Keystore-backed credential reference and an explicit migration |
 | SAF file-descriptor loading and bounded, evicting cache fallback | upstreamable | Avoids loading large `content://` documents into Java heap without unbounded disk growth | Remove after upstream accepts an equivalent implementation |
-| Named transactional database migrations and schema 36 compatibility repair | fork-only | Enforces migration postconditions, repairs early downstream schema 34 databases and physically removes legacy OPDS secret columns | Retain while legacy schemas can still be upgraded |
+| Shared, fixture-tested database migrations and schema 36 compatibility repair | fork-only | Enforces migration postconditions, repairs early downstream schema 34 databases and physically removes legacy OPDS secret columns | Retain while legacy schemas can still be upgraded |
 | Verified pre-migration database backups | upstreamable | Makes schema upgrades and recovery atomic while retaining bounded history | Remove after an equivalent upstream backup policy lands |
 | ZIP/image/document resource budgets | upstreamable | Bounds hostile input resource use | Replace only with stricter shared parse budgets |
 

@@ -57,13 +57,12 @@ public class MainDB extends BaseDB {
 	public static final Logger vlog = L.create("mdb", Log.VERBOSE);
 	
 	private boolean pathCorrectionRequired = false;
-	public final int DB_VERSION = 36;
+	public final int DB_VERSION = MainDbMigrations.CURRENT_VERSION;
 	@Override
 	protected boolean upgradeSchema() {
 		// When the database is just created, its version is 0.
 		int currentVersion = mDB.getVersion();
 		//int currentVersion = 32;
-		// TODO: check database structure consistency regardless of its version.
 		if (currentVersion > DB_VERSION) {
 			return rejectIncompatibleSchema(currentVersion, DB_VERSION);
 		}
@@ -74,190 +73,35 @@ public class MainDB extends BaseDB {
 				execSQL("PRAGMA foreign_keys=OFF");
 			mDB.beginTransaction();
 			try {
-				execSQL("CREATE TABLE IF NOT EXISTS author (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-						"name VARCHAR NOT NULL COLLATE NOCASE" +
-						")");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"author_name_index ON author (name) ");
-				execSQL("CREATE TABLE IF NOT EXISTS series (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-						"name VARCHAR NOT NULL COLLATE NOCASE" +
-						")");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"series_name_index ON series (name) ");
-				execSQL("CREATE TABLE IF NOT EXISTS folder (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-						"name VARCHAR NOT NULL" +
-						")");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"folder_name_index ON folder (name) ");
-				execSQL("CREATE TABLE IF NOT EXISTS book (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-						"pathname VARCHAR NOT NULL," +
-						"folder_fk INTEGER REFERENCES folder (id)," +
-						"filename VARCHAR NOT NULL," +
-						"arcname VARCHAR," +
-						"title VARCHAR COLLATE NOCASE," +
-						"series_fk INTEGER REFERENCES series (id)," +
-						"series_number INTEGER," +
-						"format INTEGER," +
-						"filesize INTEGER," +
-						"arcsize INTEGER," +
-						"create_time INTEGER," +
-						"last_access_time INTEGER, " +
-						"flags INTEGER DEFAULT 0, " +
-						"language VARCHAR DEFAULT NULL, " +
-						"description TEXT DEFAULT NULL, " +
-						"crc32 INTEGER DEFAULT NULL, " +
-						"domVersion INTEGER DEFAULT 0, " +
-						"rendFlags INTEGER DEFAULT 0" +
-						")");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"book_folder_index ON book (folder_fk) ");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"book_filename_index ON book (filename) ");
-				execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
-						"book_pathname_index ON book (pathname) ");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"book_title_index ON book (title) ");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"book_last_access_time_index ON book (last_access_time) ");
-				execSQL("CREATE TABLE IF NOT EXISTS book_author (" +
-						"book_fk INTEGER NOT NULL REFERENCES book (id)," +
-						"author_fk INTEGER NOT NULL REFERENCES author (id)," +
-						"PRIMARY KEY (book_fk, author_fk)" +
-						")");
-				execSQL("CREATE UNIQUE INDEX IF NOT EXISTS " +
-						"author_book_index ON book_author (author_fk, book_fk) ");
-				execSQL("CREATE TABLE IF NOT EXISTS bookmark (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-						"book_fk INTEGER NOT NULL REFERENCES book (id)," +
-						"type INTEGER NOT NULL DEFAULT 0," +
-						"percent INTEGER DEFAULT 0," +
-						"shortcut INTEGER DEFAULT 0," +
-						"time_stamp INTEGER DEFAULT 0," +
-						"start_pos VARCHAR NOT NULL," +
-						"end_pos VARCHAR," +
-						"title_text VARCHAR," +
-						"pos_text VARCHAR," +
-						"comment_text VARCHAR," +
-						"time_elapsed INTEGER DEFAULT 0" +
-						")");
-				execSQL("CREATE INDEX IF NOT EXISTS " +
-						"bookmark_book_index ON bookmark (book_fk) ");
-				execSQL(GenreSchema.CREATE_V33);
-				execSQL(GenreSchema.CREATE_HIERARCHY_TABLE);
-				execSQL(OpdsCatalogSchema.CREATE_CURRENT_TABLE);
-				execSQL(OpdsCatalogSchema.CREATE_INDEXES);
-				execSQL("CREATE TABLE IF NOT EXISTS favorite_folders (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-						"path VARCHAR NOT NULL, " +
-						"position INTEGER NOT NULL default 0" +
-						")");
-				applySchemaMigration(currentVersion, 1, "bookmark-shortcut",
-						() -> addColumnIfMissing(
-								"bookmark", "shortcut",
-								"ALTER TABLE bookmark ADD COLUMN shortcut INTEGER DEFAULT 0"),
-						() -> requireColumn("bookmark", "shortcut"));
-				applySchemaMigration(currentVersion, 4, "book-flags",
-						() -> addColumnIfMissing(
-								"book", "flags",
-								"ALTER TABLE book ADD COLUMN flags INTEGER DEFAULT 0"),
-						() -> requireColumn("book", "flags"));
-				applySchemaMigration(currentVersion, 6, "opds-catalog",
-						() -> execSQL(OpdsCatalogSchema.CREATE_CURRENT_TABLE),
-						() -> requireTable("opds_catalog"));
+				try {
+					MainDbMigrations.upgrade(createMigrationBackend(), currentVersion);
+				} catch (MainDbMigrations.MigrationException e) {
+					throw new SQLiteException(e.getMessage());
+				}
 				if (currentVersion < 7)
 					addOPDSCatalogs(DEF_OPDS_URLS1);
-				applySchemaMigration(currentVersion, 13, "book-language",
-						() -> addColumnIfMissing(
-								"book", "language",
-								"ALTER TABLE book ADD COLUMN language VARCHAR DEFAULT NULL"),
-						() -> requireColumn("book", "language"));
 				if (currentVersion < 14)
 					pathCorrectionRequired = true;
-				applySchemaMigration(currentVersion, 15, "opds-last-usage",
-						() -> addColumnIfMissing(
-								"opds_catalog", "last_usage",
-								"ALTER TABLE opds_catalog ADD COLUMN last_usage INTEGER DEFAULT 0"),
-						() -> requireColumn("opds_catalog", "last_usage"));
-				applySchemaMigration(currentVersion, 16, "bookmark-elapsed-time",
-						() -> addColumnIfMissing(
-								"bookmark", "time_elapsed",
-								"ALTER TABLE bookmark ADD COLUMN time_elapsed INTEGER DEFAULT 0"),
-						() -> requireColumn("bookmark", "time_elapsed"));
 				if (currentVersion < 17)
 					pathCorrectionRequired = true;
 				if (currentVersion < 20)
 					removeOPDSCatalogsFromBlackList();
-				applySchemaMigration(currentVersion, 21, "favorite-folders",
-						() -> execSQL("CREATE TABLE IF NOT EXISTS favorite_folders (" +
-								"id INTEGER PRIMARY KEY AUTOINCREMENT," +
-								"path VARCHAR NOT NULL," +
-								"position INTEGER NOT NULL default 0" +
-								")"),
-						() -> requireTable("favorite_folders"));
-				applySchemaMigration(currentVersion, 26, "search-history",
-						this::createSearchHistorySchema,
-						() -> {
-							requireTable("search_history");
-							requireIndex("search_history_index");
-						});
 				if (currentVersion < 27) {
 					removeOPDSCatalogsByURLs(OBSOLETE_OPDS_URLS);
 					addOPDSCatalogs(DEF_OPDS_URLS3);
 				}
-				applySchemaMigration(currentVersion, 28, "document-render-fields",
-						this::addDocumentRenderColumnsV28,
-						() -> {
-							requireColumn("book", "crc32");
-							requireColumn("book", "domVersion");
-							requireColumn("book", "rendFlags");
-						});
-				applySchemaMigration(currentVersion, 29, "document-format-ordinals",
-						this::migrateBookFormatsV29,
-						this::verifyBookFormatsV29);
-				applySchemaMigration(currentVersion, 30, "document-dom-version",
-						() -> execSQL(
-								"UPDATE book SET domVersion=20200824 " +
-										"WHERE domVersion=20200223"),
-						() -> {
-							requireColumn("book", "domVersion");
-							requireNoRows(
-									"SELECT 1 FROM book " +
-											"WHERE domVersion=20200223 LIMIT 1",
-									"Legacy document DOM versions remain after migration");
-						});
-				applySchemaMigration(currentVersion, 31, "book-description",
-						() -> addColumnIfMissing(
-								"book", "description",
-								"ALTER TABLE book ADD COLUMN description TEXT DEFAULT NULL"),
-						() -> requireColumn("book", "description"));
-				applySchemaMigration(currentVersion, 33, "genre-metadata",
-						this::createGenreSchemaV33,
-						this::verifyGenreMetadataSchema);
-				applySchemaMigration(currentVersion, 34, "normalized-genres",
-						this::migrateGenreSchemaV34,
-						this::verifyNormalizedGenreSchema);
-				applySchemaMigration(currentVersion, 35, "compatibility-repair",
-						this::repairSchemaV35,
-						() -> {
-							requireColumn("book", "arcsize");
-							requireColumn("bookmark", "time_elapsed");
-						});
-				applySchemaMigration(currentVersion, 36, "remove-opds-credentials",
-						this::removeLegacyOpdsCredentialColumns,
-						this::verifyOpdsCatalogSchema);
-
-				verifyCurrentSchema();
-				// set current version
 				mDB.setVersion(DB_VERSION);
 				mDB.setTransactionSuccessful();
 			} finally {
 				mDB.endTransaction();
 				if (restoreForeignKeys)
 					execSQL("PRAGMA foreign_keys=ON");
+			}
+		} else {
+			try {
+				MainDbMigrations.verifyCurrentSchema(createMigrationBackend());
+			} catch (MainDbMigrations.MigrationException e) {
+				throw new SQLiteException(e.getMessage());
 			}
 		}
 
@@ -268,205 +112,70 @@ public class MainDB extends BaseDB {
 		return true;
 	}
 
-	private void applySchemaMigration(
-			int currentVersion,
-			int targetVersion,
-			String name,
-			Runnable migration,
-			Runnable postcondition) {
-		if (currentVersion >= targetVersion)
-			return;
-		log.i("Applying schema migration " + targetVersion + " (" + name + ")");
-		migration.run();
-		postcondition.run();
-	}
-
-	private void createSearchHistorySchema() {
-		execSQL(
-				"CREATE TABLE IF NOT EXISTS search_history (" +
-						"id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-						"book_fk INTEGER NOT NULL REFERENCES book (id), " +
-						"search_text VARCHAR)",
-				"CREATE INDEX IF NOT EXISTS " +
-						"search_history_index ON search_history (book_fk)"
-		);
-	}
-
-	private void addDocumentRenderColumnsV28() {
-		addColumnIfMissing(
-				"book", "crc32",
-				"ALTER TABLE book ADD COLUMN crc32 INTEGER DEFAULT NULL");
-		addColumnIfMissing(
-				"book", "domVersion",
-				"ALTER TABLE book ADD COLUMN domVersion INTEGER DEFAULT 0");
-		addColumnIfMissing(
-				"book", "rendFlags",
-				"ALTER TABLE book ADD COLUMN rendFlags INTEGER DEFAULT 0");
-	}
-
-	private void migrateBookFormatsV29() {
-		HashMap<Long, Long> formatsMap = findBookFormatUpdates();
-		if (formatsMap.isEmpty())
-			return;
-
-		int updatedCount = 0;
-		try (SQLiteStatement statement =
-					 mDB.compileStatement("UPDATE book SET format = ? WHERE id = ?")) {
-			for (Map.Entry<Long, Long> record : formatsMap.entrySet()) {
-				statement.clearBindings();
-				statement.bindLong(1, record.getValue());
-				statement.bindLong(2, record.getKey());
-				statement.execute();
-				updatedCount++;
+	private MainDbMigrations.Backend createMigrationBackend() {
+		return new MainDbMigrations.Backend() {
+			@Override
+			public void execute(String... statements) {
+				execSQL(statements);
 			}
-		}
-		vlog.i("Updated " + updatedCount + " records with invalid format.");
-	}
 
-	private HashMap<Long, Long> findBookFormatUpdates() {
-		HashMap<Long, Long> formatsMap = new HashMap<>();
-		try (Cursor cursor = mDB.rawQuery("SELECT id, pathname, format FROM book", null)) {
-			while (cursor.moveToNext()) {
-				long id = cursor.getLong(0);
-				String pathname = cursor.getString(1);
-				long oldFormat = cursor.getLong(2);
-				if (oldFormat > 1) {
-					DocumentFormat newFormat = DocumentFormat.byExtension(pathname);
-					if (newFormat != null && oldFormat != newFormat.ordinal())
-						formatsMap.put(id, (long) newFormat.ordinal());
+			@Override
+			public boolean tableExists(String tableName) {
+				return MainDB.this.tableExists(tableName);
+			}
+
+			@Override
+			public boolean columnExists(String tableName, String columnName) {
+				return tableHasColumn(tableName, columnName);
+			}
+
+			@Override
+			public boolean indexExists(String indexName) {
+				return MainDB.this.indexExists(indexName);
+			}
+
+			@Override
+			public long queryLong(String query) {
+				try (SQLiteStatement statement = mDB.compileStatement(query)) {
+					return statement.simpleQueryForLong();
 				}
 			}
-		}
-		return formatsMap;
-	}
 
-	private void verifyBookFormatsV29() {
-		requireColumn("book", "format");
-		if (!findBookFormatUpdates().isEmpty())
-			throw new SQLiteException("Invalid document format ordinals remain");
-	}
+			@Override
+			public ArrayList<MainDbMigrations.BookFormatRow> readBookFormats() {
+				ArrayList<MainDbMigrations.BookFormatRow> rows = new ArrayList<>();
+				try (Cursor cursor =
+							 mDB.rawQuery("SELECT id, pathname, format FROM book", null)) {
+					while (cursor.moveToNext()) {
+						rows.add(new MainDbMigrations.BookFormatRow(
+								cursor.getLong(0),
+								cursor.getString(1),
+								cursor.getLong(2)));
+					}
+				}
+				return rows;
+			}
 
-	private void createGenreSchemaV33() {
-		execSQL(GenreSchema.CREATE_V33);
-	}
+			@Override
+			public void updateBookFormats(Map<Long, Long> updates) {
+				try (SQLiteStatement statement =
+							 mDB.compileStatement("UPDATE book SET format = ? WHERE id = ?")) {
+					for (Map.Entry<Long, Long> record : updates.entrySet()) {
+						statement.clearBindings();
+						statement.bindLong(1, record.getValue());
+						statement.bindLong(2, record.getKey());
+						statement.execute();
+					}
+				}
+				vlog.i("Updated " + updates.size() +
+						" records with invalid format.");
+			}
 
-	private void verifyGenreMetadataSchema() {
-		requireTable("metadata");
-		requireTable("genre_group");
-		requireTable("genre");
-		requireTable("book_genre");
-		requireColumn("genre", "id");
-		requireColumn("genre", "code");
-		requireColumn("genre", "parent");
-		requireIndex("genre_group_code_index");
-		requireIndex("genre_code_index");
-		requireIndex("book_genre_index");
-	}
-
-	private void repairSchemaV35() {
-		addColumnIfMissing(
-				"book", "arcsize",
-				"ALTER TABLE book ADD COLUMN arcsize INTEGER");
-		addColumnIfMissing(
-				"bookmark", "time_elapsed",
-				"ALTER TABLE bookmark ADD COLUMN time_elapsed INTEGER DEFAULT 0");
-	}
-
-	private void migrateGenreSchemaV34() {
-		execSQL(GenreSchema.CREATE_HIERARCHY_TABLE);
-		if (tableHasColumn("genre", "parent")) {
-			execSQL(GenreSchema.NORMALIZE_V34);
-		}
-		execSQL(GenreSchema.CREATE_NORMALIZED_INDEX);
-		requireColumn("genre", "id");
-		requireColumn("genre", "code");
-		requireNoColumn("genre", "parent");
-		requireIndex("genre_code_index");
-	}
-
-	private void verifyNormalizedGenreSchema() {
-		requireTable("genre_hier");
-		requireColumn("genre", "id");
-		requireColumn("genre", "code");
-		requireNoColumn("genre", "parent");
-		requireIndex("genre_code_index");
-	}
-
-	private void verifyCurrentSchema() {
-		String[] requiredTables = {
-				"author", "series", "folder", "book", "book_author", "bookmark",
-				"metadata", "genre_group", "genre", "genre_hier", "book_genre",
-				"opds_catalog", "favorite_folders", "search_history"
+			@Override
+			public void log(String message) {
+				log.i(message);
+			}
 		};
-		for (String tableName : requiredTables)
-			requireTable(tableName);
-
-		String[] requiredBookColumns = {
-				"id", "pathname", "folder_fk", "filename", "arcname", "title",
-				"series_fk", "series_number", "format", "filesize", "arcsize",
-				"create_time", "last_access_time", "flags", "language",
-				"description", "crc32", "domVersion", "rendFlags"
-		};
-		for (String columnName : requiredBookColumns)
-			requireColumn("book", columnName);
-
-		String[] requiredBookmarkColumns = {
-				"id", "book_fk", "type", "percent", "shortcut", "time_stamp",
-				"start_pos", "end_pos", "title_text", "pos_text", "comment_text",
-				"time_elapsed"
-		};
-		for (String columnName : requiredBookmarkColumns)
-			requireColumn("bookmark", columnName);
-
-		requireColumn("genre", "id");
-		requireColumn("genre", "code");
-		requireNoColumn("genre", "parent");
-		verifyOpdsCatalogSchema();
-
-		String[] requiredIndexes = {
-				"book_pathname_index", "bookmark_book_index",
-				"genre_group_code_index", "genre_code_index", "book_genre_index",
-				"opds_catalog_name_index", "opds_catalog_url_index",
-				"opds_catalog_last_usage_index", "search_history_index"
-		};
-		for (String indexName : requiredIndexes)
-			requireIndex(indexName);
-	}
-
-	private void removeLegacyOpdsCredentialColumns() {
-		if (!tableHasColumn("opds_catalog", "username")
-				&& !tableHasColumn("opds_catalog", "password")) {
-			verifyOpdsCatalogSchema();
-			return;
-		}
-
-		long sourceCount;
-		try (SQLiteStatement statement =
-					 mDB.compileStatement("SELECT count(*) FROM opds_catalog")) {
-			sourceCount = statement.simpleQueryForLong();
-		}
-
-		execSQL(OpdsCatalogSchema.REMOVE_CREDENTIAL_COLUMNS);
-
-		long migratedCount;
-		try (SQLiteStatement statement =
-					 mDB.compileStatement("SELECT count(*) FROM opds_catalog")) {
-			migratedCount = statement.simpleQueryForLong();
-		}
-		if (migratedCount != sourceCount)
-			throw new SQLiteException("OPDS catalog migration lost records");
-		verifyOpdsCatalogSchema();
-	}
-
-	private void verifyOpdsCatalogSchema() {
-		if (!tableHasColumn("opds_catalog", "id")
-				|| !tableHasColumn("opds_catalog", "name")
-				|| !tableHasColumn("opds_catalog", "url")
-				|| !tableHasColumn("opds_catalog", "last_usage"))
-			throw new SQLiteException("OPDS catalog schema is incomplete");
-		if (tableHasColumn("opds_catalog", "username")
-				|| tableHasColumn("opds_catalog", "password"))
-			throw new SQLiteException("Legacy OPDS credential columns still exist");
 	}
 
 	private void dumpStatistics() {

@@ -16,6 +16,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   private-cache fallback for non-seekable providers.
 - Unit and native regression tests for XML, OPDS, stream and hostile document
   resource limits.
+- SQLite fixture matrices for every supported main and cover database migration,
+  including atomic rollback, repeat runs, damaged downstream schema repair and
+  future-version rejection.
 - Weekly read-only compatibility check against `buggins/coolreader`.
 
 ### Changed
@@ -37,6 +40,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Main and cover database upgrades now run as named transactional steps with
   mandatory schema and data postconditions instead of suppressing migration
   errors.
+- The Android and JDBC test paths now share one migration runner, and current
+  database schemas are verified on every open.
 
 ### Security
 

@@ -23,6 +23,7 @@ import org.coolreader.crengine.L;
 import org.coolreader.crengine.Logger;
 
 import android.database.Cursor;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
 import android.util.Log;
 
@@ -30,15 +31,8 @@ public class CoverDB extends BaseDB {
 
 	public static final Logger log = L.create("cdb");
 	
-	public final int DB_VERSION = 9;
+	public final int DB_VERSION = CoverDbMigrations.CURRENT_VERSION;
 	private final static boolean CLEAR_ON_START = false;
-
-	private final static String[] COVERPAGE_SCHEMA = new String[] {
-		"CREATE TABLE IF NOT EXISTS coverpages (" +
-		"book_path VARCHAR NOT NULL PRIMARY KEY," +
-		"imagedata BLOB NULL" +
-		")"
-	};
 	
 	@Override
 	protected boolean upgradeSchema() {
@@ -48,16 +42,21 @@ public class CoverDB extends BaseDB {
 		if (currentVersion < DB_VERSION) {
 			mDB.beginTransaction();
 			try {
-				log.i("Applying cover database migration 9 (current cover schema)");
-				execSQL(COVERPAGE_SCHEMA);
-				execSQL("DROP TABLE IF EXISTS coverpage");
-				requireTable("coverpages");
-				requireColumn("coverpages", "book_path");
-				requireColumn("coverpages", "imagedata");
+				try {
+					CoverDbMigrations.upgrade(createMigrationBackend(), currentVersion);
+				} catch (CoverDbMigrations.MigrationException e) {
+					throw new SQLiteException(e.getMessage());
+				}
 				mDB.setVersion(DB_VERSION);
 				mDB.setTransactionSuccessful();
 			} finally {
 				mDB.endTransaction();
+			}
+		} else {
+			try {
+				CoverDbMigrations.verifyCurrentSchema(createMigrationBackend());
+			} catch (CoverDbMigrations.MigrationException e) {
+				throw new SQLiteException(e.getMessage());
 			}
 		}
 
@@ -69,6 +68,30 @@ public class CoverDB extends BaseDB {
 		}
 		
 		return true;
+	}
+
+	private CoverDbMigrations.Backend createMigrationBackend() {
+		return new CoverDbMigrations.Backend() {
+			@Override
+			public void execute(String... statements) {
+				execSQL(statements);
+			}
+
+			@Override
+			public boolean tableExists(String tableName) {
+				return CoverDB.this.tableExists(tableName);
+			}
+
+			@Override
+			public boolean columnExists(String tableName, String columnName) {
+				return tableHasColumn(tableName, columnName);
+			}
+
+			@Override
+			public void log(String message) {
+				log.i(message);
+			}
+		};
 	}
 
 	@Override
