@@ -615,11 +615,14 @@ public class TTSToolbarDlg implements Settings {
 		mWindow = new PopupWindow( context );
 		mWindow.setBackgroundDrawable(new BitmapDrawable());
 		mPlayPauseButton.setOnClickListener(
-				v -> mCoolReader.sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_PLAY_PAUSE)));
+				v -> mCoolReader.sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_PLAY_PAUSE)
+						.setPackage(mCoolReader.getPackageName())));
 		backButton.setOnClickListener(
-				v -> mCoolReader.sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_PREV)));
+				v -> mCoolReader.sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_PREV)
+						.setPackage(mCoolReader.getPackageName())));
 		forwardButton.setOnClickListener(
-				v -> mCoolReader.sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_NEXT)));
+				v -> mCoolReader.sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_NEXT)
+						.setPackage(mCoolReader.getPackageName())));
 		optionsButton.setOnClickListener(v -> mTTSControl.bind(ttsbinder -> {
 			OptionsDialog dlg = new OptionsDialog(mCoolReader, OptionsDialog.Mode.TTS, null, null, ttsbinder);
 			dlg.show();

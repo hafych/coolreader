@@ -138,7 +138,6 @@ public class CoolReader extends BaseActivity {
 	private int mOpenDocumentTreeCommand = ODT_CMD_NO_SPEC;
 	private FileInfo mOpenDocumentTreeArg = null;
 
-	private boolean phoneStateChangeHandlerInstalled = false;
 	private int initialBatteryState = ReaderView.BATTERY_STATE_NO_BATTERY;
 	private int initialBatteryChargeConn = ReaderView.BATTERY_CHARGER_NO;
 	private int initialBatteryLevel = 0;
@@ -154,7 +153,6 @@ public class CoolReader extends BaseActivity {
 	private TTSControlServiceAccessor ttsControlServiceAccessor = null;
 
 	private static final int REQUEST_CODE_STORAGE_PERM = 1;
-	private static final int REQUEST_CODE_READ_PHONE_STATE_PERM = 2;
 	private static final int REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN = 3;
 	private static final int REQUEST_CODE_OPEN_DOCUMENT_TREE = 11;
 
@@ -1133,24 +1131,6 @@ public class CoolReader extends BaseActivity {
 		}
 	}
 
-	private void requestReadPhoneStatePermissions() {
-		// check or request permission to read phone state
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-			int phoneStatePermissionCheck = checkSelfPermission(Manifest.permission.READ_PHONE_STATE);
-			if (PackageManager.PERMISSION_GRANTED != phoneStatePermissionCheck) {
-				log.i("READ_PHONE_STATE permission DENIED, requesting from user");
-				// TODO: Show an explanation to the user
-				// Show an explanation to the user *asynchronously* -- don't block
-				// this thread waiting for the user's response! After the user
-				// sees the explanation, try again to request the permission.
-				// request permission from user
-				requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE}, REQUEST_CODE_READ_PHONE_STATE_PERM);
-			} else {
-				log.i("READ_PHONE_STATE permission already granted.");
-			}
-		}
-	}
-
 	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
 		log.i("CoolReader.onRequestPermissionsResult()");
 		if (REQUEST_CODE_STORAGE_PERM == requestCode) {        // external storage read & write permissions
@@ -1181,19 +1161,6 @@ public class CoolReader extends BaseActivity {
 				setExtDataDirCreateTime(new Date());
 			} else {
 				setExtDataDirCreateTime(null);
-			}
-		} else if (REQUEST_CODE_READ_PHONE_STATE_PERM == requestCode) {
-			if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-				log.i("read phone state permission is GRANTED, registering phone activity handler...");
-				PhoneStateReceiver.setPhoneActivityHandler(() -> {
-					if (mReaderView != null) {
-						mReaderView.pauseTTS();
-						mReaderView.save();
-					}
-				});
-				phoneStateChangeHandlerInstalled = true;
-			} else {
-				log.i("Read phone state permission is DENIED!");
 			}
 		}
 	}
@@ -1982,30 +1949,6 @@ public class CoolReader extends BaseActivity {
 
 
 	public void initTTS(TTSControlServiceAccessor.Callback callback) {
-		if (!phoneStateChangeHandlerInstalled) {
-			// TODO: Investigate the need to tracking state of the phone, while we already respect the audio focus.
-			boolean readPhoneStateIsAvailable;
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-				readPhoneStateIsAvailable = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
-			} else
-				readPhoneStateIsAvailable = true;
-			if (!readPhoneStateIsAvailable) {
-				// assumed Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-				requestReadPhoneStatePermissions();
-			} else {
-				// On Android API less than 23 phone read state permission is granted
-				// after application install (permission requested while application installing).
-				log.i("read phone state permission already GRANTED, registering phone activity handler...");
-				PhoneStateReceiver.setPhoneActivityHandler(() -> {
-					if (mReaderView != null) {
-						mReaderView.pauseTTS();
-						mReaderView.save();
-					}
-				});
-				phoneStateChangeHandlerInstalled = true;
-			}
-		}
-
 		showToast("Initializing TTS");
 		if (null == ttsControlServiceAccessor)
 			ttsControlServiceAccessor = new TTSControlServiceAccessor(this);

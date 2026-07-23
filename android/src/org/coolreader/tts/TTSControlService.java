@@ -49,6 +49,8 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
 
+import androidx.core.content.ContextCompat;
+
 import org.coolreader.CoolReader;
 import org.coolreader.R;
 import org.coolreader.crengine.L;
@@ -92,6 +94,14 @@ public class TTSControlService extends BaseService {
 	private static final long INIT_TTS_TIMEOUT = 10000;		// 10 sec.
 	private static final int NOTIFICATION_ID = 1;
 	private static final String NOTIFICATION_CHANNEL_ID = "CoolReader TTS C9";
+	private static final int PENDING_INTENT_FLAGS =
+			PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+	private static final int REQUEST_OPEN_READER = 1000;
+	private static final int REQUEST_PLAY_PAUSE = 1001;
+	private static final int REQUEST_PREVIOUS = 1002;
+	private static final int REQUEST_NEXT = 1003;
+	private static final int REQUEST_STOP = 1004;
+	private static final int REQUEST_DELETE_NOTIFICATION = 1005;
 
 	public static final String TTS_CONTROL_ACTION_PREPARE = "org.coolreader.tts.prepare";
 	public static final String TTS_CONTROL_ACTION_PLAY_PAUSE = "org.coolreader.tts.tts_play_pause";
@@ -379,7 +389,9 @@ public class TTSControlService extends BaseService {
 						mMediaSession.setPlaybackState(
 								mPlaybackStateBuilder.setState(PlaybackState.STATE_PLAYING,
 										PlaybackState.PLAYBACK_POSITION_UNKNOWN, mSpeechRate).build());
-						registerReceiver(mBecomingNoisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+						ContextCompat.registerReceiver(TTSControlService.this, mBecomingNoisyReceiver,
+								new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+								ContextCompat.RECEIVER_NOT_EXPORTED);
 						synchronized (mLocker) {
 							mState = State.PLAYING;
 							if (!mState.equals(mPrevState)) {
@@ -475,12 +487,12 @@ public class TTSControlService extends BaseService {
 
 				@Override
 				public void onSkipToNext() {
-					sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_NEXT));
+					sendBroadcast(createControlIntent(TTSControlService.TTS_CONTROL_ACTION_NEXT));
 				}
 
 				@Override
 				public void onSkipToPrevious() {
-					sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_PREV));
+					sendBroadcast(createControlIntent(TTSControlService.TTS_CONTROL_ACTION_PREV));
 				}
 			};
 			mMediaSession = new MediaSession(this, "CoolReader TTS");
@@ -513,7 +525,8 @@ public class TTSControlService extends BaseService {
 		filter.addAction(TTS_CONTROL_ACTION_NEXT);
 		filter.addAction(TTS_CONTROL_ACTION_PREV);
 		filter.addAction(TTS_CONTROL_ACTION_STOP);
-		registerReceiver(mTTSControlActionReceiver, filter);
+		ContextCompat.registerReceiver(this, mTTSControlActionReceiver, filter,
+				ContextCompat.RECEIVER_NOT_EXPORTED);
 		mVolumeSettingsContentObserver = new VolumeSettingsContentObserver(new Handler());
 		getApplicationContext().getContentResolver().registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, mVolumeSettingsContentObserver);
 	}
@@ -847,7 +860,9 @@ public class TTSControlService extends BaseService {
 					} else {
 						log.e("Failed to build notification!");
 					}
-					registerReceiver(mBecomingNoisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+					ContextCompat.registerReceiver(TTSControlService.this, mBecomingNoisyReceiver,
+							new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+							ContextCompat.RECEIVER_NOT_EXPORTED);
 				}
 			} else {
 				log.e("Can't say anything, audio focus is locked by other app.");
@@ -1430,6 +1445,10 @@ public class TTSControlService extends BaseService {
 	// ======================================
 	// private implementation
 
+	private Intent createControlIntent(String action) {
+		return new Intent(action).setPackage(getPackageName());
+	}
+
 	private Notification buildNotification(String utterance) {
 		String title = "";
 		if (null != mAuthors && mAuthors.length() > 0) {
@@ -1446,7 +1465,8 @@ public class TTSControlService extends BaseService {
 			title = "CoolReader";
 		Notification notification;
 		Intent notificationIntent = new Intent(this, CoolReader.class);
-		PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+		PendingIntent pendingIntent = PendingIntent.getActivity(
+				this, REQUEST_OPEN_READER, notificationIntent, PENDING_INTENT_FLAGS);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
 			Notification.Builder builder;
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1487,22 +1507,31 @@ public class TTSControlService extends BaseService {
 					builder = builder.setLocalOnly(true);
 					// add actions
 					// play/pause
-					PendingIntent playPauseIntent = PendingIntent.getBroadcast(this, 0, new Intent(TTS_CONTROL_ACTION_PLAY_PAUSE), 0);
+					PendingIntent playPauseIntent = PendingIntent.getBroadcast(
+							this, REQUEST_PLAY_PAUSE,
+							createControlIntent(TTS_CONTROL_ACTION_PLAY_PAUSE),
+							PENDING_INTENT_FLAGS);
 					Notification.Action.Builder actionBld = new Notification.Action.Builder(mState == State.PAUSED ? R.drawable.ic_media_play : R.drawable.ic_media_pause, "", playPauseIntent);
 					Notification.Action actionPlayPause = actionBld.build();
 					builder = builder.addAction(actionPlayPause);
 					// prev
-					PendingIntent prevIntent = PendingIntent.getBroadcast(this, 0, new Intent(TTS_CONTROL_ACTION_PREV), 0);
+					PendingIntent prevIntent = PendingIntent.getBroadcast(
+							this, REQUEST_PREVIOUS, createControlIntent(TTS_CONTROL_ACTION_PREV),
+							PENDING_INTENT_FLAGS);
 					actionBld = new Notification.Action.Builder(R.drawable.ic_media_rew, "", prevIntent);
 					Notification.Action actionPrev = actionBld.build();
 					builder = builder.addAction(actionPrev);
 					// next
-					PendingIntent nextIntent = PendingIntent.getBroadcast(this, 0, new Intent(TTS_CONTROL_ACTION_NEXT), 0);
+					PendingIntent nextIntent = PendingIntent.getBroadcast(
+							this, REQUEST_NEXT, createControlIntent(TTS_CONTROL_ACTION_NEXT),
+							PENDING_INTENT_FLAGS);
 					actionBld = new Notification.Action.Builder(R.drawable.ic_media_ff, "", nextIntent);
 					Notification.Action actionNext = actionBld.build();
 					builder = builder.addAction(actionNext);
 					// stop
-					PendingIntent stopIntent = PendingIntent.getBroadcast(this, 0, new Intent(TTS_CONTROL_ACTION_STOP), 0);
+					PendingIntent stopIntent = PendingIntent.getBroadcast(
+							this, REQUEST_STOP, createControlIntent(TTS_CONTROL_ACTION_STOP),
+							PENDING_INTENT_FLAGS);
 					actionBld = new Notification.Action.Builder(R.drawable.ic_media_stop, "", stopIntent);
 					Notification.Action actionStop = actionBld.build();
 					builder = builder.addAction(actionStop);
@@ -1521,7 +1550,9 @@ public class TTSControlService extends BaseService {
 			} else
 				builder = builder.setWhen(System.currentTimeMillis());
 			// delete intent
-			PendingIntent delPendingIntent = PendingIntent.getBroadcast(this, 0, new Intent(TTS_CONTROL_ACTION_STOP), 0);
+			PendingIntent delPendingIntent = PendingIntent.getBroadcast(
+					this, REQUEST_DELETE_NOTIFICATION,
+					createControlIntent(TTS_CONTROL_ACTION_STOP), PENDING_INTENT_FLAGS);
 			builder = builder.setDeleteIntent(delPendingIntent);
 			builder = builder.setContentIntent(pendingIntent);
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN)

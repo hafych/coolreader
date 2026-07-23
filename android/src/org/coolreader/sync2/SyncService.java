@@ -33,6 +33,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 
+import androidx.core.content.ContextCompat;
+
 import org.coolreader.R;
 import org.coolreader.crengine.BookInfo;
 import org.coolreader.crengine.FileInfo;
@@ -107,6 +109,10 @@ public class SyncService extends BaseService {
 
 	private static final int NOTIFICATION_ID = 2;
 	private static final String NOTIFICATION_CHANNEL_ID = "CoolReader Sync2 C1";
+	private static final int PENDING_INTENT_FLAGS =
+			PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+	private static final int REQUEST_CANCEL = 2001;
+	private static final int REQUEST_DELETE_NOTIFICATION = 2002;
 
 	public static final String SYNC_ACTION_SYNCTO = "org.coolreader.sync2.syncto";
 	public static final String SYNC_ACTION_SYNCTO_ONLY = "org.coolreader.sync2.syncto.only";
@@ -260,7 +266,8 @@ public class SyncService extends BaseService {
 		mNotificationManager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
 		IntentFilter filter = new IntentFilter();
 		filter.addAction(SYNC_ACTION_CANCEL);
-		registerReceiver(mSyncActionReceiver, filter);
+		ContextCompat.registerReceiver(this, mSyncActionReceiver, filter,
+				ContextCompat.RECEIVER_NOT_EXPORTED);
 	}
 
 	@Override
@@ -632,7 +639,10 @@ public class SyncService extends BaseService {
 					builder = builder.setLocalOnly(true);
 					// add actions
 					// cancel
-					PendingIntent cancelIntent = PendingIntent.getBroadcast(this, 0, new Intent(SYNC_ACTION_CANCEL), 0);
+					PendingIntent cancelIntent = PendingIntent.getBroadcast(
+							this, REQUEST_CANCEL,
+							new Intent(SYNC_ACTION_CANCEL).setPackage(getPackageName()),
+							PENDING_INTENT_FLAGS);
 					Notification.Action.Builder actionBld = new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.dlg_button_cancel), cancelIntent);
 					Notification.Action actionCancel = actionBld.build();
 					builder = builder.addAction(actionCancel);
@@ -645,7 +655,10 @@ public class SyncService extends BaseService {
 			} else
 				builder = builder.setWhen(System.currentTimeMillis());
 			// delete intent (no-op)
-			PendingIntent delPendingIntent = PendingIntent.getBroadcast(this, 0, new Intent(SYNC_ACTION_NOOP), 0);
+			PendingIntent delPendingIntent = PendingIntent.getBroadcast(
+					this, REQUEST_DELETE_NOTIFICATION,
+					new Intent(SYNC_ACTION_NOOP).setPackage(getPackageName()),
+					PENDING_INTENT_FLAGS);
 			builder = builder.setDeleteIntent(delPendingIntent);
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN)
 				notification = builder.build();

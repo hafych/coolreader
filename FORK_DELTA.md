@@ -19,10 +19,10 @@ original repository above as `upstream`.
 | Area | Classification | Reason | Removal/upstream condition |
 | --- | --- | --- | --- |
 | CMake C++17 repair and `fb2props` smoke test | upstreamable | Restores reproducible native configuration and testing | Remove after an equivalent upstream change lands |
-| Android API 21 minimum, pinned NDK, blocking lint and CI | fork-only for now | Establishes the downstream support baseline | Reclassify when upstream adopts the same support matrix |
+| Android API 21 minimum, pinned NDK, least-privilege manifest, blocking lint and CI | fork-only for now | Establishes the downstream support and privacy baseline | Reclassify when upstream adopts the same support matrix and permission policy |
 | OPDS/LitRes TLS, redirect, XML and response limits | upstreamable | Removes stop-ship network vulnerabilities | Keep until an audited upstream equivalent lands |
 | Plaintext OPDS/LitRes credential purge | temporary-delta | Credentials require re-entry until secure storage exists | Replace with a Keystore-backed credential reference |
-| SAF file-descriptor loading and bounded cache fallback | upstreamable | Avoids loading large `content://` documents into Java heap | Remove after upstream accepts an equivalent implementation |
+| SAF file-descriptor loading and bounded, evicting cache fallback | upstreamable | Avoids loading large `content://` documents into Java heap without unbounded disk growth | Remove after upstream accepts an equivalent implementation |
 | Database schema 35 compatibility repair | fork-only | Repairs early downstream schema 34 databases and purges secrets | Retain while schema 34 can still be upgraded |
 | ZIP/image/document resource budgets | upstreamable | Bounds hostile input resource use | Replace only with stricter shared parse budgets |
 

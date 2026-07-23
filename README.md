@@ -47,6 +47,19 @@ cd android
 
 The debug APK is written to `android/app/build/outputs/apk/debug/`.
 
+### Support matrix
+
+| Target | Current status | Verified environment |
+| --- | --- | --- |
+| Android | Actively verified preview | API 21 minimum, API 35 target, JDK 17, pinned NDK |
+| Native engine/tools | Actively verified | Ubuntu and macOS CI, C++17, CMake |
+| Qt desktop | Best effort until Qt 6 CI lands | Legacy Qt 5 build path |
+| wxWidgets, Windows and E-Ink frontends | Community-tested | No blocking CI yet |
+
+“Best effort” means the code is retained and fixes are welcome, but every commit
+is not currently tested on that target. Stable downstream binaries have not yet
+been released.
+
 ### Native engine smoke tests
 
 ```bash
@@ -59,7 +72,8 @@ ctest --test-dir build --output-on-failure
 
 Bug reports, reproducible ebook samples, device compatibility results and
 focused pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md)
-and use the issue templates.
+and use the issue and pull request templates. User-visible changes belong in
+[CHANGELOG.md](CHANGELOG.md).
 
 If a maintained, privacy-conscious Android and E-Ink ebook reader is useful to
 you, starring the repository is the simplest way to help other readers discover

@@ -1,0 +1,63 @@
+name: Upstream compatibility dry run
+
+on:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-sync-dry-run
+  cancel-in-progress: true
+
+jobs:
+  merge-and-verify:
+    name: Merge upstream/master and verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout downstream
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch and merge upstream without publishing
+        run: |
+          git remote add upstream https://github.com/buggins/coolreader.git
+          git fetch --no-tags upstream master
+          git config user.name "CoolReader upstream dry run"
+          git config user.email "actions@users.noreply.github.com"
+          git merge --no-commit --no-ff upstream/master
+          git diff --check HEAD
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libzstd-dev libutf8proc-dev
+
+      - name: Configure and build native targets
+        run: |
+          cmake -S . -B build -DGUI=FB2PROPS -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Deploy verified third-party sources
+        run: ./thirdparty-deploy.sh
+
+      - name: Build, lint and test Android
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug lintDebug testDebugUnitTest --stacktrace

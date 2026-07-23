@@ -25,17 +25,24 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 
 public final class DocumentFileCache {
 	public static final Logger log = L.create("dfc");
 
+	static final long MAX_CACHE_SIZE_BYTES = 512L * 1024L * 1024L;
+	static final int MAX_CACHE_FILE_COUNT = 32;
+
 	String mBasePath = null;
 
 	public DocumentFileCache(Activity activity) {
-		File fd = activity.getCacheDir();
-		File dir = new File(fd, "bookCache");
+		this(new File(activity.getCacheDir(), "bookCache"));
+	}
+
+	DocumentFileCache(File dir) {
 		if (dir.isDirectory() || dir.mkdirs()) {
 			mBasePath = dir.getAbsolutePath();
+			pruneCacheDirectory(dir, MAX_CACHE_SIZE_BYTES, MAX_CACHE_FILE_COUNT, null);
 		} else {
 			log.e("Failed to obtain private app cache directory!");
 		}
@@ -52,6 +59,11 @@ public final class DocumentFileCache {
 	public BookInfo saveStream(FileInfo fileInfo, InputStream inputStream, long maxBytes) {
 		if (null == mBasePath) {
 			log.e("Attempt to save stream while private app cache directory uninitialized!");
+			return null;
+		}
+		long effectiveMaxBytes = Math.min(maxBytes, MAX_CACHE_SIZE_BYTES);
+		if (effectiveMaxBytes < 0) {
+			log.e("Attempt to save stream with a negative byte limit!");
 			return null;
 		}
 		BookInfo bookInfo = null;
@@ -73,19 +85,10 @@ public final class DocumentFileCache {
 		String filename = Long.valueOf(codebase).toString() + extension;
 		try {
 			file = new File(mBasePath, filename);
-			long size = 0;
-			byte[] buffer = new byte[64 * 1024];
-			try (FileOutputStream outputStream = new FileOutputStream(file)) {
-				int count;
-				while ((count = inputStream.read(buffer)) != -1) {
-					if (size + count > maxBytes)
-						throw new IOException("Document exceeds cache limit of " + maxBytes + " bytes");
-					outputStream.write(buffer, 0, count);
-					size += count;
-				}
-				outputStream.getFD().sync();
-			}
+			long size = copyStreamToFile(inputStream, file, effectiveMaxBytes);
 			if (size > 0) {
+				pruneCacheDirectory(new File(mBasePath), MAX_CACHE_SIZE_BYTES,
+						MAX_CACHE_FILE_COUNT, file);
 				FileInfo newFileInfo = new FileInfo(fileInfo);
 				// Set new path & name
 				if (fileInfo.isArchive) {
@@ -99,6 +102,8 @@ public final class DocumentFileCache {
 					newFileInfo.size = size;
 				}
 				bookInfo = new BookInfo(newFileInfo);
+			} else if (file.exists() && !file.delete()) {
+				log.w("Cannot delete empty cache file " + file);
 			}
 		} catch (Exception e) {
 			log.e("Exception while saving stream: " + e.getMessage());
@@ -106,5 +111,64 @@ public final class DocumentFileCache {
 				log.w("Cannot delete incomplete cache file " + file);
 		}
 		return bookInfo;
+	}
+
+	static long copyStreamToFile(InputStream inputStream, File file, long maxBytes)
+			throws IOException {
+		if (maxBytes < 0)
+			throw new IOException("Negative cache byte limit");
+		long size = 0;
+		boolean complete = false;
+		byte[] buffer = new byte[64 * 1024];
+		try (FileOutputStream outputStream = new FileOutputStream(file)) {
+			int count;
+			while ((count = inputStream.read(buffer)) != -1) {
+				if (count > maxBytes - size)
+					throw new IOException("Document exceeds cache limit of " + maxBytes + " bytes");
+				outputStream.write(buffer, 0, count);
+				size += count;
+			}
+			outputStream.getFD().sync();
+			complete = true;
+			return size;
+		} finally {
+			if (!complete && file.exists() && !file.delete())
+				log.w("Cannot delete incomplete cache file " + file);
+		}
+	}
+
+	static void pruneCacheDirectory(File directory, long maxBytes, int maxFiles,
+									File protectedFile) {
+		if (directory == null || maxBytes < 0 || maxFiles < 0)
+			return;
+		File[] files = directory.listFiles(File::isFile);
+		if (files == null || files.length == 0)
+			return;
+
+		Arrays.sort(files, (left, right) -> {
+			int byAge = Long.compare(left.lastModified(), right.lastModified());
+			return byAge != 0 ? byAge : left.getName().compareTo(right.getName());
+		});
+
+		long totalBytes = 0;
+		int totalFiles = 0;
+		for (File file : files) {
+			totalBytes += file.length();
+			totalFiles++;
+		}
+
+		for (File file : files) {
+			if (totalBytes <= maxBytes && totalFiles <= maxFiles)
+				break;
+			if (protectedFile != null && protectedFile.equals(file))
+				continue;
+			long fileSize = file.length();
+			if (file.delete()) {
+				totalBytes -= fileSize;
+				totalFiles--;
+			} else {
+				log.w("Cannot delete expired cache file " + file);
+			}
+		}
 	}
 }

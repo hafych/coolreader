@@ -21,12 +21,17 @@ Security vulnerabilities should be reported privately as described in
 
 ## Development workflow
 
-1. Create a focused branch from the current default branch.
-2. Keep unrelated formatting and generated files out of the change.
-3. Add or update a regression test.
-4. Run the checks that cover the changed area.
-5. Explain user-visible behavior, compatibility risk and upstream relevance in
-   the pull request.
+1. Use JDK 17 for Android and a C++17 compiler/CMake for native work.
+2. Create a focused branch from the current default branch.
+3. Keep unrelated formatting and generated files out of the change.
+4. Add or update a regression test.
+5. Run the checks that cover the changed area.
+6. Explain user-visible behavior, compatibility risk and upstream relevance in
+   the pull request template.
+
+If Android native dependencies are not already present, run
+`./thirdparty-deploy.sh` from the repository root. The script verifies pinned
+archive checksums before extraction.
 
 ### Android checks
 
@@ -56,6 +61,10 @@ Classify downstream changes in [FORK_DELTA.md](FORK_DELTA.md):
 
 Do not rewrite upstream history. Upstream syncs should be isolated, reviewed and
 followed by Android, native and sanitizer verification.
+
+The scheduled upstream dry-run is diagnostic only: it has read-only repository
+permissions and never pushes, creates a branch or changes the default branch.
+Any real upstream merge must still use a reviewed pull request.
 
 ## License and authorship
 
