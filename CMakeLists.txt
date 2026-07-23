@@ -35,6 +35,12 @@ ELSE()
 ENDIF(${CMAKE_BUILD_TYPE} STREQUAL Debug)
 
 option(USE_DEBUG_EXTRA_OPTS "Add extra debug flags and technique" OFF)
+option(USE_THREAD_SANITIZER "Build native targets with ThreadSanitizer" OFF)
+
+if(USE_DEBUG_EXTRA_OPTS AND USE_THREAD_SANITIZER)
+    message(FATAL_ERROR
+        "USE_DEBUG_EXTRA_OPTS and USE_THREAD_SANITIZER cannot be enabled together")
+endif()
 
 if(USE_DEBUG_EXTRA_OPTS)
     add_definitions(-D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC)
@@ -47,6 +53,23 @@ if(USE_DEBUG_EXTRA_OPTS)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${DEBUG_EXTRA_FLAGS}")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${DEBUG_EXTRA_FLAGS}")
 endif(USE_DEBUG_EXTRA_OPTS)
+
+if(USE_THREAD_SANITIZER)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        message(FATAL_ERROR
+            "USE_THREAD_SANITIZER requires a Clang or GCC-compatible compiler")
+    endif()
+    set(THREAD_SANITIZER_COMPILE_FLAGS
+        "-fsanitize=thread -fno-omit-frame-pointer")
+    set(CMAKE_C_FLAGS
+        "${CMAKE_C_FLAGS} ${THREAD_SANITIZER_COMPILE_FLAGS}")
+    set(CMAKE_CXX_FLAGS
+        "${CMAKE_CXX_FLAGS} ${THREAD_SANITIZER_COMPILE_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS
+        "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
+    set(CMAKE_SHARED_LINKER_FLAGS
+        "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=thread")
+endif()
 
 if(MSVC)
   # Force to always compile with W4

@@ -30,6 +30,8 @@
 
 #if (CR_USE_THREADS==1)
 
+#include <atomic>
+
 #if defined(_LINUX)
 #include <pthread.h>
 
@@ -37,12 +39,12 @@ class LVThread {
 private:
     pthread_t _thread;
     bool _valid;
-    bool _stopped;
+    std::atomic<bool> _stopped;
     static void * start_routine(void * param)
     {
         LVThread * thread = (LVThread*)param;
         thread->run();
-        thread->_stopped = true;
+        thread->_stopped.store(true, std::memory_order_release);
         return NULL;
     }
 protected:
@@ -54,9 +56,9 @@ public:
     {
         _valid = (pthread_create(&_thread, NULL, &start_routine, this) == 0);
     }
-    bool stopped()
+    bool stopped() const
     {
-        return _stopped;
+        return _stopped.load(std::memory_order_acquire);
     }
     void join()
     {
@@ -123,7 +125,7 @@ class LVThread {
     private:
         HANDLE _thread;
         bool _valid;
-        bool _stopped;
+        std::atomic<bool> _stopped;
         DWORD _id;
 
         static DWORD WINAPI start_routine(
@@ -132,7 +134,7 @@ class LVThread {
         {
             LVThread * thread = (LVThread*)param;
             thread->run();
-            thread->_stopped = true;
+            thread->_stopped.store(true, std::memory_order_release);
             return 0;
         }
     protected:
@@ -144,9 +146,9 @@ class LVThread {
         {
             ResumeThread( _thread );
         }
-        bool stopped()
+        bool stopped() const
         {
-            return _stopped;
+            return _stopped.load(std::memory_order_acquire);
         }
         void join()
         {

@@ -30,5 +30,17 @@ if(BUILD_TESTING)
             crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}
         )
         add_test(NAME core_safety COMMAND core_safety_test)
+
+        add_executable(thread_safety_test
+            ${CMAKE_SOURCE_DIR}/crengine/tests/thread_safety_test.cpp
+        )
+        target_include_directories(thread_safety_test PRIVATE
+            ${CMAKE_SOURCE_DIR}/crengine/include
+        )
+        target_compile_definitions(thread_safety_test PRIVATE
+            CR_USE_THREADS=1
+            _LINUX=1
+        )
+        add_test(NAME thread_safety COMMAND thread_safety_test)
     endif()
 endif()

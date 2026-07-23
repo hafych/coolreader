@@ -71,3 +71,11 @@ authorization, referrer and timeout overrides.
 Cloud sync currently has no active remote transport in this GPL build; the old
 Google Drive integration is disabled. A new sync transport must define its
 threat model and use the same network policy before it can be enabled.
+
+## Native dynamic analysis
+
+Linux CI builds and runs the native smoke suite under AddressSanitizer,
+UndefinedBehaviorSanitizer and ThreadSanitizer. The ThreadSanitizer build uses
+Clang and includes a real-thread test even though the desktop engine normally
+compiles its legacy thread abstraction as synchronous. Sanitizer reports fail
+the job; suppressions are not accepted without a documented root-cause review.

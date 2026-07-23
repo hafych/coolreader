@@ -25,6 +25,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   regression coverage for oversized and deeply nested hostile documents.
 - An Android source-policy gate that prevents production HTTP callers from
   bypassing the shared connection policy.
+- A Clang ThreadSanitizer CI job and a real-thread native smoke test for the
+  engine's thread and recursive-mutex primitives.
 - Weekly read-only compatibility check against `buggins/coolreader`.
 
 ### Changed
@@ -54,6 +56,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   timeouts, a 15-minute transfer deadline and checked response-size limits.
 - SAF, OPDS, LitRes and the private document cache now apply the same 512 MiB
   document ingress limit as the native parser.
+- Native thread completion state is published atomically instead of racing
+  between the worker and polling threads.
 
 ### Security
 
