@@ -52,6 +52,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   longer performs ad-hoc global dependency lookups during user flows.
 - BaseActivity and CoolReader now receive that generation as one immutable
   dependency snapshot instead of reading individual global service slots.
+- Cover generation receives its Engine dependency explicitly and no longer
+  resolves it through the global service locator on background tasks; queued
+  work is discarded when its service generation closes.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

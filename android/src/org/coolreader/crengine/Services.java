@@ -104,7 +104,7 @@ public class Services {
 		mScanner.initRoots(Engine.getMountedRootsMap(), mEngine.getAppPrivateDirs());
 		mHistory = new History(mScanner);
 		mScanner.setDirScanEnabled(activity.settings().getBool(ReaderView.PROP_APP_BOOK_PROPERTY_SCAN_ENABLED, true));
-		mCoverpageManager = new CoverpageManager();
+		mCoverpageManager = new CoverpageManager(mEngine, mLifecycle);
 		mFSFolders = new FileSystemFolders(mScanner);
 		mGenresCollection = GenresCollection.getInstance(activity);
 		mDocumentCache = new DocumentFileCache(activity);
@@ -129,7 +129,6 @@ public class Services {
 			log.i("Will not destroy services: finish only activity creation detected");
 			return;
 		}
-		mCoverpageManager.clear();
 		Engine engine = mEngine;
 		ServiceLifecycle lifecycle = mLifecycle;
 		long stoppedGeneration = mGeneration;
@@ -137,6 +136,7 @@ public class Services {
 		mLifecycle = null;
 		if (lifecycle != null)
 			lifecycle.close();
+		mCoverpageManager.clear();
 		if (engine != null)
 			engine.detachActivity(activity);
 		BackgroundThread.instance().postBackground(() -> {

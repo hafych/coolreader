@@ -40,6 +40,8 @@ import android.widget.ImageView;
 public class CoverpageManager {
 
 	public static final Logger log = L.create("cp");
+	private final Engine mEngine;
+	private final ServiceLifecycle mLifecycle;
 	
 	public static class ImageItem {
 		public FileInfo file;
@@ -152,7 +154,9 @@ public class CoverpageManager {
 	/**
 	 * Constructor.
 	 */
-	public CoverpageManager () {
+	public CoverpageManager(Engine engine, ServiceLifecycle lifecycle) {
+		mEngine = engine;
+		mLifecycle = lifecycle;
 	}
 	
 	/**
@@ -395,12 +399,16 @@ public class CoverpageManager {
 	private Runnable lastReadyNotifyTask;
 	private long firstReadyTimestamp;
 	private void notifyBitmapIsReady(final ImageItem file) {
+		if (!mLifecycle.isActive())
+			return;
 		synchronized(LOCK) {
 			if (mReadyQueue.empty())
 				firstReadyTimestamp = Utils.timeStamp();
 			mReadyQueue.add(file);
 		}
 		Runnable task = () -> {
+			if (!mLifecycle.isActive())
+				return;
 //				if (lastReadyNotifyTask != this && Utils.timeInterval(firstReadyTimestamp) < COVERPAGE_MAX_UPDATE_DELAY) {
 //					log.v("skipping update, " + Utils.timeInterval(firstReadyTimestamp));
 //					return;
@@ -428,6 +436,8 @@ public class CoverpageManager {
 	}
 
 	private void draw(ImageItem file, byte[] data) {
+		if (!mLifecycle.isActive())
+			return;
 		BitmapCacheItem item;
 		synchronized(LOCK) {
 			item = mCache.getItem(file);
@@ -448,15 +458,24 @@ public class CoverpageManager {
 	}
 
 	private void coverpageLoaded(final ImageItem file, final byte[] data) {
+		if (!mLifecycle.isActive())
+			return;
 		log.v("coverpage data is loaded for " + file);
 		setItemState(file, State.IMAGE_DRAW_SCHEDULED);
-		BackgroundThread.instance().postBackground(() -> draw(file, data));
+		BackgroundThread.instance().postBackground(() -> {
+			if (mLifecycle.isActive())
+				draw(file, data);
+		});
 	}
 	private void scheduleCheckCache(final CRDBService.LocalBinder db) {
+		if (!mLifecycle.isActive())
+			return;
 		// cache lookup
 		lastCheckCacheTask = new Runnable() {
 			@Override
 			public void run() {
+				if (!mLifecycle.isActive())
+					return;
 				ImageItem file = null;
 				synchronized(LOCK) {
 					if (lastCheckCacheTask == this) {
@@ -481,10 +500,14 @@ public class CoverpageManager {
 		BackgroundThread.instance().postGUI(lastCheckCacheTask);
 	}
 	private void scheduleScanFile(final CRDBService.LocalBinder db) {
+		if (!mLifecycle.isActive())
+			return;
 		// file scan
 		lastScanFileTask = new Runnable() {
 			@Override
 			public void run() {
+				if (!mLifecycle.isActive())
+					return;
 				ImageItem file = null;
 				synchronized(LOCK) {
 					if (lastScanFileTask == this) {
@@ -495,7 +518,9 @@ public class CoverpageManager {
 					final ImageItem fileInfo = file;
 					if (fileInfo.file.format.canParseCoverpages) {
 						BackgroundThread.instance().postBackground(() -> {
-							byte[] data = Services.getEngine().scanBookCover(fileInfo.file.getPathName());
+							if (!mLifecycle.isActive())
+								return;
+							byte[] data = mEngine.scanBookCover(fileInfo.file.getPathName());
 							if (data == null)
 								data = new byte[] {};
 							if (fileInfo.file.format.needCoverPageCaching())
@@ -513,6 +538,8 @@ public class CoverpageManager {
 	}
 
 	private void queueForDrawing(final CRDBService.LocalBinder db, ImageItem file) {
+		if (!mLifecycle.isActive())
+			return;
 		synchronized (LOCK) {
 			if (file == null || file.file == null || file.file.format == null)
 				return;
@@ -682,17 +709,23 @@ public class CoverpageManager {
 	}
 
 	public void drawCoverpageFor(final CRDBService.LocalBinder db, final FileInfo file, final Bitmap buffer, boolean respectAspectRatio, final CoverpageBitmapReadyListener callback) {
+		if (!mLifecycle.isActive())
+			return;
 		db.loadBookCoverpage(file, (fileInfo, data) -> BackgroundThread.instance().postBackground(() -> {
+			if (!mLifecycle.isActive())
+				return;
 			byte[] imageData = data;
 			if (data == null && file.format != null && file.format.canParseCoverpages) {
-				imageData = Services.getEngine().scanBookCover(file.getPathName());
+				imageData = mEngine.scanBookCover(file.getPathName());
 				if (imageData == null)
 					imageData = new byte[] {};
 				if (file.format.needCoverPageCaching())
 					db.saveBookCoverpage(file, imageData);
 			}
-			Services.getEngine().drawBookCover(buffer, imageData, respectAspectRatio, fontFace, file.getTitleOrFileName(), file.authors, file.series, file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
+			mEngine.drawBookCover(buffer, imageData, respectAspectRatio, fontFace, file.getTitleOrFileName(), file.authors, file.series, file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
 			BackgroundThread.instance().postGUI(() -> {
+				if (!mLifecycle.isActive())
+					return;
 				ImageItem item = new ImageItem(file, buffer.getWidth(), buffer.getHeight());
 				callback.onCoverpageReady(item, buffer);
 			});
@@ -720,7 +753,7 @@ public class CoverpageManager {
 	{
 		try {
 			Bitmap bmp = Bitmap.createBitmap(file.maxWidth, file.maxHeight, DeviceInfo.BUFFER_COLOR_FORMAT);
-			Services.getEngine().drawBookCover(bmp, data, false, fontFace, file.file.getTitleOrFileName(), file.file.authors, file.file.series, file.file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
+			mEngine.drawBookCover(bmp, data, false, fontFace, file.file.getTitleOrFileName(), file.file.authors, file.file.series, file.file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
 			return bmp;
 		} catch ( Exception e ) {
     		Log.e("cr3", "exception while decoding coverpage " + e.getMessage());

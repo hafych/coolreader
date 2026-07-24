@@ -19,6 +19,7 @@ SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
+COVERPAGE_MANAGER = SOURCE / "crengine" / "CoverpageManager.java"
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -164,6 +165,21 @@ def main() -> None:
         if re.search(r"\bServices\.", text):
             violations.append(
                 f"{relative(path)} still uses the static service locator")
+
+    coverpage_manager_text = COVERPAGE_MANAGER.read_text(encoding="utf-8")
+    if re.search(r"\bServices\.", coverpage_manager_text):
+        violations.append(
+            f"{relative(COVERPAGE_MANAGER)} still uses the static service "
+            "locator")
+    for marker in (
+        "private final Engine mEngine",
+        "private final ServiceLifecycle mLifecycle",
+        "public CoverpageManager(Engine engine, ServiceLifecycle lifecycle)",
+        "if (!mLifecycle.isActive())",
+    ):
+        if marker not in coverpage_manager_text:
+            violations.append(
+                f"{relative(COVERPAGE_MANAGER)} omits marker: {marker}")
 
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")
