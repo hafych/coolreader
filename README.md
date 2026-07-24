@@ -80,6 +80,8 @@ Prepared minimal upstream contributions and verification evidence are listed in
 [docs/UPSTREAM_CONTRIBUTIONS.md](docs/UPSTREAM_CONTRIBUTIONS.md).
 The enforced default of local crash redaction without telemetry is documented
 in [docs/TELEMETRY_POLICY.md](docs/TELEMETRY_POLICY.md).
+Active Android document and dictionary result flows use lifecycle-aware
+Activity Result launchers and preserve pending SAF state across recreation.
 
 ### Support matrix
 

@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Keep active Android result and permission flows on lifecycle-aware APIs."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "android" / "src" / "org" / "coolreader"
+COOL_READER = SOURCE / "CoolReader.java"
+DICTIONARIES = SOURCE / "Dictionaries.java"
+BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
+ACTIVE_RESULT_SOURCES = (COOL_READER, DICTIONARIES, BASE_ACTIVITY)
+FORBIDDEN_RESULT_PATTERNS = (
+    r"\bstartActivityForResult\s*\(",
+    r"\bvoid\s+onActivityResult\s*\(",
+)
+FORBIDDEN_PERMISSION_PATTERNS = (
+    r"\brequestPermissions\s*\(",
+    r"\bvoid\s+onRequestPermissionsResult\s*\(",
+)
+REQUIRED_COOL_READER_MARKERS = (
+    "mSelectLibraryRootLauncher",
+    "mOpenLibraryDocumentLauncher",
+    "mOpenDocumentTreeLauncher",
+    "registerForActivityResult",
+    "STATE_OPEN_DOCUMENT_TREE_COMMAND",
+    "STATE_OPEN_DOCUMENT_TREE_ARG",
+)
+
+
+def relative(path: Path) -> str:
+    return str(path.relative_to(ROOT))
+
+
+def find_pattern(
+        path: Path,
+        text: str,
+        pattern: str,
+        reason: str,
+        violations: list[str]) -> None:
+    for match in re.finditer(pattern, text):
+        line = text.count("\n", 0, match.start()) + 1
+        violations.append(f"{relative(path)}:{line}: {reason}")
+
+
+def main() -> None:
+    violations: list[str] = []
+    for path in ACTIVE_RESULT_SOURCES:
+        text = path.read_text(encoding="utf-8")
+        for pattern in FORBIDDEN_RESULT_PATTERNS:
+            find_pattern(
+                path,
+                text,
+                pattern,
+                "uses a legacy activity-result callback",
+                violations)
+
+    for path in sorted(SOURCE.rglob("*.java")):
+        text = path.read_text(encoding="utf-8")
+        for pattern in FORBIDDEN_PERMISSION_PATTERNS:
+            find_pattern(
+                path,
+                text,
+                pattern,
+                "uses a manual runtime-permission callback",
+                violations)
+
+    base_text = BASE_ACTIVITY.read_text(encoding="utf-8")
+    if "extends ComponentActivity" not in base_text:
+        violations.append("BaseActivity is not lifecycle-aware")
+    if "mDictionaryLauncher" not in base_text:
+        violations.append("Dictan result launcher is missing")
+
+    cool_reader_text = COOL_READER.read_text(encoding="utf-8")
+    for marker in REQUIRED_COOL_READER_MARKERS:
+        if marker not in cool_reader_text:
+            violations.append(
+                f"{relative(COOL_READER)} omits marker: {marker}")
+
+    command = "python3 tools/verify_android_activity_results.py"
+    for workflow in (
+        ROOT / ".github" / "workflows" / "build.yml",
+        ROOT / ".github" / "workflows" / "release.yml",
+    ):
+        if command not in workflow.read_text(encoding="utf-8"):
+            violations.append(
+                f"{relative(workflow)} does not run the activity-result gate")
+
+    if violations:
+        raise RuntimeError(
+            "Android activity-result policy violations found:\n"
+            + "\n".join(violations))
+    print(
+        "Android activity-result policy OK: active result flows use "
+        "lifecycle-aware launchers")
+
+
+if __name__ == "__main__":
+    main()

@@ -93,8 +93,6 @@ DRM или ограничений доступа, подбор/получени�
 
 ### Архитектура Android
 
-- [ ] Заменить `startActivityForResult`/ручные permission callbacks на Activity
-  Result APIs в изменяемых сценариях.
 - [ ] Разделить монолитные `CoolReader`, `ReaderView` и сервисы на тестируемые
   lifecycle-aware компоненты без статического состояния Activity/Service.
 - [ ] Проверить Android 14–16 требования к foreground services, receiver export,

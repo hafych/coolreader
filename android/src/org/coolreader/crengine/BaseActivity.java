@@ -32,7 +32,6 @@ package org.coolreader.crengine;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -60,6 +59,10 @@ import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.widget.Toast;
 
+import androidx.activity.ComponentActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+
 import org.coolreader.Dictionaries;
 import org.coolreader.Dictionaries.DictInfo;
 import org.coolreader.R;
@@ -83,13 +86,27 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 @SuppressLint("Registered")
-public class BaseActivity extends Activity implements Settings {
+public class BaseActivity extends ComponentActivity implements Settings {
 
 	private static final Logger log = L.create("ba");
 	private View mDecorView;
 
 	private CRDBServiceAccessor mCRDBService;
 	protected Dictionaries mDictionaries;
+	private final ActivityResultLauncher<Intent> mDictionaryLauncher =
+			registerForActivityResult(
+					new ActivityResultContracts.StartActivityForResult(),
+					result -> {
+						if (mDictionaries == null)
+							return;
+						try {
+							mDictionaries.handleDictanResult(
+									result.getResultCode(),
+									result.getData());
+						} catch (Dictionaries.DictionaryException e) {
+							showToast(e.getMessage());
+						}
+					});
 
 	protected void unbindCRDBService() {
 		if (mCRDBService != null) {
@@ -204,7 +221,7 @@ public class BaseActivity extends Activity implements Settings {
 
 		super.onCreate(savedInstanceState);
 
-		mDictionaries = new Dictionaries(this);
+		mDictionaries = new Dictionaries(this, mDictionaryLauncher);
 
 		try {
 			PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);

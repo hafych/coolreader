@@ -52,6 +52,9 @@ import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+
 import org.coolreader.Dictionaries.DictionaryException;
 import org.coolreader.crengine.AboutDialog;
 import org.coolreader.crengine.BackgroundThread;
@@ -145,6 +148,21 @@ public class CoolReader extends BaseActivity {
 
 	private int mOpenDocumentTreeCommand = ODT_CMD_NO_SPEC;
 	private FileInfo mOpenDocumentTreeArg = null;
+	private final ActivityResultLauncher<Intent> mSelectLibraryRootLauncher =
+			registerForActivityResult(
+					new ActivityResultContracts.StartActivityForResult(),
+					result -> handleSelectLibraryRootResult(
+							result.getResultCode(), result.getData()));
+	private final ActivityResultLauncher<Intent> mOpenLibraryDocumentLauncher =
+			registerForActivityResult(
+					new ActivityResultContracts.StartActivityForResult(),
+					result -> handleOpenLibraryDocumentResult(
+							result.getResultCode(), result.getData()));
+	private final ActivityResultLauncher<Intent> mOpenDocumentTreeLauncher =
+			registerForActivityResult(
+					new ActivityResultContracts.StartActivityForResult(),
+					result -> handleOpenDocumentTreeResult(
+							result.getResultCode(), result.getData()));
 
 	private int initialBatteryState = ReaderView.BATTERY_STATE_NO_BATTERY;
 	private int initialBatteryChargeConn = ReaderView.BATTERY_CHARGER_NO;
@@ -158,12 +176,12 @@ public class CoolReader extends BaseActivity {
 	private String ttsEnginePackage = "";
 	private TTSControlServiceAccessor ttsControlServiceAccessor = null;
 
-	private static final int REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN = 3;
-	private static final int REQUEST_CODE_OPEN_DOCUMENT_TREE = 11;
-	private static final int REQUEST_CODE_SELECT_LIBRARY_ROOT = 12;
-	private static final int REQUEST_CODE_OPEN_LIBRARY_DOCUMENT = 13;
 	private static final String STATE_PENDING_LIBRARY_ROOT =
 			"pendingLibraryRoot";
+	private static final String STATE_OPEN_DOCUMENT_TREE_COMMAND =
+			"openDocumentTreeCommand";
+	private static final String STATE_OPEN_DOCUMENT_TREE_ARG =
+			"openDocumentTreeArg";
 
 	// open document tree activity commands
 	private static final int ODT_CMD_NO_SPEC = -1;
@@ -237,6 +255,10 @@ public class CoolReader extends BaseActivity {
 					STATE_PENDING_LIBRARY_ROOT);
 			if (pendingRoot != null)
 				mPendingLibraryRootUri = Uri.parse(pendingRoot);
+			mOpenDocumentTreeCommand = savedInstanceState.getInt(
+					STATE_OPEN_DOCUMENT_TREE_COMMAND, ODT_CMD_NO_SPEC);
+			mOpenDocumentTreeArg = savedInstanceState.getParcelable(
+					STATE_OPEN_DOCUMENT_TREE_ARG);
 		}
 
 		isFirstStart = true;
@@ -731,6 +753,7 @@ public class CoolReader extends BaseActivity {
 
 	@Override
 	protected void onNewIntent(Intent intent) {
+		super.onNewIntent(intent);
 		log.i("onNewIntent : " + intent);
 		if (mDestroyed) {
 			log.e("engine is already destroyed");
@@ -1038,6 +1061,14 @@ public class CoolReader extends BaseActivity {
 			outState.putString(
 					STATE_PENDING_LIBRARY_ROOT,
 					mPendingLibraryRootUri.toString());
+		}
+		if (mOpenDocumentTreeCommand != ODT_CMD_NO_SPEC) {
+			outState.putInt(
+					STATE_OPEN_DOCUMENT_TREE_COMMAND,
+					mOpenDocumentTreeCommand);
+			outState.putParcelable(
+					STATE_OPEN_DOCUMENT_TREE_ARG,
+					mOpenDocumentTreeArg);
 		}
 		super.onSaveInstanceState(outState);
 	}
@@ -1798,7 +1829,7 @@ public class CoolReader extends BaseActivity {
 				&& previousUri != null) {
 			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, previousUri);
 		}
-		startActivityForResult(intent, REQUEST_CODE_SELECT_LIBRARY_ROOT);
+		mSelectLibraryRootLauncher.launch(intent);
 	}
 
 	public void openLibraryRoot(LibraryRootStore.Entry root) {
@@ -1816,7 +1847,7 @@ public class CoolReader extends BaseActivity {
 						| Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
 			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, root.getUri());
-		startActivityForResult(intent, REQUEST_CODE_OPEN_LIBRARY_DOCUMENT);
+		mOpenLibraryDocumentLauncher.launch(intent);
 	}
 
 	public void showLibraryRootActions(LibraryRootStore.Entry root) {
@@ -1902,114 +1933,130 @@ public class CoolReader extends BaseActivity {
 		findInDictionaryInternal(null);
 	}
 
-	@Override
-	protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
-		try {
-			mDictionaries.onActivityResult(requestCode, resultCode, intent);
-		} catch (DictionaryException e) {
-			showToast(e.getMessage());
+	private void handleSelectLibraryRootResult(
+			int resultCode, Intent intent) {
+		if (resultCode == Activity.RESULT_OK && intent != null) {
+			Uri selectedUri = intent.getData();
+			boolean persisted = persistReadPermission(
+					selectedUri, intent.getFlags());
+			if (persisted && mLibraryRootStore.addOrReplace(
+					mPendingLibraryRootUri, selectedUri)) {
+				showToast(R.string.library_root_selected);
+			} else {
+				showToast(R.string.library_root_grant_failed);
+			}
 		}
-		/*
-		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-		if (requestCode == REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				if (null != mGoogleDriveSync) {
-					mGoogleDriveSync.onActivityResultHandler(requestCode, resultCode, intent);
-				}
+		mPendingLibraryRootUri = null;
+		refreshLibraryRoots();
+	}
+
+	private void handleOpenLibraryDocumentResult(
+			int resultCode, Intent intent) {
+		if (resultCode == Activity.RESULT_OK
+				&& intent != null && intent.getData() != null) {
+			Uri uri = intent.getData();
+			persistReadPermission(uri, intent.getFlags());
+			loadDocumentFromUri(uri, null, this::showRootWindow);
+		}
+	}
+
+	private void handleOpenDocumentTreeResult(
+			int resultCode, Intent intent) {
+		try {
+			if (resultCode != Activity.RESULT_OK || intent == null)
+				return;
+			switch (mOpenDocumentTreeCommand) {
+				case ODT_CMD_DEL_FILE:
+					handleDeleteFileTreeResult(intent.getData());
+					break;
+				case ODT_CMD_DEL_FOLDER:
+					handleDeleteFolderTreeResult(intent.getData());
+					break;
+				case ODT_CMD_SAVE_LOGCAT:
+					handleSaveLogcatTreeResult(intent.getData());
+					break;
+				default:
+					log.w("Unexpected document tree result");
+					break;
 			}
-		} else */ if (requestCode == REQUEST_CODE_SELECT_LIBRARY_ROOT) {
-			if (resultCode == Activity.RESULT_OK && intent != null) {
-				Uri selectedUri = intent.getData();
-				boolean persisted = persistReadPermission(
-						selectedUri, intent.getFlags());
-				if (persisted && mLibraryRootStore.addOrReplace(
-						mPendingLibraryRootUri, selectedUri)) {
-					showToast(R.string.library_root_selected);
-				} else {
-					showToast(R.string.library_root_grant_failed);
-				}
+		} finally {
+			mOpenDocumentTreeCommand = ODT_CMD_NO_SPEC;
+			mOpenDocumentTreeArg = null;
+		}
+	}
+
+	private void launchOpenDocumentTree() {
+		mOpenDocumentTreeLauncher.launch(
+				new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE));
+	}
+
+	private void handleDeleteFileTreeResult(Uri sdCardUri) {
+		if (mOpenDocumentTreeArg == null
+				|| mOpenDocumentTreeArg.isDirectory
+				|| sdCardUri == null)
+			return;
+		Uri docUri = DocumentsContractWrapper.getDocumentUri(
+				mOpenDocumentTreeArg, this, sdCardUri);
+		if (docUri == null) {
+			showToast(R.string.could_not_delete_on_sd);
+			return;
+		}
+		if (!DocumentsContractWrapper.deleteFile(this, docUri)) {
+			showToast(R.string.could_not_delete_file, mOpenDocumentTreeArg);
+			return;
+		}
+		Services.getHistory().removeBookInfo(
+				getDB(), mOpenDocumentTreeArg, true, true);
+		FileInfo dirToUpdate = mOpenDocumentTreeArg.parent;
+		if (dirToUpdate != null) {
+			BackgroundThread.instance().postGUI(
+					() -> directoryUpdated(dirToUpdate), 700);
+		}
+		updateExtSDURI(mOpenDocumentTreeArg, sdCardUri);
+	}
+
+	private void handleDeleteFolderTreeResult(Uri sdCardUri) {
+		if (mOpenDocumentTreeArg == null
+				|| !mOpenDocumentTreeArg.isDirectory)
+			return;
+		Uri documentUri = sdCardUri != null
+				? DocumentsContractWrapper.getDocumentUri(
+						mOpenDocumentTreeArg, this, sdCardUri)
+				: null;
+		if (documentUri == null) {
+			showToast(R.string.could_not_delete_on_sd);
+			return;
+		}
+		if (DocumentsContractWrapper.fileExists(this, documentUri)) {
+			updateExtSDURI(mOpenDocumentTreeArg, sdCardUri);
+			deleteFolder(mOpenDocumentTreeArg);
+		}
+	}
+
+	private void handleSaveLogcatTreeResult(Uri uri) {
+		if (mOpenDocumentTreeArg == null || uri == null)
+			return;
+		Uri docFolderUri =
+				DocumentsContractWrapper.buildDocumentUriUsingTree(uri);
+		if (docFolderUri == null)
+			return;
+		Uri fileUri = DocumentsContractWrapper.createFile(
+				this, docFolderUri, "text/x-log",
+				mOpenDocumentTreeArg.filename);
+		if (fileUri == null) {
+			log.e("logcat: can't create file!");
+			return;
+		}
+		try (OutputStream ostream =
+					 getContentResolver().openOutputStream(fileUri)) {
+			if (ostream != null) {
+				saveLogcat(mOpenDocumentTreeArg.filename, ostream);
+			} else {
+				log.e("logcat: failed to open stream!");
 			}
-			mPendingLibraryRootUri = null;
-			refreshLibraryRoots();
-		} else if (requestCode == REQUEST_CODE_OPEN_LIBRARY_DOCUMENT) {
-			if (resultCode == Activity.RESULT_OK
-					&& intent != null && intent.getData() != null) {
-				Uri uri = intent.getData();
-				persistReadPermission(uri, intent.getFlags());
-				loadDocumentFromUri(uri, null, this::showRootWindow);
-			}
-		} else if (requestCode == REQUEST_CODE_OPEN_DOCUMENT_TREE) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-				if (resultCode == Activity.RESULT_OK) {
-					switch (mOpenDocumentTreeCommand) {
-						case ODT_CMD_DEL_FILE:
-							if (mOpenDocumentTreeArg != null && !mOpenDocumentTreeArg.isDirectory) {
-								Uri sdCardUri = intent.getData();
-								Uri docUri = DocumentsContractWrapper.getDocumentUri(mOpenDocumentTreeArg, this, sdCardUri);
-								if (null != docUri) {
-									if (DocumentsContractWrapper.deleteFile(this, docUri)) {
-										Services.getHistory().removeBookInfo(getDB(), mOpenDocumentTreeArg, true, true);
-										FileInfo dirToUpdate = mOpenDocumentTreeArg.parent;
-										if (null != dirToUpdate)
-											BackgroundThread.instance().postGUI(() -> directoryUpdated(dirToUpdate), 700);
-										updateExtSDURI(mOpenDocumentTreeArg, sdCardUri);
-									} else {
-										showToast(R.string.could_not_delete_file, mOpenDocumentTreeArg);
-									}
-								} else {
-									showToast(R.string.could_not_delete_on_sd);
-								}
-							}
-							break;
-						case ODT_CMD_DEL_FOLDER:
-							if (mOpenDocumentTreeArg != null && mOpenDocumentTreeArg.isDirectory) {
-								Uri sdCardUri = intent.getData();
-								Uri documentUri = null;
-								if (null != sdCardUri)
-									documentUri = DocumentsContractWrapper.getDocumentUri(mOpenDocumentTreeArg, this, sdCardUri);
-								if (null != documentUri) {
-									if (DocumentsContractWrapper.fileExists(this, documentUri)) {
-										updateExtSDURI(mOpenDocumentTreeArg, sdCardUri);
-										deleteFolder(mOpenDocumentTreeArg);
-									}
-								} else {
-									showToast(R.string.could_not_delete_on_sd);
-								}
-							}
-							break;
-						case ODT_CMD_SAVE_LOGCAT:
-							if (mOpenDocumentTreeArg != null) {
-								Uri uri = intent.getData();
-								if (null != uri) {
-									Uri docFolderUri = DocumentsContractWrapper.buildDocumentUriUsingTree(uri);
-									if (null != docFolderUri) {
-										Uri fileUri = DocumentsContractWrapper.createFile(this, docFolderUri, "text/x-log", mOpenDocumentTreeArg.filename);
-										if (null != fileUri) {
-											try {
-												OutputStream ostream = getContentResolver().openOutputStream(fileUri);
-												if (null != ostream) {
-													saveLogcat(mOpenDocumentTreeArg.filename, ostream);
-													ostream.close();
-												} else {
-													log.e("logcat: failed to open stream!");
-												}
-											} catch (Exception e) {
-												log.e("logcat: " + e);
-											}
-										} else {
-											log.e("logcat: can't create file!");
-										}
-									}
-								} else {
-									log.d("logcat creation canceled by user");
-								}
-							}
-							break;
-					}
-					mOpenDocumentTreeArg = null;
-				}
-			}
-		} //if (requestCode == REQUEST_CODE_OPEN_DOCUMENT_TREE)
+		} catch (Exception e) {
+			log.e("logcat: " + e);
+		}
 	}
 
 	public void setDict(String id) {
@@ -2168,8 +2215,7 @@ public class CoolReader extends BaseActivity {
 						showToast(R.string.choose_root_sd);
 						mOpenDocumentTreeArg = file;
 						mOpenDocumentTreeCommand = ODT_CMD_DEL_FILE;
-						Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-						startActivityForResult(intent, REQUEST_CODE_OPEN_DOCUMENT_TREE);
+						launchOpenDocumentTree();
 					}
 				} else {
 					showToast(R.string.could_not_delete_file, file);
@@ -2233,8 +2279,7 @@ public class CoolReader extends BaseActivity {
 										mFolderDeleteRetryCount++;
 										mOpenDocumentTreeCommand = ODT_CMD_DEL_FOLDER;
 										mOpenDocumentTreeArg = item;
-										Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-										startActivityForResult(intent, REQUEST_CODE_OPEN_DOCUMENT_TREE);
+										launchOpenDocumentTree();
 									}
 								});
 							});
@@ -2244,8 +2289,7 @@ public class CoolReader extends BaseActivity {
 								mFolderDeleteRetryCount++;
 								mOpenDocumentTreeCommand = ODT_CMD_DEL_FOLDER;
 								mOpenDocumentTreeArg = item;
-								Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-								startActivityForResult(intent, REQUEST_CODE_OPEN_DOCUMENT_TREE);
+								launchOpenDocumentTree();
 							});
 						}
 					}
@@ -2263,8 +2307,7 @@ public class CoolReader extends BaseActivity {
 				askConfirmation(R.string.confirmation_select_folder_for_log, () -> {
 					mOpenDocumentTreeCommand = ODT_CMD_SAVE_LOGCAT;
 					mOpenDocumentTreeArg = new FileInfo(format.format(new Date()));
-					Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-					startActivityForResult(intent, REQUEST_CODE_OPEN_DOCUMENT_TREE);
+					launchOpenDocumentTree();
 				});
 			} else {
 				log.e("Can't create logcat file: no access to download directory!");

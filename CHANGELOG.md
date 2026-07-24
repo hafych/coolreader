@@ -40,6 +40,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   Clang diagnostic.
 - A machine-enforced no-telemetry decision: local crash redaction only, with
   analytics/crash SDKs blocked until a separate consent and privacy decision.
+- Lifecycle-aware Activity Result launchers for SAF and dictionary flows, with
+  pending document-tree state restored after Activity recreation.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

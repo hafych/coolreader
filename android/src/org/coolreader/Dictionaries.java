@@ -36,12 +36,15 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 
+import androidx.activity.result.ActivityResultLauncher;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class Dictionaries {
 
 	private Activity mActivity;
+	private final ActivityResultLauncher<Intent> mDictanLauncher;
 
 	public Integer isiDic2IsActive() {
 		return iDic2IsActive;
@@ -57,8 +60,11 @@ public class Dictionaries {
 
 	private Integer iDic2IsActive = 0;
 
-	public Dictionaries(Activity activity) {
+	public Dictionaries(
+			Activity activity,
+			ActivityResultLauncher<Intent> dictanLauncher) {
 		mActivity = activity;
+		mDictanLauncher = dictanLauncher;
 		currentDictionary = defaultDictionary();
 		currentDictionary2 = defaultDictionary();
 	}
@@ -169,8 +175,6 @@ public class Dictionaries {
         }
     }
 
-	private final static int DICTAN_ARTICLE_REQUEST_CODE = 100;
-	
 	private final static String DICTAN_ARTICLE_WORD = "article.word";
 	
 	private final static String DICTAN_ERROR_MESSAGE = "error.message";
@@ -253,13 +257,13 @@ public class Dictionaries {
             // because it doesn't have any content view.	      
             intent2.setFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
 		  
-	        intent2.putExtra(DICTAN_ARTICLE_WORD, s);
-			  
-	        try {
-	        	mActivity.startActivityForResult(intent2, DICTAN_ARTICLE_REQUEST_CODE);
-	        } catch (ActivityNotFoundException e) {
+			intent2.putExtra(DICTAN_ARTICLE_WORD, s);
+
+			try {
+				mDictanLauncher.launch(intent2);
+			} catch (ActivityNotFoundException e) {
 				throw new DictionaryException("Dictionary \"" + curDict.name + "\" is not installed");
-	        }
+			}
 			break;
 		case 3:
 			Intent intent3 = new Intent("aard2.lookup");
@@ -301,29 +305,28 @@ public class Dictionaries {
 
 	}
 
-    public void onActivityResult(int requestCode, int resultCode, Intent intent) throws DictionaryException {
-        if (requestCode == DICTAN_ARTICLE_REQUEST_CODE) {
-	       	switch (resultCode) {
-	        	
-	        	// The article has been shown, the intent is never expected null
+	public void handleDictanResult(int resultCode, Intent intent) throws DictionaryException {
+		switch (resultCode) {
+
+			// The article has been shown, the intent is never expected null
 			case Activity.RESULT_OK:
 				break;
-					
-			// Error occured
-			case Activity.RESULT_CANCELED: 
+
+			// Error occurred
+			case Activity.RESULT_CANCELED:
 				String errMessage = "Unknown Error.";
 				if (intent != null) {
-					errMessage = "The Requested Word: " + 
-					intent.getStringExtra(DICTAN_ARTICLE_WORD) + 
-					". Error: " + intent.getStringExtra(DICTAN_ERROR_MESSAGE);
+					errMessage = "The Requested Word: "
+							+ intent.getStringExtra(DICTAN_ARTICLE_WORD)
+							+ ". Error: "
+							+ intent.getStringExtra(DICTAN_ERROR_MESSAGE);
 				}
 				throw new DictionaryException(errMessage);
-					
+
 			// Must never occur
-			default: 
+			default:
 				throw new DictionaryException("Unknown Result Code: " + resultCode);
-			}
-        }
+		}
 	}
-	
+
 }
