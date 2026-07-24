@@ -44,15 +44,16 @@ References:
 
 Run `tools/run_android_instrumentation.sh` against a clean emulator for each
 row. The suite covers app startup, private-storage policy, ordinary and
-archive-entry metadata, provider-backed document opening, persisted SAF
-recovery, TTS foreground notification actions, and clean reinstall.
+archive-entry metadata, bounded multi-batch library scanning, provider-backed
+document opening, persisted SAF recovery, TTS foreground notification actions,
+and clean reinstall.
 
 Evidence recorded on July 24, 2026:
 
 | Platform | Profile | Evidence |
 | --- | --- | --- |
 | Android 14 / API 34 | `coolreader_api34_atd`, clean phone data | 7/7 instrumentation phases passed; background TTS controls passed |
-| Android 15 / API 35 | `coolreader_api35_atd`, clean phone data | 8/8 instrumentation phases passed, including locator-free archive metadata; background TTS controls passed |
+| Android 15 / API 35 | `coolreader_api35_atd`, clean phone data | 9/9 instrumentation phases passed, including locator-free archive metadata and a 130-book bounded scan; background TTS controls passed |
 | Android 16 / API 36 | `coolreader_api36_phone`, clean phone data | 7/7 instrumentation phases passed; background TTS controls passed |
 | Android 16 / API 36 | `coolreader_api36_tablet`, 2560×1600 | cold start, background TTS controls and portrait/landscape visual checks passed |
 

@@ -1812,22 +1812,18 @@ public class MainDB extends BaseDB {
 		return list;
 	}
 
-	public ArrayList<FileInfo> loadFileInfos(ArrayList<String> pathNames, final Scanner.ScanControl control, final Engine.ProgressControl progress) {
+	public ArrayList<FileInfo> loadFileInfos(ArrayList<String> pathNames, final Scanner.ScanControl control) {
 		ArrayList<FileInfo> list = new ArrayList<>();
 		if (!isOpened())
 			return list;
 		try {
 			beginReading();
-			int count = pathNames.size();
-			int i = 0;
 			for (String path : pathNames) {
 				FileInfo file = findFileInfoByPathname(path, true);
 				if (control.isStopped())
 					break;
-				progress.setProgress(i * 10000 / (2*count));
 				if (file != null)
 					list.add(new FileInfo(file));
-				i++;
 			}
 			endReading();
 		} catch (Exception e) {

@@ -41,6 +41,9 @@ run_instrumentation \
     'phase0-archive-entry-metadata' \
     'org.coolreader.AndroidSmokeInstrumentedTest#archiveEntryMetadataDoesNotRequireServiceLocator'
 run_instrumentation \
+    'phase0-library-metadata-batches' \
+    'org.coolreader.AndroidSmokeInstrumentedTest#metadataScanProcessesMoreThanOneBoundedBatch'
+run_instrumentation \
     'phase0-library-root-management' \
     'org.coolreader.crengine.LibraryRootStoreInstrumentedTest#rootsCanBeReplacedAndRemovedWithoutFileOperations'
 run_instrumentation \

@@ -70,6 +70,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   the Activity-owned global service graph.
 - Archive metadata lookup is a stateless Engine operation, so FileInfo no
   longer reaches through the global service locator.
+- Library metadata scanning uses one in-flight 64-item batch, persists
+  completed batches incrementally, honours cancellation between items and owns
+  UI progress outside the database layer.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

@@ -38,6 +38,7 @@ import java.util.zip.ZipEntry;
 public class Scanner extends FileInfoChangeSource {
 	
 	public static final Logger log = L.create("sc");
+	private static final int METADATA_BATCH_SIZE = 64;
 	
 	HashMap<String, FileInfo> mFileList = new HashMap<>();
 //	ArrayList<FileInfo> mFilesForParsing = new ArrayList<FileInfo>();
@@ -268,21 +269,13 @@ public class Scanner extends FileInfoChangeSource {
 	 * @param readyCallback is Runable to call when operation is finished or stopped (will be called in GUI thread)
 	 * @param control allows to stop long operation
 	 */
-	private void scanDirectoryFiles(final CRDBService.LocalBinder db, final FileInfo baseDir, final ScanControl control, final Engine.ProgressControl progress, final Runnable readyCallback) {
+	private void scanDirectoryFiles(final CRDBService.LocalBinder db,
+			final FileInfo baseDir, final ScanControl control,
+			final Engine.ProgressControl progress,
+			final Runnable readyCallback) {
 		// GUI thread
 		BackgroundThread.ensureGUI();
 		log.d("scanDirectoryFiles(" + baseDir.getPathName() + ") ");
-		
-		// store list of files to scan
-		ArrayList<String> pathNames = new ArrayList<>();
-		for (int i=0; i < baseDir.fileCount(); i++) {
-			pathNames.add(baseDir.getFile(i).getPathName());
-		}
-
-		if (pathNames.size() == 0) {
-			readyCallback.run();
-			return;
-		}
 
 		// list all subdirectories
 		for (int i=0; i < baseDir.dirCount(); i++) {
@@ -293,17 +286,70 @@ public class Scanner extends FileInfoChangeSource {
 				listDirectory(dir);
 		}
 
-		// load book infos for files
-		db.loadFileInfos(pathNames, control, progress, list -> {
-			log.v("onFileInfoListLoaded");
-			// GUI thread
+		if (baseDir.fileCount() == 0 || control.isStopped()) {
+			progress.hide();
+			readyCallback.run();
+			return;
+		}
+
+		new MetadataScanSession(
+				db, baseDir, control, progress, readyCallback).scanNextBatch();
+	}
+
+	private final class MetadataScanSession {
+		private final CRDBService.LocalBinder db;
+		private final FileInfo baseDir;
+		private final ScanControl control;
+		private final Engine.ProgressControl progress;
+		private final Runnable readyCallback;
+		private final ScanBatchCursor batches;
+		private boolean finished;
+
+		MetadataScanSession(CRDBService.LocalBinder db, FileInfo baseDir,
+				ScanControl control, Engine.ProgressControl progress,
+				Runnable readyCallback) {
+			this.db = db;
+			this.baseDir = baseDir;
+			this.control = control;
+			this.progress = progress;
+			this.readyCallback = readyCallback;
+			batches = new ScanBatchCursor(
+					baseDir.fileCount(), METADATA_BATCH_SIZE,
+					control::isStopped);
+		}
+
+		void scanNextBatch() {
+			BackgroundThread.ensureGUI();
+			ScanBatchCursor.Range batch = batches.next();
+			if (batch == null) {
+				finish();
+				return;
+			}
+			ArrayList<String> pathNames =
+					new ArrayList<>(batch.size());
+			for (int i = batch.start; i < batch.end; i++)
+				pathNames.add(baseDir.getFile(i).getPathName());
+			db.loadFileInfos(
+					pathNames, control,
+					list -> onFileInfoListLoaded(batch, list));
+		}
+
+		private void onFileInfoListLoaded(
+				ScanBatchCursor.Range batch, ArrayList<FileInfo> list) {
+			BackgroundThread.ensureGUI();
+			log.v("onFileInfoListLoaded("
+					+ batch.start + ", " + batch.end + ")");
+			if (control.isStopped()) {
+				finish();
+				return;
+			}
 			final ArrayList<FileInfo> filesForParsing = new ArrayList<>();
 			final ArrayList<FileInfo> filesForCRC32Update = new ArrayList<>();
 			Map<String, FileInfo> mapOfFilesFoundInDb = new HashMap<>();
 			for (FileInfo f : list)
 				mapOfFilesFoundInDb.put(f.getPathName(), f);
 
-			for (int i=0; i<baseDir.fileCount(); i++) {
+			for (int i = batch.start; i < batch.end; i++) {
 				FileInfo item = baseDir.getFile(i);
 				FileInfo fromDB = mapOfFilesFoundInDb.get(item.getPathName());
 				// check the relevance of data in the database
@@ -335,56 +381,81 @@ public class Scanner extends FileInfoChangeSource {
 					}
 				}
 			}
-			if ((filesForParsing.size() == 0 && filesForCRC32Update.size() == 0) || control.isStopped()) {
-				readyCallback.run();
+			if (control.isStopped()) {
+				finish();
 				return;
 			}
-			// scan files in Background thread,
-			// update CRC32 in Background thread
+			if (filesForParsing.isEmpty()
+					&& filesForCRC32Update.isEmpty()) {
+				setProgress(batch.end);
+				scanNextBatch();
+				return;
+			}
+
 			BackgroundThread.instance().postBackground(() -> {
 				// Background thread
-				final ArrayList<FileInfo> filesForSave1 = new ArrayList<>();
+				final ArrayList<FileInfo> filesForSave = new ArrayList<>();
+				int completed = batch.start;
 				try {
 					int count1 = filesForParsing.size();
 					int count2 = filesForCRC32Update.size();
-					int count = count1 + count2;
-					for ( int i=0; i<count1; i++ ) {
+					for (int i = 0; i < count1; i++) {
 						if (control.isStopped())
 							break;
-						progress.setProgress((i + count) * 10000 / (2*count));
 						FileInfo item = filesForParsing.get(i);
 						if (engine.scanBookProperties(item))
-							filesForSave1.add(item);
+							filesForSave.add(item);
+						setProgress(++completed);
 					}
-					for ( int i=0; i<count2; i++ ) {
+					for (int i = 0; i < count2; i++) {
 						if (control.isStopped())
 							break;
-						progress.setProgress((i + count) * 10000 / (2*count));
 						FileInfo item = filesForCRC32Update.get(i);
 						if (Engine.updateFileCRC32(item))
-							filesForSave1.add(item);
+							filesForSave.add(item);
+						setProgress(++completed);
 					}
 				} catch (Exception e) {
 					L.e("Exception while scanning", e);
 				}
-				progress.hide();
-				// jump to GUI thread
-				BackgroundThread.instance().postGUI(() -> {
-					// GUI thread
-					try {
-						if (filesForSave1.size() > 0) {
-							db.saveFileInfos(filesForSave1);
-						}
-						for (FileInfo file : filesForSave1)
-							baseDir.setFile(file);
-					} catch (Exception e ) {
-						L.e("Exception while scanning", e);
-					}
-					// call finish handler
-					readyCallback.run();
-				});
+				BackgroundThread.instance().postGUI(
+						() -> saveBatchAndContinue(batch, filesForSave));
 			});
-		});
+		}
+
+		private void saveBatchAndContinue(ScanBatchCursor.Range batch,
+				ArrayList<FileInfo> filesForSave) {
+			BackgroundThread.ensureGUI();
+			try {
+				if (!filesForSave.isEmpty())
+					db.saveFileInfos(filesForSave);
+				for (FileInfo file : filesForSave)
+					baseDir.setFile(file);
+			} catch (Exception e) {
+				L.e("Exception while saving scan batch", e);
+			}
+			if (control.isStopped()) {
+				finish();
+				return;
+			}
+			setProgress(batch.end);
+			scanNextBatch();
+		}
+
+		private void setProgress(int completedCount) {
+			int totalCount = batches.getTotalCount();
+			progress.setProgress(
+					(int) Math.min(10000L,
+							(long) completedCount * 10000 / totalCount));
+		}
+
+		private void finish() {
+			if (finished)
+				return;
+			finished = true;
+			progress.hide();
+			readyCallback.run();
+		}
 	}
 	
 	/**

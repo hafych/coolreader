@@ -24,6 +24,7 @@ import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.ReaderView;
+import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.Services;
 import org.coolreader.tts.OnTTSStatusListener;
 import org.coolreader.tts.TTSControlBinder;
@@ -118,6 +119,63 @@ public class AndroidSmokeInstrumentedTest {
 			assertEquals(DocumentFormat.FB2, info.format);
 		} finally {
 			assertTrue(archive.delete() || !archive.exists());
+		}
+	}
+
+	@Test
+	public void metadataScanProcessesMoreThanOneBoundedBatch()
+			throws Exception {
+		Context target = targetContext();
+		File directory = new File(
+				target.getCacheDir(),
+				"metadata-batches-" + System.nanoTime());
+		assertTrue(directory.mkdir());
+		final int fileCount = 130;
+		for (int i = 0; i < fileCount; i++) {
+			File document = new File(
+					directory, "book-" + i + ".txt");
+			try (FileOutputStream output =
+					new FileOutputStream(document)) {
+				output.write(("Book " + i + "\nMetadata batch test.")
+						.getBytes(StandardCharsets.UTF_8));
+			}
+		}
+
+		CoolReader activity = (CoolReader) launchMainActivity(
+				target, InstrumentationRegistry.getInstrumentation());
+		Scanner.ScanControl control = new Scanner.ScanControl();
+		try {
+			AtomicReference<Scanner> scanner = new AtomicReference<>();
+			waitUntil(() -> {
+				scanner.set(Services.getScanner());
+				return activity.getDB() != null;
+			});
+			FileInfo baseDir = new FileInfo(directory);
+			CountDownLatch completed = new CountDownLatch(1);
+			InstrumentationRegistry.getInstrumentation().runOnMainSync(
+					() -> scanner.get().scanDirectory(
+							activity.getDB(), baseDir, null,
+							scanControl -> completed.countDown(),
+							false, control));
+
+			assertTrue(completed.await(
+					TIMEOUT_MS, TimeUnit.MILLISECONDS));
+			assertFalse(control.isStopped());
+			assertTrue(baseDir.isScanned);
+			assertEquals(fileCount, baseDir.fileCount());
+			for (int i = 0; i < baseDir.fileCount(); i++) {
+				FileInfo file = baseDir.getFile(i);
+				assertEquals(DocumentFormat.TXT, file.format);
+				assertTrue(file.crc32 != 0);
+			}
+		} finally {
+			control.stop();
+			finishActivity(activity);
+			File[] children = directory.listFiles();
+			assertNotNull(children);
+			for (File child : children)
+				assertTrue(child.delete());
+			assertTrue(directory.delete());
 		}
 	}
 

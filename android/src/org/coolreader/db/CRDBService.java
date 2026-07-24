@@ -502,11 +502,11 @@ public class CRDBService extends BaseService {
 		});
 	}
 
-	public void loadFileInfos(final ArrayList<String> pathNames, final Scanner.ScanControl control, final Engine.ProgressControl progress, final FileInfoLoadingCallback callback, final Handler handler) {
+	public void loadFileInfos(final ArrayList<String> pathNames, final Scanner.ScanControl control, final FileInfoLoadingCallback callback, final Handler handler) {
 		execTask(new Task("loadFileInfos") {
 			@Override
 			public void work() {
-				final ArrayList<FileInfo> list = mainDB.loadFileInfos(pathNames, control, progress);
+				final ArrayList<FileInfo> list = mainDB.loadFileInfos(pathNames, control);
 				sendTask(handler, () -> callback.onFileInfoListLoaded(list));
 			}
 		});
@@ -700,8 +700,9 @@ public class CRDBService extends BaseService {
 			getService().findByPatterns(maxCount, authors, title, series, filename, callback, new Handler());
 		}
 
-		public void loadFileInfos(final ArrayList<String> pathNames, final Scanner.ScanControl control, final Engine.ProgressControl progress, final FileInfoLoadingCallback callback) {
-    		getService().loadFileInfos(pathNames, control, progress, callback, new Handler());
+		public void loadFileInfos(final ArrayList<String> pathNames, final Scanner.ScanControl control, final FileInfoLoadingCallback callback) {
+			getService().loadFileInfos(
+					pathNames, control, callback, new Handler());
     	}
 
     	public void deleteBook(final FileInfo fileInfo)	{

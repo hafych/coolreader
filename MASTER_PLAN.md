@@ -98,7 +98,7 @@ DRM или ограничений доступа, подбор/получени�
 
 ### Библиотека и сканирование
 
-- [ ] Сделать сканер инкрементальным и отменяемым, с bounded parallelism и
+- [-] Сделать сканер инкрементальным и отменяемым, с bounded parallelism и
   backpressure.
 - [ ] Отделить discovery, metadata extraction, persistence и UI progress.
 - [ ] Добавить fingerprint каталога/документа и не перечитывать неизменённые книги.
