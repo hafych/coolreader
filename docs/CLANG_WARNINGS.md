@@ -30,5 +30,6 @@ gate.
 
 Source-scoped promotion is allowed while a diagnostic still exists elsewhere.
 `hyphman.cpp` currently enforces `sign-compare` and
-`unused-but-set-variable`; widening either diagnostic to the full `crengine`
-target requires first clearing the remaining first-party occurrences.
+`unused-but-set-variable`; `lvstring.cpp` also enforces `sign-compare`.
+Widening either diagnostic to the full `crengine` target requires first
+clearing the remaining first-party occurrences.

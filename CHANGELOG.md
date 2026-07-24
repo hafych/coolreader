@@ -166,7 +166,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - The parsed-document cache now enforces its configured capacity from finalized
   file sizes, reports hit/miss/eviction counters, and correctly clears its files.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
-  regressions in the hyphenation engine.
+  regressions in the hyphenation engine, and signed-comparison regressions in
+  Unicode string conversion and matching.
 - A native Unicode corpus now covers supplementary UTF-16, combining and
   emoji-ZWJ graphemes, bidirectional text, CJK line breaking and mixed scripts.
 - SQLite fixture matrices for every supported main and cover database migration,

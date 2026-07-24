@@ -1593,7 +1593,8 @@ bool lString32::atod( double &d, char dp ) const {
             s++;
         }
     }
-    if (res && *s == dp) {
+    if (res && *s == static_cast<lChar32>(
+            static_cast<unsigned char>(dp))) {
         // decimal point found
         s++;
         res = false;
@@ -3107,7 +3108,8 @@ int lString32::pos(const lChar8 * subStr) const
     {
         int flg = 1;
         for (int j=0; j<l; j++)
-            if (pchunk->buf32[i+j] != subStr[j])
+            if (pchunk->buf32[i+j] != static_cast<lChar32>(
+                    static_cast<unsigned char>(subStr[j])))
             {
                 flg = 0;
                 break;
@@ -3131,7 +3133,8 @@ int lString32::pos(const lChar8 * subStr, int start) const
     {
         int flg = 1;
         for (int j=0; j<l; j++)
-            if (pchunk->buf32[i+j] != subStr[j])
+            if (pchunk->buf32[i+j] != static_cast<lChar32>(
+                    static_cast<unsigned char>(subStr[j])))
             {
                 flg = 0;
                 break;
@@ -5873,7 +5876,8 @@ bool lString16::startsWith(const lChar8 * substring) const
     const lChar16 * s1 = c_str();
     const lChar8 * s2 = substring;
     for ( int i=0; i<len; i++ )
-        if (s1[i] != s2[i])
+        if (s1[i] != static_cast<lChar16>(
+                static_cast<unsigned char>(s2[i])))
             return false;
     return true;
 }
@@ -5960,7 +5964,8 @@ bool lString32::startsWith(const lChar8 * substring) const
     const lChar32 * s1 = c_str();
     const lChar8 * s2 = substring;
     for ( int i=0; i<len; i++ )
-        if (s1[i] != s2[i])
+        if (s1[i] != static_cast<lChar32>(
+                static_cast<unsigned char>(s2[i])))
             return false;
     return true;
 }

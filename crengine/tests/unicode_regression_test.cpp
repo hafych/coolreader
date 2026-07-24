@@ -152,6 +152,23 @@ static int testMixedScriptRoundTrips()
     return 0;
 }
 
+static int testAsciiInterop()
+{
+    const lString32 text(U"prefix-value");
+    if (text.pos("value") != 7
+            || text.pos("fix", 1) != 3
+            || !text.startsWith("prefix"))
+        return fail("ASCII and Unicode string matching diverged");
+    if (!lString16(u"prefix-value").startsWith("prefix"))
+        return fail("ASCII and UTF-16 prefix matching diverged");
+
+    double value = 0;
+    if (!lString32(U"12,5").atod(value, ',')
+            || value < 12.49 || value > 12.51)
+        return fail("Unicode decimal parsing lost its ASCII separator");
+    return 0;
+}
+
 int main()
 {
     if (testUtf16Surrogates() != 0
@@ -162,5 +179,7 @@ int main()
     if (testBidirectionalText() != 0)
         return 1;
 #endif
-    return testMixedScriptRoundTrips();
+    if (testMixedScriptRoundTrips() != 0)
+        return 1;
+    return testAsciiInterop();
 }
