@@ -256,6 +256,7 @@ enum CacheFileBlockType {
 #include "../include/lvcontaineriteminfo.h"
 #include "../include/lvstreambuffer.h"
 #include "../include/lvstreamutils.h"
+#include "../include/streamproxy.h"
 #include "../include/lvbase64stream.h"
 #include "../include/lvxmlutils.h"
 #include "../include/lvfileformatparser.h"
@@ -264,6 +265,8 @@ enum CacheFileBlockType {
 
 #include <stddef.h>
 #include <math.h>
+#include <memory>
+#include <mutex>
 #if (USE_ZSTD == 1)
 #include <zstd.h>
 #endif
@@ -15951,13 +15954,50 @@ ContinuousOperationResult ldomDocument::updateMap(CRTimerUtil & maxTime, LVDocVi
 
 static const char * doccache_magic = "CoolReader3 Document Cache Directory Index\nV1.00\n";
 
+class ldomDocCacheImpl;
+
+class ldomDocCacheStream : public StreamProxy
+{
+    std::weak_ptr<ldomDocCacheImpl> _owner;
+    lString32 _filename;
+    lString32 _pathname;
+    lUInt64 _generation;
+public:
+    ldomDocCacheStream(LVStreamRef stream,
+            const std::shared_ptr<ldomDocCacheImpl> &owner,
+            lString32 filename, lString32 pathname, lUInt64 generation)
+        : StreamProxy(stream), _owner(owner), _filename(filename),
+          _pathname(pathname), _generation(generation) {
+    }
+
+    virtual lvopen_mode_t GetMode() { return _base->GetMode(); }
+    virtual lverror_t SetMode(lvopen_mode_t mode) {
+        return _base->SetMode(mode);
+    }
+    virtual lverror_t Flush(bool sync) { return _base->Flush(sync); }
+    virtual lverror_t Flush(bool sync, CRTimerUtil &timeout) {
+        return _base->Flush(sync, timeout);
+    }
+    virtual void setAutoSyncSize(lvsize_t size) {
+        _base->setAutoSyncSize(size);
+    }
+
+    virtual ~ldomDocCacheStream();
+};
+
 /// document cache
-class ldomDocCacheImpl : public ldomDocCache
+class ldomDocCacheImpl : public ldomDocCache,
+        public std::enable_shared_from_this<ldomDocCacheImpl>
 {
     lString32 _cacheDir;
     lvsize_t _maxSize;
     lUInt32 _oldStreamSize;
     lUInt32 _oldStreamCRC;
+    std::recursive_mutex _mutex;
+    lUInt64 _hits;
+    lUInt64 _misses;
+    lUInt64 _evictions;
+    lUInt64 _generation;
 
     struct FileItem {
         lString32 filename;
@@ -15966,7 +16006,9 @@ class ldomDocCacheImpl : public ldomDocCache
     LVPtrVector<FileItem> _files;
 public:
     ldomDocCacheImpl( lString32 cacheDir, lvsize_t maxSize )
-        : _cacheDir( cacheDir ), _maxSize( maxSize ), _oldStreamSize(0), _oldStreamCRC(0)
+        : _cacheDir( cacheDir ), _maxSize( maxSize ), _oldStreamSize(0),
+          _oldStreamCRC(0), _hits(0), _misses(0), _evictions(0),
+          _generation(0)
     {
         LVAppendPathDelimiter( _cacheDir );
         CRLog::trace("ldomDocCacheImpl(%s maxSize=%d)", LCSTR(_cacheDir), (int)maxSize);
@@ -16094,31 +16136,49 @@ public:
         return true;
     }
 
-    // remove all extra files to add new one of specified size
-    bool reserve( lvsize_t allocSize )
+    // Remove missing entries, refresh their actual sizes and enforce the
+    // configured bound from most-recently-used to least-recently-used.
+    bool enforceLimit( bool refreshSizes )
     {
         bool res = true;
-        // remove extra files specified in list
-        lvsize_t dirsize = allocSize;
+        lvsize_t dirsize = 0;
         for ( int i=0; i<_files.length(); ) {
-            if ( LVFileExists( _cacheDir + _files[i]->filename ) ) {
-                if ( (i>0 || allocSize>0) && dirsize+_files[i]->size > _maxSize ) {
-                    if ( LVDeleteFile( _cacheDir + _files[i]->filename ) ) {
-                        _files.erase(i, 1);
-                    } else {
-                        CRLog::error("Cannot delete cache file %s", UnicodeToUtf8(_files[i]->filename).c_str() );
-                        dirsize += _files[i]->size;
-                        res = false;
-                        i++;
-                    }
-                } else {
-                    dirsize += _files[i]->size;
-                    i++;
-                }
-            } else {
+            lString32 pathname = _cacheDir + _files[i]->filename;
+            if ( !LVFileExists(pathname) ) {
                 CRLog::error("File %s is found in cache index, but does not exist", UnicodeToUtf8(_files[i]->filename).c_str() );
                 _files.erase(i, 1);
+                continue;
             }
+            lvsize_t fileSize = _files[i]->size;
+            if ( refreshSizes ) {
+                LVStreamRef stream = LVOpenFileStream(pathname.c_str(), LVOM_READ);
+                if ( stream.isNull() ) {
+                    CRLog::error("Cannot inspect cache file %s", UnicodeToUtf8(_files[i]->filename).c_str() );
+                    _files.erase(i, 1);
+                    res = false;
+                    continue;
+                }
+                fileSize = stream->GetSize();
+                stream.Clear();
+            }
+            bool sizeFitsIndex = fileSize <= (lvsize_t)0xFFFFFFFFU;
+            bool sizeFitsCache = fileSize <= _maxSize
+                    && dirsize <= _maxSize - fileSize;
+            if ( !sizeFitsIndex || !sizeFitsCache ) {
+                if ( LVDeleteFile(pathname) ) {
+                    _files.erase(i, 1);
+                    _evictions++;
+                } else {
+                    CRLog::error("Cannot delete cache file %s", UnicodeToUtf8(_files[i]->filename).c_str() );
+                    res = false;
+                    dirsize = _maxSize;
+                    i++;
+                }
+                continue;
+            }
+            _files[i]->size = (lUInt32)fileSize;
+            dirsize += fileSize;
+            i++;
         }
         return res;
     }
@@ -16132,7 +16192,7 @@ public:
         return -1;
     }
 
-    bool moveFileToTop( lString32 filename, lUInt32 size )
+    void moveFileToTop( lString32 filename, lUInt32 size )
     {
         int index = findFileIndex( filename );
         if ( index<0 ) {
@@ -16144,11 +16204,32 @@ public:
             _files.move( 0, index );
             _files[0]->size = size;
         }
-        return writeIndex();
+    }
+
+    void removeFileFromIndex( lString32 filename )
+    {
+        int index = findFileIndex(filename);
+        if ( index >= 0 )
+            _files.erase(index, 1);
+    }
+
+    lvsize_t getCurrentSize()
+    {
+        lvsize_t size = 0;
+        for ( int i=0; i<_files.length(); i++ )
+            size += _files[i]->size;
+        return size;
+    }
+
+    static int statsSize( lvsize_t size )
+    {
+        return size > (lvsize_t)0x7FFFFFFF
+                ? 0x7FFFFFFF : (int)size;
     }
 
     bool init()
     {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
         CRLog::info("Initialize document cache in directory %s", UnicodeToUtf8(_cacheDir).c_str() );
         // read index
         if ( readIndex(  ) ) {
@@ -16163,7 +16244,7 @@ public:
             _files.clear();
 
         }
-        reserve(0);
+        enforceLimit(true);
         if ( !writeIndex() )
             return false; // cannot write index: read only?
         return true;
@@ -16172,10 +16253,28 @@ public:
     /// remove all files
     bool clear()
     {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        _generation++;
         for ( int i=0; i<_files.length(); i++ )
-            LVDeleteFile( _files[i]->filename );
+            LVDeleteFile( _cacheDir + _files[i]->filename );
         _files.clear();
         return writeIndex();
+    }
+
+    LVCacheStats getStats()
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        return LVCacheStats(statsSize(_maxSize),
+                statsSize(getCurrentSize()), _hits, _misses, _evictions,
+                0, _files.length());
+    }
+
+    void resetStats()
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        _hits = 0;
+        _misses = 0;
+        _evictions = 0;
     }
 
     // dir/filename.{crc32}.cr3
@@ -16213,6 +16312,7 @@ public:
     /// open existing cache file stream
     LVStreamRef openExisting( lString32 filename, lUInt32 crc, lUInt32 docFlags, lString32 &cachePath )
     {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
         lString32 fn = makeFileName( filename, crc, docFlags );
         CRLog::debug("ldomDocCache::openExisting(%s)", LCSTR(fn));
         // Try filename with ".keep" extension (that a user can manually add
@@ -16228,18 +16328,23 @@ public:
 #if ENABLED_BLOCK_WRITE_CACHE
                 stream = LVCreateBlockWriteStream( stream, WRITE_CACHE_BLOCK_SIZE, WRITE_CACHE_BLOCK_COUNT );
 #endif
+                _hits++;
                 return stream;
             }
         }
         LVStreamRef res;
         if ( findFileIndex( fn ) < 0 ) {
             CRLog::error( "ldomDocCache::openExisting - File %s is not found in cache index", UnicodeToUtf8(fn).c_str() );
+            _misses++;
             return res;
         }
         lString32 pathname = _cacheDir + fn;
         res = LVOpenFileStream( pathname.c_str(), LVOM_APPEND|LVOM_FLAG_SYNC );
         if ( !res ) {
             CRLog::error( "ldomDocCache::openExisting - File %s is listed in cache index, but cannot be opened", UnicodeToUtf8(fn).c_str() );
+            removeFileFromIndex(fn);
+            writeIndex();
+            _misses++;
             return res;
         }
         cachePath = pathname;
@@ -16257,14 +16362,28 @@ public:
 #endif
 #endif
 
-        lUInt32 fileSize = (lUInt32) res->GetSize();
-        moveFileToTop( fn, fileSize );
-        return res;
+        lvsize_t fileSize = res->GetSize();
+        if ( fileSize > _maxSize || fileSize > (lvsize_t)0xFFFFFFFFU ) {
+            res.Clear();
+            if ( LVDeleteFile(pathname) )
+                _evictions++;
+            removeFileFromIndex(fn);
+            writeIndex();
+            _misses++;
+            return LVStreamRef();
+        }
+        moveFileToTop( fn, (lUInt32)fileSize );
+        writeIndex();
+        _hits++;
+        return LVStreamRef(new ldomDocCacheStream(
+                res, shared_from_this(), fn, pathname, _generation));
     }
 
     /// create new cache file
     LVStreamRef createNew( lString32 filename, lUInt32 crc, lUInt32 docFlags, lUInt32 fileSize, lString32 &cachePath )
     {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        (void)fileSize;
         lString32 fn = makeFileName( filename, crc, docFlags );
         LVStreamRef res;
         lString32 pathname = _cacheDir + fn;
@@ -16287,9 +16406,10 @@ public:
                 return stream;
             }
         }
-        if ( findFileIndex( pathname ) >= 0 )
-            LVDeleteFile( pathname );
-        reserve( fileSize/10 );
+        if ( findFileIndex( fn ) >= 0 ) {
+            removeFileFromIndex(fn);
+            writeIndex();
+        }
         //res = LVMapFileStream( (_cacheDir+fn).c_str(), LVOM_APPEND, fileSize );
         LVDeleteFile( pathname ); // try to delete, ignore errors
         res = LVOpenFileStream( pathname.c_str(), LVOM_APPEND|LVOM_FLAG_SYNC );
@@ -16309,8 +16429,33 @@ public:
         res = LVCreateCompareTestStream(res, stream2);
 #endif
 #endif
-        moveFileToTop( fn, fileSize );
-        return res;
+        return LVStreamRef(new ldomDocCacheStream(
+                res, shared_from_this(), fn, pathname, _generation));
+    }
+
+    void finalize( lString32 filename, lString32 pathname, lvsize_t fileSize,
+            lUInt64 generation )
+    {
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
+        if ( generation != _generation ) {
+            LVDeleteFile(pathname);
+            return;
+        }
+        if ( !LVFileExists(pathname) )
+            return;
+        bool wasIndexed = findFileIndex(filename) >= 0;
+        if ( fileSize > _maxSize || fileSize > (lvsize_t)0xFFFFFFFFU ) {
+            if ( LVDeleteFile(pathname) && wasIndexed )
+                _evictions++;
+            removeFileFromIndex(filename);
+            writeIndex();
+            return;
+        }
+        moveFileToTop(filename, (lUInt32)fileSize);
+        enforceLimit(false);
+        if ( !writeIndex() )
+            CRLog::error("Cannot update document cache index for %s",
+                    UnicodeToUtf8(filename).c_str());
     }
 
     virtual ~ldomDocCacheImpl()
@@ -16318,59 +16463,113 @@ public:
     }
 };
 
-static ldomDocCacheImpl * _cacheInstance = NULL;
+ldomDocCacheStream::~ldomDocCacheStream()
+{
+    if ( _base.isNull() )
+        return;
+    _base->Flush(true);
+    lvsize_t fileSize = _base->GetSize();
+    _base.Clear();
+    std::shared_ptr<ldomDocCacheImpl> owner = _owner.lock();
+    if ( owner )
+        owner->finalize(_filename, _pathname, fileSize, _generation);
+}
+
+static std::shared_ptr<ldomDocCacheImpl> _cacheInstance;
+static std::mutex _cacheInstanceMutex;
 
 bool ldomDocCache::init( lString32 cacheDir, lvsize_t maxSize )
 {
-    if ( _cacheInstance )
-        delete _cacheInstance;
+    {
+        std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+        _cacheInstance.reset();
+    }
     CRLog::info("Initialize document cache at %s (max size = %d)", UnicodeToUtf8(cacheDir).c_str(), (int)maxSize );
-    _cacheInstance = new ldomDocCacheImpl( cacheDir, maxSize );
-    if ( !_cacheInstance->init() ) {
-        delete _cacheInstance;
-        _cacheInstance = NULL;
+    std::shared_ptr<ldomDocCacheImpl> candidate(
+            new ldomDocCacheImpl(cacheDir, maxSize));
+    if ( !candidate->init() )
         return false;
+    {
+        std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+        _cacheInstance = candidate;
     }
     return true;
 }
 
 bool ldomDocCache::close()
 {
+    std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
     if ( !_cacheInstance )
         return false;
-    delete _cacheInstance;
-    _cacheInstance = NULL;
+    _cacheInstance.reset();
     return true;
 }
 
 /// open existing cache file stream
 LVStreamRef ldomDocCache::openExisting( lString32 filename, lUInt32 crc, lUInt32 docFlags, lString32 &cachePath )
 {
-    if ( !_cacheInstance )
+    std::shared_ptr<ldomDocCacheImpl> instance;
+    {
+        std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+        instance = _cacheInstance;
+    }
+    if ( !instance )
         return LVStreamRef();
-    return _cacheInstance->openExisting( filename, crc, docFlags, cachePath );
+    return instance->openExisting( filename, crc, docFlags, cachePath );
 }
 
 /// create new cache file
 LVStreamRef ldomDocCache::createNew( lString32 filename, lUInt32 crc, lUInt32 docFlags, lUInt32 fileSize, lString32 &cachePath )
 {
-    if ( !_cacheInstance )
+    std::shared_ptr<ldomDocCacheImpl> instance;
+    {
+        std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+        instance = _cacheInstance;
+    }
+    if ( !instance )
         return LVStreamRef();
-    return _cacheInstance->createNew( filename, crc, docFlags, fileSize, cachePath );
+    return instance->createNew( filename, crc, docFlags, fileSize, cachePath );
 }
 
 /// delete all cache files
 bool ldomDocCache::clear()
 {
-    if ( !_cacheInstance )
+    std::shared_ptr<ldomDocCacheImpl> instance;
+    {
+        std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+        instance = _cacheInstance;
+    }
+    if ( !instance )
         return false;
-    return _cacheInstance->clear();
+    return instance->clear();
 }
 
 /// returns true if cache is enabled (successfully initialized)
 bool ldomDocCache::enabled()
 {
-    return _cacheInstance!=NULL;
+    std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+    return (bool)_cacheInstance;
+}
+
+LVCacheStats ldomDocCache::getStats()
+{
+    std::shared_ptr<ldomDocCacheImpl> instance;
+    {
+        std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+        instance = _cacheInstance;
+    }
+    return instance ? instance->getStats() : LVCacheStats();
+}
+
+void ldomDocCache::resetStats()
+{
+    std::shared_ptr<ldomDocCacheImpl> instance;
+    {
+        std::lock_guard<std::mutex> guard(_cacheInstanceMutex);
+        instance = _cacheInstance;
+    }
+    if ( instance )
+        instance->resetStats();
 }
 
 //void calcStyleHash( ldomNode * node, lUInt32 & value )

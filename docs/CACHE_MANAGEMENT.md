@@ -7,8 +7,9 @@ validated without changing unrelated rendering behavior.
 | --- | --- | --- | --- |
 | Glyph bitmap | Compile-time byte capacity (`GLYPH_CACHE_SIZE`) with LRU eviction | hits, misses, evictions, current bytes, capacity | implemented |
 | Rendered page image | 2 entries | hits, misses, evictions, current bytes/items, item capacity | implemented |
+| Decoded skin image | pending | pending | follow-up |
 | Cover bytes | 512 KiB and 256 entries | hits, misses, evictions, current bytes/items, capacities | implemented |
-| Parsed document | pending | pending | follow-up |
+| Parsed document | Configured byte capacity with LRU eviction | hits, misses, evictions, current bytes/items, capacity | implemented |
 
 Glyph counters are aggregated by the process-wide font manager and exposed
 through `GetGlyphCacheStats()`. `ResetGlyphCacheStats()` resets counters without
@@ -27,3 +28,8 @@ accounting but do not count as capacity evictions.
 The desktop rendered-page cache retains two buffers. Cache lookups use scoped
 locking on misses and probes, while a returned image holder keeps the mutex only
 for the lifetime of the borrowed buffer.
+
+The parsed-document cache admits a file only after its stream is finalized and
+its actual size is known. Oversized files are discarded without evicting valid
+entries; accepted files evict least-recently-used entries until the configured
+byte bound is met. Its process-wide manager has synchronized RAII ownership.

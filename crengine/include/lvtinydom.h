@@ -64,6 +64,7 @@
 #include "serialbuf.h"
 #include "lvstring32hashedcollection.h"
 #include "lvdocviewcallback.h"
+#include "lvcache.h"
 
 #if MATHML_SUPPORT==1
 #include "mathml.h"
@@ -2916,6 +2917,10 @@ public:
     static bool clear();
     /// returns true if cache is enabled (successfully initialized)
     static bool enabled();
+    /// return document cache bounds and counters
+    static LVCacheStats getStats();
+    /// reset hit, miss and eviction counters without clearing cached documents
+    static void resetStats();
 };
 
 

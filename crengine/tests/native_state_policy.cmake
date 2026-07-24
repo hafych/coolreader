@@ -234,6 +234,21 @@ require_source_text(
   "LVLock lock( _mutex );"
   "page image cache probes must use scoped locking"
 )
+require_source_text(
+  "${DOM_SOURCE}"
+  "static std::shared_ptr<ldomDocCacheImpl> _cacheInstance"
+  "document cache manager lifetime must use RAII ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "static std::mutex _cacheInstanceMutex"
+  "document cache manager lifecycle must be synchronized"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "static ldomDocCacheImpl * _cacheInstance"
+  "document cache manager must not use an owning raw pointer"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
