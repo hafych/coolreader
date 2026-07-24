@@ -191,28 +191,34 @@ Use File/Open project or file menu item, and choose `coolreader` root directory.
 
 
 CMake Build Instructions (Linux)
-------------------------
+--------------------------------
 
 In case the installed libraries are outdated, run the `thirdparty-deploy.sh` script to download libraries sources of the recommended versions. In this case, the build system will build static libraries that were not found in the system.
 
         $ ./thirdparty-deploy.sh
 
-Building Qt version (qtbase5-dev, qttools5-dev should be installed)
+Qt 6 is the primary desktop frontend and is built on every pull request.
+Install `qt6-base-dev`, `qt6-tools-dev` and `qt6-tools-dev-tools`.
 
         mkdir qtbuild
         cd qtbuild
-        cmake -D GUI=QT5 -D CMAKE_BUILD_TYPE=Release -D MAX_IMAGE_SCALE_MUL=2 -D DOC_DATA_COMPRESSION_LEVEL=3 -D DOC_BUFFER_SIZE=0x1400000 -D CMAKE_INSTALL_PREFIX=/usr ..
+        cmake -D GUI=QT6 -D CMAKE_BUILD_TYPE=Release -D MAX_IMAGE_SCALE_MUL=2 -D DOC_DATA_COMPRESSION_LEVEL=3 -D DOC_BUFFER_SIZE=0x1400000 -D CMAKE_INSTALL_PREFIX=/usr ..
         make
         sudo make install
 
 
-Building Qt version, in DEBUG mode
+Building the Qt 6 version in DEBUG mode
 
         mkdir qtbuild
         cd qtbuild
-        cmake -D GUI=QT5 -D CMAKE_BUILD_TYPE=Debug -D MAX_IMAGE_SCALE_MUL=2 -D DOC_DATA_COMPRESSION_LEVEL=3 -D DOC_BUFFER_SIZE=0x1400000 -D CMAKE_INSTALL_PREFIX=/usr ..
+        cmake -D GUI=QT6 -D CMAKE_BUILD_TYPE=Debug -D MAX_IMAGE_SCALE_MUL=2 -D DOC_DATA_COMPRESSION_LEVEL=3 -D DOC_BUFFER_SIZE=0x1400000 -D CMAKE_INSTALL_PREFIX=/usr ..
         make
         sudo make install
+
+Qt 5 remains a best-effort compatibility target through December 31, 2026.
+Use `GUI=QT5` with `qtbase5-dev` and `qttools5-dev`. New desktop work targets
+Qt 6; Qt 5 may be removed in the first release made on or after January 1,
+2027.
 
 Building wxWidgets version (libwxgtk3.0-gtk3-dev should be installed)
 

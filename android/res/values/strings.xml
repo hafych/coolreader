@@ -47,6 +47,13 @@
     <string name="mi_folder_fav_right">Move right</string>
     <string name="mi_folder_fav_remove">Remove</string>
     <string name="mi_folder_delete">Delete…</string>
+    <string name="library_root_add">Add library folder</string>
+    <string name="library_root_access_lost">%1$s — access lost</string>
+    <string name="library_root_reselect">Select folder again</string>
+    <string name="library_root_remove">Remove from library</string>
+    <string name="library_root_remove_confirm">Remove this folder from the library? Your files will not be deleted.</string>
+    <string name="library_root_grant_failed">The folder could not be saved. Please allow permanent read access.</string>
+    <string name="library_root_selected">Library folder saved</string>
     <string name="dir_recent_books">Recent Books</string>
     <string name="dir_sd_card">SD Card</string>
     <string name="dir_internal_sd_card">Internal SD Card</string>
@@ -614,6 +621,8 @@
     <string name="black_list_warning">WARNING: this URL is added to black list of catalogs which may violate DMCA by request of LitRes.ru Do you really want to add this catalog?</string>
     <string name="error">Error</string>
     <string name="cant_open_file">Can\'t open file \"%s\"!</string>
+    <string name="unsupported_document_format">This file is not a supported document or its content does not match the reported format.</string>
+    <string name="temporary_uri_access_warning">The file provider granted temporary access. This book may not reopen after the app restarts; import it into app storage to keep it available.</string>
     <string name="opened_from_stream">Document opened from stream, file location unknown. Unable to save information about the last opened file!</string>
     <string name="options_app_tts_stop_motion_timeout">Stop reading aloud on motion sensor timeout</string>
     <string name="motion_timeout_off">"Off"</string>

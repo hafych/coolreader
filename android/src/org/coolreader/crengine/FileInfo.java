@@ -73,6 +73,11 @@ public class FileInfo implements Parcelable {
 	public String filename; // file name w/o path for normal file, with optional path for file inside archive 
 	public String pathname; // full path+filename
 	public String arcname; // archive file name with path
+	public String bookKey; // stable, versioned book identity
+	public String sourceType; // BookKey.SourceType name
+	public String sourceLocator; // URI or source pathname used for diagnostics
+	public String archiveEntry; // entry name for archive-backed books
+	public String contentHash; // SHA-256 of the document or archive container
 	public String language; // document language
 	public String description;	// book description
 	public String username; // username for online catalogs
@@ -271,6 +276,11 @@ public class FileInfo implements Parcelable {
 		filename = in.readString();
 		pathname = in.readString();
 		arcname = in.readString();
+		bookKey = in.readString();
+		sourceType = in.readString();
+		sourceLocator = in.readString();
+		archiveEntry = in.readString();
+		contentHash = in.readString();
 		language = in.readString();
 		description = in.readString();
 		username = in.readString();
@@ -392,6 +402,11 @@ public class FileInfo implements Parcelable {
 		filename = v.filename;
 		pathname = v.pathname;
 		arcname = v.arcname;
+		bookKey = v.bookKey;
+		sourceType = v.sourceType;
+		sourceLocator = v.sourceLocator;
+		archiveEntry = v.archiveEntry;
+		contentHash = v.contentHash;
 		format = v.format;
 		flags = v.flags;
 		size = v.size;
@@ -753,6 +768,18 @@ public class FileInfo implements Parcelable {
 	public boolean pathNameEquals(FileInfo item) {
 		return isDirectory == item.isDirectory && eq(arcname, item.arcname) && eq(pathname, item.pathname);
 	}
+
+	public boolean bookKeyEquals(FileInfo item) {
+		return item != null && bookKey != null && bookKey.equals(item.bookKey);
+	}
+
+	public boolean sameBook(FileInfo item) {
+		if (item == null || isDirectory != item.isDirectory)
+			return false;
+		if (!isDirectory && bookKeyEquals(item))
+			return true;
+		return pathNameEquals(item);
+	}
 	
 	public boolean hasItem(FileInfo item) {
 		return getItemIndex(item) >= 0;
@@ -939,6 +966,11 @@ public class FileInfo implements Parcelable {
 	{
 		if (isDirectory)
 			return false;
+		// A ContentResolver, not java.io.File, owns this identity. Keep the
+		// record available in history; the open boundary verifies the current
+		// URI grant and reports a safe error if access was revoked.
+		if (DocumentSource.isContentUri(getPathName()))
+			return true;
 		if ( isArchive ) {
 			if ( arcname!=null )
 				return new File(arcname).exists();
@@ -952,6 +984,8 @@ public class FileInfo implements Parcelable {
 	 */
 	public boolean exists()
 	{
+		if (DocumentSource.isContentUri(getPathName()))
+			return true;
 		if ( isArchive ) {
 			if ( arcname==null )
 				return false;
@@ -1077,6 +1111,11 @@ public class FileInfo implements Parcelable {
 		dest.writeString(filename);
 		dest.writeString(pathname);
 		dest.writeString(arcname);
+		dest.writeString(bookKey);
+		dest.writeString(sourceType);
+		dest.writeString(sourceLocator);
+		dest.writeString(archiveEntry);
+		dest.writeString(contentHash);
 		dest.writeString(language);
 		dest.writeString(description);
 		dest.writeString(username);
@@ -1266,8 +1305,11 @@ public class FileInfo implements Parcelable {
 		final int prime = 31;
 		int result = 1;
 		result = prime * result + ((arcname == null) ? 0 : arcname.hashCode());
+		result = prime * result + ((archiveEntry == null) ? 0 : archiveEntry.hashCode());
 		result = prime * result + (int)arcsize;
 		result = prime * result + ((authors == null) ? 0 : authors.hashCode());
+		result = prime * result + ((bookKey == null) ? 0 : bookKey.hashCode());
+		result = prime * result + ((contentHash == null) ? 0 : contentHash.hashCode());
 		result = prime * result + (int) (createTime ^ (createTime >>> 32));
 		result = prime * result + ((dirs == null) ? 0 : dirs.hashCode());
 		result = prime * result
@@ -1287,6 +1329,10 @@ public class FileInfo implements Parcelable {
 		result = prime * result + ((path == null) ? 0 : path.hashCode());
 		result = prime * result
 				+ ((pathname == null) ? 0 : pathname.hashCode());
+		result = prime * result
+				+ ((sourceLocator == null) ? 0 : sourceLocator.hashCode());
+		result = prime * result
+				+ ((sourceType == null) ? 0 : sourceType.hashCode());
 		result = prime * result + ((series == null) ? 0 : series.hashCode());
 		result = prime * result + seriesNumber;
 		result = prime * result + (int)size;
@@ -1308,12 +1354,18 @@ public class FileInfo implements Parcelable {
 				return false;
 		} else if (!arcname.equals(other.arcname))
 			return false;
+		if (!eq(archiveEntry, other.archiveEntry))
+			return false;
 		if (arcsize != other.arcsize)
 			return false;
 		if (authors == null) {
 			if (other.authors != null)
 				return false;
 		} else if (!authors.equals(other.authors))
+			return false;
+		if (!eq(bookKey, other.bookKey))
+			return false;
+		if (!eq(contentHash, other.contentHash))
 			return false;
 		if (createTime != other.createTime)
 			return false;
@@ -1376,6 +1428,10 @@ public class FileInfo implements Parcelable {
 			if (other.pathname != null)
 				return false;
 		} else if (!pathname.equals(other.pathname))
+			return false;
+		if (!eq(sourceLocator, other.sourceLocator))
+			return false;
+		if (!eq(sourceType, other.sourceType))
 			return false;
 		if (series == null) {
 			if (other.series != null && other.series.length() != 0)

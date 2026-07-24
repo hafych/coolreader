@@ -137,6 +137,8 @@ final class LegacyMainDbFixtures {
 			createV33GenreSchema(connection);
 		if (version >= 34)
 			createV34GenreSchema(connection);
+		if (version >= 36)
+			execute(connection, OpdsCatalogSchema.REMOVE_CREDENTIAL_COLUMNS);
 	}
 
 	private static void createLegacyOpdsSchema(Connection connection)
@@ -212,15 +214,23 @@ final class LegacyMainDbFixtures {
 				"INSERT INTO bookmark (id, book_fk, start_pos) " +
 						"VALUES (1, 1, 'fixture-position')");
 		if (version >= 6) {
-			execute(connection,
-					"INSERT INTO opds_catalog " +
-							"(id, name, url, username, password" +
-							(version >= 15 ? ", last_usage" : "") +
-							") VALUES (7, 'Fixture catalog', " +
-							"'https://catalog.example/opds', " +
-							(version >= 35 ? "NULL, NULL" : "'alice', 'secret'") +
-							(version >= 15 ? ", 9" : "") +
-							")");
+			if (version >= 36) {
+				execute(connection,
+						"INSERT INTO opds_catalog " +
+								"(id, name, url, last_usage) VALUES " +
+								"(7, 'Fixture catalog', " +
+								"'https://catalog.example/opds', 9)");
+			} else {
+				execute(connection,
+						"INSERT INTO opds_catalog " +
+								"(id, name, url, username, password" +
+								(version >= 15 ? ", last_usage" : "") +
+								") VALUES (7, 'Fixture catalog', " +
+								"'https://catalog.example/opds', " +
+								(version >= 35 ? "NULL, NULL" : "'alice', 'secret'") +
+								(version >= 15 ? ", 9" : "") +
+								")");
+			}
 		}
 		if (version >= 33) {
 			execute(connection,

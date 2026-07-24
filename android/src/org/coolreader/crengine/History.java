@@ -147,7 +147,7 @@ public class History extends FileInfoChangeSource {
 	public int findBookInfo( FileInfo file )
 	{
 		for ( int i=0; i<mBooks.size(); i++ )
-			if (file.pathNameEquals(mBooks.get(i).getFileInfo()))
+			if (file.sameBook(mBooks.get(i).getFileInfo()))
 				return i;
 		return -1;
 	}

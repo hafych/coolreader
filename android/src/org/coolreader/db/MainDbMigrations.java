@@ -17,9 +17,9 @@ import java.util.List;
 import java.util.Map;
 
 final class MainDbMigrations {
-	static final int CURRENT_VERSION = 36;
+	static final int CURRENT_VERSION = 37;
 	static final int[] SUPPORTED_LEGACY_VERSIONS = {
-			1, 4, 6, 13, 15, 16, 21, 26, 28, 29, 30, 31, 33, 34, 35
+			1, 4, 6, 13, 15, 16, 21, 26, 28, 29, 30, 31, 33, 34, 35, 36
 	};
 
 	private static final String[] ENSURE_BASE_SCHEMA = {
@@ -54,7 +54,12 @@ final class MainDbMigrations {
 					"description TEXT DEFAULT NULL," +
 					"crc32 INTEGER DEFAULT NULL," +
 					"domVersion INTEGER DEFAULT 0," +
-					"rendFlags INTEGER DEFAULT 0)",
+					"rendFlags INTEGER DEFAULT 0," +
+					"book_key VARCHAR DEFAULT NULL," +
+					"source_type VARCHAR DEFAULT NULL," +
+					"source_locator VARCHAR DEFAULT NULL," +
+					"archive_entry VARCHAR DEFAULT NULL," +
+					"content_hash VARCHAR DEFAULT NULL)",
 			"CREATE INDEX IF NOT EXISTS book_folder_index ON book (folder_fk)",
 			"CREATE INDEX IF NOT EXISTS book_filename_index ON book (filename)",
 			"CREATE UNIQUE INDEX IF NOT EXISTS book_pathname_index ON book (pathname)",
@@ -261,6 +266,9 @@ final class MainDbMigrations {
 		apply(database, currentVersion, 36, "remove-opds-credentials",
 				() -> removeLegacyOpdsCredentialColumns(database),
 				() -> verifyOpdsCatalogSchema(database));
+		apply(database, currentVersion, 37, "stable-book-identity",
+				() -> addStableBookIdentity(database),
+				() -> verifyStableBookIdentity(database));
 
 		verifyCurrentSchema(database);
 	}
@@ -278,7 +286,8 @@ final class MainDbMigrations {
 				"id", "pathname", "folder_fk", "filename", "arcname", "title",
 				"series_fk", "series_number", "format", "filesize", "arcsize",
 				"create_time", "last_access_time", "flags", "language",
-				"description", "crc32", "domVersion", "rendFlags"
+				"description", "crc32", "domVersion", "rendFlags", "book_key",
+				"source_type", "source_locator", "archive_entry", "content_hash"
 		};
 		for (String columnName : requiredBookColumns)
 			requireColumn(database, "book", columnName);
@@ -299,7 +308,7 @@ final class MainDbMigrations {
 		String[] requiredIndexes = {
 				"author_name_index", "series_name_index", "folder_name_index",
 				"book_folder_index", "book_filename_index", "book_pathname_index",
-				"book_title_index", "book_last_access_time_index",
+				"book_title_index", "book_last_access_time_index", "book_key_index",
 				"author_book_index", "bookmark_book_index",
 				"genre_group_code_index", "genre_code_index", "book_genre_index",
 				"opds_catalog_name_index", "opds_catalog_url_index",
@@ -307,6 +316,7 @@ final class MainDbMigrations {
 		};
 		for (String indexName : requiredIndexes)
 			requireIndex(database, indexName);
+		verifyStableBookIdentity(database);
 	}
 
 	private static void apply(
@@ -400,6 +410,58 @@ final class MainDbMigrations {
 		requireColumn(database, "opds_catalog", "last_usage");
 		requireNoColumn(database, "opds_catalog", "username");
 		requireNoColumn(database, "opds_catalog", "password");
+	}
+
+	private static void addStableBookIdentity(Backend database) {
+		addColumnIfMissing(
+				database, "book", "book_key",
+				"ALTER TABLE book ADD COLUMN book_key VARCHAR DEFAULT NULL");
+		addColumnIfMissing(
+				database, "book", "source_type",
+				"ALTER TABLE book ADD COLUMN source_type VARCHAR DEFAULT NULL");
+		addColumnIfMissing(
+				database, "book", "source_locator",
+				"ALTER TABLE book ADD COLUMN source_locator VARCHAR DEFAULT NULL");
+		addColumnIfMissing(
+				database, "book", "archive_entry",
+				"ALTER TABLE book ADD COLUMN archive_entry VARCHAR DEFAULT NULL");
+		addColumnIfMissing(
+				database, "book", "content_hash",
+				"ALTER TABLE book ADD COLUMN content_hash VARCHAR DEFAULT NULL");
+		database.execute(
+				"UPDATE book SET source_type=CASE " +
+						"WHEN pathname LIKE 'content://%' THEN 'CONTENT_URI' " +
+						"WHEN arcname IS NOT NULL THEN 'ARCHIVE_ENTRY' " +
+						"ELSE 'FILE' END WHERE source_type IS NULL",
+				"UPDATE book SET source_locator=CASE " +
+						"WHEN arcname IS NOT NULL THEN arcname ELSE pathname END " +
+						"WHERE source_locator IS NULL",
+				"UPDATE book SET archive_entry=pathname " +
+						"WHERE archive_entry IS NULL AND arcname IS NOT NULL",
+				"UPDATE book SET book_key='legacy:' || id WHERE book_key IS NULL",
+				"CREATE UNIQUE INDEX IF NOT EXISTS book_key_index " +
+						"ON book (book_key) WHERE book_key IS NOT NULL");
+	}
+
+	private static void verifyStableBookIdentity(Backend database) {
+		String[] columns = {
+				"book_key", "source_type", "source_locator",
+				"archive_entry", "content_hash"
+		};
+		for (String column : columns)
+			requireColumn(database, "book", column);
+		requireIndex(database, "book_key_index");
+		require(
+				database.queryLong(
+						"SELECT count(*) FROM book WHERE book_key IS NULL " +
+								"OR source_type IS NULL OR source_locator IS NULL") == 0,
+				"Book identity migration left incomplete rows");
+		require(
+				database.queryLong(
+						"SELECT count(*) FROM (" +
+								"SELECT book_key FROM book GROUP BY book_key " +
+								"HAVING count(*) > 1)") == 0,
+				"Duplicate stable book keys remain");
 	}
 
 	private static void addColumnIfMissing(

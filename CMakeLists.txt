@@ -36,10 +36,16 @@ ENDIF(${CMAKE_BUILD_TYPE} STREQUAL Debug)
 
 option(USE_DEBUG_EXTRA_OPTS "Add extra debug flags and technique" OFF)
 option(USE_THREAD_SANITIZER "Build native targets with ThreadSanitizer" OFF)
+option(USE_CLANG_WARNING_GATE
+    "Fail on selected high-confidence Clang diagnostics in project targets" OFF)
 
 if(USE_DEBUG_EXTRA_OPTS AND USE_THREAD_SANITIZER)
     message(FATAL_ERROR
         "USE_DEBUG_EXTRA_OPTS and USE_THREAD_SANITIZER cannot be enabled together")
+endif()
+
+if(USE_CLANG_WARNING_GATE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "USE_CLANG_WARNING_GATE requires Clang")
 endif()
 
 if(USE_DEBUG_EXTRA_OPTS)
@@ -530,3 +536,44 @@ elseif ( ${GUI} STREQUAL CRGUI_QT )
 else ( ${GUI} STREQUAL CRGUI_XCB )
   message("Unknown GUI type ${GUI}")
 endif ( ${GUI} STREQUAL CRGUI_XCB )
+
+if(BUILD_TESTING AND UNIX)
+  add_executable(core_safety_test
+    ${CMAKE_SOURCE_DIR}/crengine/tests/core_safety_test.cpp
+  )
+  target_link_libraries(core_safety_test
+    crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}
+  )
+  add_test(NAME core_safety COMMAND core_safety_test)
+
+  add_executable(thread_safety_test
+    ${CMAKE_SOURCE_DIR}/crengine/tests/thread_safety_test.cpp
+  )
+  target_include_directories(thread_safety_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/crengine/include
+  )
+  target_compile_definitions(thread_safety_test PRIVATE
+    CR_USE_THREADS=1
+    _LINUX=1
+  )
+  add_test(NAME thread_safety COMMAND thread_safety_test)
+endif()
+
+if(USE_CLANG_WARNING_GATE)
+  set(CLANG_WARNING_GATE_TARGETS
+    crengine
+    core_safety_test
+    thread_safety_test
+    fb2props
+    fb2propstest
+    cr3
+  )
+  foreach(CLANG_WARNING_TARGET ${CLANG_WARNING_GATE_TARGETS})
+    if(TARGET ${CLANG_WARNING_TARGET})
+      target_compile_options(${CLANG_WARNING_TARGET} PRIVATE
+        $<$<COMPILE_LANGUAGE:C>:-Wall;-Wextra;-Wpedantic;-Werror=return-type;-Werror=implicit-function-declaration;-Werror=incompatible-pointer-types>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Werror=return-type;-Werror=uninitialized;-Werror=delete-non-virtual-dtor>
+      )
+    endif()
+  endforeach()
+endif()

@@ -27,12 +27,14 @@ package org.coolreader;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.UriPermission;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.media.AudioManager;
@@ -45,6 +47,7 @@ import android.os.ParcelFileDescriptor;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
+import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.view.LayoutInflater;
 import android.view.Surface;
@@ -65,6 +68,8 @@ import org.coolreader.crengine.CRToolBar;
 import org.coolreader.crengine.DeviceInfo;
 import org.coolreader.crengine.DocumentsContractWrapper;
 import org.coolreader.crengine.DocumentFormat;
+import org.coolreader.crengine.DocumentFormatDetector;
+import org.coolreader.crengine.DocumentSource;
 import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.ErrorDialog;
 import org.coolreader.crengine.FileBrowser;
@@ -72,6 +77,7 @@ import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.FileInfoOperationListener;
 import org.coolreader.crengine.InterfaceTheme;
 import org.coolreader.crengine.L;
+import org.coolreader.crengine.LibraryRootStore;
 import org.coolreader.crengine.LogcatSaver;
 import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.N2EpdController;
@@ -92,6 +98,7 @@ import org.coolreader.tts.TTSControlServiceAccessor;
 import org.koekak.android.ebookdownloader.SonyBookSelector;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -100,6 +107,7 @@ import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -134,7 +142,9 @@ public class CoolReader extends BaseActivity {
 
 	private String mOptionAppearance = "0";
 
-	private String mFileToOpenFromExt = null;
+	private DocumentSource mExternalDocumentSource = null;
+	private LibraryRootStore mLibraryRootStore;
+	private Uri mPendingLibraryRootUri;
 
 	private int mOpenDocumentTreeCommand = ODT_CMD_NO_SPEC;
 	private FileInfo mOpenDocumentTreeArg = null;
@@ -156,6 +166,10 @@ public class CoolReader extends BaseActivity {
 	private static final int REQUEST_CODE_STORAGE_PERM = 1;
 	private static final int REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN = 3;
 	private static final int REQUEST_CODE_OPEN_DOCUMENT_TREE = 11;
+	private static final int REQUEST_CODE_SELECT_LIBRARY_ROOT = 12;
+	private static final int REQUEST_CODE_OPEN_LIBRARY_DOCUMENT = 13;
+	private static final String STATE_PENDING_LIBRARY_ROOT =
+			"pendingLibraryRoot";
 
 	// open document tree activity commands
 	private static final int ODT_CMD_NO_SPEC = -1;
@@ -223,6 +237,13 @@ public class CoolReader extends BaseActivity {
 
 		log.i("CoolReader.onCreate() entered");
 		super.onCreate(savedInstanceState);
+		mLibraryRootStore = new LibraryRootStore(this);
+		if (savedInstanceState != null) {
+			String pendingRoot = savedInstanceState.getString(
+					STATE_PENDING_LIBRARY_ROOT);
+			if (pendingRoot != null)
+				mPendingLibraryRootUri = Uri.parse(pendingRoot);
+		}
 
 		isFirstStart = true;
 		justCreated = true;
@@ -761,15 +782,22 @@ public class CoolReader extends BaseActivity {
 		log.d("intent=" + intent);
 		if (intent == null)
 			return false;
-		String fileToOpen = null;
-		mFileToOpenFromExt = null;
+		DocumentSource sourceToOpen = null;
+		mExternalDocumentSource = null;
 		Uri uri = null;
 		if (Intent.ACTION_VIEW.equals(intent.getAction())) {
 			uri = intent.getData();
-			persistReadPermission(uri, intent.getFlags());
+			boolean persistedReadPermission =
+					persistReadPermission(uri, intent.getFlags());
 			intent.setData(null);
 			if (uri != null) {
-				fileToOpen = filePathFromUri(uri);
+				String localPath = filePathFromUri(uri);
+				if (localPath != null)
+					sourceToOpen = DocumentSource.fromLegacyLocation(localPath);
+				else if (ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(
+						uri.getScheme()))
+					sourceToOpen = DocumentSource.contentUri(
+							uri.toString(), persistedReadPermission);
 			}
 		} else {
 			for (ReaderAction ra: ReaderAction.AVAILABLE_ACTIONS) {
@@ -781,35 +809,72 @@ public class CoolReader extends BaseActivity {
 			}
 		}
 
-		if (fileToOpen == null && intent.getExtras() != null) {
+		if (sourceToOpen == null && intent.getExtras() != null) {
 			log.d("Open intent contains extras");
-			fileToOpen = intent.getExtras().getString(OPEN_FILE_PARAM);
+			String fileToOpen = intent.getExtras().getString(OPEN_FILE_PARAM);
+			if (fileToOpen != null)
+				sourceToOpen = DocumentSource.fromLegacyLocation(fileToOpen);
 		}
-		if (fileToOpen != null) {
-			mFileToOpenFromExt = fileToOpen;
-			log.d("FILE_TO_OPEN = " + safePathForLog(fileToOpen));
-			final String finalFileToOpen = fileToOpen;
-			loadDocument(fileToOpen, null, () -> BackgroundThread.instance().postGUI(() -> {
+		if (sourceToOpen != null) {
+			sourceToOpen = validateExternalDocumentSource(
+					sourceToOpen, intent.getType());
+			if (sourceToOpen == null) {
+				showToast(R.string.unsupported_document_format);
+				showRootWindow();
+				return true;
+			}
+			mExternalDocumentSource = sourceToOpen;
+			log.d("DOCUMENT_TO_OPEN = "
+					+ safePathForLog(sourceToOpen.getIdentity()));
+			final String errorLabel = sourceToOpen.getDisplayName() != null
+					? sourceToOpen.getDisplayName()
+					: sourceToOpen.getIdentity();
+			loadDocument(sourceToOpen, null, () ->
+					BackgroundThread.instance().postGUI(() -> {
 				// if document not loaded show error & then root window
-				ErrorDialog errDialog = new ErrorDialog(CoolReader.this, CoolReader.this.getString(R.string.error), CoolReader.this.getString(R.string.cant_open_file, finalFileToOpen));
+				ErrorDialog errDialog = new ErrorDialog(
+						CoolReader.this,
+						CoolReader.this.getString(R.string.error),
+						CoolReader.this.getString(
+								R.string.cant_open_file, errorLabel));
 				errDialog.setOnDismissListener(dialog -> showRootWindow());
 				errDialog.show();
 			}, 500), true);
 			return true;
-		} else if (null != uri) {
-			log.d("URI_TO_OPEN = " + safeUriForLog(uri));
-			final String uriString = uri.toString();
-			mFileToOpenFromExt = uriString;
-			loadDocumentFromUri(uri, null, () -> BackgroundThread.instance().postGUI(() -> {
-				// if document not loaded show error & then root window
-				ErrorDialog errDialog = new ErrorDialog(CoolReader.this, CoolReader.this.getString(R.string.error), CoolReader.this.getString(R.string.cant_open_file, uriString));
-				errDialog.setOnDismissListener(dialog -> showRootWindow());
-				errDialog.show();
-			}, 500));
-			return true;
 		} else {
 			log.d("No file to open");
 			return false;
+		}
+	}
+
+	private DocumentSource validateExternalDocumentSource(
+			DocumentSource source, String mimeType) {
+		if (source.getKind() == DocumentSource.Kind.CONTENT_URI)
+			return source;
+
+		DocumentFormat declaredFormat = DocumentFormat.byMimeType(mimeType);
+		if (!DocumentFormatDetector.requiresContentInspection(mimeType)) {
+			return source.withMetadata(
+					source.getDisplayName(), mimeType, source.getSize(),
+					declaredFormat);
+		}
+
+		File probeFile;
+		if (source.getKind() == DocumentSource.Kind.ARCHIVE_ENTRY)
+			probeFile = new File(source.getContainer().getLocalPath());
+		else
+			probeFile = new File(source.getLocalPath());
+		try (InputStream inputStream = new FileInputStream(probeFile)) {
+			DocumentFormat detectedFormat = DocumentFormatDetector.resolve(
+					inputStream, source.getDisplayName(), mimeType);
+			if (detectedFormat == null)
+				return null;
+			return source.withMetadata(
+					source.getDisplayName(), mimeType, probeFile.length(),
+					detectedFormat);
+		} catch (IOException e) {
+			log.w("Cannot validate external document source", e);
+			return null;
 		}
 	}
 
@@ -827,8 +892,9 @@ public class CoolReader extends BaseActivity {
 					filePath = filePath.replace("%2F", "/");
 			}
 		} else if ("content".equals(scheme)) {
-			if (uri.getEncodedPath().contains("%00"))
-				filePath = uri.getEncodedPath();
+			String encodedPath = uri.getEncodedPath();
+			if (encodedPath != null && encodedPath.contains("%00"))
+				filePath = encodedPath;
 			else
 				filePath = uri.getPath();
 			if (null != filePath) {
@@ -954,10 +1020,11 @@ public class CoolReader extends BaseActivity {
 
 	@Override
 	protected void onResume() {
-		if (null == mFileToOpenFromExt)
+		if (null == mExternalDocumentSource)
 			log.i("CoolReader.onResume()");
 		else
-			log.i("CoolReader.onResume(), mFileToOpenFromExt=" + mFileToOpenFromExt);
+			log.i("CoolReader.onResume(), externalDocumentSource="
+					+ safePathForLog(mExternalDocumentSource.getIdentity()));
 		super.onResume();
 		//Properties props = SettingsManager.instance(this).get();
 
@@ -993,7 +1060,7 @@ public class CoolReader extends BaseActivity {
 				// when the program starts, the local settings file is already updated, so the local file is always newer than the remote one
 				// Therefore, the synchronization mode is quiet, i.e. without comparing modification times and without prompting the user for action.
 				// If the file is opened from an external file manager, we must disable the "currently reading book" sync operation with google drive.
-				if (null == mFileToOpenFromExt) {
+				if (null == mExternalDocumentSource) {
 					//mGoogleDriveSync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0));
 					syncServiceAccessor.bind(sync -> {
 						sync.setSynchronizer(mGoogleDriveSync);
@@ -1017,6 +1084,11 @@ public class CoolReader extends BaseActivity {
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
 		log.i("CoolReader.onSaveInstanceState()");
+		if (mPendingLibraryRootUri != null) {
+			outState.putString(
+					STATE_PENDING_LIBRARY_ROOT,
+					mPendingLibraryRootUri.toString());
+		}
 		super.onSaveInstanceState(outState);
 	}
 
@@ -1475,20 +1547,26 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showManual() {
-		loadDocument("@manual", null, null, false);
+		runInReader(() -> mReaderView.showManual());
 	}
 
 	public static final String OPEN_FILE_PARAM = "FILE_TO_OPEN";
 
-	public void loadDocument(final String item, final Runnable doneCallback, final Runnable errorCallback, final boolean forceSync) {
-		if (item != null) {
-			Uri itemUri = Uri.parse(item);
-			if (ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(itemUri.getScheme())) {
-				loadDocumentFromUri(itemUri, doneCallback, errorCallback);
-				return;
-			}
+	public void loadDocument(final DocumentSource source,
+							 final Runnable doneCallback,
+							 final Runnable errorCallback,
+							 final boolean forceSync) {
+		if (source == null) {
+			runOpenError(errorCallback);
+			return;
 		}
-		runInReader(() -> mReaderView.loadDocument(item, forceSync ? () -> {
+		if (source.getKind() == DocumentSource.Kind.CONTENT_URI) {
+			if (!source.isDurable())
+				showToast(R.string.temporary_uri_access_warning);
+			loadDocumentFromUri(source, doneCallback, errorCallback);
+			return;
+		}
+		runInReader(() -> mReaderView.loadDocument(source, forceSync ? () -> {
 			if (null != doneCallback)
 				doneCallback.run();
 			/*
@@ -1516,10 +1594,24 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void loadDocumentFromUri(Uri uri, Runnable doneCallback, Runnable errorCallback) {
+		if (uri == null) {
+			runOpenError(errorCallback);
+			return;
+		}
+		loadDocument(
+				DocumentSource.contentUri(
+						uri.toString(), hasPersistedReadPermission(uri)),
+				doneCallback, errorCallback, false);
+	}
+
+	private void loadDocumentFromUri(DocumentSource source,
+									 Runnable doneCallback,
+									 Runnable errorCallback) {
 		runInReader(() -> {
 			ContentResolver contentResolver = getContentResolver();
 			ParcelFileDescriptor pfd = null;
 			try {
+				Uri uri = Uri.parse(source.getLocator());
 				SafDocumentMetadata metadata = readSafDocumentMetadata(contentResolver, uri);
 				pfd = contentResolver.openFileDescriptor(uri, "r");
 				if (pfd == null)
@@ -1528,8 +1620,17 @@ public class CoolReader extends BaseActivity {
 				if (statSize >= 0)
 					ParseBudget.requireDocumentBytes(statSize);
 				if (isSeekable(pfd) && statSize >= 0) {
+					DocumentFormat detectedFormat =
+							resolveSafDocumentFormat(pfd, metadata);
+					if (detectedFormat == null) {
+						showToast(R.string.unsupported_document_format);
+						throw new IOException("Unsupported document format");
+					}
+					DocumentSource resolvedSource = source.withMetadata(
+							metadata.displayName, metadata.mimeType, statSize,
+							detectedFormat);
 					mReaderView.loadDocumentFromFileDescriptor(
-							pfd, uri.toString(), metadata.displayName, metadata.mimeType,
+							pfd, resolvedSource,
 							doneCallback, errorCallback);
 					pfd = null; // ownership transferred to ReaderView
 					return;
@@ -1541,8 +1642,10 @@ public class CoolReader extends BaseActivity {
 				final ParcelFileDescriptor fallbackPfd = pfd;
 				pfd = null; // AutoCloseInputStream owns it from here
 				BackgroundThread.instance().postBackground(() -> cacheAndOpenSafDocument(
-						uri, metadata, fallbackPfd, doneCallback, errorCallback));
+						source, metadata, fallbackPfd,
+						doneCallback, errorCallback));
 			} catch (Exception e) {
+				Uri uri = Uri.parse(source.getLocator());
 				log.e("Cannot open SAF document " + safeUriForLog(uri), e);
 				runOpenError(errorCallback);
 			} finally {
@@ -1568,11 +1671,33 @@ public class CoolReader extends BaseActivity {
 		}
 	}
 
-	private void cacheAndOpenSafDocument(Uri uri, SafDocumentMetadata metadata,
+	private DocumentFormat resolveSafDocumentFormat(
+			ParcelFileDescriptor pfd, SafDocumentMetadata metadata)
+			throws IOException, ErrnoException {
+		if (!DocumentFormatDetector.requiresContentInspection(metadata.mimeType))
+			return DocumentFormatDetector.resolve(
+					null, metadata.displayName, metadata.mimeType);
+
+		Os.lseek(pfd.getFileDescriptor(), 0, OsConstants.SEEK_SET);
+		ParcelFileDescriptor probeDescriptor =
+				ParcelFileDescriptor.dup(pfd.getFileDescriptor());
+		try (InputStream inputStream =
+					 new ParcelFileDescriptor.AutoCloseInputStream(probeDescriptor)) {
+			return DocumentFormatDetector.resolve(
+					inputStream, metadata.displayName, metadata.mimeType);
+		} finally {
+			Os.lseek(pfd.getFileDescriptor(), 0, OsConstants.SEEK_SET);
+		}
+	}
+
+	private void cacheAndOpenSafDocument(
+										DocumentSource source,
+										SafDocumentMetadata metadata,
 										ParcelFileDescriptor pfd,
 										Runnable doneCallback, Runnable errorCallback) {
+		Uri uri = Uri.parse(source.getLocator());
 		FileInfo sourceInfo = new FileInfo();
-		sourceInfo.pathname = uri.toString();
+		sourceInfo.pathname = source.getIdentity();
 		sourceInfo.filename = metadata.displayName;
 		sourceInfo.format = DocumentFormat.byMimeType(metadata.mimeType);
 		if (sourceInfo.format == null)
@@ -1580,11 +1705,28 @@ public class CoolReader extends BaseActivity {
 
 		BookInfo cachedBook;
 		ParcelFileDescriptor cachedPfd = null;
+		DocumentSource resolvedSource = null;
 		try (InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
 			cachedBook = Services.getDocumentCache().saveStream(
 					sourceInfo, inputStream, ParseBudget.MAX_DOCUMENT_INPUT_BYTES);
 			if (cachedBook != null) {
 				File cachedFile = new File(cachedBook.getFileInfo().pathname);
+				DocumentFormat detectedFormat;
+				try (InputStream probe = new FileInputStream(cachedFile)) {
+					detectedFormat = DocumentFormatDetector.resolve(
+							probe, metadata.displayName, metadata.mimeType);
+				}
+				if (detectedFormat == null) {
+					if (!cachedFile.delete())
+						log.w("Cannot delete unsupported cached document");
+					BackgroundThread.instance().postGUI(
+							() -> showToast(R.string.unsupported_document_format));
+					throw new IOException("Unsupported document format");
+				}
+				cachedBook.getFileInfo().format = detectedFormat;
+				resolvedSource = source.withMetadata(
+						metadata.displayName, metadata.mimeType,
+						cachedFile.length(), detectedFormat);
 				cachedPfd = ParcelFileDescriptor.open(
 						cachedFile, ParcelFileDescriptor.MODE_READ_ONLY);
 			}
@@ -1594,13 +1736,14 @@ public class CoolReader extends BaseActivity {
 		}
 
 		final ParcelFileDescriptor resultPfd = cachedPfd;
+		final DocumentSource resultSource = resolvedSource;
 		BackgroundThread.instance().postGUI(() -> {
-			if (resultPfd == null) {
+			if (resultPfd == null || resultSource == null) {
 				runOpenError(errorCallback);
 				return;
 			}
 			runInReader(() -> mReaderView.loadDocumentFromFileDescriptor(
-					resultPfd, uri.toString(), metadata.displayName, metadata.mimeType,
+					resultPfd, resultSource,
 					doneCallback, errorCallback));
 		});
 	}
@@ -1635,18 +1778,33 @@ public class CoolReader extends BaseActivity {
 		}
 	}
 
-	private void persistReadPermission(Uri uri, int intentFlags) {
+	private boolean persistReadPermission(Uri uri, int intentFlags) {
 		if (uri == null || !ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(uri.getScheme()))
-			return;
+			return false;
+		if (hasPersistedReadPermission(uri))
+			return true;
 		if ((intentFlags & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) == 0
 				|| (intentFlags & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0)
-			return;
+			return false;
 		try {
 			getContentResolver().takePersistableUriPermission(
 					uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
 		} catch (SecurityException e) {
 			log.w("Provider did not grant persistable read access for " + safeUriForLog(uri), e);
 		}
+		return hasPersistedReadPermission(uri);
+	}
+
+	private boolean hasPersistedReadPermission(Uri uri) {
+		if (uri == null
+				|| !ContentResolver.SCHEME_CONTENT.equalsIgnoreCase(uri.getScheme()))
+			return false;
+		for (UriPermission permission
+				: getContentResolver().getPersistedUriPermissions()) {
+			if (permission.isReadPermission() && uri.equals(permission.getUri()))
+				return true;
+		}
+		return false;
 	}
 
 	private String safeUriForLog(Uri uri) {
@@ -1679,8 +1837,21 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void loadDocument(FileInfo item, Runnable doneCallback, Runnable errorCallback, boolean forceSync) {
+		if (item == null) {
+			runOpenError(errorCallback);
+			return;
+		}
 		log.d("Activities.loadDocument(" + item.pathname + ")");
-		loadDocument(item.getPathName(), doneCallback, errorCallback, forceSync);
+		DocumentSource source = DocumentSource.fromFileInfo(item);
+		if (source.getKind() == DocumentSource.Kind.CONTENT_URI) {
+			source = DocumentSource.contentUri(
+					source.getIdentity(),
+					hasPersistedReadPermission(Uri.parse(source.getIdentity())))
+					.withMetadata(
+							source.getDisplayName(), source.getMimeType(),
+							source.getSize(), source.getFormat());
+		}
+		loadDocument(source, doneCallback, errorCallback, forceSync);
 	}
 
 	/**
@@ -1725,6 +1896,79 @@ public class CoolReader extends BaseActivity {
 	public void showDirectory(FileInfo path) {
 		log.d("Activities.showDirectory(" + path + ") is called");
 		showBrowser(path);
+	}
+
+	public List<LibraryRootStore.Entry> getLibraryRoots() {
+		return mLibraryRootStore.getRoots();
+	}
+
+	public void addLibraryRoot() {
+		selectLibraryRoot(null);
+	}
+
+	public void reselectLibraryRoot(LibraryRootStore.Entry root) {
+		selectLibraryRoot(root != null ? root.getUri() : null);
+	}
+
+	private void selectLibraryRoot(Uri previousUri) {
+		mPendingLibraryRootUri = previousUri;
+		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+		intent.addFlags(
+				Intent.FLAG_GRANT_READ_URI_PERMISSION
+						| Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+						| Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+				&& previousUri != null) {
+			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, previousUri);
+		}
+		startActivityForResult(intent, REQUEST_CODE_SELECT_LIBRARY_ROOT);
+	}
+
+	public void openLibraryRoot(LibraryRootStore.Entry root) {
+		if (root == null)
+			return;
+		if (!root.isAccessGranted()) {
+			reselectLibraryRoot(root);
+			return;
+		}
+		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+		intent.addCategory(Intent.CATEGORY_OPENABLE);
+		intent.setType("*/*");
+		intent.addFlags(
+				Intent.FLAG_GRANT_READ_URI_PERMISSION
+						| Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, root.getUri());
+		startActivityForResult(intent, REQUEST_CODE_OPEN_LIBRARY_DOCUMENT);
+	}
+
+	public void showLibraryRootActions(LibraryRootStore.Entry root) {
+		if (root == null)
+			return;
+		String[] actions = {
+				getString(R.string.library_root_reselect),
+				getString(R.string.library_root_remove)
+		};
+		new AlertDialog.Builder(this)
+				.setTitle(root.getLabel())
+				.setItems(actions, (dialog, which) -> {
+					if (which == 0) {
+						reselectLibraryRoot(root);
+					} else {
+						askConfirmation(
+								getString(R.string.library_root_remove_confirm),
+								() -> {
+									mLibraryRootStore.remove(root.getUri());
+									refreshLibraryRoots();
+								});
+					}
+				})
+				.show();
+	}
+
+	private void refreshLibraryRoots() {
+		if (mHomeFrame != null)
+			mHomeFrame.refreshFileSystemFolders();
 	}
 
 	public void showCatalog(final FileInfo path) {
@@ -1799,7 +2043,28 @@ public class CoolReader extends BaseActivity {
 					mGoogleDriveSync.onActivityResultHandler(requestCode, resultCode, intent);
 				}
 			}
-		} else */ if (requestCode == REQUEST_CODE_OPEN_DOCUMENT_TREE) {
+		} else */ if (requestCode == REQUEST_CODE_SELECT_LIBRARY_ROOT) {
+			if (resultCode == Activity.RESULT_OK && intent != null) {
+				Uri selectedUri = intent.getData();
+				boolean persisted = persistReadPermission(
+						selectedUri, intent.getFlags());
+				if (persisted && mLibraryRootStore.addOrReplace(
+						mPendingLibraryRootUri, selectedUri)) {
+					showToast(R.string.library_root_selected);
+				} else {
+					showToast(R.string.library_root_grant_failed);
+				}
+			}
+			mPendingLibraryRootUri = null;
+			refreshLibraryRoots();
+		} else if (requestCode == REQUEST_CODE_OPEN_LIBRARY_DOCUMENT) {
+			if (resultCode == Activity.RESULT_OK
+					&& intent != null && intent.getData() != null) {
+				Uri uri = intent.getData();
+				persistReadPermission(uri, intent.getFlags());
+				loadDocumentFromUri(uri, null, this::showRootWindow);
+			}
+		} else if (requestCode == REQUEST_CODE_OPEN_DOCUMENT_TREE) {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 				if (resultCode == Activity.RESULT_OK) {
 					switch (mOpenDocumentTreeCommand) {
@@ -2381,7 +2646,13 @@ public class CoolReader extends BaseActivity {
 			location = FileInfo.ROOT_DIR_TAG;
 		if (location.startsWith(BOOK_LOCATION_PREFIX)) {
 			location = location.substring(BOOK_LOCATION_PREFIX.length());
-			loadDocument(location, null, () -> BackgroundThread.instance().postGUI(() -> {
+			DocumentSource source = DocumentSource.fromLegacyLocation(location);
+			if (source.getKind() == DocumentSource.Kind.CONTENT_URI) {
+				Uri uri = Uri.parse(source.getIdentity());
+				source = DocumentSource.contentUri(
+						source.getIdentity(), hasPersistedReadPermission(uri));
+			}
+			loadDocument(source, null, () -> BackgroundThread.instance().postGUI(() -> {
 				// if document not loaded show error & then root window
 				ErrorDialog errDialog = new ErrorDialog(CoolReader.this, "Error", "Can't open file!");
 				errDialog.setOnDismissListener(dialog -> showRootWindow());

@@ -43,6 +43,13 @@
     <string name="mi_folder_fav_right">Сдвинуть вправо</string>
     <string name="mi_folder_fav_remove">Убрать</string>
     <string name="mi_folder_delete">Удалить…</string>
+    <string name="library_root_add">Добавить папку библиотеки</string>
+    <string name="library_root_access_lost">%1$s — доступ утрачен</string>
+    <string name="library_root_reselect">Выбрать папку повторно</string>
+    <string name="library_root_remove">Убрать из библиотеки</string>
+    <string name="library_root_remove_confirm">Убрать эту папку из библиотеки? Пользовательские файлы удалены не будут.</string>
+    <string name="library_root_grant_failed">Не удалось сохранить папку. Разрешите постоянный доступ для чтения.</string>
+    <string name="library_root_selected">Папка библиотеки сохранена</string>
     <string name="dir_recent_books">Последние книги</string>
     <string name="dir_sd_card">SD карта</string>
     <string name="dir_internal_sd_card">Внутр. SD карта</string>
@@ -582,6 +589,8 @@
     <string name="black_list_enforced">Нельзя добавлять этот адрес, так как по запросу LitRes.ru он добавлен в черный список каталогов, нарушающих авторские права.</string>
     <string name="black_list_warning">Внимание! этот адрес по запросу LitRes.ru был добавлен в черный список каталогов, нарушающих авторские права. Вы действительно хотите использовать этот каталог?</string>
     <string name="cant_open_file">Невозможно открыть файл \"%s\"!</string>
+    <string name="unsupported_document_format">Файл не является поддерживаемым документом или его содержимое не соответствует заявленному формату.</string>
+    <string name="temporary_uri_access_warning">Провайдер выдал временный доступ. После перезапуска книга может не открыться; импортируйте её в хранилище приложения, чтобы сохранить доступ.</string>
     <string name="opened_from_stream">Документ открыт из потока, местоположение файла неизвестно. Невозможно сохранить информацию о последнем открытом файле!</string>
     <string name="error">Ошибка</string>
     <string name="options_app_tts_stop_motion_timeout">Остановить чтение вслух при бездействии датчика движения</string>

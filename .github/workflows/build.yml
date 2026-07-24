@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-15]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -37,9 +37,54 @@ jobs:
       - name: Run native smoke tests
         run: ctest --test-dir build --output-on-failure
 
+  build-desktop-qt6:
+    name: Build Qt 6 desktop app (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Qt 6 and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config qt6-base-dev qt6-tools-dev qt6-tools-dev-tools zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libzstd-dev libutf8proc-dev
+
+      - name: Configure Qt 6 desktop build
+        run: cmake -S . -B build-qt6 -DGUI=QT6 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build Qt 6 desktop app and smoke tests
+        run: cmake --build build-qt6 --config Release --parallel
+
+      - name: Run native smoke tests
+        run: ctest --test-dir build-qt6 --output-on-failure
+
+  clang-warning-gate:
+    name: Clang warning gate (Linux)
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Clang and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang cmake pkg-config zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libzstd-dev libutf8proc-dev
+
+      - name: Configure Clang warning build
+        run: cmake -S . -B build-clang -DGUI=FB2PROPS -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DUSE_CLANG_WARNING_GATE=ON
+
+      - name: Build with selected diagnostics as errors
+        run: cmake --build build-clang --parallel
+
+      - name: Run native smoke tests
+        run: ctest --test-dir build-clang --output-on-failure
+
   build-android:
     name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -90,9 +135,57 @@ jobs:
             android/app/build/reports/lint-results-debug.*
           if-no-files-found: warn
 
+  android-instrumentation:
+    name: Android instrumentation smoke (API 35)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Deploy verified third-party sources
+        run: ./thirdparty-deploy.sh
+
+      - name: Run Android instrumentation phases
+        uses: reactivecircus/android-emulator-runner@v2.37.0
+        with:
+          api-level: 35
+          arch: x86_64
+          target: default
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: >-
+            -no-snapshot-save -no-window -gpu swiftshader_indirect
+            -noaudio -no-boot-anim -camera-back none
+          script: ./tools/run_android_instrumentation.sh
+
+      - name: Upload instrumentation reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-instrumentation-${{ github.sha }}
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          if-no-files-found: warn
+
   sanitizer-smoke:
     name: ASan & UBSan smoke (Linux)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -113,7 +206,7 @@ jobs:
 
   thread-sanitizer-smoke:
     name: ThreadSanitizer smoke (Linux)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CC: clang
       CXX: clang++

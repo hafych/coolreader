@@ -9,11 +9,27 @@ The historical Debian changelog remains in [`changelog`](changelog).
 
 - Linux, macOS and Android build verification, native smoke tests and
   ASan/UBSan CI.
+- A full Qt 6 Linux desktop build job with shared native smoke tests; Qt 5 is
+  now a best-effort compatibility target through December 31, 2026.
+- A separate Clang warning gate for high-confidence C/C++ diagnostics; its
+  first run also fixed an uninitialized MathML style flag.
+- CI runner labels pinned to Ubuntu 24.04 and macOS 15 instead of moving
+  `*-latest` aliases.
 - Release AAB and native debug-symbol generation in Android CI.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded
   private-cache fallback for non-seekable providers.
+- User-managed SAF library folders with persisted access status, re-selection
+  after a lost grant and removal from the app without deleting user files.
+- Typed document sources and bounded content-based format detection for
+  providers that report generic MIME types.
+- Versioned stable book keys for files, archive entries and document-provider
+  URIs, with bounded SHA-256 identity for local content.
+- API 35 emulator instrumentation for startup, ordinary-file and generic
+  `content://` opening, SAF library-root management, persisted position
+  restore, TTS notification actions and safe startup after a clean
+  uninstall/reinstall cycle.
 - Unit and native regression tests for XML, OPDS, stream and hostile document
   resource limits.
 - SQLite fixture matrices for every supported main and cover database migration,
@@ -35,6 +51,12 @@ The historical Debian changelog remains in [`changelog`](changelog).
 
 - Android baseline is API 21+, compile/target API 35, JDK 17 and the pinned NDK
   declared in the Gradle build.
+- Android instrumentation now uses the AndroidX test runner, and the obsolete
+  Jetifier compatibility pass is disabled after removal of support-library
+  dependencies.
+- Android document-open flows now carry typed file, archive, temporary-import
+  and `content://` sources through the reader task boundary instead of
+  collapsing them back to a pathname.
 - Notification actions are immutable, package-scoped and registered as
   non-exported.
 - Temporary document cache is capped at 512 MiB and 32 files with
@@ -44,6 +66,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Database schema 36 preserves OPDS catalogs while physically removing legacy
   plaintext username and password columns; the catalog editor no longer
   collects credentials that cannot be stored safely.
+- Database schema 37 adds source-aware stable book identity, upgrades legacy
+  rows without changing book IDs, and therefore preserves bookmark ownership
+  while paths move or strong identities replace legacy keys.
 - Database upgrades now create a SHA-256-verified, `fsync`ed backup through a
   same-directory temporary file, retain four generations and restore without
   deleting the current database before the replacement is ready.
@@ -63,6 +88,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android log messages, uncaught Java exceptions and explicitly exported
   logcat files now remove credentials, URLs, query/fragment data, book names
   and local paths while preserving safe stack frame identifiers.
+- Temporary `content://` grants now warn that access may be lost after restart;
+  persistable grants are retained, recent entries survive the local-file
+  availability filter, and reopening restores stored bookmarks and position.
 
 ### Security
 
@@ -83,3 +111,5 @@ The historical Debian changelog remains in [`changelog`](changelog).
   interruption is handled through Android Audio Focus.
 - Routed every production Java/NDK log call through privacy filters and removed
   direct stack-trace/stdout/stderr diagnostics.
+- Generic `application/octet-stream` and ZIP intents are rejected before native
+  parsing unless a bounded content probe confirms a supported document format.

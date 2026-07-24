@@ -354,7 +354,6 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	private void updateFilesystems(List<FileInfo> dirs) {
 		LayoutInflater inflater = LayoutInflater.from(mActivity);
 		mFilesystemScroll.removeAllViews();
-        int idx = 0;
         for (final FileInfo item : dirs) {
             if (item == null)
                 continue;
@@ -380,8 +379,44 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 				return false;
 			});
             mFilesystemScroll.addView(view);
-            ++idx;
         }
+		for (LibraryRootStore.Entry root : mActivity.getLibraryRoots()) {
+			final View view = inflater.inflate(R.layout.root_item_dir, null);
+			ImageView icon = view.findViewById(R.id.item_icon);
+			TextView label = view.findViewById(R.id.item_name);
+			icon.setImageResource(Utils.resolveResourceIdByAttr(
+					mActivity, R.attr.folder_big_drawable,
+					R.drawable.folder_blue));
+			String title = root.isAccessGranted()
+					? root.getLabel()
+					: mActivity.getString(
+							R.string.library_root_access_lost,
+							root.getLabel());
+			label.setText(title);
+			label.setMaxWidth(coverWidth * 25 / 10);
+			view.setContentDescription(title);
+			if (!root.isAccessGranted())
+				view.setAlpha(0.55f);
+			view.setOnClickListener(v -> mActivity.openLibraryRoot(root));
+			view.setOnLongClickListener(v -> {
+				mActivity.showLibraryRootActions(root);
+				return true;
+			});
+			mFilesystemScroll.addView(view);
+		}
+
+		final View addRootView = inflater.inflate(R.layout.root_item_dir, null);
+		ImageView addRootIcon = addRootView.findViewById(R.id.item_icon);
+		TextView addRootLabel = addRootView.findViewById(R.id.item_name);
+		addRootIcon.setImageResource(Utils.resolveResourceIdByAttr(
+				mActivity, R.attr.folder_big_bookmark_drawable,
+				R.drawable.folder_bookmark));
+		addRootLabel.setText(R.string.library_root_add);
+		addRootLabel.setMaxWidth(coverWidth * 25 / 10);
+		addRootView.setContentDescription(
+				mActivity.getString(R.string.library_root_add));
+		addRootView.setOnClickListener(v -> mActivity.addLibraryRoot());
+		mFilesystemScroll.addView(addRootView);
 		mFilesystemScroll.invalidate();
 	}
 

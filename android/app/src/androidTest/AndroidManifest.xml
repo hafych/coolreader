@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name="org.coolreader.test.TestDocumentProvider"
+            android:authorities="org.coolreader.test.documents"
+            android:exported="true"
+            android:grantUriPermissions="true">
+            <grant-uri-permission android:pathPrefix="/" />
+        </provider>
+
+        <activity
+            android:name="org.coolreader.test.GrantingActivity"
+            android:exported="true"
+            android:noHistory="true" />
+    </application>
+</manifest>

@@ -31,19 +31,23 @@ public enum DocumentFormat {
 			new String[] {}),// doc_format_none,
 	FB2("fb2.css", R.raw.fb2, R.drawable.cr3_browser_book_fb2, true, true, 12,
 			new String[] {".fb2", ".fb2.zip"},
-			new String[] {"application/fb2+zip"}), // doc_format_fb2,
+			new String[] {
+					"application/fb2", "application/fb2+zip",
+					"application/fb2.zip", "application/x-fictionbook",
+					"application/x-fictionbook+xml"
+			}), // doc_format_fb2,
 	FB3("fb3.css", R.raw.fb3, R.drawable.cr3_browser_book_fb3, true, true, 11,
 			new String[] {".fb3" },
 			new String[] {"application/fb3"}), // doc_format_fb3,
 	TXT("txt.css", R.raw.txt, R.drawable.cr3_browser_book_txt, false, false, 3,
 			new String[] {".txt", ".tcr", ".pml"},
-			new String[] {"text/plain"}), // doc_format_txt,
+			new String[] {"text/plain", "text/richtext"}), // doc_format_txt,
 	RTF("rtf.css", R.raw.rtf, R.drawable.cr3_browser_book_rtf, false, false, 8,
 			new String[] {".rtf"},
-			new String[] {}), // doc_format_rtf,
+			new String[] {"application/rtf", "application/x-rtf", "text/rtf"}), // doc_format_rtf,
 	EPUB("epub.css", R.raw.epub, R.drawable.cr3_browser_book_epub, true, true, 10,
 			new String[] {".epub"},
-			new String[] {"application/epub+zip"}),// doc_format_epub,
+			new String[] {"application/epub", "application/epub+zip"}),// doc_format_epub,
 	HTML("htm.css", R.raw.htm, R.drawable.cr3_browser_book_html, false, false, 9,
 			new String[] {".htm", ".html", ".shtml", ".xhtml"},
 			new String[] {"text/html"}),// doc_format_html,
@@ -52,16 +56,26 @@ public enum DocumentFormat {
 			new String[] {}), // doc_format_txt_bookmark, // coolreader TXT format bookmark
 	CHM("chm.css", R.raw.chm, R.drawable.cr3_browser_book_chm, false, false, 4,
 			new String[] {".chm"},
-			new String[] {}), //  doc_format_chm,
+			new String[] {"application/x-chm", "application/vnd.ms-htmlhelp"}), //  doc_format_chm,
 	DOC("doc.css", R.raw.doc, R.drawable.cr3_browser_book_doc, false, false, 5,
 			new String[] {".doc"},
-			new String[] {}), // doc_format_doc,
+			new String[] {
+					"application/msword", "application/doc",
+					"application/vnd.msword", "application/vnd.ms-word",
+					"application/winword", "application/word",
+					"application/x-msw6", "application/x-msword"
+			}), // doc_format_doc,
 	DOCX("docx.css", R.raw.docx, R.drawable.cr3_browser_book_doc, true, false, 6,
 			new String[] {".docx"},
-			new String[] {}), // doc_format_docx,
+			new String[] {
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+			}), // doc_format_docx,
 	PDB("htm.css", R.raw.htm, R.drawable.cr3_browser_book_pdb, false, true, 2,
 			new String[] {".pdb", ".prc", ".mobi", ".azw"},
-			new String[] {}), // doc_format_txt/html/...,
+			new String[] {
+					"application/x-pilot-prc",
+					"application/x-mobipocket-ebook"
+			}), // doc_format_txt/html/...,
 	ODT("docx.css", R.raw.docx, R.drawable.cr3_browser_book_odt, true, false, 7,
 			new String[] {".odt"},
 			new String[] {"application/vnd.oasis.opendocument.text"}), // doc_format_odt,
@@ -146,6 +160,8 @@ public enum DocumentFormat {
 	
 	public static DocumentFormat byExtension( String filename )
 	{
+		if (filename == null)
+			return null;
 		String s = filename.toLowerCase();
 		for ( int i=0; i<DocumentFormat.values().length; i++ )
 			if ( values()[i].matchExtension(s))
@@ -157,14 +173,31 @@ public enum DocumentFormat {
 	{
 		if ( format==null )
 			return null;
-		String s = format.toLowerCase();
+		String s = format.trim().toLowerCase();
 		for ( int i=0; i<DocumentFormat.values().length; i++ )
 			if ( values()[i].matchMimeType(s))
 				return values()[i];
 		return null;
 	}
 
+	public static boolean isGenericMimeType(String format)
+	{
+		if (format == null)
+			return true;
+		String normalized = format.trim().toLowerCase();
+		int parameter = normalized.indexOf(';');
+		if (parameter >= 0)
+			normalized = normalized.substring(0, parameter).trim();
+		return normalized.length() == 0
+				|| "application/octet-stream".equals(normalized)
+				|| "application/zip".equals(normalized)
+				|| "application/x-zip-compressed".equals(normalized)
+				|| "*/*".equals(normalized);
+	}
+
 	public static String getSupportedExtension( String filename ) {
+		if (filename == null)
+			return null;
 		String s = filename.toLowerCase();
 		for ( int i=0; i<DocumentFormat.values().length; i++ ) {
 			for ( String ext : values()[i].extensions ) {

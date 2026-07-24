@@ -109,6 +109,54 @@ public class MainDbMigrationsTest {
 	}
 
 	@Test
+	public void stableIdentityMigrationClassifiesUriAndArchiveRows()
+			throws Exception {
+		try (Connection connection = LegacyMainDbFixtures.open(36)) {
+			try (Statement statement = connection.createStatement()) {
+				statement.execute(
+						"INSERT INTO book (id, pathname, filename, format) VALUES " +
+								"(2, 'content://provider/document/42', " +
+								"'uri.epub', 5)");
+				statement.execute(
+						"INSERT INTO book " +
+								"(id, pathname, filename, arcname, format) VALUES " +
+								"(3, 'inside/book.fb2', 'book.fb2', " +
+								"'/library/books.zip', 1)");
+			}
+			JdbcMigrationBackend backend = new JdbcMigrationBackend(connection);
+			connection.setAutoCommit(false);
+			MainDbMigrations.upgrade(backend, 36);
+			connection.commit();
+
+			assertEquals(
+					"CONTENT_URI|content://provider/document/42|null|legacy:2",
+					queryText(
+							connection,
+							"SELECT source_type || '|' || source_locator || '|' || " +
+									"coalesce(archive_entry, 'null') || '|' || book_key " +
+									"FROM book WHERE id=2"));
+			assertEquals(
+					"ARCHIVE_ENTRY|/library/books.zip|inside/book.fb2|legacy:3",
+					queryText(
+							connection,
+							"SELECT source_type || '|' || source_locator || '|' || " +
+									"archive_entry || '|' || book_key " +
+									"FROM book WHERE id=3"));
+			try (Statement statement = connection.createStatement()) {
+				statement.execute(
+						"INSERT INTO book " +
+								"(pathname, filename, book_key, source_type, " +
+								"source_locator) VALUES " +
+								"('/duplicate.epub', 'duplicate.epub', " +
+								"'legacy:1', 'FILE', '/duplicate.epub')");
+				fail("book_key_index must reject duplicate stable identities");
+			} catch (SQLException expected) {
+				assertTrue(expected.getMessage().contains("UNIQUE"));
+			}
+		}
+	}
+
+	@Test
 	public void futureSchemaIsRejectedWithoutChanges() throws Exception {
 		try (Connection connection = LegacyMainDbFixtures.open(35)) {
 			int futureVersion = MainDbMigrations.CURRENT_VERSION + 1;
@@ -163,6 +211,18 @@ public class MainDbMigrationsTest {
 				0,
 				queryLong(connection,
 						"SELECT count(*) FROM book WHERE domVersion=20200223"));
+		assertEquals(
+				1,
+				queryLong(connection,
+						"SELECT count(*) FROM book WHERE id=1 " +
+								"AND book_key='legacy:1' " +
+								"AND source_type='FILE' " +
+								"AND source_locator='/fixture/book.epub'"));
+		assertEquals(
+				1,
+				queryLong(connection,
+						"SELECT count(*) FROM bookmark " +
+								"WHERE id=1 AND book_fk=1"));
 		if (sourceVersion >= 6) {
 			assertEquals(
 					1,
@@ -199,6 +259,15 @@ public class MainDbMigrationsTest {
 		}
 	}
 
+	private static String queryText(Connection connection, String query)
+			throws SQLException {
+		try (Statement statement = connection.createStatement();
+			 ResultSet rows = statement.executeQuery(query)) {
+			assertTrue(rows.next());
+			return rows.getString(1);
+		}
+	}
+
 	private static String fingerprint(Connection connection) throws SQLException {
 		StringBuilder result = new StringBuilder();
 		appendQuery(
@@ -218,6 +287,14 @@ public class MainDbMigrationsTest {
 				result,
 				"SELECT id, pathname, filename, format FROM book ORDER BY id",
 				4);
+		if (columnExists(connection, "book", "book_key")) {
+			appendQuery(
+					connection,
+					result,
+					"SELECT id, book_key, source_type, source_locator, " +
+							"archive_entry, content_hash FROM book ORDER BY id",
+					6);
+		}
 		appendQuery(
 				connection,
 				result,
@@ -264,6 +341,20 @@ public class MainDbMigrationsTest {
 					 "SELECT 1 FROM sqlite_master WHERE type='table' " +
 							 "AND name='" + name + "'")) {
 			return rows.next();
+		}
+	}
+
+	private static boolean columnExists(
+			Connection connection, String tableName, String columnName)
+			throws SQLException {
+		try (Statement statement = connection.createStatement();
+			 ResultSet rows = statement.executeQuery(
+					 "PRAGMA table_info('" + tableName + "')")) {
+			while (rows.next()) {
+				if (columnName.equals(rows.getString("name")))
+					return true;
+			}
+			return false;
 		}
 	}
 }

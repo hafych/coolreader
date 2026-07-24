@@ -32,6 +32,7 @@ import android.database.sqlite.SQLiteStatement;
 import org.coolreader.crengine.Log;
 
 import org.coolreader.crengine.BookInfo;
+import org.coolreader.crengine.BookKey;
 import org.coolreader.crengine.Bookmark;
 import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.Engine;
@@ -1055,6 +1056,20 @@ public class MainDB extends BaseDB {
 		return findMovedFileInfo(path);
 	}
 
+	private FileInfo findFileInfoByBookKey(String bookKey) {
+		if (bookKey == null)
+			return null;
+		FileInfo existing = fileInfoCache.getByBookKey(bookKey);
+		if (existing != null)
+			return existing;
+		FileInfo fileInfo = new FileInfo();
+		if (findBy(fileInfo, "book_key", bookKey)) {
+			fileInfoCache.put(fileInfo);
+			return fileInfo;
+		}
+		return null;
+	}
+
 	private FileInfo findFileInfoById(Long id)
 	{
 		if (id == null)
@@ -1211,10 +1226,14 @@ public class MainDB extends BaseDB {
 		boolean authorsChanged = true;
 		boolean genresChanged = true;
 		try {
+			ensureBookKey(fileInfo);
 			FileInfo oldValue = findFileInfoByPathname(fileInfo.getPathName(), false);
+			if (oldValue == null)
+				oldValue = findFileInfoByBookKey(fileInfo.bookKey);
 			if (oldValue == null && fileInfo.id != null)
 				oldValue = findFileInfoById(fileInfo.id);
-			if (oldValue != null && fileInfo.id == null && oldValue.id != null)
+			if (oldValue != null && oldValue.id != null
+					&& !oldValue.id.equals(fileInfo.id))
 				fileInfo.id = oldValue.id;
 			if (oldValue != null) {
 				// found, updating
@@ -1257,6 +1276,16 @@ public class MainDB extends BaseDB {
 			log.e("error while writing to DB", e);
 			return false;
 		}
+	}
+
+	private static void ensureBookKey(FileInfo fileInfo) {
+		if (fileInfo == null || fileInfo.isDirectory
+				|| fileInfo.getPathName() == null)
+			return;
+		if (fileInfo.bookKey == null
+				|| fileInfo.sourceType == null
+				|| fileInfo.sourceLocator == null)
+			BookKey.fromFileInfo(fileInfo).applyTo(fileInfo);
 	}
 
 	public void saveFileInfos(Collection<FileInfo> list)
@@ -1441,6 +1470,11 @@ public class MainDB extends BaseDB {
 		{
 			this("book");
 			add("pathname", newValue.getPathName(), oldValue.getPathName());
+			add("book_key", newValue.bookKey, oldValue.bookKey);
+			add("source_type", newValue.sourceType, oldValue.sourceType);
+			add("source_locator", newValue.sourceLocator, oldValue.sourceLocator);
+			add("archive_entry", newValue.archiveEntry, oldValue.archiveEntry);
+			add("content_hash", newValue.contentHash, oldValue.contentHash);
 			add("folder_fk", getFolderId(newValue.path), getFolderId(oldValue.path));
 			add("filename", newValue.filename, oldValue.filename);
 			add("arcname", newValue.arcname, oldValue.arcname);
@@ -1487,6 +1521,7 @@ public class MainDB extends BaseDB {
 		"s.name as series_name, " +
 		"series_number, " +
 		"format, filesize, arcsize, " +
+		"book_key, source_type, source_locator, archive_entry, content_hash, " +
 		"create_time, last_access_time, flags, language, description, crc32, domVersion, rendFlags ";
 	
 	private static final String READ_FILEINFO_SQL = 
@@ -1513,6 +1548,11 @@ public class MainDB extends BaseDB {
 		fileInfo.format = DocumentFormat.byId(rs.getInt(i++));
 		fileInfo.size = rs.getLong(i++);
 		fileInfo.arcsize = rs.getLong(i++);
+		fileInfo.bookKey = rs.getString(i++);
+		fileInfo.sourceType = rs.getString(i++);
+		fileInfo.sourceLocator = rs.getString(i++);
+		fileInfo.archiveEntry = rs.getString(i++);
+		fileInfo.contentHash = rs.getString(i++);
 		fileInfo.createTime = rs.getInt(i++);
 		fileInfo.lastAccessTime = rs.getInt(i++);
 		fileInfo.flags = rs.getInt(i++);
@@ -1810,7 +1850,10 @@ public class MainDB extends BaseDB {
 		if (!isOpened())
 			return null;
 		try {
-			FileInfo cached = fileInfoCache.get(fileInfo.getPathName());
+			ensureBookKey(fileInfo);
+			FileInfo cached = fileInfoCache.getByBookKey(fileInfo.bookKey);
+			if (cached == null)
+				cached = fileInfoCache.get(fileInfo.getPathName());
 			if (cached != null) {
 				BookInfo book = new BookInfo(new FileInfo(cached));
 				loadBookmarks(book);
@@ -1851,6 +1894,11 @@ public class MainDB extends BaseDB {
 			fileInfoCache.put(fileInfo);
 			return true;
 		}
+		if (fileInfo.bookKey != null
+				&& findBy(fileInfo, "book_key", fileInfo.bookKey)) {
+			fileInfoCache.put(fileInfo);
+			return true;
+		}
 		
 		FileInfo moved = findMovedFileInfo(fileInfo.getPathName());
 		if (moved != null) {
@@ -1870,7 +1918,9 @@ public class MainDB extends BaseDB {
 		if (fileInfo == null)
 			return bookId;
 		String pathName = fileInfo.getPathName();
-		FileInfo cached = fileInfoCache.get(pathName);
+		FileInfo cached = fileInfoCache.getByBookKey(fileInfo.bookKey);
+		if (cached == null)
+			cached = fileInfoCache.get(pathName);
 		if (cached != null) {
 			bookId = cached.id;
 		}

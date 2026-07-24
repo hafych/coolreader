@@ -36,7 +36,9 @@ public class FileInfoCache {
 	}
 	
 	public FileInfo remove(FileInfo entry) {
-		int index = findByPath(entry.getPathName());
+		int index = findByBookKey(entry.bookKey);
+		if (index == -1)
+			index = findByPath(entry.getPathName());
 		if (index == -1)
 			index = findById(entry.id);
 		if (index == -1)
@@ -48,7 +50,9 @@ public class FileInfoCache {
 	}
 	
 	public void put(FileInfo entry) {
-		int index = findByPath(entry.getPathName());
+		int index = findByBookKey(entry.bookKey);
+		if (index == -1)
+			index = findByPath(entry.getPathName());
 		if (index == -1)
 			index = findById(entry.id);
 		if (index == -1) {
@@ -80,6 +84,15 @@ public class FileInfoCache {
 		moveOnTop(index);
 		return item;
 	}
+
+	public FileInfo getByBookKey(String bookKey) {
+		int index = findByBookKey(bookKey);
+		if (index == -1)
+			return null;
+		FileInfo item = list.get(index);
+		moveOnTop(index);
+		return item;
+	}
 	
 	public void clear() {
 		list.clear();
@@ -99,6 +112,16 @@ public class FileInfoCache {
 			return -1;
 		for (int i=0; i<list.size(); i++) {
 			if (path.equals(list.get(i).getPathName()))
+				return i;
+		}
+		return -1;
+	}
+
+	private int findByBookKey(String bookKey) {
+		if (bookKey == null)
+			return -1;
+		for (int i = 0; i < list.size(); i++) {
+			if (bookKey.equals(list.get(i).bookKey))
 				return i;
 		}
 		return -1;

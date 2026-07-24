@@ -852,7 +852,7 @@ bool MathMLHelper::handleMathMLtag( ldomDocumentWriter * writer, int step, lUInt
         // property math-shift:normal, and unset it for math-shift:compact. The
         // only effect of MS is using OpenType Math superscriptShiftUp when normal,
         // and superscriptShiftUpCramped when compact.
-        bool is_MD; // math-style
+        bool is_MD = false; // math-style
         bool is_MS; // math-shift
         int add_MN = 0; // math-depth: number to add to nearest upper
         if ( curNodeId == el_math ) {
