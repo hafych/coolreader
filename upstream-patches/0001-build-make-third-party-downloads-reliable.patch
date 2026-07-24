@@ -1,0 +1,53 @@
+From b2860a2450db14e0684c1ea5ace9ad73abfdd7d5 Mon Sep 17 00:00:00 2001
+From: Nazarii Hafych <nazariihafych@gmail.com>
+Date: Fri, 24 Jul 2026 12:38:33 +0200
+Subject: [PATCH] build: make third-party downloads reliable
+
+---
+ thirdparty-deploy.sh            | 2 +-
+ thirdparty_repo/libjpeg.meta.sh | 2 +-
+ thirdparty_repo/zlib.meta.sh    | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/thirdparty-deploy.sh b/thirdparty-deploy.sh
+index 722fb2a..2be3b8a 100755
+--- a/thirdparty-deploy.sh
++++ b/thirdparty-deploy.sh
+@@ -108,7 +108,7 @@ deploy_package()
+ 		then
+ 			rm -f "${SRCFILE}"
+ 		fi
+-		curl -f -L -O ${URL} || die "Failed to fetch sources!"
++		curl --fail --location --retry 3 --output "${SRCFILE}" "${URL}" || die "Failed to fetch sources!"
+ 		if [ ! -f "${SRCFILE}" ]
+ 		then
+ 			die "Something wrong... source file not found!"
+diff --git a/thirdparty_repo/libjpeg.meta.sh b/thirdparty_repo/libjpeg.meta.sh
+index f123814..71e70b7 100644
+--- a/thirdparty_repo/libjpeg.meta.sh
++++ b/thirdparty_repo/libjpeg.meta.sh
+@@ -9,7 +9,7 @@ REV="1"
+ SRCFILE="jpegsrc.v10.tar.gz"
+ SHA512="3bdd55d805d76f35cbcd44074e27684a25b40f4811c62374ec9300dde31fa75a17ff3fccfcb8f5947311fa7b07f52dc9cba343562ae4ceb8b3cbe30fda1e4311"
+ 
+-URL="http://www.ijg.org/files/${SRCFILE}"
++URL="https://www.ijg.org/files/${SRCFILE}"
+ 
+ SOURCESDIR="jpeg-10"
+ 
+diff --git a/thirdparty_repo/zlib.meta.sh b/thirdparty_repo/zlib.meta.sh
+index 898e678..f8fe41a 100644
+--- a/thirdparty_repo/zlib.meta.sh
++++ b/thirdparty_repo/zlib.meta.sh
+@@ -9,7 +9,7 @@ REV="1"
+ SRCFILE="${PN}-${PV}.tar.xz"
+ SHA512="cf3d49fbabddc57cca99858feeca8f910e9de42a16014cddd406814d2d24ee33fee2af3805d7efbb1b04b05f55818092b000daf82502b675df65f2512c353f73"
+ 
+-URL="http://www.zlib.net/${SRCFILE}"
++URL="https://github.com/madler/zlib/releases/download/v${PV}/${SRCFILE}"
+ 
+ SOURCESDIR="${PN}-${PV}"
+ 
+-- 
+2.50.1 (Apple Git-155)
+

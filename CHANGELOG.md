@@ -31,6 +31,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   native-symbol and SPDX timestamps.
 - A trusted-base pull request governance check enforcing fork classification
   and consistent `FORK_DELTA.md` declarations.
+- Two verified, brand-independent upstream patch candidates for C++17 CMake
+  selection and reliable checksum-pinned third-party downloads.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

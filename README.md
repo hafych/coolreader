@@ -76,6 +76,8 @@ The two-clean-runner reproducibility contract and its explicit boundary are in
 [docs/REPRODUCIBLE_BUILDS.md](docs/REPRODUCIBLE_BUILDS.md).
 Pull request fork classification and delta-ledger rules are documented in
 [docs/PR_GOVERNANCE.md](docs/PR_GOVERNANCE.md).
+Prepared minimal upstream contributions and verification evidence are listed in
+[docs/UPSTREAM_CONTRIBUTIONS.md](docs/UPSTREAM_CONTRIBUTIONS.md).
 
 ### Support matrix
 

@@ -1,0 +1,34 @@
+From 3e8fedb58ce7141db8d73ce171beb614b400b1d9 Mon Sep 17 00:00:00 2001
+From: Nazarii Hafych <nazariihafych@gmail.com>
+Date: Fri, 24 Jul 2026 12:38:30 +0200
+Subject: [PATCH] fix: honor the requested C++17 standard
+
+---
+ CMakeLists.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 740599d..51461e3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -8,7 +8,7 @@ endif()
+ 
+ PROJECT(cr3)
+ 
+-set(CMAKE_CXX_STANDARD 17`)
++set(CMAKE_CXX_STANDARD 17)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ 
+ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules/")
+@@ -56,7 +56,7 @@ if(MSVC)
+ elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
+   # Update if necessary
+   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-long-long -pedantic -std=gnu11 -fPIC -Wno-misleading-indentation")
+-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -std=c++11 -fPIC -Wno-misleading-indentation -Wno-reorder -Wno-format-overflow")
++  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -fPIC -Wno-misleading-indentation -Wno-reorder -Wno-format-overflow")
+   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fomit-frame-pointer")
+   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fomit-frame-pointer")
+ endif()
+-- 
+2.50.1 (Apple Git-155)
+
