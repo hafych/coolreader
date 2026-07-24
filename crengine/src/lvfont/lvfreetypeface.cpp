@@ -82,8 +82,6 @@
 //#define DEBUG_DRAW_TEXT
 //#define DEBUG_MEASURE_TEXT
 
-extern int gammaIndex;          // lvfntman.cpp
-
 // next two functions from lvfreetypefontman.cpp
 extern lString8 familyName(FT_Face face);
 extern int getFontWeight(FT_Face face);
@@ -298,8 +296,11 @@ static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lChar32
         case BMP_PIXEL_FORMAT_RGB_V:
         case BMP_PIXEL_FORMAT_BGR_V:
             // correct gamma
-            if ( gammaIndex!=GAMMA_NO_CORRECTION_INDEX )
-                cr_correct_gamma_buf(item->bmp, bmp_sz, gammaIndex);
+            {
+                const int gamma_index = fontMan->GetGammaIndex();
+                if ( gamma_index != GAMMA_NO_CORRECTION_INDEX )
+                    cr_correct_gamma_buf(item->bmp, bmp_sz, gamma_index);
+            }
             break;
         case BMP_PIXEL_FORMAT_MONO:
         case BMP_PIXEL_FORMAT_GRAY2:
@@ -346,8 +347,11 @@ static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lUInt32
         case BMP_PIXEL_FORMAT_RGB_V:
         case BMP_PIXEL_FORMAT_BGR_V:
             // correct gamma
-            if ( gammaIndex!=GAMMA_NO_CORRECTION_INDEX )
-                cr_correct_gamma_buf(item->bmp, bmp_sz, gammaIndex);
+            {
+                const int gamma_index = fontMan->GetGammaIndex();
+                if ( gamma_index != GAMMA_NO_CORRECTION_INDEX )
+                    cr_correct_gamma_buf(item->bmp, bmp_sz, gamma_index);
+            }
             break;
         case BMP_PIXEL_FORMAT_MONO:
         case BMP_PIXEL_FORMAT_GRAY2:

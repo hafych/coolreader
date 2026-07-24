@@ -26,6 +26,7 @@
 #include "lvwin32fontman.h"
 #include "lvbitmapfontman.h"
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -37,10 +38,9 @@ LVFontManager *fontMan = NULL;
 namespace {
 std::unique_ptr<LVFontManager> g_font_manager_owner;
 std::mutex g_font_manager_lifecycle_mutex;
+std::atomic<int> g_font_gamma_index(GAMMA_NO_CORRECTION_INDEX);
+std::mutex g_font_gamma_mutex;
 }
-
-static double gammaLevel = 1.0;
-int gammaIndex = GAMMA_NO_CORRECTION_INDEX;
 
 /// returns first found face from passed list, or return face for font found by family only
 lString8 LVFontManager::findFontFace(lString8 commaSeparatedFaceList, css_font_family_t fallbackByFamily) {
@@ -76,7 +76,7 @@ void LVFontManager::GetGammaLevels(LVArray<double> dst) {
 
 /// returns current gamma level index
 int LVFontManager::GetGammaIndex() {
-    return gammaIndex;
+    return g_font_gamma_index.load(std::memory_order_relaxed);
 }
 
 /// sets current gamma level index
@@ -85,10 +85,12 @@ void LVFontManager::SetGammaIndex(int index) {
         index = 0;
     if (index >= GAMMA_LEVELS)
         index = GAMMA_LEVELS - 1;
-    if (gammaIndex != index) {
-        CRLog::trace("FontManager gamma index changed from %d to %d", gammaIndex, index);
-        gammaIndex = index;
-        gammaLevel = cr_gamma_levels[index];
+    std::lock_guard<std::mutex> guard(g_font_gamma_mutex);
+    int old_index =
+            g_font_gamma_index.exchange(index, std::memory_order_relaxed);
+    if (old_index != index) {
+        CRLog::trace("FontManager gamma index changed from %d to %d",
+                old_index, index);
         gc();
         clearGlyphCache();
     }
@@ -96,29 +98,24 @@ void LVFontManager::SetGammaIndex(int index) {
 
 /// returns current gamma level
 double LVFontManager::GetGamma() {
-    return gammaLevel;
+    return cr_gamma_levels[GetGammaIndex()];
 }
 
 /// sets current gamma level
 void LVFontManager::SetGamma( double gamma ) {
-    // gammaLevel = cr_ft_gamma_levels[GAMMA_LEVELS/2];
-    // gammaIndex = GAMMA_LEVELS/2;
-    int oldGammaIndex = gammaIndex;
+    int gamma_index = GetGammaIndex();
+    double gamma_level = cr_gamma_levels[gamma_index];
     for (int i = 0; i < GAMMA_LEVELS; i++) {
         double diff1 = cr_gamma_levels[i] - gamma;
         if (diff1 < 0) diff1 = -diff1;
-        double diff2 = gammaLevel - gamma;
+        double diff2 = gamma_level - gamma;
         if (diff2 < 0) diff2 = -diff2;
         if (diff1 < diff2) {
-            gammaLevel = cr_gamma_levels[i];
-            gammaIndex = i;
+            gamma_level = cr_gamma_levels[i];
+            gamma_index = i;
         }
     }
-    if (gammaIndex != oldGammaIndex) {
-        CRLog::trace("FontManager gamma index changed from %d to %d", oldGammaIndex, gammaIndex);
-        gc();
-        clearGlyphCache();
-    }
+    SetGammaIndex(gamma_index);
 }
 
 bool InitFontManager(lString8 path) {

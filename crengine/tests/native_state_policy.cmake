@@ -14,6 +14,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/textlang.cpp" TEXTLANG_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/textlang.h" TEXTLANG_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -164,6 +165,16 @@ require_source_text(
   "std::mutex g_font_manager_lifecycle_mutex"
   "font-manager lifecycle operations must be serialized"
 )
+require_source_text(
+  "${FONT_MANAGER_SOURCE}"
+  "std::atomic<int> g_font_gamma_index"
+  "the process-wide font gamma index must be synchronized"
+)
+require_source_text(
+  "${FONT_MANAGER_SOURCE}"
+  "std::mutex g_font_gamma_mutex"
+  "font gamma changes and cache invalidation must be serialized"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -274,4 +285,19 @@ forbid_source_text(
   "${FONT_MANAGER_SOURCE}"
   "delete fontMan"
   "font-manager shutdown must use RAII ownership"
+)
+forbid_source_text(
+  "${FONT_MANAGER_SOURCE}"
+  "static double gammaLevel"
+  "font gamma level must be derived from one atomic index"
+)
+forbid_source_text(
+  "${FONT_MANAGER_SOURCE}"
+  "int gammaIndex ="
+  "font gamma index storage must remain private and synchronized"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "extern int gammaIndex"
+  "glyph rendering must use the synchronized font gamma API"
 )

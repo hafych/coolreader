@@ -66,6 +66,10 @@ The process-wide font-manager lifetime is serialized and owned by a private
 view between successful `InitFontManager()` and `ShutdownFontManager()` calls.
 Those lifecycle calls are quiescent operations and must not race font users.
 
-Known follow-up groups include font-manager settings and its internal caches.
-Each group must be migrated separately with an impact check and focused
-regression tests.
+The font gamma setting is stored as one atomic table index, while setters
+serialize index changes with glyph-cache invalidation. Glyph creation takes one
+index snapshot for each bitmap correction.
+
+Known follow-up groups include the remaining font-manager settings and its
+internal caches. Each group must be migrated separately with an impact check
+and focused regression tests.

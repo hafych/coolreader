@@ -484,6 +484,55 @@ static int testFontManagerLifecycleOwnership() {
     return 0;
 }
 
+static int testConcurrentFontGammaSettings() {
+    if (!InitFontManager(lString8::empty_str) || !fontMan)
+        return fail("font gamma fixture manager did not initialize");
+
+    fontMan->SetGammaIndex(-1);
+    if (fontMan->GetGammaIndex() != 0) {
+        ShutdownFontManager();
+        return fail("font gamma lower bound was not enforced");
+    }
+    fontMan->SetGammaIndex(100000);
+    const int maxGammaIndex = fontMan->GetGammaIndex();
+    if (maxGammaIndex <= 0 || maxGammaIndex >= 100000) {
+        ShutdownFontManager();
+        return fail("font gamma upper bound was not enforced");
+    }
+
+    static const int workerCount = 8;
+    static const int iterations = 250;
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, maxGammaIndex, &failed]() {
+            for (int iteration = 0; iteration < iterations; iteration++) {
+                const int requested =
+                        (workerIndex + iteration) % 2 ? 0 : maxGammaIndex;
+                fontMan->SetGammaIndex(requested);
+                const int observed = fontMan->GetGammaIndex();
+                if (observed != 0 && observed != maxGammaIndex) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+
+    fontMan->SetGamma(1.0);
+    const double restoredGamma = fontMan->GetGamma();
+    ShutdownFontManager();
+    if (failed.load(std::memory_order_acquire))
+        return fail("font gamma index published an invalid value");
+    if (restoredGamma <= 0.0)
+        return fail("font gamma value was not restored");
+    return 0;
+}
+
 static int testLogRedactor() {
     if (CRRedactLogMessage("Rendered 42 pages") != "Rendered 42 pages")
         return fail("safe native diagnostic was unexpectedly changed");
@@ -1049,6 +1098,8 @@ int main() {
     if (testConcurrentTextLangConfigCache() != 0)
         return 1;
     if (testFontManagerLifecycleOwnership() != 0)
+        return 1;
+    if (testConcurrentFontGammaSettings() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

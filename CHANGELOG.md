@@ -150,6 +150,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   ownership and a documented process-lifecycle teardown boundary.
 - The process-wide font manager now has RAII ownership, serialized lifecycle
   operations and rollback-safe initialization.
+- Font gamma selection now uses one atomic index and serialized glyph-cache
+  invalidation.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
 - SQLite fixture matrices for every supported main and cover database migration,
