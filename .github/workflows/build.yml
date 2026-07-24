@@ -110,6 +110,9 @@ jobs:
       - name: Verify Android release policy
         run: python3 tools/verify_android_release_policy.py
 
+      - name: Verify Play release documentation
+        run: python3 tools/verify_play_release_docs.py
+
       - name: Verify Android HTTP policy
         run: python3 tools/verify_android_http_policy.py
 

@@ -58,6 +58,13 @@ The optional LitRes integration is consumption-only on Android: it can browse
 the catalog, download trials, and download books already owned by a signed-in
 user, but it does not create accounts or offer purchases.
 
+Release preparation documents:
+[listing draft](docs/PLAY_LISTING.md),
+[privacy policy draft](docs/PRIVACY_POLICY.md),
+[Data safety worksheet](docs/DATA_SAFETY.md),
+[Play test plan](docs/PLAY_RELEASE.md), and
+[identity/asset decisions](docs/IDENTITY_AND_ASSETS.md).
+
 ### Support matrix
 
 | Target | Current status | Verified environment |
