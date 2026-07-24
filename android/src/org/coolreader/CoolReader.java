@@ -76,6 +76,7 @@ import org.coolreader.crengine.DocumentFormatDetector;
 import org.coolreader.crengine.DocumentSource;
 import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.ErrorDialog;
+import org.coolreader.crengine.ExternalDocumentValidator;
 import org.coolreader.crengine.FileBrowser;
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.FileInfoOperationListener;
@@ -136,6 +137,8 @@ public class CoolReader extends BaseActivity {
 	private FileSystemFolders mFileSystemFolders;
 	private GenresCollection mGenresCollection;
 	private ServiceLifecycle mServiceLifecycle;
+	private final ExternalDocumentValidator mExternalDocumentValidator =
+			new ExternalDocumentValidator();
 	//View startupView;
 	//CRDB mDB;
 	private ViewGroup mCurrentFrame;
@@ -822,7 +825,7 @@ public class CoolReader extends BaseActivity {
 				sourceToOpen = DocumentSource.fromLegacyLocation(fileToOpen);
 		}
 		if (sourceToOpen != null) {
-			sourceToOpen = validateExternalDocumentSource(
+			sourceToOpen = mExternalDocumentValidator.validate(
 					sourceToOpen, intent.getType());
 			if (sourceToOpen == null) {
 				showToast(R.string.unsupported_document_format);
@@ -850,37 +853,6 @@ public class CoolReader extends BaseActivity {
 		} else {
 			log.d("No file to open");
 			return false;
-		}
-	}
-
-	private DocumentSource validateExternalDocumentSource(
-			DocumentSource source, String mimeType) {
-		if (source.getKind() == DocumentSource.Kind.CONTENT_URI)
-			return source;
-
-		DocumentFormat declaredFormat = DocumentFormat.byMimeType(mimeType);
-		if (!DocumentFormatDetector.requiresContentInspection(mimeType)) {
-			return source.withMetadata(
-					source.getDisplayName(), mimeType, source.getSize(),
-					declaredFormat);
-		}
-
-		File probeFile;
-		if (source.getKind() == DocumentSource.Kind.ARCHIVE_ENTRY)
-			probeFile = new File(source.getContainer().getLocalPath());
-		else
-			probeFile = new File(source.getLocalPath());
-		try (InputStream inputStream = new FileInputStream(probeFile)) {
-			DocumentFormat detectedFormat = DocumentFormatDetector.resolve(
-					inputStream, source.getDisplayName(), mimeType);
-			if (detectedFormat == null)
-				return null;
-			return source.withMetadata(
-					source.getDisplayName(), mimeType, probeFile.length(),
-					detectedFormat);
-		} catch (IOException e) {
-			log.w("Cannot validate external document source", e);
-			return null;
 		}
 	}
 

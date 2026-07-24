@@ -37,6 +37,10 @@ OPDS_UTIL = SOURCE / "crengine" / "OPDSUtil.java"
 MAIN_DB = SOURCE / "db" / "MainDB.java"
 CRDB_SERVICE = SOURCE / "db" / "CRDBService.java"
 FILE_INFO = SOURCE / "crengine" / "FileInfo.java"
+DOCUMENT_FILE_CACHE = SOURCE / "crengine" / "DocumentFileCache.java"
+EXTERNAL_DOCUMENT_VALIDATOR = (
+    SOURCE / "crengine" / "ExternalDocumentValidator.java"
+)
 ONLINE_STORE_PLUGIN_MANAGER = (
     SOURCE / "plugins" / "OnlineStorePluginManager.java"
 )
@@ -363,6 +367,26 @@ def main() -> None:
         violations.append(
             f"{relative(ENGINE)} archive enumeration is instance-bound")
 
+    document_cache_text = DOCUMENT_FILE_CACHE.read_text(encoding="utf-8")
+    if "DocumentFileCache(Activity" in document_cache_text:
+        violations.append(
+            f"{relative(DOCUMENT_FILE_CACHE)} requires an Activity context")
+    if "public DocumentFileCache(Context context)" not in document_cache_text:
+        violations.append(
+            f"{relative(DOCUMENT_FILE_CACHE)} omits its Context constructor")
+
+    validator_text = EXTERNAL_DOCUMENT_VALIDATOR.read_text(
+        encoding="utf-8")
+    for marker in (
+        "public final class ExternalDocumentValidator",
+        "public DocumentSource validate(",
+        "DocumentFormatDetector.resolve(",
+    ):
+        if marker not in validator_text:
+            violations.append(
+                f"{relative(EXTERNAL_DOCUMENT_VALIDATOR)} omits marker: "
+                f"{marker}")
+
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")
         if re.search(r"\bActivity\s+mActivity\s*[=;]", text):
@@ -397,6 +421,10 @@ def main() -> None:
             cool_reader_text):
         violations.append(
             f"{relative(COOL_READER)} does not capture its service generation")
+    if "mExternalDocumentValidator.validate(" not in cool_reader_text:
+        violations.append(
+            f"{relative(COOL_READER)} does not delegate external source "
+            "validation")
     if "stopServices();" not in cool_reader_text:
         violations.append(
             f"{relative(COOL_READER)} does not stop its owned service graph")

@@ -19,7 +19,7 @@
 
 package org.coolreader.crengine;
 
-import android.app.Activity;
+import android.content.Context;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -35,8 +35,8 @@ public final class DocumentFileCache {
 
 	String mBasePath = null;
 
-	public DocumentFileCache(Activity activity) {
-		this(new File(activity.getCacheDir(), "bookCache"));
+	public DocumentFileCache(Context context) {
+		this(new File(context.getCacheDir(), "bookCache"));
 	}
 
 	DocumentFileCache(File dir) {

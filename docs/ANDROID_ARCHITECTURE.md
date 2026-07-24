@@ -39,6 +39,11 @@ Scanner filesystem/resource access and cached online-store plugins also retain
 only application context. Cached process objects must never capture the
 Activity that first requested them.
 
+External document validation is isolated from `CoolReader`: local inputs are
+probed by `ExternalDocumentValidator`, while resolver-owned content URIs remain
+in the Activity's ContentResolver flow. Storage helpers such as
+`DocumentFileCache` depend on `Context`, not on an Activity subtype.
+
 ## Migration rule
 
 New Android components should:

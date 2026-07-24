@@ -75,6 +75,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   cancelled by their Activity instead of retaining Views in static fields.
 - Scanner resources, private-directory access and cached online-store plugins
   now retain application context rather than the creating Activity.
+- External local-document validation is a standalone tested component, and the
+  document cache accepts a generic Context instead of an Activity.
 - Archive metadata lookup is a stateless Engine operation, so FileInfo no
   longer reaches through the global service locator.
 - Library metadata scanning uses one in-flight 64-item batch, persists
