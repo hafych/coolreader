@@ -25,6 +25,24 @@ static int fail(const char *message) {
     return 1;
 }
 
+class CountingHyphDataLoader : public HyphDataLoader {
+private:
+    std::atomic<int> &_destroyed;
+
+public:
+    explicit CountingHyphDataLoader(std::atomic<int> &destroyed)
+        : _destroyed(destroyed) {
+    }
+
+    ~CountingHyphDataLoader() override {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    LVStreamRef loadData(lString32) override {
+        return LVStreamRef();
+    }
+};
+
 static int testMutex() {
     LVMutex mutex;
     if (!mutex.trylock())
@@ -188,6 +206,36 @@ static int testConcurrentHyphenationSettings() {
     HyphMan::setTrustSoftHyphens(HYPH_DEFAULT_TRUST_SOFT_HYPHENS);
     if (failed.load(std::memory_order_acquire))
         return fail("hyphenation settings published an invalid value");
+    return 0;
+}
+
+static int testHyphenationRegistryOwnership() {
+    std::atomic<int> destroyed(0);
+    CountingHyphDataLoader *first =
+            new CountingHyphDataLoader(destroyed);
+    HyphMan::setDataLoader(first);
+    HyphMan::setDataLoader(first);
+    if (destroyed.load(std::memory_order_relaxed) != 0)
+        return fail("hyphenation loader was destroyed when reinstalled");
+
+    HyphMan::setDataLoader(new CountingHyphDataLoader(destroyed));
+    if (destroyed.load(std::memory_order_relaxed) != 1)
+        return fail("replaced hyphenation loader was not destroyed");
+    HyphMan::setDataLoader(NULL);
+    if (destroyed.load(std::memory_order_relaxed) != 2)
+        return fail("cleared hyphenation loader was not destroyed");
+
+    const bool initialized = HyphMan::initDictionaries(
+            lString32::empty_str, true);
+    HyphDictionaryList *list = HyphMan::getDictList();
+    const int dictionaryCount = list ? list->length() : 0;
+    HyphMan::uninit();
+    if (!initialized || dictionaryCount < 3)
+        return fail("hyphenation dictionary registry did not initialize");
+    if (HyphMan::getDictList() != NULL)
+        return fail("hyphenation dictionary registry survived uninit");
+    if (HyphMan::activateDictionary(HYPH_DICT_ID_ALGORITHM))
+        return fail("uninitialized hyphenation registry activated a method");
     return 0;
 }
 
@@ -746,6 +794,8 @@ int main() {
     if (testConcurrentRenderDPISettings() != 0)
         return 1;
     if (testConcurrentHyphenationSettings() != 0)
+        return 1;
+    if (testHyphenationRegistryOwnership() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

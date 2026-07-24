@@ -30,6 +30,7 @@
 #define _HYPHEN_
 
 #include <atomic>
+#include <memory>
 
 #include "lvtypes.h"
 #include "lvstring.h"
@@ -151,9 +152,9 @@ class HyphMan
     // Obsolete: now fetched from TextLangMan main lang TextLangCfg
     // static HyphMethod * _method;
     // static HyphDictionary * _selectedDictionary;
-    static HyphDictionaryList * _dictList; // available hyph dict files (+ none/algo/softhyphens)
+    static std::unique_ptr<HyphDictionaryList> _dictList; // available hyph dict files (+ none/algo/softhyphens)
     static LVHashTable<lString32, HyphMethod*> _loaded_hyph_methods; // methods with loaded dictionaries
-    static HyphDataLoader* _dataLoader;
+    static std::unique_ptr<HyphDataLoader> _dataLoader;
     static std::atomic<int> _OverriddenLeftHyphenMin;
     static std::atomic<int> _OverriddenRightHyphenMin;
     static std::atomic<int> _TrustSoftHyphens;
@@ -161,10 +162,15 @@ class HyphMan
 public:
     static void uninit();
     static bool initDictionaries(lString32 dir, bool clear = true);
-    static HyphDictionaryList * getDictList() { return _dictList; }
+    // Observing pointer valid from initDictionaries() until process-shutdown
+    // uninit(); callers must not race either lifecycle function.
+    static HyphDictionaryList * getDictList() { return _dictList.get(); }
     static bool addDictionaryItem(HyphDictionary* dict);
+    // Takes ownership of loader, including NULL to clear it.
     static void setDataLoader(HyphDataLoader* loader);
-    static bool activateDictionary(lString32 id) { return _dictList->activate(id); }
+    static bool activateDictionary(lString32 id) {
+        return _dictList && _dictList->activate(id);
+    }
     static HyphDictionary* getSelectedDictionary(); // was: { return _selectedDictionary; }
     static int getOverriddenLeftHyphenMin() {
         return _OverriddenLeftHyphenMin.load(std::memory_order_relaxed);

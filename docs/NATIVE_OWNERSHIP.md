@@ -32,3 +32,9 @@ by the native test suite and sanitized CI configuration where applicable.
 The first migrated path is `CRIniFileTranslator`: its temporary file buffer is
 owned by `std::vector`, and its factory uses `std::unique_ptr` until the legacy
 raw-pointer return transfers ownership to the caller.
+
+`HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
+The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
+transfer boundary, while `getDictList()` returns a non-owning pointer valid only
+between initialization and process-shutdown teardown. Loaded dictionary methods
+remain a separate manual-ownership migration group.

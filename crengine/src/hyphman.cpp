@@ -93,13 +93,13 @@ std::atomic<int> HyphMan::_OverriddenRightHyphenMin(
 std::atomic<int> HyphMan::_TrustSoftHyphens(
         HYPH_DEFAULT_TRUST_SOFT_HYPHENS);
 LVHashTable<lString32, HyphMethod*> HyphMan::_loaded_hyph_methods(16);
-HyphDataLoader* HyphMan::_dataLoader = NULL;
+std::unique_ptr<HyphDataLoader> HyphMan::_dataLoader;
 
 
 // Obsolete: now fetched from TextLangMan main lang TextLangCfg
 // HyphDictionary * HyphMan::_selectedDictionary = NULL;
 
-HyphDictionaryList * HyphMan::_dictList = NULL;
+std::unique_ptr<HyphDictionaryList> HyphMan::_dictList;
 
 // MAX_PATTERN_SIZE is actually the max size of a word (pattern stripped
 // from all the numbers that give the quality of a split after previous char)
@@ -210,12 +210,8 @@ void HyphMan::uninit()
         delete pair->value;
     }
     _loaded_hyph_methods.clear();
-    if ( _dictList )
-            delete _dictList;
-    _dictList = NULL;
-    if ( _dataLoader )
-        delete _dataLoader;
-    _dataLoader = NULL;
+    _dictList.reset();
+    _dataLoader.reset();
     /* Obsolete:
 	_selectedDictionary = NULL;
     if ( HyphMan::_method != &ALGO_HYPH && HyphMan::_method != &NO_HYPH && HyphMan::_method != &SOFTHYPHENS_HYPH )
@@ -226,12 +222,12 @@ void HyphMan::uninit()
 
 bool HyphMan::initDictionaries(lString32 dir, bool clear)
 {
-    if (clear && _dictList)
-        delete _dictList;
+    if (clear)
+        _dictList.reset();
     if (clear || !_dictList)
-        _dictList = new HyphDictionaryList();
-    if (NULL == _dataLoader)
-        _dataLoader = new HyphDataLoaderFromFile;
+        _dictList.reset(new HyphDictionaryList());
+    if (!_dataLoader)
+        _dataLoader.reset(new HyphDataLoaderFromFile());
     if (_dictList->open(dir, clear)) {
 		if ( !_dictList->activate( lString32(DEF_HYPHENATION_DICT) ) )
     			_dictList->activate( lString32(HYPH_DICT_ID_ALGORITHM) );
@@ -252,9 +248,8 @@ bool HyphMan::addDictionaryItem(HyphDictionary* dict)
 }
 
 void HyphMan::setDataLoader(HyphDataLoader* loader) {
-    if (_dataLoader)
-        delete _dataLoader;
-    _dataLoader = loader;
+    if (_dataLoader.get() != loader)
+        _dataLoader.reset(loader);
 }
 
 bool HyphMan::overrideLeftHyphenMin(int left_hyphen_min) {
@@ -303,7 +298,7 @@ HyphDictionary * HyphMan::getSelectedDictionary() {
 }
 
 HyphMethod * HyphMan::getHyphMethodForDictionary( lString32 id ) {
-    if ( id.empty() || NULL == _dataLoader)
+    if ( id.empty() || !_dataLoader)
         return &NO_HYPH;
     HyphDictionary * p = _dictList->find(id);
     if ( !p || p->getType() == HDT_NONE )

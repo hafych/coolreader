@@ -43,6 +43,10 @@ Process-wide hyphenation minima and the soft-hyphen policy are atomically
 published, range-checked where applicable and covered by concurrent regression
 tests.
 
-Known follow-up groups include the owning hyphenation dictionary registry and
-font/cache singletons. Each group must be migrated separately with an impact
-check and focused regression tests.
+The hyphenation dictionary list and data loader now have explicit RAII
+ownership. Their initialization and teardown remain process lifecycle
+operations and must not race readers.
+
+Known follow-up groups include synchronization and ownership of the loaded
+hyphenation-method cache, plus font/cache singletons. Each group must be
+migrated separately with an impact check and focused regression tests.

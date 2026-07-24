@@ -140,6 +140,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   scaling snapshots instead of directly exposed mutable globals.
 - Hyphenation minima and soft-hyphen policy updates are now race-free during
   concurrent rendering.
+- Hyphenation dictionary-list and loader lifetimes now use explicit RAII
+  ownership with regression coverage for replacement and teardown.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

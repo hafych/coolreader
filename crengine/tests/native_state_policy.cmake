@@ -96,6 +96,16 @@ require_source_text(
   "static std::atomic<int> _TrustSoftHyphens"
   "soft-hyphen policy must be synchronized"
 )
+require_source_text(
+  "${HYPH_HEADER}"
+  "static std::unique_ptr<HyphDictionaryList> _dictList"
+  "hyphenation dictionary list must have explicit ownership"
+)
+require_source_text(
+  "${HYPH_HEADER}"
+  "static std::unique_ptr<HyphDataLoader> _dataLoader"
+  "hyphenation data loader must have explicit ownership"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -156,4 +166,14 @@ forbid_source_text(
   "${HYPH_SOURCE}"
   "int HyphMan::_TrustSoftHyphens"
   "soft-hyphen policy must not have unsynchronized storage"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "delete _dictList"
+  "hyphenation dictionary list must use RAII teardown"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "delete _dataLoader"
+  "hyphenation data loader must use RAII teardown"
 )
