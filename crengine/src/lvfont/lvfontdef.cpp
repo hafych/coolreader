@@ -76,6 +76,16 @@ int LVFontDef::CalcMatch(const LVFontDef &def, bool useBias) const {
                        : ((_family == css_ff_monospace) == (def._family == css_ff_monospace) ? 64
                                                                                              : 0);
     int typeface_match = (_typeface == def._typeface) ? 256 : 0;
+    // A document font is the book's definition of an explicitly requested
+    // family. Prefer it over an equally named process font, including an
+    // already instantiated process font, without affecting generic-family
+    // fallback when the document face does not match.
+    int document_scope_match =
+            _documentId != -1
+            && _documentId == def._documentId
+            && typeface_match
+            ? 256
+            : 0;
 
     // bias
     int bias = useBias ? _bias : 0;
@@ -132,7 +142,8 @@ int LVFontDef::CalcMatch(const LVFontDef &def, bool useBias) const {
         + (italic_match   * 5)
         + (features_match * 1000)
         + (family_match   * 100)
-        + (typeface_match * 1000);
+        + (typeface_match * 1000)
+        + (document_scope_match * 1000);
 
     return score;
 }

@@ -126,7 +126,7 @@ DRM или ограничений доступа, подбор/получени�
   specificity, inheritance, units и page-break.
 - [ ] Обновить hyphenation dictionaries, проверить их лицензии и добавить
   языковые golden tests.
-- [ ] Добавить variable-font/font-fallback tests и контролируемый выбор системных и
+- [x] Добавить variable-font/font-fallback tests и контролируемый выбор системных и
   встроенных шрифтов.
 
 ### UI, доступность и E-Ink
