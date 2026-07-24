@@ -50,6 +50,10 @@ Books outside app-private storage are opened through Android's document picker
 or a persisted SAF library root; the app does not request legacy broad access
 to shared storage.
 
+Production signing uses an external keystore and the guarded
+`:app:bundleSignedRelease` task; see
+[docs/ANDROID_SIGNING.md](docs/ANDROID_SIGNING.md).
+
 ### Support matrix
 
 | Target | Current status | Verified environment |

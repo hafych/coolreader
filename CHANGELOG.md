@@ -15,7 +15,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   first run also fixed an uninitialized MathML style flag.
 - CI runner labels pinned to Ubuntu 24.04 and macOS 15 instead of moving
   `*-latest` aliases.
-- Release AAB and native debug-symbol generation in Android CI.
+- Guarded external-keystore release signing, a synthetic signed-AAB CI smoke
+  test and native debug-symbol generation; unsigned bundles are not uploaded as
+  distributable artifacts.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

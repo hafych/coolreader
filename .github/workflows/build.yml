@@ -122,21 +122,42 @@ jobs:
       - name: Report Android artifact sizes
         run: |
           find android/app/build/outputs/apk/debug \
-               android/app/build/outputs/bundle/release \
                android/app/build/outputs/native-debug-symbols/release \
                -type f -exec du -h {} \;
 
-      - name: Upload APK, AAB, symbols and lint reports
+      - name: Upload APK, symbols and lint reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: android-build-${{ github.sha }}
           path: |
             android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/native-debug-symbols/release/*.zip
             android/app/build/reports/lint-results-debug.*
           if-no-files-found: warn
+
+      - name: Smoke-test external release signing
+        env:
+          COOLREADER_RELEASE_STORE_FILE: ${{ runner.temp }}/coolreader-ci-smoke.jks
+          COOLREADER_RELEASE_STORE_PASSWORD: ci-smoke-password
+          COOLREADER_RELEASE_KEY_ALIAS: coolreader-ci-smoke
+          COOLREADER_RELEASE_KEY_PASSWORD: ci-smoke-password
+        run: |
+          keytool -genkeypair -noprompt \
+            -keystore "${COOLREADER_RELEASE_STORE_FILE}" \
+            -storepass "${COOLREADER_RELEASE_STORE_PASSWORD}" \
+            -keypass "${COOLREADER_RELEASE_KEY_PASSWORD}" \
+            -alias "${COOLREADER_RELEASE_KEY_ALIAS}" \
+            -dname "CN=CoolReader CI Signing Smoke" \
+            -keyalg RSA -keysize 2048 -validity 1
+          cd android
+          ./gradlew :app:bundleSignedRelease --stacktrace
+          if ! signing_output="$(jarsigner -verify \
+            app/build/outputs/bundle/release/app-release.aab 2>&1)"; then
+            printf '%s\n' "${signing_output}"
+            exit 1
+          fi
+          grep -q '^jar verified\.$' <<<"${signing_output}"
 
   android-instrumentation:
     name: Android instrumentation smoke (API 35)

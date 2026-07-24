@@ -30,3 +30,6 @@ cr3gui/data/tessdata/
 /thirdparty
 /thirdparty_tmp
 /build_test/
+/android/release-signing.properties
+/android/*.jks
+/android/*.keystore

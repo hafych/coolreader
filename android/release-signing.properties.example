@@ -1,0 +1,6 @@
+# Copy to android/release-signing.properties only for local use.
+# The keystore itself must use an absolute path outside this repository.
+coolreader.release.storeFile=/absolute/path/outside/repository/coolreader-release.jks
+coolreader.release.storePassword=replace-with-local-secret
+coolreader.release.keyAlias=coolreader-release
+coolreader.release.keyPassword=replace-with-local-secret

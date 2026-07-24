@@ -1,5 +1,40 @@
 apply plugin: 'com.android.application'
 
+def releaseSigningPropertiesFile =
+        rootProject.file('release-signing.properties')
+def releaseSigningProperties = new Properties()
+if (releaseSigningPropertiesFile.isFile()) {
+    releaseSigningPropertiesFile.withInputStream {
+        releaseSigningProperties.load(it)
+    }
+}
+def releaseSigningValue = { String propertyName, String environmentName ->
+    def projectValue = project.findProperty(propertyName)
+    if (projectValue != null && !projectValue.toString().trim().isEmpty())
+        return projectValue.toString()
+    def environmentValue = System.getenv(environmentName)
+    if (environmentValue != null && !environmentValue.trim().isEmpty())
+        return environmentValue
+    return releaseSigningProperties.getProperty(propertyName)
+}
+def releaseSigning = [
+        storeFile: releaseSigningValue(
+                'coolreader.release.storeFile',
+                'COOLREADER_RELEASE_STORE_FILE'),
+        storePassword: releaseSigningValue(
+                'coolreader.release.storePassword',
+                'COOLREADER_RELEASE_STORE_PASSWORD'),
+        keyAlias: releaseSigningValue(
+                'coolreader.release.keyAlias',
+                'COOLREADER_RELEASE_KEY_ALIAS'),
+        keyPassword: releaseSigningValue(
+                'coolreader.release.keyPassword',
+                'COOLREADER_RELEASE_KEY_PASSWORD')
+]
+def releaseSigningConfigured = releaseSigning.values().every {
+    it != null && !it.toString().trim().isEmpty()
+}
+
 android {
     namespace 'org.coolreader'
     compileSdkVersion 35
@@ -29,6 +64,16 @@ android {
             res.srcDirs = ['../../android/res']
         }
     }
+    signingConfigs {
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(releaseSigning.storeFile)
+                storePassword releaseSigning.storePassword
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             // to make the bug report more readable.
@@ -44,6 +89,8 @@ android {
                     arguments "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
                 }
             }
+            if (releaseSigningConfigured)
+                signingConfig signingConfigs.release
         }
         release_stripped {
             minifyEnabled true
@@ -54,6 +101,8 @@ android {
                     arguments "-DCMAKE_BUILD_TYPE=Release"
                 }
             }
+            if (releaseSigningConfigured)
+                signingConfig signingConfigs.release
         }
         debug {
             minifyEnabled false
@@ -135,6 +184,49 @@ android {
 }
 
 task prepareKotlinBuildScriptModel {}
+
+tasks.register('verifyReleaseSigning') {
+    group = 'verification'
+    description = 'Require a complete external release-signing configuration.'
+    doLast {
+        def missing = releaseSigning.findAll {
+            it.value == null || it.value.toString().trim().isEmpty()
+        }.keySet()
+        if (!missing.isEmpty()) {
+            throw new GradleException(
+                    "Missing release signing values: ${missing.join(', ')}")
+        }
+        File configuredKeystore = new File(
+                releaseSigning.storeFile.toString().trim())
+        if (!configuredKeystore.isAbsolute()) {
+            throw new GradleException(
+                    'Release keystore path must be absolute and outside the repository')
+        }
+        File keystore = configuredKeystore
+        if (!keystore.isFile())
+            throw new GradleException("Release keystore not found: ${keystore}")
+        def repositoryPath = rootProject.rootDir.canonicalFile.toPath()
+        if (keystore.canonicalFile.toPath().startsWith(repositoryPath)) {
+            throw new GradleException(
+                    'Release keystore must be stored outside the repository')
+        }
+    }
+}
+
+tasks.register('bundleSignedRelease') {
+    group = 'build'
+    description = 'Build a release AAB after validating external signing inputs.'
+    dependsOn 'verifyReleaseSigning'
+}
+
+gradle.projectsEvaluated {
+    tasks.named('bundleSignedRelease') {
+        dependsOn tasks.named('bundleRelease')
+    }
+    tasks.named('bundleRelease') {
+        mustRunAfter tasks.named('verifyReleaseSigning')
+    }
+}
 
 tasks.register('packageNativeDebugSymbols', Zip) {
     dependsOn 'bundleRelease'
