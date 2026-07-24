@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "allowedLicenses": [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-2-Clause AND Imlib2",
+    "BSD-3-Clause OR GPL-2.0-only",
+    "FTL OR GPL-2.0-or-later",
+    "GPL-2.0-or-later",
+    "IJG",
+    "LGPL-2.1-or-later",
+    "Libpng-2.0",
+    "MIT",
+    "Zlib"
+  ],
+  "mavenGroupRules": [
+    {
+      "prefix": "androidx.",
+      "license": "Apache-2.0"
+    },
+    {
+      "prefix": "com.google.guava",
+      "license": "Apache-2.0"
+    },
+    {
+      "prefix": "org.jetbrains",
+      "license": "Apache-2.0"
+    }
+  ],
+  "nativeComponents": [
+    {
+      "name": "zlib",
+      "version": "1.3.2",
+      "license": "Zlib",
+      "downloadLocation": "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz",
+      "metadata": "thirdparty_repo/zlib.meta.sh",
+      "licenseFile": "thirdparty/zlib-1.3.2/LICENSE"
+    },
+    {
+      "name": "libpng",
+      "version": "1.6.58",
+      "license": "Libpng-2.0",
+      "downloadLocation": "https://download.sourceforge.net/libpng/libpng-1.6.58.tar.xz",
+      "metadata": "thirdparty_repo/libpng.meta.sh",
+      "licenseFile": "thirdparty/libpng-1.6.58/LICENSE",
+      "cmakeTarget": "local_png"
+    },
+    {
+      "name": "libjpeg",
+      "version": "10.0.0",
+      "license": "IJG",
+      "downloadLocation": "https://www.ijg.org/files/jpegsrc.v10.tar.gz",
+      "metadata": "thirdparty_repo/libjpeg.meta.sh",
+      "licenseFile": "thirdparty/jpeg-10/README",
+      "cmakeTarget": "local_jpeg"
+    },
+    {
+      "name": "freetype",
+      "version": "2.14.3",
+      "license": "FTL OR GPL-2.0-or-later",
+      "downloadLocation": "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz",
+      "metadata": "thirdparty_repo/freetype.meta.sh",
+      "licenseFile": "thirdparty/freetype-2.14.3/LICENSE.TXT",
+      "cmakeTarget": "local_freetype"
+    },
+    {
+      "name": "harfbuzz",
+      "version": "14.2.1",
+      "license": "MIT",
+      "downloadLocation": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz",
+      "metadata": "thirdparty_repo/harfbuzz.meta.sh",
+      "licenseFile": "thirdparty/harfbuzz-14.2.1/COPYING",
+      "cmakeTarget": "local_harfbuzz"
+    },
+    {
+      "name": "fribidi",
+      "version": "1.0.16",
+      "license": "LGPL-2.1-or-later",
+      "downloadLocation": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz",
+      "metadata": "thirdparty_repo/fribidi.meta.sh",
+      "licenseFile": "thirdparty/fribidi-1.0.16/COPYING",
+      "cmakeTarget": "local_fribidi"
+    },
+    {
+      "name": "utf8proc",
+      "version": "2.11.3",
+      "license": "MIT",
+      "downloadLocation": "https://github.com/JuliaStrings/utf8proc/archive/refs/tags/v2.11.3.tar.gz",
+      "metadata": "thirdparty_repo/utf8proc.meta.sh",
+      "licenseFile": "thirdparty/utf8proc-2.11.3/LICENSE.md",
+      "cmakeTarget": "local_utf8proc"
+    },
+    {
+      "name": "libunibreak",
+      "version": "7.0",
+      "license": "Zlib",
+      "downloadLocation": "https://github.com/adah1972/libunibreak/releases/download/libunibreak_7_0/libunibreak-7.0.tar.gz",
+      "metadata": "thirdparty_repo/libunibreak.meta.sh",
+      "licenseFile": "thirdparty/libunibreak-7.0/LICENCE",
+      "cmakeTarget": "local_unibreak"
+    },
+    {
+      "name": "zstd",
+      "version": "1.5.7",
+      "license": "BSD-3-Clause OR GPL-2.0-only",
+      "downloadLocation": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
+      "metadata": "thirdparty_repo/zstd.meta.sh",
+      "licenseFile": "thirdparty/zstd-1.5.7/LICENSE",
+      "cmakeTarget": "local_zstd"
+    },
+    {
+      "name": "antiword",
+      "version": "vendored",
+      "license": "GPL-2.0-or-later",
+      "downloadLocation": "NOASSERTION",
+      "licenseFile": "thirdparty_unman/antiword/Docs/COPYING",
+      "cmakeTarget": "local_antiword"
+    },
+    {
+      "name": "chmlib",
+      "version": "vendored",
+      "license": "LGPL-2.1-or-later",
+      "downloadLocation": "NOASSERTION",
+      "licenseFile": "thirdparty_unman/chmlib/COPYING",
+      "cmakeTarget": "local_chmlib"
+    },
+    {
+      "name": "qimagescale",
+      "version": "vendored",
+      "license": "BSD-2-Clause AND Imlib2",
+      "downloadLocation": "NOASSERTION",
+      "licenseFile": "thirdparty_unman/qimagescale/QIMAGETRANSFORM_LICENSE.txt",
+      "cmakeTarget": "local_qimagescale"
+    },
+    {
+      "name": "nanosvg",
+      "version": "vendored",
+      "license": "Zlib",
+      "downloadLocation": "NOASSERTION",
+      "licenseFile": "thirdparty_unman/nanosvg/LICENSE.txt",
+      "sourceEvidence": "thirdparty_unman/nanosvg/src/nanosvg.h"
+    },
+    {
+      "name": "coffeecatch",
+      "version": "vendored",
+      "license": "BSD-2-Clause",
+      "downloadLocation": "NOASSERTION",
+      "licenseFile": "android/jni/coffeecatch/LICENSE",
+      "sourceEvidence": "android/jni/coffeecatch/coffeecatch.c"
+    },
+    {
+      "name": "xxhash",
+      "version": "vendored",
+      "license": "BSD-2-Clause",
+      "downloadLocation": "NOASSERTION",
+      "licenseFile": "crengine/src/xxhash.h",
+      "sourceEvidence": "crengine/src/xxhash.c"
+    }
+  ]
+}

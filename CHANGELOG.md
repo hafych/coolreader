@@ -18,6 +18,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Guarded external-keystore release signing, a synthetic signed-AAB CI smoke
   test and native debug-symbol generation; unsigned bundles are not uploaded as
   distributable artifacts.
+- A CI-enforced dependency and license allowlist plus an SPDX 2.3 SBOM for the
+  resolved Android release runtime and native components.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

@@ -55,7 +55,9 @@ Approval record:
   inventory and allowlist review. Runtime use of system/user fonts is distinct
   from redistributing a font file.
 - Hyphenation patterns and embedded third-party code have license statements,
-  but the planned dependency/SBOM and license-allowlist task is still open.
+  and the runtime-library allowlist/SBOM gate is active. Asset corpora (including
+  HarfBuzz test fonts and hyphenation data) still need release-archive-specific
+  rights and notice review.
 - The provenance and fork-specific trademark permission for the current
   CoolReader name/logo have not been established by this code audit.
 

@@ -64,6 +64,8 @@ Release preparation documents:
 [Data safety worksheet](docs/DATA_SAFETY.md),
 [Play test plan](docs/PLAY_RELEASE.md), and
 [identity/asset decisions](docs/IDENTITY_AND_ASSETS.md).
+Dependency licensing and SPDX generation are documented in
+[docs/DEPENDENCY_POLICY.md](docs/DEPENDENCY_POLICY.md).
 
 ### Support matrix
 
