@@ -30,6 +30,10 @@ round-robin allocation. Concurrent construction and destruction are covered by
 the document regression test; callers must still ensure no node outlives its
 owning document.
 
+The legacy process-wide base font-weight API is retained for compatibility,
+but its value is atomically published and constrained to the documented
+`1..999` range. Concurrent setter/getter coverage protects this boundary.
+
 Known follow-up groups include render configuration globals, hyphenation
 registries and font/cache singletons. Each group must be migrated separately
 with an impact check and focused regression tests.

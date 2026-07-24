@@ -134,6 +134,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   selection boundaries and serialized reading-position restoration.
 - The fixed-size native DOM registry now publishes document slots atomically
   and is stress-tested with concurrent construction and destruction.
+- Concurrent renderers now read and update the legacy process-wide base font
+  weight without a native data race.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

@@ -49,6 +49,11 @@ require_source_text(
   "render measurement scratch must be isolated per thread"
 )
 require_source_text(
+  "${RENDER_SOURCE}"
+  "static std::atomic<int> rend_font_base_weight"
+  "process-wide render base weight must be synchronized"
+)
+require_source_text(
   "${BITMAP_SOURCE}"
   "static thread_local lUInt8 glyph_buf[16384]"
   "bitmap glyph scratch must be isolated per thread"
@@ -78,4 +83,9 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "static int _nextDocumentIndex"
   "document registry index must not have unsynchronized writes"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "static int rend_font_base_weight"
+  "render base weight must not have unsynchronized writes"
 )

@@ -35,6 +35,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <atomic>
 #include "../include/lvtextfm.h"
 #include "../include/lvtinydom.h"
 #include "../include/fb2def.h"
@@ -2316,7 +2317,7 @@ bool isSameFontStyle( css_style_rec_t * style1, css_style_rec_t * style2 )
         && (style1->font_weight == style2->font_weight);
 }
 
-static int rend_font_base_weight = 400;
+static std::atomic<int> rend_font_base_weight(400);
 
 void LVRendSetBaseFontWeight( int weight )
 {
@@ -2324,12 +2325,12 @@ void LVRendSetBaseFontWeight( int weight )
         weight = 1;
     else if ( weight>999 )
         weight = 999;
-    rend_font_base_weight = weight;
+    rend_font_base_weight.store(weight, std::memory_order_relaxed);
 }
 
 int LVRendGetBaseFontWeight()
 {
-    return rend_font_base_weight;
+    return rend_font_base_weight.load(std::memory_order_relaxed);
 }
 
 LVFontRef getFont(ldomNode * node, css_style_rec_t * style, int documentId)
@@ -2356,7 +2357,7 @@ LVFontRef getFont(ldomNode * node, css_style_rec_t * style, int documentId)
         fw = ((style->font_weight - css_fw_100)+1) * 100;
     else
         fw = 400;
-    fw += (rend_font_base_weight - 400);
+    fw += (LVRendGetBaseFontWeight() - 400);
     // Although the css standard does not regulate the use of weight over 900,
     //   https://www.w3.org/TR/CSS21/fonts.html#propdef-font-weight
     //   https://developer.mozilla.org/ru/docs/Web/CSS/font-weight

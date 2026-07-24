@@ -1,11 +1,13 @@
 #include "lvstreamutils.h"
 #include "lvthread.h"
+#include "lvrend.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
 #include "cri18n.h"
 #include "logredactor.h"
 #include "parsebudget.h"
 
+#include <atomic>
 #include <cerrno>
 #include <cstdlib>
 #include <cstdio>
@@ -13,6 +15,7 @@
 #include <cstdint>
 #include <fcntl.h>
 #include <string>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -36,6 +39,48 @@ static int testMutex() {
             return fail("LVLock did not leave the mutex usable");
         mutex.unlock();
     }
+    return 0;
+}
+
+static int testConcurrentRenderBaseWeight() {
+    static const int workerCount = 8;
+    static const int iterations = 1000;
+    LVRendSetBaseFontWeight(0);
+    if (LVRendGetBaseFontWeight() != 1)
+        return fail("render base weight lower bound was not enforced");
+    LVRendSetBaseFontWeight(1000);
+    if (LVRendGetBaseFontWeight() != 999)
+        return fail("render base weight upper bound was not enforced");
+
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, &failed]() {
+            for (int iteration = 0; iteration < iterations; iteration++) {
+                int requested = ((workerIndex + iteration) % 3 == 0)
+                        ? 0
+                        : (((workerIndex + iteration) % 3 == 1)
+                                ? 1000
+                                : 500);
+                LVRendSetBaseFontWeight(requested);
+                int observed = LVRendGetBaseFontWeight();
+                if (observed < 1 || observed > 999) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+    LVRendSetBaseFontWeight(400);
+    if (LVRendGetBaseFontWeight() != 400)
+        return fail("render base weight default was not restored");
+    if (failed.load(std::memory_order_acquire))
+        return fail("render base weight was published outside its bounds");
     return 0;
 }
 
@@ -588,6 +633,8 @@ static int testRecursiveContainerBudget() {
 
 int main() {
     if (testMutex() != 0)
+        return 1;
+    if (testConcurrentRenderBaseWeight() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;
