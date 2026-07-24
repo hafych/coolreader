@@ -557,6 +557,12 @@ if(BUILD_TESTING AND UNIX)
     _LINUX=1
   )
   add_test(NAME thread_safety COMMAND thread_safety_test)
+
+  add_test(NAME native_state_policy
+    COMMAND ${CMAKE_COMMAND}
+      "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+      -P ${CMAKE_SOURCE_DIR}/crengine/tests/native_state_policy.cmake
+  )
 endif()
 
 if(USE_CLANG_WARNING_GATE)

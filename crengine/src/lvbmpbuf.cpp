@@ -91,6 +91,7 @@ void lvdrawbufFillRect( draw_buf_t * buf, int x0, int y0, int x1, int y1, unsign
     }
 }
 
+
 void lvdrawbufDraw2( draw_buf_t * buf, int x, int y, const lUInt8 * bitmap, int width, int height )
 {
     int buf_width = buf->bytesPerRow << 2; /* 2bpp */
@@ -431,7 +432,7 @@ void lvdrawbufDrawText( draw_buf_t * buf, int x, int y, const lvfont_handle pfon
 void lvdrawbufDrawText( draw_buf_t * buf, int x, int y, const lvfont_handle pfont, 
                        const lChar32 * text, int len, lChar32 def_char )
 {
-    static lUInt8 glyph_buf[16384];
+    static thread_local lUInt8 glyph_buf[16384];
     const lvfont_glyph_t * glyph;
     int baseline = lvfontGetHeader( pfont )->fontBaseline;
     const hrle_decode_info_t * pDecodeTable = lvfontGetDecodeTable( pfont );
@@ -459,4 +460,3 @@ void lvdrawbufDrawText( draw_buf_t * buf, int x, int y, const lvfont_handle pfon
       text++;
     }
 }
-

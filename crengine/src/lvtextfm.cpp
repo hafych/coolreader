@@ -46,6 +46,7 @@
 #include "../include/fb2def.h"
 
 #ifdef __cplusplus
+#include <mutex>
 #include "../include/lvtinydom.h"
 #include "../include/lvrend.h"
 #include "../include/textlang.h"
@@ -409,9 +410,9 @@ public:
     int       m_length;
     int       m_size;
     bool      m_staticBufs;
-    static bool      m_staticBufs_inUse;
+    static thread_local bool m_staticBufs_inUse;
     #if (USE_LIBUNIBREAK==1)
-    static bool      m_libunibreak_init_done;
+    static std::once_flag m_libunibreak_init_once;
     #endif
     lChar32 * m_text;
     lUInt16 * m_flags;
@@ -458,11 +459,10 @@ public:
     : m_pbuffer(pbuffer), m_length(0), m_size(0), m_staticBufs(true), m_y(0)
     {
         #if (USE_LIBUNIBREAK==1)
-        if (!m_libunibreak_init_done) {
-            m_libunibreak_init_done = true;
+        std::call_once(m_libunibreak_init_once, []() {
             // Have libunibreak build up a few lookup tables for quicker computation
             init_linebreak();
-        }
+        });
         #endif
         if (m_staticBufs_inUse)
             m_staticBufs = false;
@@ -990,15 +990,15 @@ public:
             m_staticBufs = false;
         } else {
             // static buffer space
-            static lChar32 m_static_text[STATIC_BUFS_SIZE];
-            static lUInt16 m_static_flags[STATIC_BUFS_SIZE];
-            static src_text_fragment_t * m_static_srcs[STATIC_BUFS_SIZE];
-            static lUInt16 m_static_charindex[STATIC_BUFS_SIZE];
-            static int m_static_widths[STATIC_BUFS_SIZE];
+            static thread_local lChar32 m_static_text[STATIC_BUFS_SIZE];
+            static thread_local lUInt16 m_static_flags[STATIC_BUFS_SIZE];
+            static thread_local src_text_fragment_t * m_static_srcs[STATIC_BUFS_SIZE];
+            static thread_local lUInt16 m_static_charindex[STATIC_BUFS_SIZE];
+            static thread_local int m_static_widths[STATIC_BUFS_SIZE];
             #if (USE_FRIBIDI==1)
-                static FriBidiCharType m_static_bidi_ctypes[STATIC_BUFS_SIZE];
-                static FriBidiBracketType m_static_bidi_btypes[STATIC_BUFS_SIZE];
-                static FriBidiLevel m_static_bidi_levels[STATIC_BUFS_SIZE];
+                static thread_local FriBidiCharType m_static_bidi_ctypes[STATIC_BUFS_SIZE];
+                static thread_local FriBidiBracketType m_static_bidi_btypes[STATIC_BUFS_SIZE];
+                static thread_local FriBidiLevel m_static_bidi_levels[STATIC_BUFS_SIZE];
             #endif
             m_text = m_static_text;
             m_flags = m_static_flags;
@@ -1711,10 +1711,10 @@ public:
         src_text_fragment_t * srcline = &m_pbuffer->srctext[word->src_text_index];
         LVFont * srcfont= (LVFont *) srcline->t.font;
         const lChar32 * str = srcline->t.text + word->t.start;
-        // Avoid malloc by using static buffers. Returns false if word too long.
+        // Avoid malloc by using thread-local static buffers. Returns false if word too long.
         #define MAX_MEASURED_WORD_SIZE 127
-        static lUInt16 widths[MAX_MEASURED_WORD_SIZE+1];
-        static lUInt8 flags[MAX_MEASURED_WORD_SIZE+1];
+        static thread_local lUInt16 widths[MAX_MEASURED_WORD_SIZE+1];
+        static thread_local lUInt8 flags[MAX_MEASURED_WORD_SIZE+1];
         if (word->t.len > MAX_MEASURED_WORD_SIZE)
             return false;
         lUInt32 hints = WORD_FLAGS_TO_FNT_FLAGS(word->flags);
@@ -1742,8 +1742,8 @@ public:
         int start = 0;
         int lastWidth = 0;
         #define MAX_TEXT_CHUNK_SIZE 4096
-        static lUInt16 widths[MAX_TEXT_CHUNK_SIZE+1];
-        static lUInt8 flags[MAX_TEXT_CHUNK_SIZE+1];
+        static thread_local lUInt16 widths[MAX_TEXT_CHUNK_SIZE+1];
+        static thread_local lUInt8 flags[MAX_TEXT_CHUNK_SIZE+1];
         int tabIndex = -1;
         #if (USE_FRIBIDI==1)
             FriBidiLevel lastBidiLevel = 0;
@@ -2573,11 +2573,11 @@ public:
                 printf("CRE WARNING: bidi processing line overflow (%d > %d)\n", end-start, MAX_LINE_SIZE);
                 end = start + MAX_LINE_SIZE;
             }
-            static lChar32 bidi_tmp_text[MAX_LINE_SIZE];
-            static lUInt16 bidi_tmp_flags[MAX_LINE_SIZE];
-            static src_text_fragment_t * bidi_tmp_srcs[MAX_LINE_SIZE];
-            static lUInt16 bidi_tmp_charindex[MAX_LINE_SIZE];
-            static int     bidi_tmp_widths[MAX_LINE_SIZE];
+            static thread_local lChar32 bidi_tmp_text[MAX_LINE_SIZE];
+            static thread_local lUInt16 bidi_tmp_flags[MAX_LINE_SIZE];
+            static thread_local src_text_fragment_t * bidi_tmp_srcs[MAX_LINE_SIZE];
+            static thread_local lUInt16 bidi_tmp_charindex[MAX_LINE_SIZE];
+            static thread_local int bidi_tmp_widths[MAX_LINE_SIZE];
             // Map of string indices which is reordered to reflect where each
             // glyph ends up. Note that fribidi will access it starting
             // from 0 (and not from 'start'): this would need us to allocate
@@ -2587,7 +2587,7 @@ public:
             // if some other part than [start:end] would be accessed, but
             // we know fribid doesn't - by contract as it shouldn't reorder
             // any other part except between start:end).
-            static FriBidiStrIndex bidi_indices_map[MAX_LINE_SIZE];
+            static thread_local FriBidiStrIndex bidi_indices_map[MAX_LINE_SIZE];
             for (int i=start; i<end; i++) {
                 bidi_indices_map[i-start] = i;
             }
@@ -4179,8 +4179,8 @@ public:
                     // expects a lUInt8 array. We added flagSize=1|2 so it can set the correct
                     // flags on our upgraded (from lUInt8 to lUInt16) m_flags.
                     lUInt8 * flags = (lUInt8*) (m_flags + wstart);
-                    // Fill static array with cumulative widths relative to word start
-                    static lUInt16 widths[MAX_WORD_SIZE];
+                    // Fill thread-local array with cumulative widths relative to word start
+                    static thread_local lUInt16 widths[MAX_WORD_SIZE];
                     int wordStart_w = wstart>0 ? m_widths[wstart-1] : 0;
                     for ( int i=0; i<len; i++ ) {
                         widths[i] = m_widths[wstart+i] - wordStart_w;
@@ -4536,9 +4536,9 @@ public:
     }
 };
 
-bool LVFormatter::m_staticBufs_inUse = false;
+thread_local bool LVFormatter::m_staticBufs_inUse = false;
 #if (USE_LIBUNIBREAK==1)
-bool LVFormatter::m_libunibreak_init_done = false;
+std::once_flag LVFormatter::m_libunibreak_init_once;
 #endif
 
 static void freeFrmLines( formatted_text_fragment_t * m_pbuffer )

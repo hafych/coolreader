@@ -128,6 +128,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   buffer are the first migrated RAII path with a native regression test.
 - Native mutable-state rules and a thread-local skin recursion guard prevent
   concurrent renderers from sharing one process-wide inheritance depth budget.
+- Formatter, render-measurement and bitmap glyph scratch buffers are isolated
+  per thread, and libunibreak initialization is synchronized exactly once.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

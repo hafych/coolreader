@@ -19,12 +19,12 @@ possible.
 
 ## Migration inventory
 
-The skin inheritance recursion counter was the first migrated path. It is now
-thread-local, so an unrelated renderer cannot consume another thread's
-recursion budget. A native concurrency regression test covers both the limit
-and cross-thread isolation.
+The skin inheritance recursion counter is thread-local, so an unrelated
+renderer cannot consume another thread's recursion budget. Formatter, render
+measurement and bitmap glyph scratch buffers are also thread-local, while
+libunibreak table initialization uses `std::call_once`. Native concurrency and
+source-policy tests protect these boundaries.
 
-Known follow-up groups include formatter and glyph scratch buffers, render
-configuration globals, hyphenation registries, document instance tracking and
-font/cache singletons. Each group must be migrated separately with an impact
-check and focused regression tests.
+Known follow-up groups include render configuration globals, hyphenation
+registries, document instance tracking and font/cache singletons. Each group
+must be migrated separately with an impact check and focused regression tests.
