@@ -66,7 +66,9 @@ import org.coolreader.crengine.BookmarksDlg;
 import org.coolreader.crengine.BrowserViewLayout;
 import org.coolreader.crengine.CRRootView;
 import org.coolreader.crengine.CRToolBar;
+import org.coolreader.crengine.CoverpageManager;
 import org.coolreader.crengine.DeviceInfo;
+import org.coolreader.crengine.DocumentFileCache;
 import org.coolreader.crengine.DocumentsContractWrapper;
 import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.DocumentFormatDetector;
@@ -76,6 +78,7 @@ import org.coolreader.crengine.ErrorDialog;
 import org.coolreader.crengine.FileBrowser;
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.FileInfoOperationListener;
+import org.coolreader.crengine.History;
 import org.coolreader.crengine.InterfaceTheme;
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.LibraryRootStore;
@@ -90,6 +93,8 @@ import org.coolreader.crengine.ReaderAction;
 import org.coolreader.crengine.ReaderCommand;
 import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.ReaderViewLayout;
+import org.coolreader.crengine.Scanner;
+import org.coolreader.crengine.ServiceLifecycle;
 import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Utils;
 import org.coolreader.tts.OnTTSCreatedListener;
@@ -121,6 +126,11 @@ public class CoolReader extends BaseActivity {
 	private BrowserViewLayout mBrowserFrame;
 	private CRRootView mHomeFrame;
 	private Engine mEngine;
+	private Scanner mScanner;
+	private History mHistory;
+	private CoverpageManager mCoverpageManager;
+	private DocumentFileCache mDocumentCache;
+	private ServiceLifecycle mServiceLifecycle;
 	//View startupView;
 	//CRDB mDB;
 	private ViewGroup mCurrentFrame;
@@ -269,6 +279,11 @@ public class CoolReader extends BaseActivity {
 		onSettingsChanged(settings(), null);
 
 		mEngine = Services.getEngine();
+		mScanner = Services.getScanner();
+		mHistory = Services.getHistory();
+		mCoverpageManager = Services.getCoverpageManager();
+		mDocumentCache = Services.getDocumentCache();
+		mServiceLifecycle = Services.getLifecycle();
 
 		//requestWindowFeature(Window.FEATURE_NO_TITLE);
 
@@ -377,7 +392,7 @@ public class CoolReader extends BaseActivity {
 			if (mBrowser != null)
 				mBrowser.setCoverPagesEnabled(flg);
 		} else if (key.equals(PROP_APP_BOOK_PROPERTY_SCAN_ENABLED)) {
-			Services.getScanner().setDirScanEnabled(flg);
+			mScanner.setDirScanEnabled(flg);
 		} else if (key.equals(PROP_FONT_FACE)) {
 			if (mBrowser != null)
 				mBrowser.setCoverPageFontFace(value);
@@ -428,7 +443,7 @@ public class CoolReader extends BaseActivity {
 		} */
 		else if (key.equals(PROP_APP_FILE_BROWSER_HIDE_EMPTY_FOLDERS)) {
 			// already in super method:
-			// Services.getScanner().setHideEmptyDirs(flg);
+			// mScanner.setHideEmptyDirs(flg);
 			// Here only refresh the file browser
 			if (null != mBrowser) {
 				mBrowser.showLastDirectory();
@@ -563,7 +578,7 @@ public class CoolReader extends BaseActivity {
 									currentPos = lastPos.getPercent();
 							}
 						}
-						Services.getHistory().updateBookInfo(bookInfo);
+						mHistory.updateBookInfo(bookInfo);
 						getDB().saveBookInfo(bookInfo);
 						if (null != currentBook) {
 							FileInfo currentFileInfo = currentBook.getFileInfo();
@@ -940,7 +955,7 @@ public class CoolReader extends BaseActivity {
 		} catch (IllegalArgumentException e) {
 			log.e("Failed to unregister receiver: " + e.toString());
 		}
-		Services.getCoverpageManager().removeCoverpageReadyListener(mHomeFrame);
+		mCoverpageManager.removeCoverpageReadyListener(mHomeFrame);
 		/*
 		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
@@ -1091,10 +1106,10 @@ public class CoolReader extends BaseActivity {
 
 		if (mHomeFrame == null) {
 			waitForCRDBService(() -> {
-				Services.getHistory().loadFromDB(getDB(), 200);
+				mHistory.loadFromDB(getDB(), 200);
 
 				mHomeFrame = new CRRootView(CoolReader.this);
-				Services.getCoverpageManager().addCoverpageReadyListener(mHomeFrame);
+				mCoverpageManager.addCoverpageReadyListener(mHomeFrame);
 				mHomeFrame.requestFocus();
 
 				showRootWindow();
@@ -1285,7 +1300,7 @@ public class CoolReader extends BaseActivity {
 			}
 			if (mCurrentFrame == mBrowserFrame) {
 				// update recent books directory
-				mBrowser.refreshDirectory(Services.getScanner().getRecentDir(), null);
+				mBrowser.refreshDirectory(mScanner.getRecentDir(), null);
 			} else {
 				if (null != mBrowser)
 					mBrowser.stopCurrentScan();
@@ -1340,10 +1355,10 @@ public class CoolReader extends BaseActivity {
 				mReaderView = new ReaderView(
 						CoolReader.this,
 						mEngine,
-						Services.getScanner(),
-						Services.getHistory(),
-						Services.getDocumentCache(),
-						Services.getLifecycle(),
+						mScanner,
+						mHistory,
+						mDocumentCache,
+						mServiceLifecycle,
 						settings());
 				mReaderFrame = new ReaderViewLayout(CoolReader.this, mReaderView);
 				mReaderFrame.getToolBar().setOnActionHandler(item -> {
@@ -1371,7 +1386,14 @@ public class CoolReader extends BaseActivity {
 	private void runInBrowser(final Runnable task) {
 		waitForCRDBService(() -> {
 			if (mBrowserFrame == null) {
-				mBrowser = new FileBrowser(CoolReader.this, Services.getEngine(), Services.getScanner(), Services.getHistory(), settings().getBool(PROP_APP_FILE_BROWSER_HIDE_EMPTY_GENRES, false));
+				mBrowser = new FileBrowser(
+						CoolReader.this,
+						mEngine,
+						mScanner,
+						mHistory,
+						settings().getBool(
+								PROP_APP_FILE_BROWSER_HIDE_EMPTY_GENRES,
+								false));
 				mBrowser.setCoverPagesEnabled(settings().getBool(ReaderView.PROP_APP_SHOW_COVERPAGES, true));
 				mBrowser.setCoverPageFontFace(settings().getProperty(ReaderView.PROP_FONT_FACE, DeviceInfo.DEF_FONT_FACE));
 				mBrowser.setCoverPageSizeOption(settings().getInt(ReaderView.PROP_APP_COVERPAGE_SIZE, 1));
@@ -1444,7 +1466,7 @@ public class CoolReader extends BaseActivity {
 				mBrowserFrame = new BrowserViewLayout(CoolReader.this, mBrowser, mBrowserToolBar, mBrowserTitleBar);
 
 				//					if (getIntent() == null)
-//						mBrowser.showDirectory(Services.getScanner().getDownloadDirectory(), null);
+//						mBrowser.showDirectory(mScanner.getDownloadDirectory(), null);
 			}
 			task.run();
 			setCurrentFrame(mBrowserFrame);
@@ -1619,7 +1641,7 @@ public class CoolReader extends BaseActivity {
 		ParcelFileDescriptor cachedPfd = null;
 		DocumentSource resolvedSource = null;
 		try (InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
-			cachedBook = Services.getDocumentCache().saveStream(
+			cachedBook = mDocumentCache.saveStream(
 					sourceInfo, inputStream, ParseBudget.MAX_DOCUMENT_INPUT_BYTES);
 			if (cachedBook != null) {
 				File cachedFile = new File(cachedBook.getFileInfo().pathname);
@@ -1772,7 +1794,7 @@ public class CoolReader extends BaseActivity {
 	 * @param errorCallback
 	 */
 	public void loadPreviousDocument(Runnable errorCallback) {
-		BookInfo bi = Services.getHistory().getPreviousBook();
+		BookInfo bi = mHistory.getPreviousBook();
 		if (bi != null && bi.getFileInfo() != null) {
 			log.i("loadPreviousDocument() is called, prevBookName = " + bi.getFileInfo().getPathName());
 			loadDocument(bi.getFileInfo(), null, errorCallback, true);
@@ -1792,7 +1814,8 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showBrowser(final String dir) {
-		runInBrowser(() -> mBrowser.showDirectory(Services.getScanner().pathToFileInfo(dir), null));
+		runInBrowser(() -> mBrowser.showDirectory(
+				mScanner.pathToFileInfo(dir), null));
 	}
 
 	public void showRecentBooks() {
@@ -2009,7 +2032,7 @@ public class CoolReader extends BaseActivity {
 			showToast(R.string.could_not_delete_file, mOpenDocumentTreeArg);
 			return;
 		}
-		Services.getHistory().removeBookInfo(
+		mHistory.removeBookInfo(
 				getDB(), mOpenDocumentTreeArg, true, true);
 		FileInfo dirToUpdate = mOpenDocumentTreeArg.parent;
 		if (dirToUpdate != null) {
@@ -2191,13 +2214,13 @@ public class CoolReader extends BaseActivity {
 	public void askDeleteBook(final FileInfo item) {
 		askConfirmation(R.string.win_title_confirm_book_delete, () -> {
 			closeBookIfOpened(item);
-			FileInfo file = Services.getScanner().findFileInTree(item);
+			FileInfo file = mScanner.findFileInTree(item);
 			if (file == null)
 				file = item;
 			final FileInfo finalFile = file;
 			if (file.deleteFile()) {
 				waitForCRDBService(() -> {
-					Services.getHistory().removeBookInfo(getDB(), finalFile, true, true);
+					mHistory.removeBookInfo(getDB(), finalFile, true, true);
 					BackgroundThread.instance().postGUI(() -> directoryUpdated(finalFile.parent, null), 700);
 				});
 			} else {
@@ -2209,7 +2232,8 @@ public class CoolReader extends BaseActivity {
 					if (null != docUri) {
 						if (DocumentsContractWrapper.deleteFile(this, docUri)) {
 							waitForCRDBService(() -> {
-								Services.getHistory().removeBookInfo(getDB(), finalFile, true, true);
+								mHistory.removeBookInfo(
+										getDB(), finalFile, true, true);
 								BackgroundThread.instance().postGUI(() -> directoryUpdated(finalFile.parent), 700);
 							});
 						} else {
@@ -2230,8 +2254,8 @@ public class CoolReader extends BaseActivity {
 
 	public void askDeleteRecent(final FileInfo item) {
 		askConfirmation(R.string.win_title_confirm_history_record_delete, () -> waitForCRDBService(() -> {
-			Services.getHistory().removeBookInfo(getDB(), item, true, false);
-			directoryUpdated(Services.getScanner().createRecentRoot());
+			mHistory.removeBookInfo(getDB(), item, true, false);
+			directoryUpdated(mScanner.createRecentRoot());
 		}));
 	}
 
@@ -2240,7 +2264,7 @@ public class CoolReader extends BaseActivity {
 			if (item != null && item.isOPDSDir()) {
 				waitForCRDBService(() -> {
 					getDB().removeOPDSCatalog(item.id);
-					directoryUpdated(Services.getScanner().createOPDSRoot());
+					directoryUpdated(mScanner.createOPDSRoot());
 				});
 			}
 		});
@@ -2261,7 +2285,8 @@ public class CoolReader extends BaseActivity {
 			FileInfoOperationListener bookDeleteCallback = (fileInfo, errorStatus) -> {
 				if (0 == errorStatus && null != fileInfo.format) {
 					BackgroundThread.instance().executeGUI(() -> {
-						waitForCRDBService(() -> Services.getHistory().removeBookInfo(getDB(), fileInfo, true, true));
+						waitForCRDBService(() -> mHistory.removeBookInfo(
+								getDB(), fileInfo, true, true));
 					});
 				}
 			};
@@ -2304,7 +2329,7 @@ public class CoolReader extends BaseActivity {
 
 	public void createLogcatFile() {
 		final SimpleDateFormat format = new SimpleDateFormat("'cr3-'yyyy-MM-dd_HH_mm_ss'.log'", Locale.US);
-		FileInfo dir = Services.getScanner().getSharedDownloadDirectory();
+		FileInfo dir = mScanner.getSharedDownloadDirectory();
 		if (null == dir) {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 				log.d("logcat: no access to download directory, opening document tree...");
@@ -2347,7 +2372,8 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void editBookInfo(final FileInfo currDirectory, final FileInfo item) {
-		waitForCRDBService(() -> Services.getHistory().getOrCreateBookInfo(getDB(), item, bookInfo -> {
+		waitForCRDBService(() -> mHistory.getOrCreateBookInfo(
+				getDB(), item, bookInfo -> {
 			if (bookInfo == null)
 				bookInfo = new BookInfo(item);
 			BookInfoEditDialog dlg = new BookInfoEditDialog(CoolReader.this, currDirectory, bookInfo,
@@ -2364,7 +2390,7 @@ public class CoolReader extends BaseActivity {
 			opds.filename = "New Catalog";
 			opds.isListed = true;
 			opds.isScanned = true;
-			opds.parent = Services.getScanner().getOPDSRoot();
+			opds.parent = mScanner.getOPDSRoot();
 		}
 		OPDSCatalogEditDialog dlg = new OPDSCatalogEditDialog(CoolReader.this, opds,
 				() -> refreshOPDSRootDirectory(true));
@@ -2605,7 +2631,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showCurrentBook() {
-		BookInfo bi = Services.getHistory().getLastBook();
+		BookInfo bi = mHistory.getLastBook();
 		if (bi != null)
 			loadDocument(bi.getFileInfo(), false);
 	}

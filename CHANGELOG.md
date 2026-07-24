@@ -48,6 +48,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   host, and stale Activity shutdown can no longer tear down a newer generation.
 - ReaderView receives scanner, history, document cache and a per-generation
   lifecycle token explicitly instead of consulting the static service locator.
+- CoolReader captures one explicit service generation during creation and no
+  longer performs ad-hoc global dependency lookups during user flows.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

@@ -146,6 +146,20 @@ def main() -> None:
         if marker not in cool_reader_text:
             violations.append(
                 f"{relative(COOL_READER)} omits marker: {marker}")
+    allowed_composition_reads = {
+        "mEngine = Services.getEngine();",
+        "mScanner = Services.getScanner();",
+        "mHistory = Services.getHistory();",
+        "mCoverpageManager = Services.getCoverpageManager();",
+        "mDocumentCache = Services.getDocumentCache();",
+        "mServiceLifecycle = Services.getLifecycle();",
+    }
+    for line_number, line in enumerate(
+            cool_reader_text.splitlines(), start=1):
+        if "Services.get" in line and line.strip() not in allowed_composition_reads:
+            violations.append(
+                f"{relative(COOL_READER)}:{line_number}: reads the static "
+                "service locator outside the composition root")
 
     command = "python3 tools/verify_android_activity_results.py"
     for workflow in (
