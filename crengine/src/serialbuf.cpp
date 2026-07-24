@@ -287,9 +287,10 @@ SerialBuf & SerialBuf::operator >> ( lString32 & s )
 // read methods
 bool SerialBuf::checkMagic( const char * s )
 {
-    if ( _error )
+    if ( _error ) {
         return false;
-	while ( *s ) {
+    }
+    while ( *s ) {
 		if ( check(1) )
 			return false;
         if ( _buf[ _pos++ ] != *s++ ) {

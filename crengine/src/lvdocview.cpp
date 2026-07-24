@@ -4737,9 +4737,10 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
 						bool nameIsOk = true;
                         if ( s.endsWith(".htm") || s.endsWith(".html") ) {
 							lString32 nm = LVExtractFilenameWithoutExtension( s );
-                            if ( nm == "index" || nm == "default" )
-							defHtml = name;
-							htmCount++;
+                            if ( nm == "index" || nm == "default" ) {
+                                defHtml = name;
+                            }
+								htmCount++;
                         } else if ( s.endsWith(".fb2") ) {
 							fb2Count++;
                         } else if ( s.endsWith(".rtf") ) {
@@ -5732,8 +5733,9 @@ bool LVDocView::moveByChapter(int delta) {
 	int prevPage = -1;
 	int nextPage = -1;
     int vcp = getVisiblePageCount();
-    if (vcp < 1 || vcp > 2)
+    if (vcp < 1 || vcp > 2) {
         vcp = 1;
+    }
 	for (int i = 0; i < items.length(); i++) {
 		LVTocItem * item = items[i];
 		int p = item->getPage();
@@ -7467,4 +7469,3 @@ void LVDrawBookCover(LVDrawBuf & buf, LVImageSourceRef image, bool respectAspect
         CRLog::error("Cannot get font for coverpage");
     }
 }
-

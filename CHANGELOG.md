@@ -35,6 +35,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   selection and reliable checksum-pinned third-party downloads.
 - Explicit glyph-format handling and named packed ZIP headers, with the
   corresponding Clang diagnostics promoted to first-party build errors.
+- Deterministic member/aggregate initialization and unambiguous parser/skin
+  control flow, with misleading indentation promoted to a blocking first-party
+  Clang diagnostic.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

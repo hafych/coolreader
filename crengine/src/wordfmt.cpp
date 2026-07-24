@@ -104,24 +104,30 @@ static lString32 picasToPercent( const lChar32 * prop, int p, int minvalue, int 
 
 static lString32 picasToPx( const lChar32 * prop, int p, int minvalue, int maxvalue ) {
     int v = 600 * p / 5000;
-    if ( v>maxvalue )
+    if ( v>maxvalue ) {
         v = maxvalue;
-    if ( v<minvalue )
+    }
+    if ( v<minvalue ) {
         v = minvalue;
-	if ( v!=0 )
+    }
+    if ( v!=0 ) {
         return lString32(prop) << fmt::decimal(v) << "px; ";
-	return lString32::empty_str;
+    }
+    return lString32::empty_str;
 }
 
 static lString32 fontSizeToPercent( const lChar32 * prop, int p, int minvalue, int maxvalue ) {
     int v = 100 * p / 20;
-    if ( v>maxvalue )
+    if ( v>maxvalue ) {
         v = maxvalue;
-    if ( v<minvalue )
+    }
+    if ( v<minvalue ) {
         v = minvalue;
-	if ( v!=0 )
+    }
+    if ( v!=0 ) {
         return lString32(prop) << fmt::decimal(v) << "%; ";
-	return lString32::empty_str;
+    }
+    return lString32::empty_str;
 }
 
 static void setOptions() {
@@ -854,5 +860,4 @@ bool ImportWordDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
 
 #endif //ENABLE_ANTIWORD==1
-
 

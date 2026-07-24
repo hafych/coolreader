@@ -247,7 +247,7 @@ int LVZipArc::ReadContents() {
 
     lverror_t err;
     ZipLocalFileHdr ZipHd1;
-    ZipHd2 ZipHeader = { 0 };
+    ZipHd2 ZipHeader{};
     unsigned ZipHeader_size = 0x2E; //sizeof(ZipHd2); //0x34; //
     unsigned ZipHd1_size = 0x1E; //sizeof(ZipHd1); //sizeof(ZipHd1)
 

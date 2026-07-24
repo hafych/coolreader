@@ -535,10 +535,11 @@ void LVGrayDrawBuf::InvertRect(int x0, int y0, int x1, int y1)
         x1 = _clip.right;
     if (y1>_clip.bottom)
         y1 = _clip.bottom;
-    if (x0>=x1 || y0>=y1)
+    if (x0>=x1 || y0>=y1) {
         return;
+    }
 
-	if (_bpp==1) {
+    if (_bpp==1) {
 		; //TODO: implement for 1 bit
 	} else if (_bpp==2) {
                 lUInt8 * line = GetScanLine(y0) + (x0 >> 2);

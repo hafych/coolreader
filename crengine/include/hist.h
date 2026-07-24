@@ -218,9 +218,9 @@ public:
         , _author(v._author)
         , _series(v._series)
         , _size(v._size)
+        , _domVersion(v._domVersion)
         , _bookmarks(v._bookmarks)
         , _lastpos(v._lastpos)
-        , _domVersion(v._domVersion)
     {
     }
     ~CRFileHistRecord()

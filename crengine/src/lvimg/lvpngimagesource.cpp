@@ -141,8 +141,8 @@ bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
         if (bit_depth < 8)
             png_set_packing(png_ptr);
 
-        //if (color_type == PNG_COLOR_TYPE_RGB)
-            png_set_filler(png_ptr, 0, PNG_FILLER_AFTER);
+        // CRe always expects a filler byte after RGB data.
+        png_set_filler(png_ptr, 0, PNG_FILLER_AFTER);
 
         //if (color_type == PNG_COLOR_TYPE_RGB_ALPHA)
         //    png_set_swap_alpha(png_ptr);

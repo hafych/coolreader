@@ -370,9 +370,10 @@ void LVFreeTypeFontManager::SetAntialiasMode(font_antialiasing_t mode) {
             // TODO: test & fix this
             FT_Vector sub[3] = {{ -22, 0}, {11, 16}, {11, -16}};
             error = FT_Library_SetLcdGeometry(_library, sub);
-            if (FT_Err_Ok != error)
+            if (FT_Err_Ok != error) {
                 CRLog::debug("FT_Library_SetLcdGeometry() failed, error=%d", error);
-                break;
+            }
+            break;
             }
         case font_aa_lcd_v_pentile: {
             // TODO: test & fix this

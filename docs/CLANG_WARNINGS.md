@@ -9,7 +9,8 @@ CoolReader-owned targets:
 - C++: uninitialized values and deleting through a base without a virtual
   destructor;
 - C++: incomplete enum switches and anonymous non-C-compatible types used for
-  linkage.
+  linkage;
+- C++: misleading indentation.
 
 Enable the same gate locally with:
 

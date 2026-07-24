@@ -59,9 +59,10 @@ static const char id_map_item_magic[] = "IDMI";
 /// serialize to byte array
 void LDOMNameIdMapItem::serialize( SerialBuf & buf )
 {
-    if ( buf.error() )
+    if ( buf.error() ) {
         return;
-	buf.putMagic( id_map_item_magic );
+    }
+    buf.putMagic( id_map_item_magic );
 	buf << id;
 	buf << value;
 	if ( data ) {
@@ -78,10 +79,12 @@ void LDOMNameIdMapItem::serialize( SerialBuf & buf )
 /// deserialize from byte array
 LDOMNameIdMapItem * LDOMNameIdMapItem::deserialize( SerialBuf & buf )
 {
-    if ( buf.error() )
+    if ( buf.error() ) {
         return NULL;
-	if ( !buf.checkMagic( id_map_item_magic ) )
+    }
+    if ( !buf.checkMagic( id_map_item_magic ) ) {
         return NULL;
+    }
 	lUInt16 id;
 	lString32 value;
 	lUInt8 flgData;

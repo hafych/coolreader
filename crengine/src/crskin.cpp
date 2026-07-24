@@ -544,10 +544,12 @@ lString32 CRSkinContainer::readString( const lChar32 * path, const lChar32 * att
 lString32 CRSkinContainer::readString( const lChar32 * path, const lChar32 * attrname, const lString32 & defValue, bool * res )
 {
     lString32 value = readString( path, attrname );
-    if ( value.empty() )
+    if ( value.empty() ) {
         return defValue;
-	if ( res )
-		*res = true;
+    }
+    if ( res ) {
+        *res = true;
+    }
     return value;
 }
 
@@ -560,10 +562,12 @@ lUInt32 CRSkinContainer::readColor( const lChar32 * path, const lChar32 * attrna
     css_length_t cv;
     lString8 buf = UnicodeToUtf8(value);
     const char * bufptr = buf.modify();
-    if ( !parse_color_value( bufptr, cv ) )
+    if ( !parse_color_value( bufptr, cv ) ) {
         return defValue;
-	if ( res )
-		*res = true;
+    }
+    if ( res ) {
+        *res = true;
+    }
     return cv.value;
 }
 
@@ -611,14 +615,18 @@ lvRect CRSkinContainer::readRect( const lChar32 * path, const lChar32 * attrname
 bool CRSkinContainer::readBool( const lChar32 * path, const lChar32 * attrname, bool defValue, bool * res )
 {
     lString32 value = readString( path, attrname );
-    if (value.empty())
+    if (value.empty()) {
         return defValue;
-    if (value == "true" || value == "yes")
+    }
+    if (value == "true" || value == "yes") {
         return true;
-    if (value == "false" || value == "no")
+    }
+    if (value == "false" || value == "no") {
         return false;
-	if ( res )
-		*res = true;
+    }
+    if ( res ) {
+        *res = true;
+    }
     return defValue;
 }
 
@@ -1099,9 +1107,10 @@ LVImageSourceRef CRButtonSkin::getImage(int flags)
             btnImage = _normalimage;
     } else
         btnImage = _disabledimage;
-    if ( btnImage.isNull() )
+    if ( btnImage.isNull() ) {
         btnImage = _normalimage;
-	return btnImage;
+    }
+    return btnImage;
 }
 
 void CRScrollSkin::drawScroll( LVDrawBuf & buf, const lvRect & rect, bool vertical, int pos, int maxpos, int pagesize )
