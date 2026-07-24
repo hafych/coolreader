@@ -34,6 +34,8 @@
 #include "../include/lvdrawstatesaver.h"
 #include "../include/lvstreamutils.h"
 
+#include <mutex>
+
 // uncomment to trace skin XML access errors / not found elements
 //#define TRACE_SKIN_ERRORS
 
@@ -281,6 +283,7 @@ protected:
     LVCacheMap<lString32,CRMenuSkinRef> _menuCache;
     LVCacheMap<lString32,CRPageSkinRef> _pageCache;
     LVCacheMap<lString32,CRToolBarSkinRef> _toolbarCache;
+    std::mutex _imageCacheMutex;
     CRPageSkinListRef _pageSkinList;
 public:
     /// returns scroll skin by path or #id
@@ -301,11 +304,20 @@ public:
     virtual lString32 pathById( const lChar32 * id );
     /// gets image from container
     virtual LVImageSourceRef getImage( const lChar32 * filename );
+    virtual LVCacheStats getImageCacheStats() {
+        std::lock_guard<std::mutex> guard(_imageCacheMutex);
+        return _imageCache.getStats();
+    }
+    virtual void resetImageCacheStats() {
+        std::lock_guard<std::mutex> guard(_imageCacheMutex);
+        _imageCache.resetStats();
+    }
     /// gets doc pointer by asolute path
     virtual ldomXPointer getXPointer( const lString32 & xPointerStr ) { return _doc->createXPointer( xPointerStr ); }
     /// garbage collection
     virtual void gc()
     {
+        std::lock_guard<std::mutex> guard(_imageCacheMutex);
         _imageCache.clear();
     }
     /// constructor does nothing
@@ -454,6 +466,7 @@ static standard_image_item_t standard_images [] = {
 /// gets image from container
 LVImageSourceRef CRSkinImpl::getImage(  const lChar32 * filename  )
 {
+    std::lock_guard<std::mutex> guard(_imageCacheMutex);
     LVImageSourceRef res;
     lString32 fn( filename );
     if ( _imageCache.get( fn, res ) )

@@ -4,6 +4,7 @@
 #include "lvfntman.h"
 #include "lvgraydrawbuf.h"
 #include "lvrend.h"
+#include "crskin.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
 #include "cri18n.h"
@@ -652,6 +653,55 @@ static int testBoundedObservableGlyphCache() {
     return 0;
 }
 
+static int testBoundedObservableDecodedImageCache() {
+    LVCacheMap<int, int> cache(2);
+    int value = 0;
+    if (cache.get(9, value))
+        return fail("empty bounded cache unexpectedly returned an item");
+    cache.set(1, 10);
+    cache.set(2, 20);
+    if (!cache.get(1, value) || value != 10)
+        return fail("bounded cache did not return the first item");
+    cache.set(3, 30);
+    if (cache.get(2, value))
+        return fail("bounded cache did not evict its least-recently-used item");
+    if (!cache.get(3, value) || value != 30)
+        return fail("bounded cache did not retain the new item");
+    LVCacheStats stats = cache.getStats();
+    if (stats.capacityItems != 2 || stats.itemCount != 2
+            || stats.hits != 2 || stats.misses != 2
+            || stats.evictions != 1)
+        return fail("bounded cache counters are incorrect");
+
+    CRSkinRef skin = LVOpenSimpleSkin(
+            lString8("<?xml version=\"1.0\"?><CR3Skin/>"));
+    if (skin.isNull())
+        return fail("decoded image cache skin fixture did not open");
+    skin->resetImageCacheStats();
+    LVImageSourceRef first =
+            skin->getImage(U"std_menu_item_background.xpm");
+    if (first.isNull())
+        return fail("decoded image cache fixture did not decode");
+    if (skin->getImage(U"std_menu_item_background.xpm").isNull())
+        return fail("decoded image cache did not return a cached image");
+    if (!skin->getImage(U"missing-image.png").isNull())
+        return fail("decoded image cache found a missing image");
+    stats = skin->getImageCacheStats();
+    if (stats.capacityItems != 8 || stats.itemCount != 2
+            || stats.hits != 1 || stats.misses != 2
+            || stats.evictions != 0)
+        return fail("decoded image cache counters are incorrect");
+    skin->gc();
+    stats = skin->getImageCacheStats();
+    if (stats.itemCount != 0 || stats.hits != 1 || stats.misses != 2)
+        return fail("decoded image cache clear changed its counters");
+    skin->resetImageCacheStats();
+    stats = skin->getImageCacheStats();
+    if (stats.hits != 0 || stats.misses != 0 || stats.evictions != 0)
+        return fail("decoded image cache counters did not reset");
+    return 0;
+}
+
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
 static int testBoundedObservablePageImageCache() {
     LVDocViewImageCache cache;
@@ -1273,6 +1323,8 @@ int main() {
     if (testConcurrentFontRenderSettings() != 0)
         return 1;
     if (testBoundedObservableGlyphCache() != 0)
+        return 1;
+    if (testBoundedObservableDecodedImageCache() != 0)
         return 1;
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
     if (testBoundedObservablePageImageCache() != 0)

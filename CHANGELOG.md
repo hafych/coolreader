@@ -161,6 +161,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   observable hit, miss and eviction counters.
 - The two-entry desktop page-image cache now exposes byte/item counters and no
   longer retains its mutex after cache misses or availability probes.
+- The decoded skin-image LRU now reports hit/miss/eviction counters and
+  synchronizes lookup, insertion, clearing, and telemetry access.
 - The parsed-document cache now enforces its configured capacity from finalized
   file sizes, reports hit/miss/eviction counters, and correctly clears its files.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable

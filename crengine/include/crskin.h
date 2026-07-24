@@ -514,6 +514,10 @@ public:
     virtual LVImageSourceRef getImage( const lChar32 * filename ) = 0;
     /// gets image from container
     virtual LVImageSourceRef getImage( const lString32 & filename ) { return getImage( filename.c_str() ); }
+    /// return decoded image cache bounds and counters
+    virtual LVCacheStats getImageCacheStats() { return LVCacheStats(); }
+    /// reset decoded image cache counters without clearing images
+    virtual void resetImageCacheStats() { }
     /// gets doc pointer by path
     virtual ldomXPointer getXPointer( const lString32 & xPointerStr ) = 0;
     /// gets doc pointer by path

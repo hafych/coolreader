@@ -113,7 +113,7 @@ DRM или ограничений доступа, подбор/получени�
   явно ограничить его синхронизацией и временем жизни процесса.
 - [-] Добавить differential/regression tests для pagination, bookmarks, selection,
   search и восстановления позиции.
-- [ ] Ввести ограниченный cache manager с наблюдаемыми hit/miss/eviction counters
+- [x] Ввести ограниченный cache manager с наблюдаемыми hit/miss/eviction counters
   для glyph, image, cover и parsed-document caches.
 - [ ] Проверить корректность Unicode: surrogate pairs, combining marks, bidi,
   grapheme boundaries, CJK и mixed scripts.

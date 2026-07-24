@@ -34,6 +34,7 @@
 #include "lvmemman.h"
 #include "lvref.h"
 #include "lvarray.h"
+#include "lvcache.h"
 
 /*
     Object cache
@@ -460,6 +461,9 @@ private:
     int orig_size;
     int numitems;
     int lastAccess;
+    lUInt64 hits;
+    lUInt64 misses;
+    lUInt64 evictions;
     void checkOverflow( int oldestAccessTime )
     {
         int i;
@@ -484,7 +488,8 @@ public:
         return numitems;
     }
     LVCacheMap( int maxSize )
-    : size(maxSize), orig_size(maxSize), numitems(0), lastAccess(1)
+    : size(maxSize), orig_size(maxSize), numitems(0), lastAccess(1),
+      hits(0), misses(0), evictions(0)
     {
         buf = new Pair[ size ];
         clear();
@@ -517,11 +522,13 @@ public:
             if ( buf[i].key == key ) {
                 data = buf[i].data;
                 buf[i].lastAccess = ++lastAccess;
+                hits++;
                 if ( lastAccess>1000000000 )
                     checkOverflow(-1);
                 return true;
             }
         }
+        misses++;
         return false;
     }
     bool remove( keyT key )
@@ -539,6 +546,8 @@ public:
     }
     void set( keyT key, dataT data )
     {
+        if ( size <= 0 )
+            return;
         int oldestAccessTime = -1;
         int oldestIndex = 0;
         for ( int i=0; i<size; i++ ) {
@@ -556,10 +565,23 @@ public:
         checkOverflow(oldestAccessTime);
         if ( buf[oldestIndex].key==keyT() )
             numitems++;
+        else
+            evictions++;
         buf[oldestIndex].key = key;
         buf[oldestIndex].data = data;
         buf[oldestIndex].lastAccess = ++lastAccess;
         return;
+    }
+    LVCacheStats getStats()
+    {
+        return LVCacheStats(0, 0, hits, misses, evictions,
+                size, numitems);
+    }
+    void resetStats()
+    {
+        hits = 0;
+        misses = 0;
+        evictions = 0;
     }
     ~LVCacheMap()
     {

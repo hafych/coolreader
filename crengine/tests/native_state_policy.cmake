@@ -235,6 +235,16 @@ require_source_text(
   "page image cache probes must use scoped locking"
 )
 require_source_text(
+  "${SKIN_SOURCE}"
+  "_imageCache.getStats()"
+  "decoded image cache must expose bounded cache counters"
+)
+require_source_text(
+  "${SKIN_SOURCE}"
+  "std::lock_guard<std::mutex> guard(_imageCacheMutex);"
+  "decoded image cache access must be synchronized"
+)
+require_source_text(
   "${DOM_SOURCE}"
   "static std::shared_ptr<ldomDocCacheImpl> _cacheInstance"
   "document cache manager lifetime must use RAII ownership"
