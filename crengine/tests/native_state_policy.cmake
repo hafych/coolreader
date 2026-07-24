@@ -106,6 +106,16 @@ require_source_text(
   "static std::unique_ptr<HyphDataLoader> _dataLoader"
   "hyphenation data loader must have explicit ownership"
 )
+require_source_text(
+  "${HYPH_SOURCE}"
+  "std::vector<std::unique_ptr<HyphMethod>> _owned"
+  "loaded hyphenation methods must have explicit ownership"
+)
+require_source_text(
+  "${HYPH_SOURCE}"
+  "std::lock_guard<std::mutex> guard(g_hyph_method_cache_mutex)"
+  "loaded hyphenation method cache must be synchronized"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -176,4 +186,9 @@ forbid_source_text(
   "${HYPH_SOURCE}"
   "delete _dataLoader"
   "hyphenation data loader must use RAII teardown"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "delete pair->value"
+  "loaded hyphenation methods must use RAII teardown"
 )

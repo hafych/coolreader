@@ -142,6 +142,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   concurrent rendering.
 - Hyphenation dictionary-list and loader lifetimes now use explicit RAII
   ownership with regression coverage for replacement and teardown.
+- Concurrent requests for a hyphenation dictionary now share one synchronized,
+  RAII-owned method-cache entry.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

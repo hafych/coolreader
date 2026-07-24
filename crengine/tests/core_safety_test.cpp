@@ -43,6 +43,31 @@ public:
     }
 };
 
+class FixtureHyphDataLoader : public HyphDataLoader {
+private:
+    std::atomic<int> &_loads;
+
+public:
+    explicit FixtureHyphDataLoader(std::atomic<int> &loads)
+        : _loads(loads) {
+    }
+
+    LVStreamRef loadData(lString32) override {
+        static const char pattern[] =
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                "<HyphenationDescription title=\"Test\" lang=\"zz\" "
+                "lefthyphenmin=\"2\" righthyphenmin=\"2\">"
+                "<pattern>a1b</pattern>"
+                "<pattern>b1c</pattern>"
+                "</HyphenationDescription>";
+        _loads.fetch_add(1, std::memory_order_relaxed);
+        return LVCreateMemoryStream(
+                const_cast<char *>(pattern),
+                static_cast<int>(sizeof(pattern) - 1),
+                true, LVOM_READ);
+    }
+};
+
 static int testMutex() {
     LVMutex mutex;
     if (!mutex.trylock())
@@ -236,6 +261,58 @@ static int testHyphenationRegistryOwnership() {
         return fail("hyphenation dictionary registry survived uninit");
     if (HyphMan::activateDictionary(HYPH_DICT_ID_ALGORITHM))
         return fail("uninitialized hyphenation registry activated a method");
+    return 0;
+}
+
+static int testConcurrentHyphenationMethodCache() {
+    if (!HyphMan::initDictionaries(lString32::empty_str, true))
+        return fail("hyphenation cache fixture registry did not initialize");
+
+    const lString32 dictionaryId(U"test-cache.pattern");
+    HyphDictionary *dictionary = new HyphDictionary(
+            HDT_DICT_TEX, U"Test cache", dictionaryId, U"zz",
+            dictionaryId);
+    if (!HyphMan::addDictionaryItem(dictionary)) {
+        delete dictionary;
+        HyphMan::uninit();
+        return fail("hyphenation cache fixture dictionary was rejected");
+    }
+
+    std::atomic<int> loads(0);
+    HyphMan::setDataLoader(new FixtureHyphDataLoader(loads));
+    static const int workerCount = 8;
+    std::atomic<int> ready(0);
+    std::atomic<bool> start(false);
+    std::vector<HyphMethod *> methods(workerCount, NULL);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, &ready, &start,
+                              &methods, &dictionaryId]() {
+            ready.fetch_add(1, std::memory_order_release);
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            methods[workerIndex] =
+                    HyphMan::getHyphMethodForDictionary(dictionaryId);
+        });
+    }
+    while (ready.load(std::memory_order_acquire) < workerCount)
+        std::this_thread::yield();
+    start.store(true, std::memory_order_release);
+    for (std::thread &worker : workers)
+        worker.join();
+
+    HyphMethod *first = methods[0];
+    bool valid = first != NULL && first->getPatternsCount() == 2;
+    for (int i = 1; i < workerCount; i++)
+        valid = valid && methods[i] == first;
+    const int loadCount = loads.load(std::memory_order_relaxed);
+    HyphMan::uninit();
+    if (!valid)
+        return fail("hyphenation method cache returned inconsistent methods");
+    if (loadCount != 1)
+        return fail("hyphenation method cache loaded one dictionary repeatedly");
     return 0;
 }
 
@@ -796,6 +873,8 @@ int main() {
     if (testConcurrentHyphenationSettings() != 0)
         return 1;
     if (testHyphenationRegistryOwnership() != 0)
+        return 1;
+    if (testConcurrentHyphenationMethodCache() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

@@ -40,6 +40,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <mutex>
+#include <utility>
+#include <vector>
 #include "../include/lvxmlparsercallback.h"
 #include "../include/lvxmlparser.h"
 
@@ -86,13 +89,46 @@ const static struct lang_tag_alias s_langTag_aliases[] = {
     { NULL, NULL }
 };
 
+class HyphMethodCache {
+private:
+    LVHashTable<lString32, HyphMethod*> _index;
+    std::vector<std::unique_ptr<HyphMethod>> _owned;
+
+public:
+    HyphMethodCache() : _index(16) {
+    }
+
+    bool get(const lString32 &id, HyphMethod *&method) const {
+        return _index.get(id, method);
+    }
+
+    HyphMethod *put(
+            const lString32 &id,
+            std::unique_ptr<HyphMethod> method) {
+        HyphMethod *existing = NULL;
+        if (_index.get(id, existing))
+            return existing;
+        HyphMethod *raw = method.get();
+        _owned.push_back(std::move(method));
+        _index.set(id, raw);
+        return raw;
+    }
+
+    void clear() {
+        _index.clear();
+        _owned.clear();
+    }
+};
+
+static std::mutex g_hyph_method_cache_mutex;
+
 std::atomic<int> HyphMan::_OverriddenLeftHyphenMin(
         HYPH_DEFAULT_HYPHEN_MIN);
 std::atomic<int> HyphMan::_OverriddenRightHyphenMin(
         HYPH_DEFAULT_HYPHEN_MIN);
 std::atomic<int> HyphMan::_TrustSoftHyphens(
         HYPH_DEFAULT_TRUST_SOFT_HYPHENS);
-LVHashTable<lString32, HyphMethod*> HyphMan::_loaded_hyph_methods(16);
+HyphMethodCache HyphMan::_loaded_hyph_methods;
 std::unique_ptr<HyphDataLoader> HyphMan::_dataLoader;
 
 
@@ -203,15 +239,12 @@ void HyphMan::uninit()
 {
     // Avoid existing frontend code to have to call it:
     TextLangMan::uninit();
-    // Clean up _loaded_hyph_methods
-    LVHashTable<lString32, HyphMethod*>::iterator it = _loaded_hyph_methods.forwardIterator();
-    LVHashTable<lString32, HyphMethod*>::pair* pair;
-    while ((pair = it.next())) {
-        delete pair->value;
+    {
+        std::lock_guard<std::mutex> guard(g_hyph_method_cache_mutex);
+        _loaded_hyph_methods.clear();
+        _dictList.reset();
+        _dataLoader.reset();
     }
-    _loaded_hyph_methods.clear();
-    _dictList.reset();
-    _dataLoader.reset();
     /* Obsolete:
 	_selectedDictionary = NULL;
     if ( HyphMan::_method != &ALGO_HYPH && HyphMan::_method != &NO_HYPH && HyphMan::_method != &SOFTHYPHENS_HYPH )
@@ -248,6 +281,7 @@ bool HyphMan::addDictionaryItem(HyphDictionary* dict)
 }
 
 void HyphMan::setDataLoader(HyphDataLoader* loader) {
+    std::lock_guard<std::mutex> guard(g_hyph_method_cache_mutex);
     if (_dataLoader.get() != loader)
         _dataLoader.reset(loader);
 }
@@ -298,6 +332,7 @@ HyphDictionary * HyphMan::getSelectedDictionary() {
 }
 
 HyphMethod * HyphMan::getHyphMethodForDictionary( lString32 id ) {
+    std::lock_guard<std::mutex> guard(g_hyph_method_cache_mutex);
     if ( id.empty() || !_dataLoader)
         return &NO_HYPH;
     HyphDictionary * p = _dictList->find(id);
@@ -319,17 +354,15 @@ HyphMethod * HyphMan::getHyphMethodForDictionary( lString32 id ) {
         CRLog::error("Cannot open hyphenation dictionary %s", UnicodeToUtf8(id).c_str() );
         return &NO_HYPH;
     }
-    TexHyph * newmethod = new TexHyph(id);
+    std::unique_ptr<TexHyph> newmethod(new TexHyph(id));
     if ( !newmethod->load( stream ) ) {
         CRLog::error("Cannot open hyphenation dictionary %s", UnicodeToUtf8(id).c_str() );
-        delete newmethod;
         return &NO_HYPH;
     }
     // printf("CRE: loaded hyphenation dict %s\n", UnicodeToUtf8(id).c_str());
     if ( newmethod->largest_overflowed_word )
         CRLog::warn("%s: some hyphenation patterns were too long and have been ignored: increase MAX_PATTERN_SIZE from %d to %d\n", UnicodeToUtf8(id).c_str(), MAX_PATTERN_SIZE, newmethod->largest_overflowed_word);
-    _loaded_hyph_methods.set(id, newmethod);
-    return newmethod;
+    return _loaded_hyph_methods.put(id, std::move(newmethod));
 }
 
 HyphMethod* HyphMan::getHyphMethodForLang_impl(lString32 lang_tag) {

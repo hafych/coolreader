@@ -37,4 +37,5 @@ raw-pointer return transfers ownership to the caller.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
 transfer boundary, while `getDictList()` returns a non-owning pointer valid only
 between initialization and process-shutdown teardown. Loaded dictionary methods
-remain a separate manual-ownership migration group.
+are owned by a private vector of `std::unique_ptr`; the legacy hash table is now
+only a non-owning lookup index.

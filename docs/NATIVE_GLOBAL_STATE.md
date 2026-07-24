@@ -47,6 +47,10 @@ The hyphenation dictionary list and data loader now have explicit RAII
 ownership. Their initialization and teardown remain process lifecycle
 operations and must not race readers.
 
-Known follow-up groups include synchronization and ownership of the loaded
-hyphenation-method cache, plus font/cache singletons. Each group must be
-migrated separately with an impact check and focused regression tests.
+The loaded hyphenation-method cache owns values through `std::unique_ptr` and
+serializes lookup/load/publication. Concurrent requests for one dictionary are
+covered by a regression that requires one load and one shared method instance.
+
+Known follow-up groups include text-language configuration and font/cache
+singletons. Each group must be migrated separately with an impact check and
+focused regression tests.

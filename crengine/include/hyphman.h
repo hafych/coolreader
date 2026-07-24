@@ -133,6 +133,7 @@ public:
 class TexHyph;
 class AlgoHyph;
 class SoftHyphensHyph;
+class HyphMethodCache;
 
 class HyphDataLoader
 {
@@ -153,7 +154,7 @@ class HyphMan
     // static HyphMethod * _method;
     // static HyphDictionary * _selectedDictionary;
     static std::unique_ptr<HyphDictionaryList> _dictList; // available hyph dict files (+ none/algo/softhyphens)
-    static LVHashTable<lString32, HyphMethod*> _loaded_hyph_methods; // methods with loaded dictionaries
+    static HyphMethodCache _loaded_hyph_methods;
     static std::unique_ptr<HyphDataLoader> _dataLoader;
     static std::atomic<int> _OverriddenLeftHyphenMin;
     static std::atomic<int> _OverriddenRightHyphenMin;
