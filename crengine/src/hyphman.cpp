@@ -184,6 +184,7 @@ public:
     virtual bool hyphenate( const lChar32 * str, int len, lUInt16 * widths, lUInt8 * flags, lUInt16 hyphCharWidth, lUInt16 maxWidth, size_t flagSize )
     {
         CR_UNUSED6(str, len, widths, flags, hyphCharWidth, maxWidth);
+        CR_UNUSED(flagSize);
         return false;
     }
     virtual ~NoHyph() { }
@@ -542,13 +543,13 @@ public:
     }
     /// called on closing
     virtual void OnTagClose(const lChar32* nsname, const lChar32* tagname, bool self_closing_tag = false) {
-        CR_UNUSED2(nsname, tagname);
+        CR_UNUSED3(nsname, tagname, self_closing_tag);
         _descriptionTagProcessing = false;
         _insidePatternTag = false;
     }
     /// called on element attribute
     virtual void OnAttribute(const lChar32* nsname, const lChar32* attrname, const lChar32* attrvalue) {
-        //CR_UNUSED3(nsname, attrname, attrvalue);
+        CR_UNUSED(nsname);
         if (_descriptionTagProcessing) {
             if (!lStr_cmp(attrname, "title")) {
                 _title = lString32(attrvalue);
@@ -642,7 +643,6 @@ bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear)
 
     if (!container.isNull()) {
         int len = container->GetObjectCount();
-        int count = 0;
         CRLog::info("%d items found in hyph directory", len);
         for (int i = 0; i < len; i++) {
             const LVContainerItemInfo* item = container->GetObjectInfo(i);
@@ -685,7 +685,6 @@ bool HyphDictionaryList::open(lString32 hyphDirectory, bool clear)
                 continue;
             if (!langTag.empty() && !title.empty())
                 _list.add(new HyphDictionary(t, title, id, langTag, filename));
-            count++;
         }
         _list.sort(HyphDictionary_comparator);
         CRLog::info("%d dictionaries added to list", _list.length());
@@ -1298,15 +1297,18 @@ bool AlgoHyph::hyphenate( const lChar32 * str, int len, lUInt16 * widths, lUInt8
                                 if ( nw<maxWidth )
                                 {
                                     bool disabled = false;
-                                    const char * dblSequences[] = {
-                                        "sh", "th", "ph", "ch", NULL
+                                    static const lChar32 dblSequences[][2] = {
+                                        { 's', 'h' },
+                                        { 't', 'h' },
+                                        { 'p', 'h' },
+                                        { 'c', 'h' }
                                     };
                                     next = i+1;
                                     while ( (chprops[next] & CH_PROP_HYPHEN) && next<end-MIN_WORD_LEN_TO_HYPHEN) {
                                         // printf("next3++\n");
                                         next++;
                                     }
-                                    for (int k=0; dblSequences[k]; k++)
+                                    for (int k = 0; k < 4; k++)
                                         if (str[i]==dblSequences[k][0] && str[next]==dblSequences[k][1]) {
                                             disabled = true;
                                             break;

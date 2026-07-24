@@ -27,3 +27,8 @@ visible in CI. When a warning class has been fixed in first-party code, promote
 that class to `-Werror=<name>` in `USE_CLANG_WARNING_GATE`; do not silence it by
 adding a blanket suppression. Bundled third-party targets are outside this
 gate.
+
+Source-scoped promotion is allowed while a diagnostic still exists elsewhere.
+`hyphman.cpp` currently enforces `sign-compare` and
+`unused-but-set-variable`; widening either diagnostic to the full `crengine`
+target requires first clearing the remaining first-party occurrences.
