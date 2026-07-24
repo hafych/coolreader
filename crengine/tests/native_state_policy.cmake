@@ -18,6 +18,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvfntman.h" FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -222,6 +223,16 @@ require_source_text(
   "${GLYPH_CACHE_SOURCE}"
   "if (head != item)"
   "glyph cache hits must refresh least-recently-used order"
+)
+require_source_text(
+  "${DOC_VIEW_HEADER}"
+  "_mutex.unlock();"
+  "page image cache misses must release their mutex"
+)
+require_source_text(
+  "${DOC_VIEW_HEADER}"
+  "LVLock lock( _mutex );"
+  "page image cache probes must use scoped locking"
 )
 
 forbid_source_text(

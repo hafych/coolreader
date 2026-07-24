@@ -19,12 +19,16 @@ struct LVCacheStats {
     lUInt64 hits;
     lUInt64 misses;
     lUInt64 evictions;
+    int capacityItems;
+    int itemCount;
 
     LVCacheStats(int capacityBytes = 0, int sizeBytes = 0,
             lUInt64 hitCount = 0, lUInt64 missCount = 0,
-            lUInt64 evictionCount = 0)
+            lUInt64 evictionCount = 0, int itemCapacity = 0,
+            int currentItemCount = 0)
         : capacity(capacityBytes), size(sizeBytes), hits(hitCount),
-          misses(missCount), evictions(evictionCount) {
+          misses(missCount), evictions(evictionCount),
+          capacityItems(itemCapacity), itemCount(currentItemCount) {
     }
 };
 

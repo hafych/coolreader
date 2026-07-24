@@ -556,6 +556,9 @@ if(BUILD_TESTING AND UNIX)
     CR_USE_THREADS=1
     _LINUX=1
   )
+  target_link_libraries(thread_safety_test
+    crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}
+  )
   add_test(NAME thread_safety COMMAND thread_safety_test)
 
   add_executable(document_regression_test

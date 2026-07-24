@@ -2,6 +2,7 @@
 #include "lvthread.h"
 #include "hyphman.h"
 #include "lvfntman.h"
+#include "lvgraydrawbuf.h"
 #include "lvrend.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
@@ -651,6 +652,56 @@ static int testBoundedObservableGlyphCache() {
     return 0;
 }
 
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+static int testBoundedObservablePageImageCache() {
+    LVDocViewImageCache cache;
+    if (!cache.get(-1, 1).isNull())
+        return fail("empty page image cache unexpectedly returned an item");
+
+    LVRef<LVDrawBuf> first(new LVGrayDrawBuf(4, 4, 8));
+    LVRef<LVDrawBuf> second(new LVGrayDrawBuf(4, 4, 8));
+    LVRef<LVDrawBuf> third(new LVGrayDrawBuf(4, 4, 8));
+    LVRef<LVThread> noThread;
+    const int itemSize = first->GetRowSize() * first->GetHeight();
+    cache.set(-1, 1, first, noThread);
+    cache.set(-1, 2, second, noThread);
+
+    LVDocImageRef image = cache.get(-1, 1);
+    if (image.isNull() || image->getDrawBuf() != first.get())
+        return fail("page image cache did not return the first item");
+    image.Clear();
+    cache.set(-1, 3, third, noThread);
+
+    image = cache.get(-1, 1);
+    if (image.isNull() || image->getDrawBuf() != first.get())
+        return fail("recently used page image was evicted");
+    image.Clear();
+    if (!cache.get(-1, 2).isNull())
+        return fail("least recently used page image was not evicted");
+    image = cache.get(-1, 3);
+    if (image.isNull() || image->getDrawBuf() != third.get())
+        return fail("new page image was not cached");
+    image.Clear();
+
+    LVCacheStats stats = cache.getStats();
+    if (stats.capacityItems != 2 || stats.itemCount != 2
+            || stats.size != itemSize * 2)
+        return fail("page image cache bounds are incorrect");
+    if (stats.hits != 3 || stats.misses != 2 || stats.evictions != 1)
+        return fail("page image cache counters are incorrect");
+
+    cache.clear();
+    stats = cache.getStats();
+    if (stats.itemCount != 0 || stats.size != 0)
+        return fail("page image cache retained size after clear");
+    cache.resetStats();
+    stats = cache.getStats();
+    if (stats.hits != 0 || stats.misses != 0 || stats.evictions != 0)
+        return fail("page image cache counters did not reset");
+    return 0;
+}
+#endif
+
 static int testLogRedactor() {
     if (CRRedactLogMessage("Rendered 42 pages") != "Rendered 42 pages")
         return fail("safe native diagnostic was unexpectedly changed");
@@ -1223,6 +1274,10 @@ int main() {
         return 1;
     if (testBoundedObservableGlyphCache() != 0)
         return 1;
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+    if (testBoundedObservablePageImageCache() != 0)
+        return 1;
+#endif
     if (testLogRedactor() != 0)
         return 1;
     if (testOwnedDescriptor() != 0)

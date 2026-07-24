@@ -159,6 +159,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   exact size accounting when the final entry is removed.
 - The Android cover-byte cache now enforces hard byte and item limits with
   observable hit, miss and eviction counters.
+- The two-entry desktop page-image cache now exposes byte/item counters and no
+  longer retains its mutex after cache misses or availability probes.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
 - SQLite fixture matrices for every supported main and cover database migration,

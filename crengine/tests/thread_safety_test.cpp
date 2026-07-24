@@ -1,5 +1,6 @@
 #include "lvthread.h"
 #include "crrecursionguard.h"
+#include "lvdocview.h"
 
 #include <atomic>
 #include <cstdio>
@@ -108,10 +109,55 @@ static int testThreadLocalRecursionLimit() {
     return 0;
 }
 
+static int testPageImageCacheMissReleasesMutex() {
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+    class LockProbeThread : public LVThread {
+    private:
+        LVMutex &_mutex;
+        std::atomic<bool> &_acquired;
+
+    protected:
+        void run() override {
+            bool acquired = _mutex.trylock();
+            _acquired.store(acquired, std::memory_order_release);
+            if (acquired)
+                _mutex.unlock();
+        }
+
+    public:
+        LockProbeThread(LVMutex &mutex, std::atomic<bool> &acquired)
+            : _mutex(mutex), _acquired(acquired) {
+        }
+    };
+
+    LVDocViewImageCache cache;
+    if (!cache.get(-1, 1).isNull())
+        return fail("empty page image cache unexpectedly returned an item");
+    std::atomic<bool> acquiredAfterGet(false);
+    LockProbeThread afterGet(cache.getMutex(), acquiredAfterGet);
+    afterGet.start();
+    afterGet.join();
+    if (!acquiredAfterGet.load(std::memory_order_acquire))
+        return fail("page image cache get miss retained its mutex");
+
+    if (cache.has(-1, 1))
+        return fail("empty page image cache unexpectedly reported an item");
+    std::atomic<bool> acquiredAfterHas(false);
+    LockProbeThread afterHas(cache.getMutex(), acquiredAfterHas);
+    afterHas.start();
+    afterHas.join();
+    if (!acquiredAfterHas.load(std::memory_order_acquire))
+        return fail("page image cache has lookup retained its mutex");
+#endif
+    return 0;
+}
+
 int main() {
     if (testThreadCompletion() != 0)
         return 1;
     if (testMutexAcrossThreads() != 0)
         return 1;
-    return testThreadLocalRecursionLimit();
+    if (testThreadLocalRecursionLimit() != 0)
+        return 1;
+    return testPageImageCacheMissReleasesMutex();
 }

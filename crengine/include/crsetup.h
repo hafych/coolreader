@@ -94,11 +94,15 @@
 #endif
 
 #ifdef ANDROID
+#ifndef CR_USE_THREADS
 #define CR_USE_THREADS                       1
+#endif
 #define USE_ATOMIC_REFCOUNT
 #define USE_LIMITED_FONT_SIZES_SET           0
 #else
+#ifndef CR_USE_THREADS
 #define CR_USE_THREADS                       0
+#endif
 #endif // ANDROID
 
 #define USE_LIBJPEG                          1

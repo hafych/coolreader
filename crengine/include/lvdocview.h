@@ -50,6 +50,7 @@
 #include "lvthread.h"
 #include "lvdocviewcmd.h"
 #include "lvdocviewprops.h"
+#include "lvcache.h"
 
 
 const lChar32 * getDocFormatName( doc_format_t fmt );
@@ -122,11 +123,28 @@ class LVDocViewImageCache
                 LVRef<LVThread> _thread;
                 int _offset;
                 int _page;
+                int _size;
                 bool _ready;
                 bool _valid;
         };
         Item _items[2];
         int _last;
+        int _size;
+        int _itemCount;
+        lUInt64 _hits;
+        lUInt64 _misses;
+        lUInt64 _evictions;
+
+        static int getBufferSize(const LVRef<LVDrawBuf> &drawbuf)
+        {
+            if (drawbuf.isNull())
+                return 0;
+            lInt64 size = (lInt64)drawbuf->GetRowSize()
+                    * (lInt64)drawbuf->GetHeight();
+            if (size > 0x7FFFFFFF)
+                return 0x7FFFFFFF;
+            return size > 0 ? (int)size : 0;
+        }
     public:
         /// return mutex
         LVMutex & getMutex() { return _mutex; }
@@ -135,11 +153,19 @@ class LVDocViewImageCache
         {
             LVLock lock( _mutex );
             _last = (_last + 1) & 1;
-            _items[_last]._ready = false;
+            if (_items[_last]._valid) {
+                _size -= _items[_last]._size;
+                _evictions++;
+            } else {
+                _itemCount++;
+            }
+            _items[_last]._ready = thread.isNull();
             _items[_last]._thread = thread;
             _items[_last]._drawbuf = drawbuf;
             _items[_last]._offset = offset;
             _items[_last]._page = page;
+            _items[_last]._size = getBufferSize(drawbuf);
+            _size += _items[_last]._size;
             _items[_last]._valid = true;
         }
         /// return page image, wait until ready
@@ -150,7 +176,8 @@ class LVDocViewImageCache
                      ( (_items[i]._offset == offset && offset!=-1)
                       || (_items[i]._page==page && page!=-1)) ) {
                     if ( !_items[i]._ready ) {
-                        _items[i]._thread->join();
+                        if (!_items[i]._thread.isNull())
+                            _items[i]._thread->join();
                         _items[i]._thread = NULL;
                         _items[i]._ready = true;
                     }
@@ -165,19 +192,25 @@ class LVDocViewImageCache
         {
             _mutex.lock();
             LVRef<LVDrawBuf> buf = getWithoutLock( offset, page );
-            if ( !buf.isNull() )
-                return LVDocImageRef( new LVDocImageHolder(getWithoutLock( offset, page ), _mutex) );
+            if ( !buf.isNull() ) {
+                _hits++;
+                return LVDocImageRef( new LVDocImageHolder(buf, _mutex) );
+            }
+            _misses++;
+            _mutex.unlock();
             return LVDocImageRef( NULL );
         }
         bool has( int offset, int page )
         {
-            _mutex.lock();
+            LVLock lock( _mutex );
             for ( int i=0; i<2; i++ ) {
                 if ( _items[i]._valid && ( (_items[i]._offset == offset && offset!=-1)
                       || (_items[i]._page==page && page!=-1)) ) {
+                    _hits++;
                     return true;
                 }
             }
+            _misses++;
             return false;
         }
         void clear()
@@ -192,13 +225,32 @@ class LVDocViewImageCache
                 _items[i]._drawbuf.Clear();
                 _items[i]._offset = -1;
                 _items[i]._page = -1;
+                _items[i]._size = 0;
             }
+            _size = 0;
+            _itemCount = 0;
+        }
+        LVCacheStats getStats()
+        {
+            LVLock lock( _mutex );
+            return LVCacheStats(0, _size, _hits, _misses, _evictions,
+                    2, _itemCount);
+        }
+        void resetStats()
+        {
+            LVLock lock( _mutex );
+            _hits = 0;
+            _misses = 0;
+            _evictions = 0;
         }
         LVDocViewImageCache()
-        : _last(0)
+        : _last(0), _size(0), _itemCount(0), _hits(0), _misses(0),
+          _evictions(0)
         {
-            for ( int i=0; i<2; i++ )
+            for ( int i=0; i<2; i++ ) {
                 _items[i]._valid = false;
+                _items[i]._size = 0;
+            }
         }
         ~LVDocViewImageCache()
         {
@@ -628,6 +680,18 @@ public:
     void requestReload();
     /// invalidate image cache, request redraw
     void clearImageCache();
+    LVCacheStats getPageImageCacheStats() {
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+        return m_imageCache.getStats();
+#else
+        return LVCacheStats();
+#endif
+    }
+    void resetPageImageCacheStats() {
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+        m_imageCache.resetStats();
+#endif
+    }
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
     /// get page image (0=current, -1=prev, 1=next)
     LVDocImageRef getPageImage( int delta );
