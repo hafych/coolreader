@@ -558,6 +558,14 @@ if(BUILD_TESTING AND UNIX)
   )
   add_test(NAME thread_safety COMMAND thread_safety_test)
 
+  add_executable(document_regression_test
+    ${CMAKE_SOURCE_DIR}/crengine/tests/document_regression_test.cpp
+  )
+  target_link_libraries(document_regression_test
+    crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}
+  )
+  add_test(NAME document_regression COMMAND document_regression_test)
+
   add_test(NAME native_state_policy
     COMMAND ${CMAKE_COMMAND}
       "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}"
@@ -570,6 +578,7 @@ if(USE_CLANG_WARNING_GATE)
     crengine
     core_safety_test
     thread_safety_test
+    document_regression_test
     fb2props
     fb2propstest
     cr3

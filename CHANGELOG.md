@@ -130,6 +130,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   concurrent renderers from sharing one process-wide inheritance depth budget.
 - Formatter, render-measurement and bitmap glyph scratch buffers are isolated
   per thread, and libunibreak initialization is synchronized exactly once.
+- Deterministic native document regressions cover forward/reverse search,
+  selection boundaries and serialized reading-position restoration.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

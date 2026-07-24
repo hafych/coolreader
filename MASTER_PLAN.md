@@ -111,7 +111,7 @@ DRM или ограничений доступа, подбор/получени�
   опасные raw pointers/ручные пары acquire-release на RAII.
 - [-] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
-- [ ] Добавить differential/regression tests для pagination, bookmarks, selection,
+- [-] Добавить differential/regression tests для pagination, bookmarks, selection,
   search и восстановления позиции.
 - [ ] Ввести ограниченный cache manager с наблюдаемыми hit/miss/eviction counters
   для glyph, image, cover и parsed-document caches.
