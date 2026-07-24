@@ -6,8 +6,8 @@ validated without changing unrelated rendering behavior.
 | Cache | Bound | Counters | Status |
 | --- | --- | --- | --- |
 | Glyph bitmap | Compile-time byte capacity (`GLYPH_CACHE_SIZE`) with LRU eviction | hits, misses, evictions, current bytes, capacity | implemented |
-| Decoded image | pending | pending | follow-up |
-| Cover | pending | pending | follow-up |
+| Decoded/page image | pending | pending | follow-up |
+| Cover bytes | 512 KiB and 256 entries | hits, misses, evictions, current bytes/items, capacities | implemented |
 | Parsed document | pending | pending | follow-up |
 
 Glyph counters are aggregated by the process-wide font manager and exposed
@@ -19,3 +19,7 @@ The glyph cache admits at most the configured byte capacity for normal glyphs.
 An individual glyph larger than the configured capacity is retained as the sole
 entry so callers keep the existing ownership contract; the reported byte size
 makes this exceptional state visible.
+
+The Android cover-byte cache uses strict byte and entry bounds. Null and
+oversized entries are not retained. Explicit removal and clearing update size
+accounting but do not count as capacity evictions.

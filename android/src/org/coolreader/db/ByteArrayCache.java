@@ -24,47 +24,100 @@ import java.util.ArrayList;
 
 public class ByteArrayCache {
 
+	private static final int DEFAULT_MAX_ITEM_COUNT = 256;
+
 	public ByteArrayCache(int maxSize) {
-		this.maxSize = maxSize;
+		this(maxSize, DEFAULT_MAX_ITEM_COUNT);
 	}
-	
-	public void put(String id, byte[] data) {
+
+	ByteArrayCache(int maxSize, int maxItemCount) {
+		if (maxSize < 0 || maxItemCount < 1)
+			throw new IllegalArgumentException("Invalid cache bounds");
+		this.maxSize = maxSize;
+		this.maxItemCount = maxItemCount;
+	}
+
+	public synchronized void put(String id, byte[] data) {
+		if (data == null) {
+			remove(id);
+			return;
+		}
 		int index = find(id);
+		if (data.length > maxSize) {
+			if (index >= 0)
+				removeAt(index, true);
+			return;
+		}
 		if (index >= 0) {
 			ByteArrayItem item = list.get(index);
-			if (item.data != null)
-				currentSize -= item.data.length;
+			currentSize -= item.data.length;
 			item.data = data;
-			if (item.data != null)
-				currentSize += item.data.length;
+			currentSize += item.data.length;
 			moveOnTop(index);
 		} else {
 			ByteArrayItem item = new ByteArrayItem(id, data);
 			list.add(item);
-			if (item.data != null)
-				currentSize += item.data.length;
+			currentSize += item.data.length;
 		}
 		checkSize();
 	}
-	
-	public byte[] get(String id) {
+
+	public synchronized byte[] get(String id) {
 		int index = find(id);
-		if (index < 0)
+		if (index < 0) {
+			misses++;
 			return null;
+		}
+		hits++;
 		ByteArrayItem item = list.get(index);
 		moveOnTop(index);
 		return item.data;
 	}
-	
-	public void remove(String id) {
+
+	public synchronized void remove(String id) {
 		int index = find(id);
 		if (index < 0)
 			return;
-		list.remove(index);
+		removeAt(index, false);
 	}
-	
-	public void clear() {
+
+	public synchronized void clear() {
+		for (ByteArrayItem item : list)
+			item.data = null;
 		list.clear();
+		currentSize = 0;
+	}
+
+	public synchronized Stats getStats() {
+		return new Stats(maxSize, maxItemCount, currentSize, list.size(),
+				hits, misses, evictions);
+	}
+
+	public synchronized void resetStats() {
+		hits = 0;
+		misses = 0;
+		evictions = 0;
+	}
+
+	public static final class Stats {
+		public final int capacityBytes;
+		public final int capacityItems;
+		public final int sizeBytes;
+		public final int itemCount;
+		public final long hits;
+		public final long misses;
+		public final long evictions;
+
+		private Stats(int capacityBytes, int capacityItems, int sizeBytes,
+				int itemCount, long hits, long misses, long evictions) {
+			this.capacityBytes = capacityBytes;
+			this.capacityItems = capacityItems;
+			this.sizeBytes = sizeBytes;
+			this.itemCount = itemCount;
+			this.hits = hits;
+			this.misses = misses;
+			this.evictions = evictions;
+		}
 	}
 
 	private static class ByteArrayItem {
@@ -76,9 +129,14 @@ public class ByteArrayCache {
 		}
 	}
 	
-	private int maxSize;
+	private final int maxSize;
+	private final int maxItemCount;
 	private int currentSize;
-	private ArrayList<ByteArrayItem> list = new ArrayList<ByteArrayItem>();
+	private long hits;
+	private long misses;
+	private long evictions;
+	private final ArrayList<ByteArrayItem> list =
+			new ArrayList<ByteArrayItem>();
 
 	private int find(String id) {
 		for (int i=0; i<list.size(); i++)
@@ -95,23 +153,15 @@ public class ByteArrayCache {
 	}
 
 	private void checkSize() {
-		int extraSize = currentSize - maxSize;
-		if (extraSize < maxSize / 10)
-			return;
-		ArrayList<Integer> itemsToRemove = new ArrayList<Integer>(list.size() / 2);
-		for (int i=0; i<list.size() - 1; i++) {
-			ByteArrayItem item = list.get(i);
-			if (item.data == null || item.data.length == 0)
-				continue;
-			extraSize -= item.data.length;
-			itemsToRemove.add(i);
-			if (extraSize < 0)
-				break;
-		}
-		for (int i = itemsToRemove.size() - 1; i >= 0; i--) {
-			ByteArrayItem item = list.get(itemsToRemove.get(i));
-			list.remove(itemsToRemove.get(i));
-			item.data = null; // faster GC
-		}
+		while (currentSize > maxSize || list.size() > maxItemCount)
+			removeAt(0, true);
+	}
+
+	private void removeAt(int index, boolean eviction) {
+		ByteArrayItem item = list.remove(index);
+		currentSize -= item.data.length;
+		item.data = null; // faster GC
+		if (eviction)
+			evictions++;
 	}
 }

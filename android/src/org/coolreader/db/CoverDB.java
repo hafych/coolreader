@@ -106,10 +106,25 @@ public class CoverDB extends BaseDB {
 
 	private void dumpStatistics() {
 		log.i("coverDB: " + longQuery("SELECT count(*) FROM coverpages") + " coverpages");
+		ByteArrayCache.Stats cacheStats = coverpageCache.getStats();
+		log.i("coverDB cache: " + cacheStats.itemCount + "/"
+				+ cacheStats.capacityItems + " items, "
+				+ cacheStats.sizeBytes + "/" + cacheStats.capacityBytes
+				+ " bytes, hits=" + cacheStats.hits + ", misses="
+				+ cacheStats.misses + ", evictions="
+				+ cacheStats.evictions);
 	}
 
 	public void clearCaches() {
 		coverpageCache.clear();
+	}
+
+	public ByteArrayCache.Stats getCoverCacheStats() {
+		return coverpageCache.getStats();
+	}
+
+	public void resetCoverCacheStats() {
+		coverpageCache.resetStats();
 	}
 	
     private static final int COVERPAGE_CACHE_SIZE = 512 * 1024;
@@ -157,7 +172,9 @@ public class CoverDB extends BaseDB {
 		try {
 			rs = mDB.rawQuery("SELECT imagedata FROM coverpages WHERE book_path=" + quoteSqlString(bookId), null);
 			if ( rs.moveToFirst() ) {
-				return rs.getBlob(0);
+				data = rs.getBlob(0);
+				coverpageCache.put(bookId, data);
+				return data;
 			}
 			return null;
 		} catch ( Exception e ) {

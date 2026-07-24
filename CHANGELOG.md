@@ -157,6 +157,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - The bounded glyph LRU cache now reports hit, miss, eviction and byte counters;
   regression coverage also preserves true least-recently-used eviction and
   exact size accounting when the final entry is removed.
+- The Android cover-byte cache now enforces hard byte and item limits with
+  observable hit, miss and eviction counters.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
 - SQLite fixture matrices for every supported main and cover database migration,
