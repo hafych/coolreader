@@ -19,7 +19,6 @@
 
 package org.coolreader.sync2;
 
-import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -31,7 +30,7 @@ import java.util.ArrayList;
 
 public class SyncServiceAccessor {
 	private final static String TAG = "sync2acc";
-	private final Activity mActivity;
+	private final Context mContext;
 	private volatile SyncServiceBinder mServiceBinder;
 	private volatile boolean mServiceBound;
 	private final ArrayList<SyncServiceBinder.Callback> onConnectCallbacks = new ArrayList<>();
@@ -42,8 +41,8 @@ public class SyncServiceAccessor {
 		void run(SyncServiceAccessor acc);
 	}
 
-	public SyncServiceAccessor(Activity activity) {
-		mActivity = activity;
+	public SyncServiceAccessor(Context context) {
+		mContext = context.getApplicationContext();
 	}
 
 	public void bind(final SyncServiceBinder.Callback boundCallback) {
@@ -63,7 +62,7 @@ public class SyncServiceAccessor {
 		}
 		if (!bindIsCalled) {
 			bindIsCalled = true;
-			if (mActivity.bindService(new Intent(mActivity, SyncService.class), mServiceConnection, Context.BIND_AUTO_CREATE)) {
+			if (mContext.bindService(new Intent(mContext, SyncService.class), mServiceConnection, Context.BIND_AUTO_CREATE)) {
 				mServiceBound = true;
 				Log.v(TAG, "binding SyncService in progress...");
 			} else {
@@ -76,7 +75,7 @@ public class SyncServiceAccessor {
 		Log.v(TAG, "unbinding SyncService");
 		if (mServiceBound) {
 			// Detach our existing connection.
-			mActivity.unbindService(mServiceConnection);
+			mContext.unbindService(mServiceConnection);
 			mServiceBound = false;
 			bindIsCalled = false;
 			mServiceBinder = null;

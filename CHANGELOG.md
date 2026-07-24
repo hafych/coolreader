@@ -52,6 +52,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   longer performs ad-hoc global dependency lookups during user flows.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
+- Database, synchronization and TTS service connectors bind through application
+  context instead of retaining their Activity host.
 - Android 14–16 foreground TTS, notification and receiver invariants are now
   enforced in CI, with a repeatable API 34–36 runtime matrix.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub

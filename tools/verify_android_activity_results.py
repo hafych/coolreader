@@ -18,6 +18,11 @@ SERVICES = SOURCE / "crengine" / "Services.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
+SERVICE_ACCESSORS = (
+    SOURCE / "db" / "CRDBServiceAccessor.java",
+    SOURCE / "sync2" / "SyncServiceAccessor.java",
+    SOURCE / "tts" / "TTSControlServiceAccessor.java",
+)
 ACTIVE_RESULT_SOURCES = (COOL_READER, DICTIONARIES, BASE_ACTIVITY)
 FORBIDDEN_RESULT_PATTERNS = (
     r"\bstartActivityForResult\s*\(",
@@ -148,6 +153,19 @@ def main() -> None:
         if re.search(r"\bServices\.", text):
             violations.append(
                 f"{relative(path)} still uses the static service locator")
+
+    for path in SERVICE_ACCESSORS:
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"\bActivity\s+mActivity\s*[=;]", text):
+            violations.append(
+                f"{relative(path)} strongly retains an Activity")
+        for marker in (
+            "private final Context mContext",
+            "context.getApplicationContext()",
+        ):
+            if marker not in text:
+                violations.append(
+                    f"{relative(path)} omits lifecycle marker: {marker}")
 
     cool_reader_text = COOL_READER.read_text(encoding="utf-8")
     for marker in REQUIRED_COOL_READER_MARKERS:

@@ -24,7 +24,6 @@ import java.util.ArrayList;
 
 import org.coolreader.crengine.MountPathCorrector;
 
-import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -34,7 +33,7 @@ import org.coolreader.crengine.Log;
 
 public class CRDBServiceAccessor {
 	private final static String TAG = "cr3db";
-	private final Activity mActivity;
+	private final Context mContext;
     private volatile CRDBService.LocalBinder mService;
     private volatile boolean mServiceBound;
 	private volatile boolean bindIsCalled;
@@ -47,8 +46,8 @@ public class CRDBServiceAccessor {
     	return mService;
     }
     
-	public CRDBServiceAccessor(Activity activity, MountPathCorrector pathCorrector) {
-		mActivity = activity;
+	public CRDBServiceAccessor(Context context, MountPathCorrector pathCorrector) {
+		mContext = context.getApplicationContext();
 		this.pathCorrector = pathCorrector;
 	}
 
@@ -75,7 +74,7 @@ public class CRDBServiceAccessor {
 		}
     	if (!bindIsCalled) {
     		bindIsCalled = true;
-	    	if (mActivity.bindService(new Intent(mActivity, 
+			if (mContext.bindService(new Intent(mContext,
 	                CRDBService.class), mServiceConnection, Context.BIND_AUTO_CREATE)) {
 	            mServiceBound = true;
 			    Log.v(TAG, "binding CRDBService in progress...");
@@ -89,7 +88,7 @@ public class CRDBServiceAccessor {
     	Log.v(TAG, "unbinding CRDBService");
         if (mServiceBound) {
             // Detach our existing connection.
-            mActivity.unbindService(mServiceConnection);
+            mContext.unbindService(mServiceConnection);
             mServiceBound = false;
             bindIsCalled = false;
             mService = null;

@@ -19,7 +19,6 @@
 
 package org.coolreader.tts;
 
-import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -31,7 +30,7 @@ import java.util.ArrayList;
 
 public class TTSControlServiceAccessor {
 	private final static String TAG = "ttssrv";
-	private final Activity mActivity;
+	private final Context mContext;
 	private volatile TTSControlBinder mServiceBinder;
 	private volatile boolean mServiceBound;
 	private volatile boolean bindIsCalled;
@@ -42,8 +41,8 @@ public class TTSControlServiceAccessor {
 		void run(TTSControlServiceAccessor ttsacc);
 	}
 
-	public TTSControlServiceAccessor(Activity activity) {
-		mActivity = activity;
+	public TTSControlServiceAccessor(Context context) {
+		mContext = context.getApplicationContext();
 	}
 
 	public void bind(final TTSControlBinder.Callback boundCallback) {
@@ -63,7 +62,7 @@ public class TTSControlServiceAccessor {
 		}
 		if (!bindIsCalled) {
 			bindIsCalled = true;
-			if (mActivity.bindService(new Intent(mActivity, TTSControlService.class), mServiceConnection, Context.BIND_AUTO_CREATE)) {
+			if (mContext.bindService(new Intent(mContext, TTSControlService.class), mServiceConnection, Context.BIND_AUTO_CREATE)) {
 				mServiceBound = true;
 				Log.v(TAG, "binding TTSControlService in progress...");
 			} else {
@@ -76,7 +75,7 @@ public class TTSControlServiceAccessor {
 		Log.v(TAG, "unbinding TTSControlService");
 		if (mServiceBound) {
 			// Detach our existing connection.
-			mActivity.unbindService(mServiceConnection);
+			mContext.unbindService(mServiceConnection);
 			mServiceBound = false;
 			bindIsCalled = false;
 			mServiceBinder = null;
