@@ -25,7 +25,6 @@ import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.Scanner;
-import org.coolreader.crengine.Services;
 import org.coolreader.crengine.ScanStopReason;
 import org.coolreader.tts.OnTTSStatusListener;
 import org.coolreader.tts.TTSControlBinder;
@@ -165,7 +164,8 @@ public class AndroidSmokeInstrumentedTest {
 		try {
 			AtomicReference<Scanner> scanner = new AtomicReference<>();
 			waitUntil(() -> {
-				scanner.set(Services.getScanner());
+				scanner.set(activity.getServiceDependencies()
+						.getScanner());
 				return activity.getDB() != null;
 			});
 			FileInfo baseDir = new FileInfo(directory);
@@ -366,7 +366,9 @@ public class AndroidSmokeInstrumentedTest {
 				target, InstrumentationRegistry.getInstrumentation());
 		try {
 			assertTrue(Engine.getMountedRootsMap().isEmpty());
-			Engine engine = Services.getEngine();
+			Engine engine = ((CoolReader) activity)
+					.getServiceDependencies()
+					.getEngine();
 			for (String path : engine.getAppPrivateDirs().keySet()) {
 				File directory = new File(path);
 				assertTrue(isUnder(directory, target.getFilesDir())

@@ -106,7 +106,7 @@ public class ToastView {
         LayoutInflater inflater = (LayoutInflater) t.anchor.getContext().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         window.setContentView(inflater.inflate(R.layout.custom_toast, null, true));
         TextView tv = (TextView) window.getContentView().findViewById(R.id.toast);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize); //Integer.valueOf(Services.getSettings().getInt(ReaderView.PROP_FONT_SIZE, 20) ) );
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize);
         tv.setText(t.msg);
         tv.setGravity(Gravity.CENTER);
         window.showAtLocation(t.anchor, Gravity.NO_GRAVITY, 0, 0);

@@ -92,6 +92,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	private View mDecorView;
 
 	private CRDBServiceAccessor mCRDBService;
+	private final Services mServices = new Services();
 	private ServiceDependencies mServiceDependencies;
 	protected Dictionaries mDictionaries;
 	private final ActivityResultLauncher<Intent> mDictionaryLauncher =
@@ -145,7 +146,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		return mCRDBService != null ? mCRDBService.get() : null;
 	}
 
-	protected final ServiceDependencies getServiceDependencies() {
+	public final ServiceDependencies getServiceDependencies() {
 		if (mServiceDependencies == null)
 			throw new IllegalStateException("Services have not been started");
 		return mServiceDependencies;
@@ -208,7 +209,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		// create settings
 		mSettingsManager = new SettingsManager(this);
 		// create rest of settings
-		mServiceDependencies = Services.startServices(this);
+		mServiceDependencies = mServices.startServices(this);
+	}
+
+	protected final void stopServices() {
+		mServices.stopServices(this);
+		mServiceDependencies = null;
 	}
 
 	@SuppressLint("NewApi")

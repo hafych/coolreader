@@ -29,129 +29,81 @@ public class Services {
 
 	public static final Logger log = L.create("sv");
 
-	private static volatile Engine mEngine;
-	private static Scanner mScanner;
-	private static History mHistory;
-	private static CoverpageManager mCoverpageManager;
-	private static FileSystemFolders mFSFolders;
-	private static GenresCollection mGenresCollection;
-	private static DocumentFileCache mDocumentCache;
-	private static volatile long mGeneration;
-	private static ServiceLifecycle mLifecycle;
+	private Engine engine;
+	private Scanner scanner;
+	private History history;
+	private CoverpageManager coverpageManager;
+	private FileSystemFolders fileSystemFolders;
+	private GenresCollection genresCollection;
+	private DocumentFileCache documentCache;
+	private ServiceLifecycle lifecycle;
 
-	public static Engine getEngine() {
-		if (null != mEngine)
-			return mEngine;
-		throw new RuntimeException("Services.getEngine(): trying to get null object");
-	}
-
-	public static Scanner getScanner() {
-		if (null != mScanner)
-			return mScanner;
-		throw new RuntimeException("Services.getScanner(): trying to get null object");
-	}
-
-	public static History getHistory() {
-		if (null != mHistory)
-			return mHistory;
-		throw new RuntimeException("Services.getHistory(): trying to get null object");
-	}
-
-	public static CoverpageManager getCoverpageManager() {
-		if (null != mCoverpageManager)
-			return mCoverpageManager;
-		throw new RuntimeException("Services.getCoverpageManager(): trying to get null object");
-	}
-
-	public static FileSystemFolders getFileSystemFolders() {
-		if (null != mFSFolders)
-			return mFSFolders;
-		throw new RuntimeException("Services.getFileSystemFolders(): trying to get null object");
-	}
-
-	public static GenresCollection getGenresCollection() {
-		if (null != mGenresCollection)
-			return mGenresCollection;
-		throw new RuntimeException("Services.getGenresCollection(): trying to get null object");
-	}
-
-	public static DocumentFileCache getDocumentCache() {
-		if (null != mDocumentCache)
-			return mDocumentCache;
-		throw new RuntimeException("Services.getDocumentCache(): trying to get null object");
-	}
-
-	public static ServiceLifecycle getLifecycle() {
-		if (mLifecycle != null)
-			return mLifecycle;
-		throw new RuntimeException(
-				"Services.getLifecycle(): trying to get null object");
-	}
-
-	public static boolean isStopped() {
-		return null == mEngine || null == mScanner || null == mHistory || null == mCoverpageManager || null == mFSFolders || null == mGenresCollection || null == mDocumentCache;
-	}
-
-	public static ServiceDependencies startServices(BaseActivity activity) {
+	public ServiceDependencies startServices(BaseActivity activity) {
+		if (engine != null)
+			throw new IllegalStateException(
+					"Activity services are already started");
 		log.i("First activity is created");
-		mGeneration++;
-		mLifecycle = new ServiceLifecycle(mGeneration);
+		lifecycle = new ServiceLifecycle(System.nanoTime());
 		// testing background thread
 		//mSettings = activity.settings();
 		BackgroundThread.instance().setGUIHandler(new Handler());
-		mEngine = new Engine(activity);
-		mScanner = new Scanner(activity, mEngine);
-		mScanner.initRoots(Engine.getMountedRootsMap(), mEngine.getAppPrivateDirs());
-		mHistory = new History(mScanner);
-		mScanner.setDirScanEnabled(activity.settings().getBool(ReaderView.PROP_APP_BOOK_PROPERTY_SCAN_ENABLED, true));
-		mCoverpageManager = new CoverpageManager(mEngine, mLifecycle);
-		mFSFolders = new FileSystemFolders(mScanner);
-		mGenresCollection = GenresCollection.getInstance(activity);
-		mDocumentCache = new DocumentFileCache(activity);
+		engine = new Engine(activity);
+		scanner = new Scanner(activity, engine);
+		scanner.initRoots(
+				Engine.getMountedRootsMap(),
+				engine.getAppPrivateDirs());
+		history = new History(scanner);
+		scanner.setDirScanEnabled(
+				activity.settings().getBool(
+						ReaderView.PROP_APP_BOOK_PROPERTY_SCAN_ENABLED,
+						true));
+		coverpageManager =
+				new CoverpageManager(engine, lifecycle);
+		fileSystemFolders = new FileSystemFolders(scanner);
+		genresCollection =
+				GenresCollection.getInstance(activity);
+		documentCache = new DocumentFileCache(activity);
 		return new ServiceDependencies(
-				mEngine,
-				mScanner,
-				mHistory,
-				mCoverpageManager,
-				mFSFolders,
-				mGenresCollection,
-				mDocumentCache,
-				mLifecycle);
+				engine,
+				scanner,
+				history,
+				coverpageManager,
+				fileSystemFolders,
+				genresCollection,
+				documentCache,
+				lifecycle);
 	}
 
-	public static void stopServices(BaseActivity activity) {
+	public void stopServices(BaseActivity activity) {
 		log.i("Last activity is destroyed");
-		if (mEngine != null && !mEngine.isAttachedTo(activity)) {
+		if (engine != null && !engine.isAttachedTo(activity)) {
 			log.i("Ignoring stop from a stale activity generation");
 			return;
 		}
-		if (mCoverpageManager == null) {
+		if (coverpageManager == null) {
 			log.i("Will not destroy services: finish only activity creation detected");
 			return;
 		}
-		Engine engine = mEngine;
-		ServiceLifecycle lifecycle = mLifecycle;
-		long stoppedGeneration = mGeneration;
-		mEngine = null;
-		mLifecycle = null;
-		if (lifecycle != null)
-			lifecycle.close();
-		mCoverpageManager.clear();
-		if (engine != null)
-			engine.detachActivity(activity);
+		Engine stoppedEngine = engine;
+		ServiceLifecycle stoppedLifecycle = lifecycle;
+		engine = null;
+		lifecycle = null;
+		if (stoppedLifecycle != null)
+			stoppedLifecycle.close();
+		coverpageManager.clear();
+		if (stoppedEngine != null)
+			stoppedEngine.detachActivity(activity);
 		BackgroundThread.instance().postBackground(() -> {
-			log.i("Stopping background thread");
-			if (engine == null)
+			log.i("Stopping activity service generation");
+			if (stoppedEngine == null)
 				return;
-			engine.uninit();
-			if (mGeneration == stoppedGeneration && mEngine == null)
-				BackgroundThread.instance().quit();
+			stoppedEngine.uninit();
 		});
-		mHistory = null;
-		mScanner = null;
-		mCoverpageManager = null;
-		mFSFolders = null;
-		mGenresCollection = null;
-		mDocumentCache = null;
+		history = null;
+		scanner = null;
+		coverpageManager = null;
+		fileSystemFolders = null;
+		genresCollection = null;
+		documentCache = null;
 	}
 }

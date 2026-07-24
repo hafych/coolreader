@@ -14,7 +14,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.Scanner;
-import org.coolreader.crengine.Services;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -59,7 +58,8 @@ public class LibraryScannerCorpusInstrumentedTest {
 			AtomicReference<Scanner> scanner =
 					new AtomicReference<>();
 			waitUntil(() -> {
-				scanner.set(Services.getScanner());
+				scanner.set(activity.getServiceDependencies()
+						.getScanner());
 				return scanner.get() != null
 						&& activity.getDB() != null;
 			});

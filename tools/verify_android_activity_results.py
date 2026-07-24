@@ -134,14 +134,28 @@ def main() -> None:
             violations.append(f"{relative(ENGINE)} omits marker: {marker}")
 
     services_text = SERVICES.read_text(encoding="utf-8")
+    if re.search(
+            r"\bstatic(?:\s+volatile)?\s+"
+            r"(?:Engine|Scanner|History|CoverpageManager|"
+            r"FileSystemFolders|GenresCollection|DocumentFileCache|"
+            r"ServiceLifecycle)\b",
+            services_text):
+        violations.append(
+            f"{relative(SERVICES)} retains a static service graph")
     for marker in (
-        "!mEngine.isAttachedTo(activity)",
-        "Engine engine = mEngine",
-        "mGeneration == stoppedGeneration",
+        "private Engine engine",
+        "public ServiceDependencies startServices(BaseActivity activity)",
+        "lifecycle = new ServiceLifecycle(",
+        "public void stopServices(BaseActivity activity)",
+        "stoppedLifecycle.close()",
     ):
         if marker not in services_text:
             violations.append(
                 f"{relative(SERVICES)} omits lifecycle marker: {marker}")
+    if "BackgroundThread.instance().quit()" in services_text:
+        violations.append(
+            f"{relative(SERVICES)} lets Activity teardown stop the "
+            "process-scoped dispatcher")
 
     dependencies_text = SERVICE_DEPENDENCIES.read_text(encoding="utf-8")
     for marker in (
@@ -160,6 +174,12 @@ def main() -> None:
             text,
             r"\bEngine\.getInstance\s*\(",
             "uses the legacy Activity-owned Engine singleton",
+            violations)
+        find_pattern(
+            path,
+            text,
+            r"\bServices\.(?:get|startServices|stopServices|isStopped)\s*\(",
+            "uses the static service locator",
             violations)
 
     reader_view_text = READER_VIEW.read_text(encoding="utf-8")
@@ -306,12 +326,11 @@ def main() -> None:
                 violations.append(
                     f"{relative(path)} omits lifecycle marker: {marker}")
 
-    if re.search(r"\bServices\.get", base_text):
-        violations.append(
-            f"{relative(BASE_ACTIVITY)} still reads the static service locator")
     for marker in (
-        "mServiceDependencies = Services.startServices(this)",
-        "protected final ServiceDependencies getServiceDependencies()",
+        "private final Services mServices = new Services()",
+        "mServiceDependencies = mServices.startServices(this)",
+        "public final ServiceDependencies getServiceDependencies()",
+        "mServices.stopServices(this)",
     ):
         if marker not in base_text:
             violations.append(
@@ -322,13 +341,13 @@ def main() -> None:
         if marker not in cool_reader_text:
             violations.append(
                 f"{relative(COOL_READER)} omits marker: {marker}")
-    if re.search(r"\bServices\.get", cool_reader_text):
-        violations.append(
-            f"{relative(COOL_READER)} still reads the static service locator")
     if "ServiceDependencies dependencies = getServiceDependencies()" not in (
             cool_reader_text):
         violations.append(
             f"{relative(COOL_READER)} does not capture its service generation")
+    if "stopServices();" not in cool_reader_text:
+        violations.append(
+            f"{relative(COOL_READER)} does not stop its owned service graph")
 
     command = "python3 tools/verify_android_activity_results.py"
     for workflow in (

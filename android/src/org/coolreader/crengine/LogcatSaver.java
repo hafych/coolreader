@@ -73,7 +73,7 @@ public class LogcatSaver {
 		return res;
 	}
 
-	// May be called in Services.stopServices()
+	// May be called during activity service teardown.
 	public static boolean logcatPruneDefault() {
 		// Set default logcat prune list
 		if (DeviceInfo.getSDKLevel() < Build.VERSION_CODES.M)

@@ -98,7 +98,6 @@ import org.coolreader.crengine.ReaderViewLayout;
 import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.ServiceDependencies;
 import org.coolreader.crengine.ServiceLifecycle;
-import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Utils;
 import org.coolreader.genrescollection.GenresCollection;
 import org.coolreader.tts.OnTTSCreatedListener;
@@ -368,7 +367,7 @@ public class CoolReader extends BaseActivity {
 		log.i("CoolReader.onDestroy() exiting");
 		super.onDestroy();
 
-		Services.stopServices(this);
+		stopServices();
 	}
 
 	public ReaderView getReaderView() {
