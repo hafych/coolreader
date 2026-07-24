@@ -39,6 +39,7 @@ public class EinkScreenNook implements EinkScreen {
 	protected int mUpdateInterval;
 	protected int mRefreshNumber = -1;
 	protected boolean mIsSleep = false;
+	private final N2EpdController mEpdController = new N2EpdController();
 
 	@Override
 	public void setupController(EinkUpdateMode mode, int updateInterval, View view) {
@@ -186,21 +187,25 @@ public class EinkScreenNook implements EinkScreen {
 	}
 
 	private void nookSetMode(View view, EinkUpdateMode mode) {
+		Context context = view != null ? view.getContext() : null;
 		switch (mode) {
 			case Clear:
-				N2EpdController.setMode(N2EpdController.REGION_APP_3,
+				mEpdController.setMode(context,
+						N2EpdController.REGION_APP_3,
 						N2EpdController.WAVE_GC,
 						N2EpdController.MODE_ONESHOT_ALL);
 //				N2EpdController.MODE_CLEAR, view);
 				break;
 			case Fast:
-				N2EpdController.setMode(N2EpdController.REGION_APP_3,
+				mEpdController.setMode(context,
+						N2EpdController.REGION_APP_3,
 						N2EpdController.WAVE_GU,
 						N2EpdController.MODE_ONESHOT_ALL);
 //				N2EpdController.MODE_ONESHOT_ALL, view);
 				break;
 			case Active:
-				N2EpdController.setMode(N2EpdController.REGION_APP_3,
+				mEpdController.setMode(context,
+						N2EpdController.REGION_APP_3,
 						N2EpdController.WAVE_GL16,
 						N2EpdController.MODE_ACTIVE_ALL);
 //				N2EpdController.MODE_ACTIVE_ALL, view);

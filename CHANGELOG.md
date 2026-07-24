@@ -42,6 +42,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   analytics/crash SDKs blocked until a separate consent and privacy decision.
 - Lifecycle-aware Activity Result launchers for SAF and dictionary flows, with
   pending document-tree state restored after Activity recreation.
+- Nook E-Ink controller setup now resolves the current view host on demand
+  instead of retaining the Activity in a static field.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

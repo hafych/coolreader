@@ -12,6 +12,7 @@ SOURCE = ROOT / "android" / "src" / "org" / "coolreader"
 COOL_READER = SOURCE / "CoolReader.java"
 DICTIONARIES = SOURCE / "Dictionaries.java"
 BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
+NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
 ACTIVE_RESULT_SOURCES = (COOL_READER, DICTIONARIES, BASE_ACTIVITY)
 FORBIDDEN_RESULT_PATTERNS = (
     r"\bstartActivityForResult\s*\(",
@@ -73,6 +74,22 @@ def main() -> None:
         violations.append("BaseActivity is not lifecycle-aware")
     if "mDictionaryLauncher" not in base_text:
         violations.append("Dictan result launcher is missing")
+
+    nook_controller_text = NOOK_CONTROLLER.read_text(encoding="utf-8")
+    if re.search(
+            r"\bstatic\s+Activity\s+\w+\s*(?:=|;)",
+            nook_controller_text):
+        violations.append(
+            f"{relative(NOOK_CONTROLLER)} retains a static Activity")
+    if "n2MainActivity" in nook_controller_text:
+        violations.append(
+            f"{relative(NOOK_CONTROLLER)} retains the legacy Activity slot")
+    if re.search(
+            r"\bstatic\s+Object\s+mEpdController\b",
+            nook_controller_text):
+        violations.append(
+            f"{relative(NOOK_CONTROLLER)} retains the vendor controller "
+            "statically")
 
     cool_reader_text = COOL_READER.read_text(encoding="utf-8")
     for marker in REQUIRED_COOL_READER_MARKERS:

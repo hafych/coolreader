@@ -81,7 +81,6 @@ import org.coolreader.crengine.L;
 import org.coolreader.crengine.LibraryRootStore;
 import org.coolreader.crengine.LogcatSaver;
 import org.coolreader.crengine.Logger;
-import org.coolreader.crengine.N2EpdController;
 import org.coolreader.crengine.OPDSCatalogEditDialog;
 import org.coolreader.crengine.OptionsDialog;
 import org.coolreader.crengine.ParseBudget;
@@ -285,8 +284,6 @@ public class CoolReader extends BaseActivity {
 		// For TTS volume control
 		//  See TTSControlService
 		setVolumeControlStream(AudioManager.STREAM_MUSIC);
-
-		N2EpdController.n2MainActivity = this;
 
 		showRootWindow();
 

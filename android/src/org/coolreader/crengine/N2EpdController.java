@@ -24,7 +24,10 @@ package org.coolreader.crengine;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+
 import android.app.Activity;
+import android.content.Context;
+import android.content.ContextWrapper;
 
 /**
  * Nook Touch EPD controller interface wrapper.
@@ -59,8 +62,7 @@ public class N2EpdController {
 	private static Method mtSetRegion = null;
 	private static Constructor<?> RegionParamsConstructor= null;
 	private static Constructor<?> EpdControllerConstructors[] = null;
-	public static Activity n2MainActivity =  null;
-	private static Object mEpdController = null;
+	private Object mEpdController = null;
 
 	private static Object[] enumsWave 	= null;
 	private static Object[] enumsRegion	= null;
@@ -107,11 +109,19 @@ public class N2EpdController {
 		}
 	}
 
-	public static void setMode(int region, int wave, int mode) {
+	public void setMode(
+			Context context, int region, int wave, int mode) {
 		if (mtSetRegion != null) {
 			try {
-				if (DeviceInfo.EINK_NOOK_120 && mEpdController == null)
-					mEpdController = EpdControllerConstructors[0].newInstance(new Object[] { n2MainActivity });
+				if (DeviceInfo.EINK_NOOK_120 && mEpdController == null) {
+					Activity activity = findActivity(context);
+					if (activity == null) {
+						Log.e("cr3", "Cannot create EPD controller without Activity");
+						return;
+					}
+					mEpdController = EpdControllerConstructors[0]
+							.newInstance(new Object[] { activity });
+				}
 				Object regionParams =  RegionParamsConstructor.newInstance(new Object[] { 0, 0, 600, 800, enumsWave[wave]});
 				mtSetRegion.invoke(mEpdController, "CoolReader", enumsRegion[region], regionParams, enumsMode[mode]);
 			} catch (Exception e) {
@@ -120,5 +130,18 @@ public class N2EpdController {
 						+ e.getClass().getSimpleName();
 			}
 		}
+	}
+
+	private static Activity findActivity(Context context) {
+		Context current = context;
+		while (current instanceof ContextWrapper) {
+			if (current instanceof Activity)
+				return (Activity) current;
+			Context base = ((ContextWrapper) current).getBaseContext();
+			if (base == current)
+				break;
+			current = base;
+		}
+		return current instanceof Activity ? (Activity) current : null;
 	}
 }
