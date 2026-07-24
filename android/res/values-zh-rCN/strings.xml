@@ -233,11 +233,6 @@
     <string name="mi_book_search">查找书文</string>
     <string name="dlg_book_search_not_found">没找到任何书文</string>
     <string name="dir_search_results">搜索结果</string>
-    <string name="dlg_about_donation">Cool Reader是一款免费的软件，并将永远免费。如果你想支持这个项目的开发，可以购买Android Market上的捐赠。</string>
-    <string name="dlg_about_donation_bronze">$1: 购买Cool Reader 铜牌赞助</string>
-    <string name="dlg_about_donation_silver">$3: 购买Cool Reader 银牌赞助</string>
-    <string name="dlg_about_donation_gold">$10: 购买Cool Reader 金牌赞助</string>
-    <string name="dlg_about_donation_installed">已安装</string>
     <string name="mi_book_browser_normal_mode">普通模式</string>
     <string name="mi_book_browser_simple_mode">简单文档列表</string>
     <string name="options_page_animation_slide_2_pages">双页滑动</string>
@@ -391,10 +386,6 @@
     <string name="win_title_confirm_book_delete">确认要删除这本书吗？</string>
     <string name="folder_name_books_by_series">按丛书系列排列的书</string>
     <string name="folder_name_books_by_title">按书名排列的书</string>
-    <string name="dlg_about_donation_platinum">$30: 购买Cool Reader 白金赞助</string>
-    <string name="mi_donation">捐赠</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader是一款免费的软件，并将永远免费。如果你想支持这个项目的开发，你可以使用Android Market的程序内购买（in-app purchase）进行捐赠。</string>
-    <string name="dlg_about_donation_total">您共计捐款：</string>
     <string name="option_controls_gesture_page_flipping_enabled">划动手势翻页</string>
     <string name="options_font_embedded_document_font_enabled">文档内嵌字体</string>
     <string name="options_app_locale_system">系统</string>

@@ -241,11 +241,6 @@
     <string name="mi_book_search">検索</string>
     <string name="dlg_book_search_not_found">ブックが見つかりませんでした</string>
     <string name="dir_search_results">検索結果</string>
-    <string name="dlg_about_donation">Cool Reader はずっとフリーです。このプロジェクトの開発をサポートしていただける方は、Google Play で寄付パッケージを購入してください。</string>
-    <string name="dlg_about_donation_bronze">$1: Cool Reader ブロンズ寄付を購入</string>
-    <string name="dlg_about_donation_silver">$3: Cool Reader シルバー寄付</string>
-    <string name="dlg_about_donation_gold">$10: Cool Reader ゴールド寄付</string>
-    <string name="dlg_about_donation_installed">インストール済</string>
     <string name="mi_book_browser_normal_mode">通常モード</string>
     <string name="mi_book_browser_simple_mode">シンプルファイル一覧</string>
     <string name="options_page_animation_slide_2_pages">スライド (2 ページ)</string>
@@ -404,10 +399,6 @@
     <string name="book_info_book_language">言語</string>
     <string name="folder_name_books_by_series">シリーズ</string>
     <string name="folder_name_books_by_title">タイトル</string>
-    <string name="dlg_about_donation_platinum">$30: Cool Reader プラチナ寄付を購入</string>
-    <string name="mi_donation">寄付</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader はずっとフリーです。このプロジェクトの開発をサポートしていただける方は、Google Play のアプリ内購入で寄付することができます:</string>
-    <string name="dlg_about_donation_total">あなたからの寄付合計:</string>
     <string name="option_controls_gesture_page_flipping_enabled">ページめくりのジェスチャー</string>
     <string name="options_font_embedded_document_font_enabled">ドキュメント組み込みフォント</string>
     <string name="options_app_locale_system">システム</string>
@@ -466,8 +457,6 @@
     <string name="options_view_toolbar_hide_in_fullscreen">全画面時にツールバーを非表示</string>
     <string name="options_view_toolbar_position_right">右</string>
     <string name="dlg_button_back">戻る</string>
-    <string name="dlg_about_donation_iron">$0.3: Cool Reader 鉄寄付を購入</string>
-    <string name="dlg_about_donation_vip">$100: Cool Reader VIP 寄付を購入</string>
     <string name="tb_button_find_prev">前の検索</string>
     <string name="tb_button_find_close">検索を閉じる</string>
     <string name="tb_button_find_next">次の検索</string>

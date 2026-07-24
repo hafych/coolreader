@@ -218,11 +218,6 @@
   <string name="mi_book_search">מצא</string>
   <string name="dlg_book_search_not_found">לא נמצאו ספרים</string>
   <string name="dir_search_results">תוצאות חיפוש</string>
-  <string name="dlg_about_donation">Cool Reader תמיד היה ויהיה בחינם. אם אתה רוצה לתמוך בפיתוח הפרויקט, אתה יכול לקנות ערכת תרומה מחנות ה-Android.</string>
-  <string name="dlg_about_donation_bronze">$1: תרום Cool Reader Bronze</string>
-  <string name="dlg_about_donation_silver">$3: תרום Cool Reader Silver</string>
-  <string name="dlg_about_donation_gold">10$: קנה תרומת Cool Reader Gold</string>
-  <string name="dlg_about_donation_installed">מותקן</string>
   <string name="mi_book_browser_normal_mode">מצב רגיל</string>
   <string name="mi_book_browser_simple_mode">רשימת קבצים פשוטה</string>
   <string name="options_page_animation_slide_2_pages">שקופיות (2 עמודים)</string>
@@ -347,9 +342,6 @@
   <string name="book_info_book_language">שפה</string>
   <string name="folder_name_books_by_series">סדרות</string>
   <string name="folder_name_books_by_title">כותרות</string>
-  <string name="dlg_about_donation_platinum">30$: קנה תרומת Cool Reader Platinum</string>
-  <string name="mi_donation">תרומה</string>
-  <string name="dlg_about_donation_total">סך תרומות ממך:</string>
   <string name="options_app_locale_system">מערכת</string>
   <string name="options_app_locale">שפת ממשק</string>
   <string name="mi_goto_manual">הצג ידנית</string>
@@ -386,8 +378,6 @@
   <string name="options_view_toolbar_hide_in_fullscreen">הסתר סרגל כלים במסך מלא</string>
   <string name="options_view_toolbar_position_right">ימינה</string>
   <string name="dlg_button_back">חזור</string>
-  <string name="dlg_about_donation_iron">0.3$: קנה תרומת Cool Reader Iron</string>
-  <string name="dlg_about_donation_vip">100$: קנה תרומת Cool Reader VIP</string>
   <string name="tb_button_find_prev">מצא קודם</string>
   <string name="tb_button_find_close">סגור חיפוש</string>
   <string name="tb_button_find_next">מצא הבא</string>

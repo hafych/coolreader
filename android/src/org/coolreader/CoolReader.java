@@ -90,7 +90,6 @@ import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.ReaderViewLayout;
 import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Utils;
-import org.coolreader.donations.CRDonationService;
 import org.coolreader.tts.OnTTSCreatedListener;
 import org.coolreader.tts.TTSControlServiceAccessor;
 import org.koekak.android.ebookdownloader.SonyBookSelector;
@@ -265,22 +264,6 @@ public class CoolReader extends BaseActivity {
 		//  See TTSControlService
 		setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
-		//==========================================
-		// Donations related code
-		try {
-
-			mDonationService = new CRDonationService(this);
-			mDonationService.bind();
-			SharedPreferences pref = getSharedPreferences(DONATIONS_PREF_FILE, 0);
-			try {
-				mTotalDonations = pref.getFloat(DONATIONS_PREF_TOTAL_AMOUNT, 0.0f);
-			} catch (Exception e) {
-				log.e("exception while reading total donations from preferences", e);
-			}
-		} catch (VerifyError e) {
-			log.e("Exception while trying to initialize billing service for donations");
-		}
-
 		N2EpdController.n2MainActivity = this;
 
 		showRootWindow();
@@ -331,11 +314,6 @@ public class CoolReader extends BaseActivity {
 //		}
 
 		//mEngine = null;
-
-		//===========================
-		// Donations support code
-		if (mDonationService != null)
-			mDonationService.unbind();
 
 		if (mReaderView != null) {
 			mReaderView.destroy();
@@ -1931,9 +1909,6 @@ public class CoolReader extends BaseActivity {
 		} catch (DictionaryException e) {
 			showToast(e.getMessage());
 		}
-		if (mDonationService != null) {
-			mDonationService.onActivityResult(requestCode, resultCode, intent);
-		}
 		/*
 		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
 		if (requestCode == REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN) {
@@ -2057,59 +2032,6 @@ public class CoolReader extends BaseActivity {
 		AboutDialog dlg = new AboutDialog(this);
 		dlg.show();
 	}
-
-
-	private CRDonationService mDonationService = null;
-	private DonationListener mDonationListener = null;
-	private double mTotalDonations = 0;
-
-	public CRDonationService getDonationService() {
-		return mDonationService;
-	}
-
-	public boolean isDonationSupported() {
-		return mDonationService.isBillingSupported();
-	}
-
-	public void setDonationListener(DonationListener listener) {
-		mDonationListener = listener;
-	}
-
-	public static interface DonationListener {
-		void onDonationTotalChanged(double total);
-	}
-
-	public double getTotalDonations() {
-		return mTotalDonations;
-	}
-
-	public boolean makeDonation(final double amount) {
-		final String itemName = "donation" + (amount >= 1 ? String.valueOf((int) amount) : String.valueOf(amount));
-		log.i("makeDonation is called, itemName=" + itemName);
-		if (!mDonationService.isBillingSupported())
-			return false;
-		BackgroundThread.instance().postBackground(() -> mDonationService.purchase(itemName,
-				(success, productId, totalDonations) -> BackgroundThread.instance().postGUI(() -> {
-					try {
-						if (success) {
-							log.i("Donation purchased: " + productId + ", total amount: " + mTotalDonations);
-							mTotalDonations += amount;
-							SharedPreferences pref = getSharedPreferences(DONATIONS_PREF_FILE, 0);
-							pref.edit().putString(DONATIONS_PREF_TOTAL_AMOUNT, String.valueOf(mTotalDonations)).commit();
-						} else {
-							showToast("Donation purchase failed");
-						}
-						if (mDonationListener != null)
-							mDonationListener.onDonationTotalChanged(mTotalDonations);
-					} catch (Exception e) {
-						// ignore
-					}
-				})));
-		return true;
-	}
-
-	private static String DONATIONS_PREF_FILE = "cr3donations";
-	private static String DONATIONS_PREF_TOTAL_AMOUNT = "total";
 
 
 	public void initTTS(TTSControlServiceAccessor.Callback callback) {

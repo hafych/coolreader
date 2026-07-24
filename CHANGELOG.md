@@ -63,6 +63,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   legacy storage, probes mount tables or scans hardcoded shared-storage paths.
   Databases and native caches now remain in app-private storage; user-selected
   library access goes through persisted SAF grants.
+- The obsolete Billing v3 AIDL integration, billing permission and non-working
+  donation purchase UI were removed; the release build makes no in-app purchase
+  claims.
 - Notification actions are immutable, package-scoped and registered as
   non-exported.
 - Temporary document cache is capped at 512 MiB and 32 files with

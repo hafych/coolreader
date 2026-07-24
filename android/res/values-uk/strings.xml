@@ -241,11 +241,6 @@
     <string name="mi_book_search">Знайти книгу</string>
     <string name="dlg_book_search_not_found">Не знайдено жодної книги</string>
     <string name="dir_search_results">Результати пошуку</string>
-    <string name="dlg_about_donation">CoolReader — безкоштовна вільна програма і завжди залишатиметься такою. Ви можете підтримати розвиток проекту, придбавши пакет-монетку в Android Market.</string>
-    <string name="dlg_about_donation_bronze">$1: купити бронзову монетку CoolReader</string>
-    <string name="dlg_about_donation_silver">$3: купити срібну монетку CoolReader</string>
-    <string name="dlg_about_donation_gold">$10: купити золоту монетку CoolReader</string>
-    <string name="dlg_about_donation_installed">Встановлено</string>
     <string name="mi_book_browser_normal_mode">Нормальний режим</string>
     <string name="mi_book_browser_simple_mode">Простий перелік файлів</string>
     <string name="options_page_animation_slide_2_pages">Зсув (2)</string>
@@ -406,10 +401,6 @@
     <string name="book_info_book_language">Мова</string>
     <string name="folder_name_books_by_series">Книги за серіями</string>
     <string name="folder_name_books_by_title">Книги за назвою</string>
-    <string name="dlg_about_donation_platinum">$30: придбати Платинову монету CoolReader</string>
-    <string name="mi_donation">Пожертвувати</string>
-    <string name="dlg_about_donation_inapp_purchase">CoolReader - безкоштовна вільна програма, і завжди такою залишиться. Ви можете підтримати розвиток проекту за допомогою Android Market:</string>
-    <string name="dlg_about_donation_total">Усього: </string>
     <string name="option_controls_gesture_page_flipping_enabled">Перегортання жестами</string>
     <string name="options_font_embedded_document_font_enabled">Вбудовані шрифти документу</string>
     <string name="options_app_locale_system">Системна</string>
@@ -467,8 +458,6 @@
     <string name="options_view_toolbar_hide_in_fullscreen">Приховувати панель в повноекранному режимі</string>
     <string name="options_view_toolbar_position_right">Зправа</string>
     <string name="dlg_button_back">Назад</string>
-    <string name="dlg_about_donation_iron">$0.3: Придбати Залізну монету Cool Reader</string>
-    <string name="dlg_about_donation_vip">$100: Придбати VIP монету Cool Reader</string>
     <string name="tb_button_find_prev">Знайти попередній</string>
     <string name="tb_button_find_close">Закрити пошук</string>
     <string name="tb_button_find_next">Знайти наступний</string>

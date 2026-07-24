@@ -228,15 +228,6 @@
     <string name="mi_book_search">Buscar libro</string>
     <string name="dlg_book_search_not_found">No se han encontrado libros</string>
     <string name="dir_search_results">Resultados de búsqueda</string>
-    <string name="dlg_about_donation">Cool Reader es gratis y va a seguir siendo gratis siempre. Si quieres ayudar al desarroyo de este proyecto, puedes comprar paquetes de donaciones desde Android Market.</string>
-    <string name="dlg_about_donation_bronze">$1: compra la donación de bronze de Cool Reader</string>
-    <string name="dlg_about_donation_silver">$3: compra la donación de plata de Cool Reader</string>
-    <string name="dlg_about_donation_gold">$10: compra la donación de oro de Cool Reader</string>
-    <string name="dlg_about_donation_installed">Instalada</string>
-    <string name="dlg_about_donation_platinum">$30: compra la Donación Platinum de Cool Reader</string>
-    <string name="mi_donation">Donar</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader is free and will always be free. If you want to support development of this project, you can make donation using Android Market in-app purchase:</string>
-    <string name="dlg_about_donation_total">Total donations from you:</string>
     <string name="mi_book_browser_normal_mode">Modo normal</string>
     <string name="mi_book_browser_simple_mode">Lista de archivos simple</string>
     <string name="options_page_animation_slide_2_pages">Diapositiva (2 páginas)</string>

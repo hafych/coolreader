@@ -265,11 +265,6 @@
     <string name="mi_book_search">Найти</string>
     <string name="dlg_book_search_not_found">Книги не найдены</string>
     <string name="dir_search_results">Результаты поиска</string>
-    <string name="dlg_about_donation_bronze">$1: купить Бронзовую монетку Cool Reader</string>
-    <string name="dlg_about_donation_silver">$3: купить Серебряную монетку Cool Reader</string>
-    <string name="dlg_about_donation">Cool Reader - бесплатная свободная программа, и всегда будет оставаться такой. Вы можете поддержать развитие проекта, купив пакет-монетку в Android Market.</string>
-    <string name="dlg_about_donation_gold">$10: купить Золотую монетку Cool Reader</string>
-    <string name="dlg_about_donation_installed">Установлено</string>
     <string name="dlg_about_fonts_dirs">Каталоги шрифтов:</string>
     <string name="dlg_about_textures_dirs">Каталоги текстур:</string>
     <string name="dlg_about_backgrounds_dirs">Каталоги фоновых рисунков:</string>
@@ -444,15 +439,11 @@
     <string name="win_title_confirm_folder_delete">Вы действительно хотите удалить эту папку вместе со всеми книгами?</string>
     <string name="folder_name_books_by_series">Серии</string>
     <string name="folder_name_books_by_title">Названия</string>
-    <string name="dlg_about_donation_platinum">$30: купить Платиновую монету Cool Reader</string>
-    <string name="mi_donation">Пожертвовать</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader - бесплатная свободная программа, и всегда будет оставаться такой. Вы можете поддержать развитие проекта с помощью Android Market:</string>
     <string name="mi_font_next">Следующий шрифт</string>
     <string name="mi_font_size_decrease">Уменьшить шрифт</string>
     <string name="mi_font_size_increase">Увеличить шрифт</string>
     <string name="mi_font_previous">Предыдущий шрифт</string>
     <string name="options_multi_selection_action">Действие для нескольких выделенных слов</string>
-    <string name="dlg_about_donation_total">Всего: </string>
     <string name="options_font_embedded_document_font_enabled">Встроенные шрифты документа</string>
     <string name="options_app_locale_system">Системный</string>
     <string name="options_app_locale">Язык интерфейса (Interface language)</string>

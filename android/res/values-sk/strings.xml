@@ -240,11 +240,6 @@
     <string name="mi_book_search">Nájsť knihu</string>
     <string name="dlg_book_search_not_found">Žiadne knihy nenájdené</string>
     <string name="dir_search_results">Výsledky vyhľadávania</string>
-    <string name="dlg_about_donation">Cool Reader je bezplatný a vždy aj ostane. Ak chcete podporiť vývoj tohto projektu, môžete si kúpiť balíček na podporu projektu z Android Marketu</string>
-    <string name="dlg_about_donation_bronze">$1: kúpiť Cool Reader Bronze Donation</string>
-    <string name="dlg_about_donation_silver">$3: kúpiť Cool Reader Silver Donation</string>
-    <string name="dlg_about_donation_gold">$10: kúpiť Cool Reader Gold Donation</string>
-    <string name="dlg_about_donation_installed">Nainštalované</string>
     <string name="mi_book_browser_normal_mode">Podrobný zoznam súborov</string>
     <string name="mi_book_browser_simple_mode">Jednoduchý zoznam súborov</string>
     <string name="options_page_animation_slide_2_pages">Posun (2 strany)</string>
@@ -399,10 +394,6 @@
     <string name="book_info_book_language">Jazyk</string>
     <string name="folder_name_books_by_series">Knihy podľa série</string>
     <string name="folder_name_books_by_title">Knihy podľa názvu</string>
-    <string name="dlg_about_donation_platinum">$30: kúpiť Cool Reader Platinum Donation</string>
-    <string name="mi_donation">Podpora projektu</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader je bezplatný a vždy aj ostane. Ak chcete podporiť vývoj tohto projektu, môžete si kúpiť balíček na podporu projektu z Android Marketu:</string>
-    <string name="dlg_about_donation_total">Celková podpora od Vás:</string>
     <string name="option_controls_gesture_page_flipping_enabled">Listovanie pomocou gest</string>
     <string name="options_font_embedded_document_font_enabled">Vložené písmo dokumentu</string>
     <string name="options_app_locale_system">Systémové</string>
@@ -460,8 +451,6 @@
     <string name="options_view_toolbar_hide_in_fullscreen">Skryť panel nástrojov v režime celej obrazovky</string>
     <string name="options_view_toolbar_position_right">Vpravo</string>
     <string name="dlg_button_back">Späť</string>
-    <string name="dlg_about_donation_iron">$0,3: kúpiť Cool Reader Iron Donation</string>
-    <string name="dlg_about_donation_vip">$100: kúpiť Cool Reader VIP Donation</string>
     <string name="tb_button_find_prev">Nájsť predchádzajúce</string>
     <string name="tb_button_find_close">Ukončiť hľadanie</string>
     <string name="tb_button_find_next">Nájsť nasledujúce</string>

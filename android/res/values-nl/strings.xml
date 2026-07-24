@@ -228,11 +228,6 @@
     <string name="mi_book_search">Zoek een boek</string>
     <string name="dlg_book_search_not_found">Boeken niet gevonden</string>
     <string name="dir_search_results">Gevonden rezultaten</string>
-    <string name="dlg_about_donation_bronze">$ 1: koop een bronzen munt Cool Reader</string>
-    <string name="dlg_about_donation_silver">$ 3: koop een zilveren munt Cool Reader</string>
-    <string name="dlg_about_donation">Cool Reader - gratis software gratis, en zal altijd zo blijven. U kunt de ontwikkeling van het project te ondersteunen door het kopen van een pak-munt op de Android Market.</string>
-    <string name="dlg_about_donation_gold">10 dollar: koop een gouden munt Cool Reader</string>
-    <string name="dlg_about_donation_installed">Gevonden</string>
     <string name="mi_book_browser_normal_mode">Normaal</string>
     <string name="mi_book_browser_simple_mode">Eenvoudige lijst van bestanden</string>
     <string name="options_page_animation_slide_2_pages">Shiften (2 pagina\'s)</string>
@@ -388,13 +383,9 @@
     <string name="win_title_confirm_book_delete">Ben je zeker dit boek te verwijderen?</string>
     <string name="folder_name_books_by_series">Boeken op serie</string>
     <string name="folder_name_books_by_title">Boeken op naam</string>
-    <string name="dlg_about_donation_platinum">30 dollar: Koop een Platinum munt Cool Reader</string>
-    <string name="mi_donation">Doneer</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader is een gratis software programma en zal altijd zo blijven. U kunt de ontwikkeling van het project te ondersteunen door middel van Android Market:</string>
     <string name="mi_font_next">Next font</string>
     <string name="mi_font_size_decrease">Decrease font size</string>
     <string name="mi_font_size_increase">Increase font size</string>
-    <string name="dlg_about_donation_total">Total donations from you:</string>
     <string name="mi_font_previous">Previous font</string>
     <string name="options_multi_selection_action">Multi Selection action</string>
     <string name="option_controls_gesture_page_flipping_enabled">Gesture page flipping</string>

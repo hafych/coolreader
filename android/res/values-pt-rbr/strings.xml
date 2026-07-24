@@ -45,8 +45,6 @@
     <string name="win_title_options_apply">Aplicar mudanças?</string>
     <string name="win_title_screen_orientation_change_apply">Aplicar a mudança de exibição da tela?</string>
     <string name="dlg_button_back">Voltar</string>
-    <string name="dlg_about_donation_iron">$0.3: comprar Cool Reader Iron Donation</string>
-    <string name="dlg_about_donation_vip">$100: comprar Cool Reader VIP Donation</string>
     <string name="tb_button_find_prev">Buscar anterior</string>
     <string name="tb_button_find_close">Fechar busca</string>
     <string name="tb_button_find_next">Buscar próximo</string>
@@ -245,15 +243,6 @@
     <string name="mi_book_search">Buscar livro</string>
     <string name="dlg_book_search_not_found">No se han encontrado livros</string>
     <string name="dir_search_results">Resultados de busca</string>
-    <string name="dlg_about_donation">Cool Reader é grátis e continuará sendo grátis sempre. Si deseja ajudar no desenvolvimento deste projeto, puedes comprar paquetes de donaciones desde Android Market.</string>
-    <string name="dlg_about_donation_bronze">$1: compra a donación de bronze de Cool Reader</string>
-    <string name="dlg_about_donation_silver">$3: compra a donación de plata de Cool Reader</string>
-    <string name="dlg_about_donation_gold">$10: compra a donación de oro de Cool Reader</string>
-    <string name="dlg_about_donation_installed">Instalada</string>
-    <string name="dlg_about_donation_platinum">$30: compra a Donación Platinum de Cool Reader</string>
-    <string name="mi_donation">Donar</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader is free and will always be free. If you want to support development of this project, you can make donation using Android Market in-app purchase:</string>
-    <string name="dlg_about_donation_total">Total donations from you:</string>
     <string name="mi_book_browser_normal_mode">Modo normal</string>
     <string name="mi_book_browser_simple_mode">Modo simples</string>
     <string name="options_page_animation_slide_2_pages">Modo apresentação (2 páginas)</string>

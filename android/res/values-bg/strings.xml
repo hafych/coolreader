@@ -229,11 +229,6 @@
     <string name="mi_book_search">Търси книга</string>
     <string name="dlg_book_search_not_found">Книги не са намерени</string>
     <string name="dir_search_results">Резултати от търсенето</string>
-    <string name="dlg_about_donation_bronze">$1: купете Cool Reader с бронзова монета</string>
-    <string name="dlg_about_donation_silver">$3: купете Cool Reader със сребърна монета</string>
-    <string name="dlg_about_donation">Cool Reader е безплатна, свободна програма и винаги ще остане такава. Вие можете да подпомогнете развитието на проекта, купувайки програмата с монета в Android Market.</string>
-    <string name="dlg_about_donation_gold">$10: купете Cool Reader със златна монета</string>
-    <string name="dlg_about_donation_installed">Инсталирано</string>
     <string name="mi_book_browser_normal_mode">Нормален режим</string>
     <string name="mi_book_browser_simple_mode">Прост списък на файловете</string>
     <string name="options_page_animation_slide_2_pages">Преместване (2 стр.)</string>
@@ -388,10 +383,6 @@
     <string name="win_title_confirm_book_delete">Действително ли искате да изтриете тази книга?</string>
     <string name="folder_name_books_by_series">Книги по поредици</string>
     <string name="folder_name_books_by_title">Книги по заглавия</string>
-    <string name="dlg_about_donation_platinum">$30: купете Cool Reader с платинена монета</string>
-    <string name="mi_donation">Дари</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader е безплатна програма и винаги ще си остане такава. Можете да подпомогнете развитието на проект, като направите дарение използвайки системата за пазаруване на Android Market:</string>
-    <string name="dlg_about_donation_total">Общата сума на вашите дарения:</string>
     <string name="mi_font_next">Следващ шрифт</string>
     <string name="mi_font_size_decrease">Намали размера на шрифта</string>
     <string name="mi_font_size_increase">Увеличи размера на шрифта</string>

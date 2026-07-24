@@ -228,11 +228,6 @@
     <string name="mi_book_search">Keresés</string>
     <string name="dlg_book_search_not_found">Nem található könyv</string>
     <string name="dir_search_results">Keresési eredmény</string>
-    <string name="dlg_about_donation">A Cool Reader ingyenes és az is marad. Ha támogatni kívánja a fejlesztést, akkor az Android Marketen vásárolhat ehhez támogatási csomagokat.</string>
-    <string name="dlg_about_donation_bronze">$1: Cool Reader Bronz Támogatás</string>
-    <string name="dlg_about_donation_silver">$3: Cool Reader Ezüst Támogatás</string>
-    <string name="dlg_about_donation_gold">$10: Cool Reader Arany Támogatás</string>
-    <string name="dlg_about_donation_installed">Telepítve</string>
     <string name="mi_book_browser_normal_mode">Normál mód</string>
     <string name="mi_book_browser_simple_mode">Egyszerű fájllista</string>
     <string name="options_page_animation_slide_2_pages">Lapcsúsztatás (2 lap)</string>
@@ -386,10 +381,6 @@
     <string name="win_title_confirm_book_delete">Biztosan törli ezt a könyvet?</string>
     <string name="folder_name_books_by_series">Sorozatok</string>
     <string name="folder_name_books_by_title">Cím</string>
-    <string name="dlg_about_donation_platinum">$30: Cool Reader Platina Támogatás</string>
-    <string name="mi_donation">Támogatás</string>
-    <string name="dlg_about_donation_inapp_purchase">A Cool Reader ingyenes és az is marad. Ha támogatni kívánja a fejlesztést, akkor az Android Market alkalmazáson belüli vásárlási lehetőségét kihasználva választhat a különböző támogatási csomagok közül:</string>
-    <string name="dlg_about_donation_total">Az Ön által eddig vásárolt támogatások összesen:</string>
     <string name="mi_font_next">Következő betűtípus</string>
     <string name="mi_font_size_decrease">Betűméret csökkentése</string>
     <string name="mi_font_size_increase">Betűméret növelése</string>
@@ -447,8 +438,6 @@
     <string name="options_view_toolbar_hide_in_fullscreen">Eszköztár rejtése teljesképernyős módban</string>
     <string name="options_view_toolbar_position_right">Jobbra</string>
     <string name="dlg_button_back">Vissza</string>
-    <string name="dlg_about_donation_iron">$0.3: Cool Reader Vas támogatás</string>
-    <string name="dlg_about_donation_vip">$100: Cool Reader VIP támogatás</string>
     <string name="tb_button_find_prev">Előző</string>
     <string name="tb_button_find_close">Keresés vége</string>
     <string name="tb_button_find_next">Következő</string>

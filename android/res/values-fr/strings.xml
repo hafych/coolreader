@@ -233,11 +233,6 @@
     <string name="mi_book_search">Trouver un livre</string>
     <string name="dlg_book_search_not_found">Aucun livre trouvé</string>
     <string name="dir_search_results">Résultat de la recherche</string>
-    <string name="dlg_about_donation">Cool Reader est et restera toujours gratuit. Si vous désirez aider au développement de ce projet, vous pouvez acheter un don sur le \'Android Market\'.</string>
-    <string name="dlg_about_donation_bronze">$1: acheter un don Cool Reader Bronze</string>
-    <string name="dlg_about_donation_silver">$3: acheter un don Cool Reader Silver</string>
-    <string name="dlg_about_donation_gold">$10: acheter un don Cool Reader Gold</string>
-    <string name="dlg_about_donation_installed">Installé</string>
     <string name="mi_book_browser_normal_mode">Mode normal</string>
     <string name="mi_book_browser_simple_mode">Liste de fichier simple</string>
     <string name="options_page_animation_slide_2_pages">Glisser les pages (2 pages)</string>
@@ -394,10 +389,6 @@
     <string name="book_info_book_language">Langue</string>
     <string name="folder_name_books_by_series">Livres par séries</string>
     <string name="folder_name_books_by_title">Livres par titres</string>
-    <string name="dlg_about_donation_platinum">$30: acheter un don Cool Reader Platinum</string>
-    <string name="mi_donation">Faire un don</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader est et restera toujours gratuit. Si vous désirez aider au développement de ce projet, vous pouvez acheter un don sur le \'Android Market\'.</string>
-    <string name="dlg_about_donation_total">Total des dons que vous avez fait:</string>
     <string name="option_controls_gesture_page_flipping_enabled">Changement de page par gestuelle</string>
     <string name="options_font_embedded_document_font_enabled">Utiliser les polices internes des livres</string>
     <string name="options_app_locale_system">Système</string>

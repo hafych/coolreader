@@ -37,17 +37,6 @@
     <issue
         id="ApplySharedPref"
         message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
-        errorLine1="       pref.edit().putString(DONATIONS_PREF_TOTAL_AMOUNT, String.valueOf(mTotalDonations)).commit();"
-        errorLine2="                                                                                           ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/CoolReader.java"
-            line="1967"
-            column="92"/>
-    </issue>
-
-    <issue
-        id="ApplySharedPref"
-        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
         errorLine1="   editor.commit();"
         errorLine2="          ~~~~~~~~">
         <location
@@ -1044,22 +1033,6 @@
             file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/db/CRDBServiceAccessor.java"
             line="118"
             column="1"
-            message="Previous line indentation here"/>
-    </issue>
-
-    <issue
-        id="SuspiciousIndentation"
-        message="The indentation string here is different from on the previous line (`&quot; &quot;` vs `\t`)"
-        errorLine1="         mPurchases.add(p);"
-        errorLine2="    ~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/donations/CRDonationService.java"
-            line="182"
-            column="5"/>
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/donations/CRDonationService.java"
-            line="181"
-            column="5"
             message="Previous line indentation here"/>
     </issue>
 
@@ -2460,17 +2433,6 @@
     </issue>
 
     <issue
-        id="ExtraText"
-        message="Unexpected text found in layout file: &quot;/>&quot;"
-        errorLine1="                />"
-        errorLine2="                ~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="123"
-            column="17"/>
-    </issue>
-
-    <issue
         id="Deprecated"
         message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
         errorLine1="                    android:editable=&quot;true&quot;"
@@ -2874,17 +2836,6 @@
         <location
             file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/AboutDialog.java"
             line="197"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="UseCompatLoadingForDrawables"
-        message="Use `ResourcesCompat.getDrawable()`"
-        errorLine1="    getContext().getResources().getDrawable(R.drawable.ic_menu_emoticons));"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/AboutDialog.java"
-            line="203"
             column="5"/>
     </issue>
 
@@ -5912,17 +5863,6 @@
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.mi_donation` appears to be unused"
-        errorLine1="    &lt;string name=&quot;mi_donation&quot;>Donate&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/strings.xml"
-            line="462"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
         message="The resource `R.string.options_page_show_titlebar_bottom` appears to be unused"
         errorLine1="    &lt;string name=&quot;options_page_show_titlebar_bottom&quot;>Bottom&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
@@ -6852,13 +6792,6 @@
         id="IconColors"
         message="Action Bar icons should use a single gray color (`#333333` for light themes (with 60%/30% opacity for enabled/disabled), and `#FFFFFF` with opacity 80%/30% for dark themes">
         <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/drawable/ic_menu_emoticons.png"/>
-    </issue>
-
-    <issue
-        id="IconColors"
-        message="Action Bar icons should use a single gray color (`#333333` for light themes (with 60%/30% opacity for enabled/disabled), and `#FFFFFF` with opacity 80%/30% for dark themes">
-        <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/drawable/ic_menu_mark.png"/>
     </issue>
 
@@ -7366,13 +7299,6 @@
         message="Found bitmap drawable `res/drawable/ic_menu_copy_holo_light.png` in densityless folder">
         <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/drawable/ic_menu_copy_holo_light.png"/>
-    </issue>
-
-    <issue
-        id="IconLocation"
-        message="Found bitmap drawable `res/drawable/ic_menu_emoticons.png` in densityless folder">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/drawable/ic_menu_emoticons.png"/>
     </issue>
 
     <issue
@@ -8596,105 +8522,6 @@
     <issue
         id="ContentDescription"
         message="Missing `contentDescription` attribute on image"
-        errorLine1="  &lt;ImageView "
-        errorLine2="   ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="14"
-            column="4"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="  &lt;ImageView "
-        errorLine2="   ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="29"
-            column="4"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="  &lt;ImageView "
-        errorLine2="   ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="44"
-            column="4"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="                &lt;ImageView"
-        errorLine2="                 ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="28"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="                &lt;ImageView"
-        errorLine2="                 ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="46"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="                &lt;ImageView"
-        errorLine2="                 ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="67"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="                &lt;ImageView"
-        errorLine2="                 ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="85"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="                &lt;ImageView"
-        errorLine2="                 ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="106"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
-        errorLine1="                &lt;ImageView"
-        errorLine2="                 ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="125"
-            column="18"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
         errorLine1="                    &lt;ImageView"
         errorLine2="                     ~~~~~~~~~">
         <location
@@ -9405,28 +9232,6 @@
             file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/BaseActivity.java"
             line="1313"
             column="46"/>
-    </issue>
-
-    <issue
-        id="SetTextI18n"
-        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
-        errorLine1="  btn.setText(&quot;$&quot; + amount);"
-        errorLine2="              ~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/AboutDialog.java"
-            line="78"
-            column="15"/>
-    </issue>
-
-    <issue
-        id="SetTextI18n"
-        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
-        errorLine1="   text.setText(mCoolReader.getString(R.string.dlg_about_donation_total) + &quot; $&quot; + amount);"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/AboutDialog.java"
-            line="92"
-            column="17"/>
     </issue>
 
     <issue
@@ -10553,72 +10358,6 @@
 
     <issue
         id="RtlSymmetry"
-        message="When you define `paddingLeft` you should probably also define `paddingRight` for right-to-left symmetry"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="33"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlSymmetry"
-        message="When you define `paddingLeft` you should probably also define `paddingRight` for right-to-left symmetry"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="51"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlSymmetry"
-        message="When you define `paddingLeft` you should probably also define `paddingRight` for right-to-left symmetry"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="72"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlSymmetry"
-        message="When you define `paddingLeft` you should probably also define `paddingRight` for right-to-left symmetry"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="90"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlSymmetry"
-        message="When you define `paddingLeft` you should probably also define `paddingRight` for right-to-left symmetry"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="111"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlSymmetry"
-        message="When you define `paddingLeft` you should probably also define `paddingRight` for right-to-left symmetry"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="130"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlSymmetry"
         message="When you define `paddingRight` you should probably also define `paddingLeft` for right-to-left symmetry"
         errorLine1="    android:paddingRight=&quot;?android:attr/scrollbarSize&quot;"
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~">
@@ -10857,336 +10596,6 @@
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_app.xml"
             line="25"
             column="25"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="   android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="19"
-            column="28"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`end`&quot; instead of &quot;`right`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="    android:layout_gravity=&quot;center_vertical|right&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="24"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="   android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="34"
-            column="28"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`end`&quot; instead of &quot;`right`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="    android:layout_gravity=&quot;center_vertical|right&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="39"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="   android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="49"
-            column="28"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`end`&quot; instead of &quot;`right`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="    android:layout_gravity=&quot;center_vertical|right&quot;"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation.xml"
-            line="54"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="31"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:paddingLeft` with `android:paddingStart=&quot;12dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="33"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="40"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:layout_marginRight` with `android:layout_marginEnd=&quot;8dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:layout_marginRight=&quot;8dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="42"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="49"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:paddingLeft` with `android:paddingStart=&quot;12dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="51"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="58"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:layout_marginRight` with `android:layout_marginEnd=&quot;8dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:layout_marginRight=&quot;8dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="60"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="70"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:paddingLeft` with `android:paddingStart=&quot;12dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="72"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="79"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:layout_marginRight` with `android:layout_marginEnd=&quot;8dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:layout_marginRight=&quot;8dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="81"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="88"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:paddingLeft` with `android:paddingStart=&quot;12dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="90"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="97"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:layout_marginRight` with `android:layout_marginEnd=&quot;8dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:layout_marginRight=&quot;8dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="99"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="109"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:paddingLeft` with `android:paddingStart=&quot;12dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="111"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="118"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:layout_marginRight` with `android:layout_marginEnd=&quot;8dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:layout_marginRight=&quot;8dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="120"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="128"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:paddingLeft` with `android:paddingStart=&quot;12dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:paddingLeft=&quot;12dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="130"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`start`&quot; instead of &quot;`left`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="                    android:layout_gravity=&quot;center_vertical|left&quot;"
-        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="137"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:layout_marginRight` with `android:layout_marginEnd=&quot;8dip&quot;` to better support right-to-left layouts"
-        errorLine1="                    android:layout_marginRight=&quot;8dip&quot;"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/about_dialog_donation2.xml"
-            line="139"
-            column="21"/>
     </issue>
 
     <issue

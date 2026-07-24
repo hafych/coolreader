@@ -107,6 +107,9 @@ jobs:
       - name: Verify Android storage policy
         run: python3 tools/verify_android_storage_policy.py
 
+      - name: Verify Android release policy
+        run: python3 tools/verify_android_release_policy.py
+
       - name: Verify Android HTTP policy
         run: python3 tools/verify_android_http_policy.py
 

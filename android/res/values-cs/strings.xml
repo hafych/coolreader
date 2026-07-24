@@ -228,11 +228,6 @@
 <string name="mi_book_search">"Hledat"</string>
 <string name="dlg_book_search_not_found">"Žádné knihy nebyly nalezeny"</string>
 <string name="dir_search_results">"Výsledky hledání"</string>
-<string name="dlg_about_donation">"Cool Reader je bezplatný a vždy zůstane bezplatný. Pokud chcete podpořit jeho vývoj, můžete si koupit balíček na podporu projektu z Android Marketu."</string>
-<string name="dlg_about_donation_bronze">"$1: koupit Cool Reader Bronze Donation"</string>
-<string name="dlg_about_donation_silver">"$3: koupit Cool Reader Silver Donation"</string>
-<string name="dlg_about_donation_gold">"$10: koupit Cool Reader Gold Donation"</string>
-<string name="dlg_about_donation_installed">"Instalováno"</string>
 <string name="mi_book_browser_normal_mode">"Podrobný seznam souborů"</string>
 <string name="mi_book_browser_simple_mode">"Zjednodušený seznam souborů"</string>
 <string name="options_page_animation_slide_2_pages">"Posun (2 stránky)"</string>
@@ -388,10 +383,6 @@
 <string name="win_title_confirm_book_delete">"Opravdu chcete smazat tuto knihu?"</string>
 <string name="folder_name_books_by_series">"Knihy podle série"</string>
 <string name="folder_name_books_by_title">"Knihy podle názvu"</string>
-<string name="dlg_about_donation_platinum">"$30: koupit Cool Reader Platinum Donation"</string>
-<string name="mi_donation">"Podpořit projekt"</string>
-<string name="dlg_about_donation_inapp_purchase">"Cool Reader je bezplatný a vždy zůstane bezplatný. Pokud chcete podpořit jeho vývoj, můžete si koupit balíček na podporu projektu z Android Marketu:"</string>
-<string name="dlg_about_donation_total">"Vámi věnovaná částka celkem:"</string>
 <string name="options_multi_selection_action">"Akce po vícenásobném výběru"</string>
 <string name="option_controls_gesture_page_flipping_enabled">"Stránkování gesty"</string>
 <string name="options_font_embedded_document_font_enabled">"Použít vložená písma"</string>
@@ -459,8 +450,6 @@
 <string name="folder_name_books_by_state_finished">"Přečteno"</string>
 <string name="options_app_locale_pl">"Polski"</string>
 <string name="dlg_button_back">"Černý"</string>
-<string name="dlg_about_donation_iron">"$0,3: koupit Cool Reader Iron Donation"</string>
-<string name="dlg_about_donation_vip">"$100: koupit Cool Reader VIP Donation"</string>
 <string name="tb_button_find_prev">"Najít předcházející"</string>
 <string name="tb_button_find_close">"Ukončit hledání"</string>
 <string name="tb_button_find_next">"Najít následující"</string>

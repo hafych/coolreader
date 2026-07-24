@@ -235,11 +235,6 @@
     <string name="mi_book_search">Szukaj</string>
     <string name="dlg_book_search_not_found">Nie znaleziono książek</string>
     <string name="dir_search_results">Wyniki wyszukiwania</string>
-    <string name="dlg_about_donation">Cool Reader jest darmowy i zawsze takim będzie. Jeśli chcesz wesprzeć rozwój tego projektu, możesz kupić pakiety dotacji w Sklepie Play.</string>
-    <string name="dlg_about_donation_bronze">$1: Kup Cool Reader Bronze Donation</string>
-    <string name="dlg_about_donation_silver">$3: Kup Cool Reader Silver Donation</string>
-    <string name="dlg_about_donation_gold">$10: Kup Cool Reader Gold Donation</string>
-    <string name="dlg_about_donation_installed">Zainstalowano</string>
     <string name="mi_book_browser_normal_mode">Tryb standardowy</string>
     <string name="mi_book_browser_simple_mode">Prosta lista plików</string>
     <string name="options_page_animation_slide_2_pages">Slajd (2 strony)</string>
@@ -400,10 +395,6 @@
     <string name="book_info_book_language">Język</string>
     <string name="folder_name_books_by_series">Ks. wg. serii</string>
     <string name="folder_name_books_by_title">Ks. wg. tytułu</string>
-    <string name="dlg_about_donation_platinum">$30: Kup Cool Reader Platinum</string>
-    <string name="mi_donation">Dotacja</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader jest darmowy i zawsze takim będzie. Jeśli chcesz wesprzeć rozwój tego projektu, możesz kupić pakiety dotacji w Sklepie Play:</string>
-    <string name="dlg_about_donation_total">Suma Twoich dotacji:</string>
     <string name="option_controls_gesture_page_flipping_enabled">Zmiana strony gestem</string>
     <string name="options_font_embedded_document_font_enabled">Czcionki wbudowane dokumentu</string>
     <string name="options_app_locale_system">Systemowy</string>
@@ -459,8 +450,6 @@
     <string name="options_view_toolbar_hide_in_fullscreen">Ukryj pasek w trybie pełnoekranowym</string>
     <string name="options_view_toolbar_position_right">Po prawej</string>
     <string name="dlg_button_back">Wstecz</string>
-    <string name="dlg_about_donation_iron">$0.3: Kup dotację Cool Reader Iron</string>
-    <string name="dlg_about_donation_vip">$100: Kup dotację Cool Reader VIP</string>
     <string name="tb_button_find_prev">Znajdź poprzedni</string>
     <string name="tb_button_find_close">Zakończ wyszukiwanie</string>
     <string name="tb_button_find_next">Znajdź następny</string>

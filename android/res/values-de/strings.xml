@@ -233,11 +233,6 @@
     <string name="mi_book_search">Nach Buch suchen</string>
     <string name="dlg_book_search_not_found">Keine Bücher gefunden</string>
     <string name="dir_search_results">Suchergebnisse</string>
-    <string name="dlg_about_donation">Cool Reader ist kostenlos und wird immer kostenlos bleiben. Wenn Sie die Entwicklung dieses Projekts unterstützen wollen, können Sie ein Spendenpaket im Android-Market kaufen.</string>
-    <string name="dlg_about_donation_bronze">$1: Bronze-Spende für Cool Reader kaufen</string>
-    <string name="dlg_about_donation_silver">$3: Silber-Spende für Cool Reader kaufen</string>
-    <string name="dlg_about_donation_gold">$10: Gold-Spende für Cool Reader kaufen</string>
-    <string name="dlg_about_donation_installed">Installiert</string>
     <string name="mi_book_browser_normal_mode">Erweiterte Dateiliste</string>
     <string name="mi_book_browser_simple_mode">Einfache Dateiliste</string>
     <string name="options_page_animation_slide_2_pages">Gleiten (2 Seiten)</string>
@@ -393,10 +388,6 @@
     <string name="win_title_confirm_book_delete">Wollen Sie dieses Buch wirklich löschen?</string>
     <string name="folder_name_books_by_series">Bücher nach Reihe</string>
     <string name="folder_name_books_by_title">Bücher nach Titel</string>
-    <string name="dlg_about_donation_platinum">$30: Platin-Spende für Cool Reader kaufen</string>
-    <string name="mi_donation">Spenden</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader ist kostenlos und wird immer kostenlos bleiben. Wenn Sie die Entwicklung dieses Projekts unterstützen wollen, können Sie per In-App-Purchase ein Spendenpaket im Android-Market kaufen.</string>
-    <string name="dlg_about_donation_total">Ihre Gesamt-Spendensumme:</string>
     <string name="option_controls_gesture_page_flipping_enabled">Blättern per Geste</string>
     <string name="options_font_embedded_document_font_enabled">Eingebettete Schriftarten</string>
     <string name="options_app_locale_system">System</string>

@@ -228,11 +228,6 @@
     <string name="mi_book_search">Kitap bul</string>
     <string name="dlg_book_search_not_found">Hiç kitap bulunamadı</string>
     <string name="dir_search_results">Search results</string>
-    <string name="dlg_about_donation">Coolreader ücretsizdir ve ücretsiz kalacaktır. Eğer bu uygulamanın geliştirilmesine destek olmak istiyorsanız, Android Marketten bağış paketi satın alabilirsiniz. Bu paketler sadece bağış amaçlıdır, uygulama içermez.</string>
-    <string name="dlg_about_donation_bronze">1$: Cool Reader Bronz paket al</string>
-    <string name="dlg_about_donation_silver">3$: Cool Reader Gümüş paket al</string>
-    <string name="dlg_about_donation_gold">10$: Cool Reader Bronz paket al</string>
-    <string name="dlg_about_donation_installed">Yüklendi</string>
     <string name="mi_book_browser_normal_mode">Normal dosya görünümü</string>
     <string name="mi_book_browser_simple_mode">Basit dosya görünümü</string>
     <string name="options_page_animation_slide_2_pages">Kaydır (2 sayfa)</string>
@@ -386,10 +381,6 @@
     <string name="win_title_confirm_book_delete">Do you really want to delete this book?</string>
     <string name="folder_name_books_by_series">Books by series</string>
     <string name="folder_name_books_by_title">Books by title</string>
-    <string name="dlg_about_donation_platinum">$30: buy Cool Reader Platinum Donation</string>
-    <string name="mi_donation">Donate</string>
-    <string name="dlg_about_donation_inapp_purchase">Cool Reader is free and will always be free. If you want to support development of this project, you can make donation using Android Market in-app purchase:</string>
-    <string name="dlg_about_donation_total">Total donations from you:</string>
     <string name="mi_font_next">Next font</string>
     <string name="mi_font_size_decrease">Decrease font size</string>
     <string name="mi_font_size_increase">Increase font size</string>

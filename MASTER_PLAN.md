@@ -104,8 +104,6 @@ DRM или ограничений доступа, подбор/получени�
 
 - [ ] Заменить `startActivityForResult`/ручные permission callbacks на Activity
   Result APIs в изменяемых сценариях.
-- [ ] Удалить или полностью заменить устаревший Billing v3 AIDL; donation UI не
-  должен обещать неработающую покупку.
 - [ ] Разделить монолитные `CoolReader`, `ReaderView` и сервисы на тестируемые
   lifecycle-aware компоненты без статического состояния Activity/Service.
 - [ ] Проверить Android 14–16 требования к foreground services, receiver export,
