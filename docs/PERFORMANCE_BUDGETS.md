@@ -54,6 +54,20 @@ The same source fixture hash must be used for baseline and candidate. A changed
 scenario, device or OS establishes a new named baseline; it must not silently
 replace historical measurements.
 
+## Automated scanner corpus
+
+API 35 CI also runs a deterministic 20,000-book FB2 scanner corpus:
+
+```bash
+./tools/run_android_scanner_corpus.sh
+```
+
+The instrumentation report records `initial_scan_elapsed_ms`,
+`unchanged_scan_elapsed_ms`, `peak_pss_kib` and `peak_java_heap_bytes` under
+`android/app/build/outputs/androidTest-results/`. Its debug-emulator numbers are
+regression evidence and enforce broad safety ceilings; they are not comparable
+to, and never replace, the signed release-device baseline defined above.
+
 ## Results format and gate
 
 Store release evidence as JSON:

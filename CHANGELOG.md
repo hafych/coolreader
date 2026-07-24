@@ -89,6 +89,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Versioned document and directory source fingerprints are persisted by main
   database schema v38, allowing unchanged directory batches to reuse stored
   metadata while same-size files with a newer modification time are rescanned.
+- API 35 CI now scans and rescans a deterministic 20,000-book FB2 corpus,
+  enforcing debug safety ceilings and preserving initial/unchanged elapsed
+  time, peak PSS and peak Java heap as instrumentation evidence.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

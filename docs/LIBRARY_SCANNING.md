@@ -65,3 +65,7 @@ file receives a new modification time, only that document is parsed again.
 - Android instrumentation scans 133 books across three directory levels,
   reuses an unchanged directory, detects a same-size document change and then
   exercises user, entry and depth stops.
+- `LibraryScannerCorpusInstrumentedTest` scans and rescans 20,000 generated FB2
+  documents on the API 35 CI emulator, reports both elapsed times, peak PSS and
+  peak Java heap, and enforces a five-minute per-pass timeout plus a 768 MiB
+  debug-only PSS safety ceiling.
