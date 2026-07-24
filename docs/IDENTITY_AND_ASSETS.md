@@ -10,7 +10,7 @@ values from becoming an accidental permanent Play identity.
 | README/product working name | `CoolReader Next` | Draft only |
 | Android launcher label | `Cool Reader` (one Belarusian locale says `CoolReader 3`) | Inconsistent; must follow approved name |
 | Android `applicationId` | `org.coolreader` | Do not publish until update continuity and ownership are confirmed |
-| Version | `3.2.59-1`, code `32570` | Versioning scheme not approved |
+| Version | `3.2.59-next.1`, code `260724010` | Scheme defined in `VERSIONING.md`; increment before a later release |
 | Publisher/legal name | `[DEVELOPER LEGAL NAME]` | Required |
 | Support contact | `[SUPPORT CONTACT EMAIL]` | Required |
 | Privacy contact | `[PRIVACY CONTACT EMAIL]` | Required |

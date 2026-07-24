@@ -22,6 +22,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   resolved Android release runtime and native components.
 - Explicit Android release performance budgets and deterministic synthetic
   large-book/10,000-book-library fixture generation.
+- A single verified fork version source shared by Android and desktop, with a
+  monotonic date/sequence Android version-code scheme.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

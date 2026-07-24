@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -101,14 +102,21 @@ def main() -> None:
     gradle = (ROOT / "android" / "app" / "build.gradle").read_text(
         encoding="utf-8"
     )
-    for source_fact in (
-        'applicationId "org.coolreader"',
-        "versionCode 32570",
-        'versionName "3.2.59-1"',
+    if 'applicationId "org.coolreader"' not in gradle:
+        violations.append(
+            "Android applicationId changed; refresh Play release docs"
+        )
+    release_version = json.loads(
+        (ROOT / "release-version.json").read_text(encoding="utf-8")
+    )
+    identity = (DOCS / "IDENTITY_AND_ASSETS.md").read_text(encoding="utf-8")
+    for value in (
+        release_version["versionName"],
+        str(release_version["androidVersionCode"]),
     ):
-        if source_fact not in gradle:
+        if value not in identity:
             violations.append(
-                f"Android identity changed; refresh Play docs: {source_fact}"
+                f"identity decision record omits release version value: {value}"
             )
 
     manifests = (

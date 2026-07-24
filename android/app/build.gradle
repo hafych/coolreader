@@ -1,6 +1,12 @@
 apply plugin: 'com.android.application'
 
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def releaseVersionFile = rootProject.file('../release-version.json')
+if (!releaseVersionFile.isFile())
+    throw new GradleException('Missing release-version.json')
+def releaseVersion = new JsonSlurper().parse(releaseVersionFile)
 
 def releaseSigningPropertiesFile =
         rootProject.file('release-signing.properties')
@@ -46,10 +52,10 @@ android {
         applicationId "org.coolreader"
         minSdkVersion 21
         targetSdkVersion 35
-        // When new version released, version code must be incremented at least by 8
-        // for compatibility with ABI versioning of split apk (see below).
-        versionCode 32570
-        versionName "3.2.59-1"
+        // Base codes end in zero; 1..7 are reserved for legacy ABI split APKs.
+        // Every release base therefore advances by at least ten.
+        versionCode releaseVersion.androidVersionCode as int
+        versionName releaseVersion.versionName as String
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {

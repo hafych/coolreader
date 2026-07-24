@@ -220,10 +220,8 @@ def main() -> None:
             "Dependency policy violations found:\n" + "\n".join(violations)
         )
 
-    root_version_match = re.search(
-        r'versionName\s+"([^"]+)"', gradle_text
-    )
-    root_version = root_version_match.group(1) if root_version_match else "UNKNOWN"
+    release_version = read_json(ROOT / "release-version.json")
+    root_version = release_version["versionName"]
     root_package = {
         "SPDXID": "SPDXRef-Package-CoolReader",
         "name": "CoolReader Android",

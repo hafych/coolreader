@@ -68,6 +68,8 @@ Dependency licensing and SPDX generation are documented in
 [docs/DEPENDENCY_POLICY.md](docs/DEPENDENCY_POLICY.md).
 Release performance thresholds and reproducible synthetic fixtures are
 documented in [docs/PERFORMANCE_BUDGETS.md](docs/PERFORMANCE_BUDGETS.md).
+The shared Android/desktop version scheme is documented in
+[docs/VERSIONING.md](docs/VERSIONING.md).
 
 ### Support matrix
 

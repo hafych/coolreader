@@ -90,7 +90,6 @@ DRM или ограничений доступа, подбор/получени�
 
 ### Release engineering
 
-- [ ] Выбрать схему версий форка и связь с upstream revision.
 - [ ] Автоматизировать release workflow: tag, changelog, AAB/APK, desktop archives,
   checksums, SBOM, symbols и GitHub Release.
 - [ ] Проверить воспроизводимость двух release-сборок в чистых окружениях и

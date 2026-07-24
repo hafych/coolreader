@@ -138,6 +138,9 @@ jobs:
       - name: Deploy verified third-party sources
         run: ./thirdparty-deploy.sh
 
+      - name: Verify release version
+        run: python3 tools/verify_release_version.py
+
       - name: Verify Java/native ParseBudget contract
         run: python3 tools/verify_parse_budget_contract.py
 
