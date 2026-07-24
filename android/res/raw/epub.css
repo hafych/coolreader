@@ -224,6 +224,19 @@ img[align=right i]   { float: right; }
 table[align=left i]  { float: left; }
 table[align=right i] { float: right; }
 
+/* EPUB3 semantic notes. The namespace prefix is stripped by the HTML parser,
+ * so epub:type is matched as type. Footnotes may be gathered in-page;
+ * endnotes stay in normal flow but remain discoverable by note popups. */
+a[type~=noteref], a[role=doc-noteref] {
+    -cr-hint: noteref;
+}
+aside[type~=footnote], aside[role=doc-footnote] {
+    -cr-hint: footnote footnote-inpage;
+}
+aside[type~=endnote], aside[role=doc-endnote] {
+    -cr-hint: footnote;
+}
+
 /* EPUB3 epub:type="pagebreak" may sometimes have the page number
  * as content: hide it. (Usually, its content is empty and the
  * page number is in a title= attribute.) */

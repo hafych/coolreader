@@ -177,6 +177,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   document-scoped embedded-font precedence and ordered CJK fallback.
 - Native CSS regressions now cover declaration units, pagination aliases,
   cascade specificity, source order and computed inheritance.
+- An in-memory EPUB 3 corpus now covers nested navigation, landmarks fallback,
+  page lists, refined metadata, semantic notes and static media-overlay policy.
 - German, Portuguese and Ukrainian hyphenation patterns are refreshed from a
   pinned upstream source; language goldens and desktop/Android parity checks
   now cover all packaged dictionaries.
@@ -207,6 +209,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   font while discarding unknown families.
 - Intentionally empty Arabic and Persian no-hyphenation dictionaries now load
   as valid packaged policies instead of falling back after a parse error.
+- EPUB 3 `noteref`, `footnote` and `endnote` semantics now map to explicit
+  reader note hints, including equivalent `doc-*` ARIA roles.
 - Android instrumentation now uses the AndroidX test runner, and the obsolete
   Jetifier compatibility pass is disabled after removal of support-library
   dependencies.

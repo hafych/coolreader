@@ -120,7 +120,7 @@ DRM или ограничений доступа, подбор/получени�
 
 ### EPUB/CSS/типографика
 
-- [ ] Расширить EPUB3 nav/landmarks, metadata, footnotes и media-overlay policy с
+- [x] Расширить EPUB3 nav/landmarks, metadata, footnotes и media-overlay policy с
   тестовым corpus.
 - [x] Определить поддерживаемое CSS-подмножество, добавить тесты cascade,
   specificity, inheritance, units и page-break.
