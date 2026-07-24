@@ -68,6 +68,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   the active task is no longer retained in static Activity-owned state.
 - MainDB receives its genre handbook from CRDBService instead of depending on
   the Activity-owned global service graph.
+- Archive metadata lookup is a stateless Engine operation, so FileInfo no
+  longer reaches through the global service locator.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application
@@ -86,8 +88,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   URIs, with bounded SHA-256 identity for local content.
 - API 35 emulator instrumentation for startup, ordinary-file and generic
   `content://` opening, SAF library-root management, persisted position
-  restore, TTS notification actions and safe startup after a clean
-  uninstall/reinstall cycle.
+  restore, locator-free archive-entry metadata, TTS notification actions and
+  safe startup after a clean uninstall/reinstall cycle.
 - Unit and native regression tests for XML, OPDS, stream and hostile document
   resource limits.
 - SQLite fixture matrices for every supported main and cover database migration,

@@ -319,7 +319,7 @@ public class FileInfo implements Parcelable {
 				isArchive = true;
 				try {
 					//ZipFile zip = new ZipFile(new File(arcname));
-					ArrayList<ZipEntry> entries = Services.getEngine().getArchiveItems(arcname);
+					ArrayList<ZipEntry> entries = Engine.getArchiveItems(arcname);
 					//for ( Enumeration<?> e = zip.entries(); e.hasMoreElements(); ) {
 					for (ZipEntry entry : entries) {
 						String name = entry.getName();

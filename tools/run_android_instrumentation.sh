@@ -38,6 +38,9 @@ run_instrumentation \
     'phase0-open-ordinary-file' \
     'org.coolreader.AndroidSmokeInstrumentedTest#ordinaryFileOpensFromGenericMimeIntent'
 run_instrumentation \
+    'phase0-archive-entry-metadata' \
+    'org.coolreader.AndroidSmokeInstrumentedTest#archiveEntryMetadataDoesNotRequireServiceLocator'
+run_instrumentation \
     'phase0-library-root-management' \
     'org.coolreader.crengine.LibraryRootStoreInstrumentedTest#rootsCanBeReplacedAndRemovedWithoutFileOperations'
 run_instrumentation \

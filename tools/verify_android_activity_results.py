@@ -34,6 +34,7 @@ SYNCHRONIZER = SOURCE / "sync2" / "Synchronizer.java"
 OPDS_UTIL = SOURCE / "crengine" / "OPDSUtil.java"
 MAIN_DB = SOURCE / "db" / "MainDB.java"
 CRDB_SERVICE = SOURCE / "db" / "CRDBService.java"
+FILE_INFO = SOURCE / "crengine" / "FileInfo.java"
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -280,6 +281,17 @@ def main() -> None:
             "getApplicationContext()))" not in crdb_service_text):
         violations.append(
             f"{relative(CRDB_SERVICE)} does not assemble MainDB dependencies")
+
+    file_info_text = FILE_INFO.read_text(encoding="utf-8")
+    if re.search(r"\bServices\.", file_info_text):
+        violations.append(
+            f"{relative(FILE_INFO)} still uses the static service locator")
+    if "Engine.getArchiveItems(arcname)" not in file_info_text:
+        violations.append(
+            f"{relative(FILE_INFO)} does not use the stateless archive API")
+    if "public static ArrayList<ZipEntry> getArchiveItems" not in engine_text:
+        violations.append(
+            f"{relative(ENGINE)} archive enumeration is instance-bound")
 
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")

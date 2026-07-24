@@ -66,7 +66,7 @@ public class Scanner extends FileInfoChangeSource {
 			File zf = new File(zip.pathname);
 			long arcsize = zf.length();
 			//ZipFile file = new ZipFile(zf);
-			ArrayList<ZipEntry> entries = engine.getArchiveItems(zip.pathname);
+			ArrayList<ZipEntry> entries = Engine.getArchiveItems(zip.pathname);
 			ArrayList<FileInfo> items = new ArrayList<FileInfo>();
 			//for ( Enumeration<?> e = file.entries(); e.hasMoreElements(); ) {
 			for ( ZipEntry entry : entries ) {

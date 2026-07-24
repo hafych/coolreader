@@ -20,7 +20,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.coolreader.crengine.BookInfo;
+import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.Engine;
+import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.Services;
 import org.coolreader.tts.OnTTSStatusListener;
@@ -36,6 +38,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -85,6 +89,36 @@ public class AndroidSmokeInstrumentedTest {
 
 		finishActivity(activity);
 		assertTrue(document.delete());
+	}
+
+	@Test
+	public void archiveEntryMetadataDoesNotRequireServiceLocator()
+			throws Exception {
+		Context target = targetContext();
+		File archive = new File(
+				target.getCacheDir(), "archive-entry-metadata.zip");
+		byte[] body = "archive entry".getBytes(StandardCharsets.UTF_8);
+		try {
+			try (ZipOutputStream output = new ZipOutputStream(
+					new FileOutputStream(archive))) {
+				output.putNextEntry(new ZipEntry("folder/book.fb2"));
+				output.write(body);
+				output.closeEntry();
+			}
+
+			FileInfo info = new FileInfo(
+					archive.getAbsolutePath()
+							+ FileInfo.ARC_SEPARATOR
+							+ "folder/book.fb2");
+			assertTrue(info.isArchive);
+			assertEquals(archive.getAbsolutePath(), info.arcname);
+			assertEquals("folder/book.fb2", info.pathname);
+			assertEquals("book.fb2", info.filename);
+			assertEquals(body.length, info.size);
+			assertEquals(DocumentFormat.FB2, info.format);
+		} finally {
+			assertTrue(archive.delete() || !archive.exists());
+		}
 	}
 
 	@Test

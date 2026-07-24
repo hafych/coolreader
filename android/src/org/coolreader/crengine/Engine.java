@@ -746,7 +746,7 @@ public class Engine {
 		}
 	}
 
-	public ArrayList<ZipEntry> getArchiveItems(String zipFileName) {
+	public static ArrayList<ZipEntry> getArchiveItems(String zipFileName) {
 		final int itemsPerEntry = 2;
 		String[] in;
 		synchronized (lock) {
