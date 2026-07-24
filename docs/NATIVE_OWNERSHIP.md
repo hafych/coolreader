@@ -39,3 +39,8 @@ transfer boundary, while `getDictList()` returns a non-owning pointer valid only
 between initialization and process-shutdown teardown. Loaded dictionary methods
 are owned by a private vector of `std::unique_ptr`; the legacy hash table is now
 only a non-owning lookup index.
+
+`TextLangMan` owns cached language configurations with
+`std::vector<std::unique_ptr<TextLangCfg>>`. Lookup returns a non-owning pointer
+whose address stays stable across cache reordering and growth. It is invalidated
+only by the quiescent `HyphMan::uninit()` lifecycle operation.

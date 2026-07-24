@@ -24,11 +24,13 @@
 #define __TEXTLANG_H_INCLUDED__
 
 #include "crsetup.h"
-#include "lvptrvec.h"
 #include "lvstring.h"
 #include "cssdef.h"
 
 #include <atomic>
+#include <memory>
+#include <mutex>
+#include <vector>
 
 #if USE_HARFBUZZ==1
 #include <hb.h>
@@ -70,7 +72,8 @@ class TextLangMan
     };
 
     static lString32 _main_lang;
-    static LVPtrVector<TextLangCfg> _lang_cfg_list;
+    static std::vector<std::unique_ptr<TextLangCfg>> _lang_cfg_list;
+    static std::mutex _lang_cfg_mutex;
 
     static std::atomic<lUInt32> _runtime_options;
     static HyphMethod * _no_hyph_method;       // instance of hyphman NoHyph
@@ -81,13 +84,14 @@ class TextLangMan
         return _runtime_options.load(std::memory_order_relaxed);
     }
     static void setRuntimeOption(lUInt32 option, bool enabled);
+    static TextLangCfg * getTextLangCfgLocked(const lString32 &lang_tag);
 public:
     static void uninit();
     static lUInt32 getHash();
 
-    static void setMainLang( lString32 lang_tag ) { _main_lang = lang_tag; }
-    static void setMainLangFromHyphDict( lString32 id ); // For HyphMan legacy methods
-    static lString32 getMainLang() { return _main_lang; }
+    static void setMainLang( const lString32 &lang_tag );
+    static void setMainLangFromHyphDict( const lString32 &id ); // For HyphMan legacy methods
+    static lString32 getMainLang();
 
     static void setEmbeddedLangsEnabled( bool enabled ) {
         setRuntimeOption(RUNTIME_EMBEDDED_LANGS_ENABLED, enabled);
@@ -118,18 +122,13 @@ public:
     }
 
     static TextLangCfg * getTextLangCfg(); // get LangCfg for _main_lang
-    static TextLangCfg * getTextLangCfg( lString32 lang_tag );
+    static TextLangCfg * getTextLangCfg( const lString32 &lang_tag );
     static TextLangCfg * getTextLangCfg( ldomNode * node );
     static int getLangNodeIndex( ldomNode * node );
 
     static HyphMethod * getMainLangHyphMethod(); // For HyphMan::hyphenate()
 
     static void resetCounters();
-
-    // For frontend info about TextLangMan status and seen langs
-    static LVPtrVector<TextLangCfg> * getLangCfgList() {
-        return &_lang_cfg_list;
-    }
 
     TextLangMan();
     ~TextLangMan();
@@ -204,7 +203,7 @@ public:
 
     bool duplicateRealHyphenOnNextLine() const { return _duplicate_real_hyphen_on_next_line; }
 
-    TextLangCfg( lString32 lang_tag );
+    TextLangCfg( const lString32 &lang_tag );
     ~TextLangCfg();
 };
 

@@ -32,6 +32,8 @@
 #include "../include/fb2def.h"
 #include "../include/crlog.h"
 
+#include <algorithm>
+
 #if (USE_UTF8PROC==1)
 #include <utf8proc.h>
 #endif
@@ -75,7 +77,8 @@ static bool langStartsWith(const lString32 lang_tag, const char * prefix) {
 
 // Init global TextLangMan members
 lString32 TextLangMan::_main_lang = TEXTLANG_DEFAULT_MAIN_LANG_32;
-LVPtrVector<TextLangCfg> TextLangMan::_lang_cfg_list;
+std::vector<std::unique_ptr<TextLangCfg>> TextLangMan::_lang_cfg_list;
+std::mutex TextLangMan::_lang_cfg_mutex;
 
 std::atomic<lUInt32> TextLangMan::_runtime_options(
         (TEXTLANG_DEFAULT_HYPHENATION_ENABLED
@@ -107,8 +110,22 @@ void TextLangMan::setRuntimeOption(lUInt32 option, bool enabled) {
             std::memory_order_relaxed));
 }
 
+lString32 TextLangMan::getMainLang() {
+    std::lock_guard<std::mutex> guard(_lang_cfg_mutex);
+    return lString32(_main_lang.c_str(), _main_lang.length());
+}
+
+void TextLangMan::setMainLang(const lString32 &lang_tag) {
+    std::lock_guard<std::mutex> guard(_lang_cfg_mutex);
+    _main_lang = lString32(lang_tag.c_str(), lang_tag.length());
+}
+
 lUInt32 TextLangMan::getHash() {
-    lUInt32 hash = _main_lang.getHash();
+    lUInt32 hash;
+    {
+        std::lock_guard<std::mutex> guard(_lang_cfg_mutex);
+        hash = _main_lang.getHash();
+    }
     hash = hash << 4;
     hash = hash + getRuntimeOptions();
     // printf("TextLangMan::getHash %x\n", hash);
@@ -118,11 +135,12 @@ lUInt32 TextLangMan::getHash() {
 // No need to explicitely call this in frontend code.
 // Calling HyphMan::uninit() will have this one called.
 void TextLangMan::uninit() {
+    std::lock_guard<std::mutex> guard(_lang_cfg_mutex);
     _lang_cfg_list.clear();
 }
 
 // For HyphMan legacy methods
-void TextLangMan::setMainLangFromHyphDict( lString32 id ) {
+void TextLangMan::setMainLangFromHyphDict( const lString32 &id ) {
     // When setting up TextlangMan thru HyphMan legacy methods,
     // disable embedded langs, for a consistent hyphenation.
     TextLangMan::setEmbeddedLangsEnabled( false );
@@ -146,41 +164,52 @@ void TextLangMan::setMainLangFromHyphDict( lString32 id ) {
     CRLog::warn("lang not found for hyphenation dict: %s\n", UnicodeToLocal(id).c_str());
 }
 
-// Return the (single and cached) TextLangCfg for the provided lang_tag
-TextLangCfg * TextLangMan::getTextLangCfg( lString32 lang_tag ) {
-    if ( !getEmbeddedLangsEnabled() ) {
-        // Drop provided lang_tag: always return main lang TextLangCfg
-        lang_tag = _main_lang;
-    }
+TextLangCfg * TextLangMan::getTextLangCfgLocked(
+        const lString32 &lang_tag) {
+    // Drop the provided lang tag when embedded languages are disabled.
+    const lString32 &effective_lang_tag = getEmbeddedLangsEnabled()
+            ? lang_tag : _main_lang;
     // Not sure if we can lowercase lang_tag and avoid duplicate (Harfbuzz might
     // need the proper lang tag with some parts starting with some uppercase letter)
-    for ( int i=0; i<_lang_cfg_list.length(); i++ ) {
-        if ( _lang_cfg_list[i]->_lang_tag == lang_tag ) {
+    for ( size_t i = 0; i < _lang_cfg_list.size(); i++ ) {
+        if ( _lang_cfg_list[i]->_lang_tag == effective_lang_tag ) {
             // printf("TextLangCfg %s reused\n", UnicodeToLocal(lang_tag).c_str());
             // There should rarely be more than 3 lang in a document, so move
             // any requested far down in the list at top to shorten next loops.
             if ( i > 2 ) {
-                _lang_cfg_list.move(0, i);
-                return _lang_cfg_list[0];
+                std::rotate(_lang_cfg_list.begin(),
+                        _lang_cfg_list.begin() + i,
+                        _lang_cfg_list.begin() + i + 1);
+                return _lang_cfg_list[0].get();
             }
-            return _lang_cfg_list[i];
+            return _lang_cfg_list[i].get();
         }
     }
     // Not found in cache: create it
-    TextLangCfg * lang_cfg = new TextLangCfg( lang_tag );
-    _lang_cfg_list.add( lang_cfg ); // and cache it
-    return lang_cfg;
+    std::unique_ptr<TextLangCfg> lang_cfg(
+            new TextLangCfg(effective_lang_tag));
+    TextLangCfg * result = lang_cfg.get();
+    _lang_cfg_list.push_back(std::move(lang_cfg));
+    return result;
+}
+
+// Return the (single and cached) TextLangCfg for the provided lang_tag
+TextLangCfg * TextLangMan::getTextLangCfg(
+        const lString32 &lang_tag) {
+    std::lock_guard<std::mutex> guard(_lang_cfg_mutex);
+    return getTextLangCfgLocked(lang_tag);
 }
 
 TextLangCfg * TextLangMan::getTextLangCfg() {
     // No lang_tag specified: return main lang one
-    return TextLangMan::getTextLangCfg( _main_lang );
+    std::lock_guard<std::mutex> guard(_lang_cfg_mutex);
+    return getTextLangCfgLocked(_main_lang);
 }
 
 TextLangCfg * TextLangMan::getTextLangCfg( ldomNode * node ) {
     if ( !getEmbeddedLangsEnabled() || !node ) {
         // No need to look at nodes: return main lang one
-        return TextLangMan::getTextLangCfg( _main_lang );
+        return TextLangMan::getTextLangCfg();
     }
     if ( node->isText() )
         node = node->getParentNode();
@@ -196,7 +225,7 @@ TextLangCfg * TextLangMan::getTextLangCfg( ldomNode * node ) {
         }
     }
     // No parent with lang= attribute: return main lang one
-    return TextLangMan::getTextLangCfg( _main_lang );
+    return TextLangMan::getTextLangCfg();
 }
 
 int TextLangMan::getLangNodeIndex( ldomNode * node ) {
@@ -222,7 +251,8 @@ HyphMethod * TextLangMan::getMainLangHyphMethod() {
 }
 
 void TextLangMan::resetCounters() {
-    for ( int i=0; i<_lang_cfg_list.length(); i++ ) {
+    std::lock_guard<std::mutex> guard(_lang_cfg_mutex);
+    for ( size_t i = 0; i < _lang_cfg_list.size(); i++ ) {
         _lang_cfg_list[i]->resetCounters();
     }
 }
@@ -723,7 +753,7 @@ lChar32 TextLangCfg::getCssLbCharSub(css_line_break_t css_linebreak, css_word_br
 #endif  // USE_LIBUNIBREAK==1
 
 // Instantiate a new TextLangCfg with properties adequate to the provided lang_tag
-TextLangCfg::TextLangCfg( lString32 lang_tag ) {
+TextLangCfg::TextLangCfg( const lString32 &source_lang_tag ) {
     if ( TextLangMan::_no_hyph_method == NULL ) {
         // We need to init static TextLangMan::_no_hyph_method and friends after
         // HyphMan is set up. Do that here, even if unrelated, as TextLangCfg
@@ -733,12 +763,16 @@ TextLangCfg::TextLangCfg( lString32 lang_tag ) {
         TextLangMan::_algo_hyph_method = HyphMan::getHyphMethodForDictionary(HYPH_DICT_ID_ALGORITHM);
     }
 
-    // Keep as our id the provided and non-lowercase'd lang_tag (with possibly bogus #@algorithm)
-    _lang_tag = lang_tag;
+    // Keep our own copy of the provided, non-lowercase'd language tag (with
+    // possibly bogus #@algorithm). Desktop builds use non-atomic lString
+    // refcounts, so the process-wide cache must not share caller-owned chunks.
+    _lang_tag = lString32(
+            source_lang_tag.c_str(), source_lang_tag.length());
     // Harfbuzz may know more than us about exotic/complex lang tags,
     // so let it deal the the provided one as-is.
-    lString32 hb_lang_tag = lang_tag;
+    lString32 hb_lang_tag = _lang_tag;
     // Lowercase it for our tests
+    lString32 lang_tag = _lang_tag;
     lang_tag.lowercase(); // (used by LANG_STARTS_WITH() macros)
 
     // Get hyph method/dictionary from HyphMan::_dictList

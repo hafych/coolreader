@@ -128,6 +128,31 @@ require_source_text(
   "_runtime_options.compare_exchange_weak"
   "text-language option updates must preserve one coherent snapshot"
 )
+require_source_text(
+  "${TEXTLANG_HEADER}"
+  "static std::vector<std::unique_ptr<TextLangCfg>> _lang_cfg_list"
+  "text-language configurations must have explicit ownership"
+)
+require_source_text(
+  "${TEXTLANG_HEADER}"
+  "static std::mutex _lang_cfg_mutex"
+  "text-language configuration cache must be synchronized"
+)
+require_source_text(
+  "${TEXTLANG_SOURCE}"
+  "std::lock_guard<std::mutex> guard(_lang_cfg_mutex)"
+  "text-language cache access must be serialized"
+)
+require_source_text(
+  "${TEXTLANG_SOURCE}"
+  "return lString32(_main_lang.c_str(), _main_lang.length())"
+  "main-language reads must not expose a shared desktop string chunk"
+)
+require_source_text(
+  "${TEXTLANG_SOURCE}"
+  "_main_lang = lString32(lang_tag.c_str(), lang_tag.length())"
+  "main-language writes must not retain a caller-owned desktop string chunk"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -223,4 +248,14 @@ forbid_source_text(
   "${TEXTLANG_HEADER}"
   "static bool _hyphenation_force_algorithmic"
   "algorithmic hyphenation mode must not have unsynchronized storage"
+)
+forbid_source_text(
+  "${TEXTLANG_HEADER}"
+  "static LVPtrVector<TextLangCfg> _lang_cfg_list"
+  "text-language configuration ownership must not regress to raw pointers"
+)
+forbid_source_text(
+  "${TEXTLANG_HEADER}"
+  "getLangCfgList()"
+  "the mutable text-language cache container must not be exposed"
 )

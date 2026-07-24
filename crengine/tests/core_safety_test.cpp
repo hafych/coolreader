@@ -400,6 +400,73 @@ static int testConcurrentTextLangRuntimeOptions() {
     return 0;
 }
 
+static int testConcurrentTextLangConfigCache() {
+    if (!HyphMan::initDictionaries(lString32::empty_str, true))
+        return fail("text-language cache fixture registry did not initialize");
+
+    TextLangMan::setEmbeddedLangsEnabled(true);
+    static const int workerCount = 8;
+    std::atomic<int> ready(0);
+    std::atomic<bool> start(false);
+    const lString32 tags[] = { U"cache-a", U"cache-b" };
+    std::vector<TextLangCfg *> configs(workerCount, NULL);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, &ready, &start, &tags, &configs]() {
+            ready.fetch_add(1, std::memory_order_release);
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            configs[workerIndex] =
+                    TextLangMan::getTextLangCfg(tags[workerIndex % 2]);
+        });
+    }
+    while (ready.load(std::memory_order_acquire) < workerCount)
+        std::this_thread::yield();
+    start.store(true, std::memory_order_release);
+    for (std::thread &worker : workers)
+        worker.join();
+
+    bool cacheValid = configs[0] && configs[1]
+            && configs[0] != configs[1];
+    for (int i = 2; i < workerCount; i++)
+        cacheValid = cacheValid && configs[i] == configs[i % 2];
+    if (!cacheValid) {
+        TextLangMan::setEmbeddedLangsEnabled(
+                TEXTLANG_DEFAULT_EMBEDDED_LANGS_ENABLED);
+        HyphMan::uninit();
+        return fail("text-language cache published duplicate configurations");
+    }
+
+    std::atomic<bool> failed(false);
+    workers.clear();
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, &failed, &tags]() {
+            for (int iteration = 0; iteration < 1000; iteration++) {
+                TextLangMan::setMainLang(
+                        tags[(workerIndex + iteration) % 2]);
+                lString32 observed = TextLangMan::getMainLang();
+                if (observed != tags[0] && observed != tags[1]) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+
+    TextLangMan::setMainLang(TEXTLANG_DEFAULT_MAIN_LANG_32);
+    TextLangMan::setEmbeddedLangsEnabled(
+            TEXTLANG_DEFAULT_EMBEDDED_LANGS_ENABLED);
+    HyphMan::uninit();
+    if (failed.load(std::memory_order_acquire))
+        return fail("text-language main language was published partially");
+    return 0;
+}
+
 static int testLogRedactor() {
     if (CRRedactLogMessage("Rendered 42 pages") != "Rendered 42 pages")
         return fail("safe native diagnostic was unexpectedly changed");
@@ -961,6 +1028,8 @@ int main() {
     if (testConcurrentHyphenationMethodCache() != 0)
         return 1;
     if (testConcurrentTextLangRuntimeOptions() != 0)
+        return 1;
+    if (testConcurrentTextLangConfigCache() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

@@ -146,6 +146,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   RAII-owned method-cache entry.
 - Text-language runtime flags now use one atomic snapshot, keeping concurrent
   hyphenation-method selection internally consistent.
+- The text-language configuration cache now has synchronized lookup, RAII
+  ownership and a documented process-lifecycle teardown boundary.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
 - SQLite fixture matrices for every supported main and cover database migration,

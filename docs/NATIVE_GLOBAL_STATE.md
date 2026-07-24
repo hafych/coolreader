@@ -53,9 +53,13 @@ covered by a regression that requires one load and one shared method instance.
 
 Text-language mode flags are published as one atomic bitmask. Hyphenation
 method selection consumes one coherent snapshot, so it cannot combine a stale
-derived override flag with newer mode values. The main-language string and
-language-configuration cache remain a separate lifecycle group.
+derived override flag with newer mode values. The main-language string and the
+RAII-owned language-configuration cache are protected by one mutex; concurrent
+lookups for one tag publish one stable configuration. Returned pointers are
+non-owning and remain valid until `HyphMan::uninit()`. Teardown is a quiescent
+process-lifecycle operation and must not race readers. Main-language and cached
+tag storage use deep copies at the lock boundary because desktop `lString`
+reference counts are not atomic.
 
-Known follow-up groups include the remaining text-language lifecycle and
-font/cache singletons. Each group must be migrated separately with an impact
-check and focused regression tests.
+Known follow-up groups include font/cache singletons. Each group must be
+migrated separately with an impact check and focused regression tests.
