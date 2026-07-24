@@ -3709,7 +3709,7 @@ void LVDocView::setStatusFontSize(int newSize) {
 }
 
 int LVDocView::scaleFontSizeForDPI(int fontSize) {
-    if (gRenderScaleFontWithDPI) {
+    if (LVRendGetScaleFontWithDPI()) {
         fontSize = scaleForRenderDPI(fontSize);
 #if USE_LIMITED_FONT_SIZES_SET
         fontSize = findBestFit(m_font_sizes, fontSize);
@@ -3726,7 +3726,7 @@ int LVDocView::scaleFontSizeForDPI(int fontSize) {
 void LVDocView::setFontSize(int newSize) {
     LVLock lock(getMutex());
 
-    // We don't scale m_requested_font_size itself, so font size and gRenderDPI
+    // We don't scale m_requested_font_size itself, so font size and render DPI
     // can be changed independantly.
     int oldSize = m_requested_font_size;
     if (oldSize != newSize) {
@@ -6989,14 +6989,12 @@ CRPropRef LVDocView::propsApply(CRPropRef props) {
                     REQUEST_RENDER("propsApply render block rendering flags")
         } else if (name == PROP_RENDER_DPI) {
             int value = props->getIntDef(PROP_RENDER_DPI, DEF_RENDER_DPI);
-            if ( gRenderDPI != value ) {
-                gRenderDPI = value;
+            if ( LVRendSetRenderDPI(value) ) {
                 REQUEST_RENDER("propsApply render dpi")
             }
         } else if (name == PROP_RENDER_SCALE_FONT_WITH_DPI) {
             int value = props->getIntDef(PROP_RENDER_SCALE_FONT_WITH_DPI, DEF_RENDER_SCALE_FONT_WITH_DPI);
-            if ( gRenderScaleFontWithDPI != value ) {
-                gRenderScaleFontWithDPI = value;
+            if ( LVRendSetScaleFontWithDPI(value != 0) ) {
                 REQUEST_RENDER("propsApply render scale font with dpi")
             }
         } else if (name == PROP_FORMAT_SPACE_WIDTH_SCALE_PERCENT) {

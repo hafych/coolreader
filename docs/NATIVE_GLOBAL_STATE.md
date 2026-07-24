@@ -34,6 +34,11 @@ The legacy process-wide base font-weight API is retained for compatibility,
 but its value is atomically published and constrained to the documented
 `1..999` range. Concurrent setter/getter coverage protects this boundary.
 
-Known follow-up groups include render configuration globals, hyphenation
-registries and font/cache singletons. Each group must be migrated separately
-with an impact check and focused regression tests.
+Render DPI and font-DPI scaling also retain process lifetime for compatibility.
+Their storage is private and atomic, access is limited to explicit setter/getter
+functions, and multi-value scaling sites take one DPI snapshot where their
+calculations must agree. The unused `gRootFontSize` declaration was removed.
+
+Known follow-up groups include hyphenation registries and font/cache singletons.
+Each group must be migrated separately with an impact check and focused
+regression tests.

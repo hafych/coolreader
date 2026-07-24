@@ -891,7 +891,7 @@ public:
     int  getFontSize() const { return m_font_size; }
     /// retrieves requested font size (before scaling for DPI)
     int  getRequestedFontSize() const { return m_requested_font_size; }
-    /// scale font size according to gRenderDPI
+    /// scale font size according to the process render DPI
     int scaleFontSizeForDPI( int fontSize );
     /// sets new base font size
     void setFontSize( int newSize );

@@ -136,6 +136,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   and is stress-tested with concurrent construction and destruction.
 - Concurrent renderers now read and update the legacy process-wide base font
   weight without a native data race.
+- Render DPI settings now use a synchronized API with coherent multi-value
+  scaling snapshots instead of directly exposed mutable globals.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

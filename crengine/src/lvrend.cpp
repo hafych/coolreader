@@ -75,15 +75,37 @@
 // crengine default used to be "width: 100%", but now that we
 // can shrink to fit, it is "width: auto".
 
-int gRenderDPI = DEF_RENDER_DPI; // if 0: old crengine behaviour: 1px/pt=1px, 1in/cm/pc...=0px
-bool gRenderScaleFontWithDPI = DEF_RENDER_SCALE_FONT_WITH_DPI;
+// A value of 0 preserves the old crengine behavior: 1pt=1px and physical
+// units are disabled. These settings retain process lifetime for compatibility.
+static std::atomic<int> g_render_dpi(DEF_RENDER_DPI);
+static std::atomic<bool> g_render_scale_font_with_dpi(
+        DEF_RENDER_SCALE_FONT_WITH_DPI);
+
+int LVRendGetRenderDPI() {
+    return g_render_dpi.load(std::memory_order_relaxed);
+}
+
+bool LVRendSetRenderDPI(int dpi) {
+    return g_render_dpi.exchange(dpi, std::memory_order_relaxed) != dpi;
+}
+
+bool LVRendGetScaleFontWithDPI() {
+    return g_render_scale_font_with_dpi.load(std::memory_order_relaxed);
+}
+
+bool LVRendSetScaleFontWithDPI(bool scale) {
+    return g_render_scale_font_with_dpi.exchange(
+            scale, std::memory_order_relaxed) != scale;
+}
+
+static int scaleForRenderDPI( int value, int renderDPI ) {
+    if (renderDPI && renderDPI != BASE_CSS_DPI)
+        value = value * renderDPI / BASE_CSS_DPI;
+    return value;
+}
 
 int scaleForRenderDPI( int value ) {
-    // if gRenderDPI == 0 or 96, use value as is (1px = 1px)
-    if (gRenderDPI && gRenderDPI != BASE_CSS_DPI) {
-        value = value * gRenderDPI / BASE_CSS_DPI;
-    }
-    return value;
+    return scaleForRenderDPI(value, LVRendGetRenderDPI());
 }
 
 // Uncomment for debugging enhanced block rendering
@@ -2499,12 +2521,13 @@ int lengthToPx( ldomNode * node, css_length_t val, int base_px, int base_em, boo
     // base_em is usually the font size of the parent element
     int px = 0; // returned screen px
     bool ensure_non_zero = true; // return at least 1px if val.value is non-zero
-    // Previously, we didn't, so don't ensure non-zero if gRenderDPI=0
-    if (!gRenderDPI) ensure_non_zero = false;
+    const int renderDPI = LVRendGetRenderDPI();
+    // Previously, we didn't, so don't ensure non-zero if render DPI is 0.
+    if (!renderDPI) ensure_non_zero = false;
 
-    // Scale style value according to gRenderDPI (no scale if 96 or 0)
+    // Scale style value according to render DPI (no scale if 96 or 0)
     // we do that early to not lose precision
-    int value = scaleForRenderDPI(val.value);
+    int value = scaleForRenderDPI(val.value, renderDPI);
 
     css_value_type_t type = val.type;
     if (unspecified_as_em && type == css_val_unspecified)
@@ -2520,7 +2543,7 @@ int lengthToPx( ldomNode * node, css_length_t val, int base_px, int base_em, boo
         break;
 
     /* relative values */
-    /* We should use val.value (not scaled by gRenderDPI) here */
+    /* We should use val.value (not scaled by render DPI) here */
     case css_val_em: {
         // value = em*256 (font size of the current element)
         // Default the base em using the node if not supplied.
@@ -2548,25 +2571,25 @@ int lengthToPx( ldomNode * node, css_length_t val, int base_px, int base_em, boo
         break;
 
     /* absolute value, less often used - value = unit*256 */
-    /* (previously treated by crengine as 0, which we still do if gRenderDPI=0) */
+    /* (previously treated by crengine as 0, which we still do at render DPI 0) */
     case css_val_in: // 2.54 cm   1in = 96px
-        if (gRenderDPI)
+        if (renderDPI)
             px = (96 * value ) >> 8;
         break;
     case css_val_cm: //        2.54cm = 96px
-        if (gRenderDPI)
+        if (renderDPI)
             px = (int)(96 * value / 2.54) >> 8;
         break;
     case css_val_mm: //        25.4mm = 96px
-        if (gRenderDPI)
+        if (renderDPI)
             px = (int)(96 * value / 25.4) >> 8;
         break;
     case css_val_pt: // 1/72 in  72pt = 96px
-        if (gRenderDPI)
+        if (renderDPI)
             px = 96 * value / 72 >> 8;
         break;
     case css_val_pc: // 12 pt     6pc = 96px
-        if (gRenderDPI)
+        if (renderDPI)
             px = 96 * value / 6 >> 8;
         break;
     case css_val_vw: {
@@ -2635,9 +2658,10 @@ bool getStyledImageSize( ldomNode * enode, int & img_width, int & img_height, in
         // Just to be sure we have positive sizes
         return false;
     }
-    // Scale image native size according to gRenderDPI
-    native_width = scaleForRenderDPI(native_width);
-    native_height = scaleForRenderDPI(native_height);
+    // Scale image native size according to one coherent render DPI snapshot.
+    const int renderDPI = LVRendGetRenderDPI();
+    native_width = scaleForRenderDPI(native_width, renderDPI);
+    native_height = scaleForRenderDPI(native_height, renderDPI);
 
     // Look at style widths/heights
     css_style_ref_t style = enode->getStyle();
@@ -3186,7 +3210,7 @@ void renderFinalBlock( ldomNode * enode, LFormattedText * txform, RenderRectAcce
         // node does ensure the strut height, which is the minimal line-height for
         // all inline nodes. But an individual inline node is able to increase that
         // strut height, for the line it happens on only.
-        if (gRenderDPI) {
+        if (LVRendGetRenderDPI()) {
             // line_h is named 'interval' in lvtextfm.cpp.
             //     Note: it was formerly described as: "*16 (16=normal, 32=double)"
             //     and the scaling to the font size (font height actually) was done
@@ -3205,12 +3229,12 @@ void renderFinalBlock( ldomNode * enode, LFormattedText * txform, RenderRectAcce
             else {
                 // In all other cases (%, em, unitless/unspecified), we can just scale 'em',
                 // and use the computed value for absolute sized values (these will
-                // be affected by gRenderDPI) and 'rem' (related to root element font size).
+                // be affected by render DPI) and 'rem' (related to root element font size).
                 line_h = lengthToPx(enode, style->line_height, em, em, true);
             }
         }
         else {
-            // Let's fallback to the previous (wrong) behaviour when gRenderDPI=0
+            // Let's fallback to the previous (wrong) behaviour at render DPI 0.
             // Only do it for the top and single final node
             if ((flags & LTEXT_FLAG_NEWLINE) && rm == erm_final) {
                 int fh = enode->getFont()->getHeight(); // former code used font height for everything

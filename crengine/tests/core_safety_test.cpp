@@ -84,6 +84,61 @@ static int testConcurrentRenderBaseWeight() {
     return 0;
 }
 
+static int testConcurrentRenderDPISettings() {
+    LVRendSetRenderDPI(BASE_CSS_DPI);
+    if (LVRendSetRenderDPI(BASE_CSS_DPI))
+        return fail("unchanged render DPI was reported as changed");
+    if (!LVRendSetRenderDPI(BASE_CSS_DPI * 2)
+            || scaleForRenderDPI(BASE_CSS_DPI) != BASE_CSS_DPI * 2)
+        return fail("render DPI scaling did not use the configured value");
+    LVRendSetRenderDPI(0);
+    if (scaleForRenderDPI(BASE_CSS_DPI) != BASE_CSS_DPI)
+        return fail("legacy zero render DPI unexpectedly scaled pixels");
+
+    LVRendSetScaleFontWithDPI(false);
+    if (LVRendSetScaleFontWithDPI(false))
+        return fail("unchanged font DPI scaling was reported as changed");
+    if (!LVRendSetScaleFontWithDPI(true)
+            || !LVRendGetScaleFontWithDPI())
+        return fail("font DPI scaling setting was not published");
+
+    static const int workerCount = 8;
+    static const int iterations = 1000;
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, &failed]() {
+            for (int iteration = 0; iteration < iterations; iteration++) {
+                const int selector = (workerIndex + iteration) % 3;
+                const int dpi = selector == 0
+                        ? 0
+                        : (selector == 1 ? BASE_CSS_DPI : BASE_CSS_DPI * 2);
+                LVRendSetRenderDPI(dpi);
+                LVRendSetScaleFontWithDPI(selector == 2);
+                const int observedDPI = LVRendGetRenderDPI();
+                const int scaled = scaleForRenderDPI(BASE_CSS_DPI);
+                if ((observedDPI != 0
+                            && observedDPI != BASE_CSS_DPI
+                            && observedDPI != BASE_CSS_DPI * 2)
+                        || (scaled != BASE_CSS_DPI
+                            && scaled != BASE_CSS_DPI * 2)) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+    LVRendSetRenderDPI(DEF_RENDER_DPI);
+    LVRendSetScaleFontWithDPI(DEF_RENDER_SCALE_FONT_WITH_DPI != 0);
+    if (failed.load(std::memory_order_acquire))
+        return fail("render DPI settings published an invalid value");
+    return 0;
+}
+
 static int testLogRedactor() {
     if (CRRedactLogMessage("Rendered 42 pages") != "Rendered 42 pages")
         return fail("safe native diagnostic was unexpectedly changed");
@@ -635,6 +690,8 @@ int main() {
     if (testMutex() != 0)
         return 1;
     if (testConcurrentRenderBaseWeight() != 0)
+        return 1;
+    if (testConcurrentRenderDPISettings() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

@@ -8,6 +8,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvrend.h" RENDER_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -54,6 +55,16 @@ require_source_text(
   "process-wide render base weight must be synchronized"
 )
 require_source_text(
+  "${RENDER_SOURCE}"
+  "static std::atomic<int> g_render_dpi"
+  "process-wide render DPI must be synchronized"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "static std::atomic<bool> g_render_scale_font_with_dpi"
+  "process-wide font DPI scaling must be synchronized"
+)
+require_source_text(
   "${BITMAP_SOURCE}"
   "static thread_local lUInt8 glyph_buf[16384]"
   "bitmap glyph scratch must be isolated per thread"
@@ -88,4 +99,29 @@ forbid_source_text(
   "${RENDER_SOURCE}"
   "static int rend_font_base_weight"
   "render base weight must not have unsynchronized writes"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "int gRenderDPI"
+  "render DPI must not expose unsynchronized storage"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "bool gRenderScaleFontWithDPI"
+  "font DPI scaling must not expose unsynchronized storage"
+)
+forbid_source_text(
+  "${RENDER_HEADER}"
+  "gRootFontSize"
+  "unused render root-font global declaration must not return"
+)
+forbid_source_text(
+  "${RENDER_HEADER}"
+  "gRenderDPI"
+  "render DPI storage must remain private"
+)
+forbid_source_text(
+  "${RENDER_HEADER}"
+  "gRenderScaleFontWithDPI"
+  "font DPI scaling storage must remain private"
 )

@@ -190,6 +190,14 @@ int LVRendGetBaseFontWeight();
 int measureBorder(ldomNode *enode,int border);
 int lengthToPx( ldomNode *node, css_length_t val, int base_px, int base_em = -1, bool unspecified_as_em=false );
 int scaleForRenderDPI( int value );
+/// Return the process-wide render DPI used by legacy rendering paths.
+int LVRendGetRenderDPI();
+/// Atomically update render DPI; return true when the value changed.
+bool LVRendSetRenderDPI(int dpi);
+/// Return whether legacy font sizes are scaled with render DPI.
+bool LVRendGetScaleFontWithDPI();
+/// Atomically update font-DPI scaling; return true when the value changed.
+bool LVRendSetScaleFontWithDPI(bool scale);
 bool getStyledImageSize( ldomNode * enode, int & img_width, int & img_height, int container_width=-1, int container_height=-1 );
 
 // Returns ink offsets from the node's RenderRectAccessor (its border box), positive when inward
@@ -199,9 +207,6 @@ bool getInkOffsets( ldomNode * node, lvRect &inkOffsets, bool measure_hidden_con
 #define BASE_CSS_DPI 96 // at 96 dpi, 1 css px = 1 screen px
 #define DEF_RENDER_DPI 96
 #define DEF_RENDER_SCALE_FONT_WITH_DPI 0
-extern int gRenderDPI;
-extern bool gRenderScaleFontWithDPI;
-extern int gRootFontSize;
 
 #define INTERLINE_SCALE_FACTOR_NO_SCALE 1024
 #define INTERLINE_SCALE_FACTOR_SHIFT 10
