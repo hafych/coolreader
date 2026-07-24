@@ -54,6 +54,7 @@ import android.view.ViewGroup;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.ContextCompat;
 
 import org.coolreader.Dictionaries.DictionaryException;
 import org.coolreader.crengine.AboutDialog;
@@ -293,7 +294,9 @@ public class CoolReader extends BaseActivity {
 		// Get battery level
 		// ACTION_BATTERY_CHANGED is a sticky broadcast & we pass null instead of receiver, then
 		// no receiver is registered -- the function simply returns the sticky Intent that matches filter.
-		Intent intent = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+		Intent intent = ContextCompat.registerReceiver(
+				this, null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+				ContextCompat.RECEIVER_NOT_EXPORTED);
 		if (null != intent) {
 			// and process this Intent: save received values
 			batteryChangeReceiver.onReceive(null, intent);
@@ -1019,13 +1022,18 @@ public class CoolReader extends BaseActivity {
 		if (mReaderView != null)
 			mReaderView.onAppResume();
 		// ACTION_BATTERY_CHANGED: This is a sticky broadcast containing the charging state, level, and other information about the battery.
-		Intent intent = registerReceiver(batteryChangeReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+		Intent intent = ContextCompat.registerReceiver(
+				this, batteryChangeReceiver,
+				new IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+				ContextCompat.RECEIVER_NOT_EXPORTED);
 		if (null != intent) {
 			// process this Intent
 			batteryChangeReceiver.onReceive(null, intent);
 		}
 		// ACTION_TIME_TICK: The current time has changed. Sent every minute.
-		registerReceiver(timeTickReceiver, new IntentFilter(Intent.ACTION_TIME_TICK));
+		ContextCompat.registerReceiver(
+				this, timeTickReceiver, new IntentFilter(Intent.ACTION_TIME_TICK),
+				ContextCompat.RECEIVER_NOT_EXPORTED);
 
 		if (DeviceInfo.EINK_SCREEN) {
 			if (DeviceInfo.EINK_SONY) {

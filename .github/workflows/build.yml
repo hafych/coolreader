@@ -150,6 +150,9 @@ jobs:
       - name: Verify Android activity-result policy
         run: python3 tools/verify_android_activity_results.py
 
+      - name: Verify Android 14-16 platform policy
+        run: python3 tools/verify_android_platform_policy.py
+
       - name: Verify Android release policy
         run: python3 tools/verify_android_release_policy.py
 

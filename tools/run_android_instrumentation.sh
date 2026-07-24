@@ -4,7 +4,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 gradlew="${repo_root}/android/gradlew"
 runner="org.coolreader.test/androidx.test.runner.AndroidJUnitRunner"
-report_dir="${repo_root}/android/app/build/outputs/androidTest-results/manual"
+report_profile="${ANDROID_TEST_REPORT_PROFILE:-manual}"
+if [[ ! "${report_profile}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "Invalid ANDROID_TEST_REPORT_PROFILE: ${report_profile}" >&2
+    exit 2
+fi
+report_dir="${repo_root}/android/app/build/outputs/androidTest-results/${report_profile}"
 
 run_instrumentation() {
     local report_name="$1"

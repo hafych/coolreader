@@ -95,8 +95,6 @@ DRM или ограничений доступа, подбор/получени�
 
 - [-] Разделить монолитные `CoolReader`, `ReaderView` и сервисы на тестируемые
   lifecycle-aware компоненты без статического состояния Activity/Service.
-- [ ] Проверить Android 14–16 требования к foreground services, receiver export,
-  notifications и background starts на реальных/эмулированных устройствах.
 
 ### Библиотека и сканирование
 

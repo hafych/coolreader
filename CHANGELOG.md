@@ -52,6 +52,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   longer performs ad-hoc global dependency lookups during user flows.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
+- Android 14–16 foreground TTS, notification and receiver invariants are now
+  enforced in CI, with a repeatable API 34–36 runtime matrix.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded
@@ -137,6 +139,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Temporary `content://` grants now warn that access may be lost after restart;
   persistable grants are retained, recent entries survive the local-file
   availability filter, and reopening restores stored bookmarks and position.
+- TTS is no longer a sticky service that Android can resurrect without a fresh
+  user action, and all production dynamic receivers are explicitly
+  non-exported.
+- The first-run notice now keeps its complete message and action buttons
+  reachable on Android 16 tablets in portrait and landscape.
 
 ### Security
 

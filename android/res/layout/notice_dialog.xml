@@ -1,20 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="fill_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="fill_parent"
+    android:fitsSystemWindows="true"
     android:orientation="vertical" >
 
-    <TextView
-        android:id="@+id/notice_text_view"
+    <ScrollView
         android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginLeft="10dip"
-        android:layout_marginTop="10dip"
-        android:layout_marginRight="10dip"
-        android:layout_marginBottom="10dip"
-        android:scrollbarAlwaysDrawVerticalTrack="true"
-        android:scrollbars="vertical"
-        android:text="@string/note1_reader_menu" />
+        android:layout_height="0dip"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <TextView
+            android:id="@+id/notice_text_view"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="10dip"
+            android:layout_marginTop="10dip"
+            android:layout_marginRight="10dip"
+            android:layout_marginBottom="10dip"
+            android:text="@string/note1_reader_menu" />
+    </ScrollView>
 
     <LinearLayout
         android:layout_marginLeft="10dip"

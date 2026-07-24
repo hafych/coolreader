@@ -571,9 +571,9 @@ public class TTSControlService extends BaseService {
 		}
 		// TODO: process media buttons events (android.intent.action.MEDIA_BUTTON)
 		//  API<21
-		// We want this service to continue running until it is explicitly
-		// stopped, so return sticky.
-		return START_STICKY;
+		// TTS starts only from the visible reader UI. Do not let the system
+		// resurrect it later without a fresh user-initiated prepare command.
+		return START_NOT_STICKY;
 	}
 
 	@Override

@@ -82,6 +82,9 @@ The enforced default of local crash redaction without telemetry is documented
 in [docs/TELEMETRY_POLICY.md](docs/TELEMETRY_POLICY.md).
 Active Android document and dictionary result flows use lifecycle-aware
 Activity Result launchers and preserve pending SAF state across recreation.
+The foreground-service, media-notification and receiver contract plus the
+remaining API 34–36 runtime matrix are documented in
+[docs/ANDROID_14_16_COMPAT.md](docs/ANDROID_14_16_COMPAT.md).
 
 ### Support matrix
 

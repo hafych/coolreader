@@ -169,6 +169,8 @@ public class AndroidSmokeInstrumentedTest {
 			assertNotNull(notification.actions);
 			assertEquals(4, notification.actions.length);
 
+			assertTrue(activity.moveTaskToBack(true));
+			instrumentation.waitForIdleSync();
 			sendAndAwait(notification.actions[0].actionIntent,
 					listener.currentRequested);
 			sendAndAwait(notification.actions[1].actionIntent,
