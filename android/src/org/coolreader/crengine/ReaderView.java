@@ -60,6 +60,7 @@ import android.view.View.OnTouchListener;
 import org.coolreader.CoolReader;
 import org.coolreader.R;
 import org.coolreader.crengine.InputDialog.InputHandler;
+import org.coolreader.genrescollection.GenresCollection;
 import org.koekak.android.ebookdownloader.SonyBookSelector;
 
 import java.io.ByteArrayInputStream;
@@ -374,6 +375,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final Engine mEngine;
 	private final Scanner mScanner;
 	private final History mHistory;
+	private final CoverpageManager mCoverpageManager;
+	private final GenresCollection mGenresCollection;
 	private final DocumentFileCache mDocumentCache;
 	private final ServiceLifecycle mServiceLifecycle;
 	private final EinkScreen mEinkScreen;
@@ -384,6 +387,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public Engine getEngine() {
 		return mEngine;
+	}
+
+	public CoverpageManager getCoverpageManager() {
+		return mCoverpageManager;
 	}
 
 	public CoolReader getActivity() {
@@ -1972,7 +1979,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						items.add("book.genres=" + fi.genres);
 					}
 				}
-				BookInfoDialog dlg = new BookInfoDialog(mActivity, items);
+				BookInfoDialog dlg = new BookInfoDialog(
+						mActivity, mGenresCollection, items);
 				dlg.show();
 			}
 		});
@@ -6917,6 +6925,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			Engine engine,
 			Scanner scanner,
 			History history,
+			CoverpageManager coverpageManager,
+			GenresCollection genresCollection,
 			DocumentFileCache documentCache,
 			ServiceLifecycle serviceLifecycle,
 			Properties props) {
@@ -6938,6 +6948,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		this.mEngine = engine;
 		this.mScanner = scanner;
 		this.mHistory = history;
+		this.mCoverpageManager = coverpageManager;
+		this.mGenresCollection = genresCollection;
 		this.mDocumentCache = documentCache;
 		this.mServiceLifecycle = serviceLifecycle;
 		this.mEinkScreen = activity.getEinkScreen();

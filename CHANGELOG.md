@@ -59,6 +59,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   captured by their caller instead of resolving global scanner state.
 - About and options dialogs receive the active Engine explicitly, including
   browser and TTS entry points.
+- Book information, online-store and TTS cover UI receive cover, genre, history
+  and scanner dependencies from their owning reader or browser generation.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

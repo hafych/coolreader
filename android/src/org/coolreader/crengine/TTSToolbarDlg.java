@@ -787,7 +787,7 @@ public class TTSToolbarDlg implements Settings {
 				mBookTitle = fileInfo.title;
 				mBookLanguage = fileInfo.language;
 				mBookCover = Bitmap.createBitmap(MEDIA_COVER_WIDTH, MEDIA_COVER_HEIGHT, Bitmap.Config.RGB_565);
-				Services.getCoverpageManager().drawCoverpageFor(mCoolReader.getDB(), fileInfo, mBookCover, true,
+				mReaderView.getCoverpageManager().drawCoverpageFor(mCoolReader.getDB(), fileInfo, mBookCover, true,
 						(file, bitmap) -> mTTSControl.bind(ttsbinder -> ttsbinder.setMediaItemInfo(mBookAuthors, mBookTitle, bitmap)));
 				String pathName = fileInfo.getPathName();
 				String wordTimingPath = pathName.replaceAll("\\.\\w+$", ".wordtiming");

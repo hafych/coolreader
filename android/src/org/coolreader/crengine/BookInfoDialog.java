@@ -36,6 +36,7 @@ import android.widget.TextView;
 
 public class BookInfoDialog extends BaseDialog {
 	private final BaseActivity mCoolReader;
+	private final GenresCollection mGenresCollection;
 	private final LayoutInflater mInflater; 
 	private Map<String, Integer> mLabelMap;
 	private void fillMap() {
@@ -91,7 +92,7 @@ public class BookInfoDialog extends BaseDialog {
 				if (code.length() > 0) {
 					if (genres.length() > 0)
 						genres.append("\n");
-					genres.append(Services.getGenresCollection().translate(code));
+					genres.append(mGenresCollection.translate(code));
 				}
 			}
 			value = genres.toString();
@@ -115,10 +116,14 @@ public class BookInfoDialog extends BaseDialog {
 		table.addView(tableRow);
 	}
 	
-	public BookInfoDialog( BaseActivity activity, Collection<String> items)
+	public BookInfoDialog(
+			BaseActivity activity,
+			GenresCollection genresCollection,
+			Collection<String> items)
 	{
 		super(activity);
 		mCoolReader = activity;
+		mGenresCollection = genresCollection;
 		setTitle(mCoolReader.getString(R.string.dlg_book_info));
 		fillMap();
 		mInflater = LayoutInflater.from(getContext());

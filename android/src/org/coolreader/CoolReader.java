@@ -100,6 +100,7 @@ import org.coolreader.crengine.ServiceDependencies;
 import org.coolreader.crengine.ServiceLifecycle;
 import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Utils;
+import org.coolreader.genrescollection.GenresCollection;
 import org.coolreader.tts.OnTTSCreatedListener;
 import org.coolreader.tts.TTSControlServiceAccessor;
 import org.koekak.android.ebookdownloader.SonyBookSelector;
@@ -134,6 +135,7 @@ public class CoolReader extends BaseActivity {
 	private CoverpageManager mCoverpageManager;
 	private DocumentFileCache mDocumentCache;
 	private FileSystemFolders mFileSystemFolders;
+	private GenresCollection mGenresCollection;
 	private ServiceLifecycle mServiceLifecycle;
 	//View startupView;
 	//CRDB mDB;
@@ -286,6 +288,7 @@ public class CoolReader extends BaseActivity {
 		mCoverpageManager = dependencies.getCoverpageManager();
 		mDocumentCache = dependencies.getDocumentCache();
 		mFileSystemFolders = dependencies.getFileSystemFolders();
+		mGenresCollection = dependencies.getGenresCollection();
 		mServiceLifecycle = dependencies.getLifecycle();
 
 		// Service-backed settings require the captured generation.
@@ -1375,6 +1378,8 @@ public class CoolReader extends BaseActivity {
 						mEngine,
 						mScanner,
 						mHistory,
+						mCoverpageManager,
+						mGenresCollection,
 						mDocumentCache,
 						mServiceLifecycle,
 						settings());
@@ -2402,7 +2407,13 @@ public class CoolReader extends BaseActivity {
 				getDB(), item, bookInfo -> {
 			if (bookInfo == null)
 				bookInfo = new BookInfo(item);
-			BookInfoEditDialog dlg = new BookInfoEditDialog(CoolReader.this, currDirectory, bookInfo,
+			BookInfoEditDialog dlg = new BookInfoEditDialog(
+					CoolReader.this,
+					mCoverpageManager,
+					mGenresCollection,
+					mHistory,
+					currDirectory,
+					bookInfo,
 					currDirectory.isRecentDir());
 			dlg.show();
 		}));

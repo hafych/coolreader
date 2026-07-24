@@ -24,6 +24,12 @@ FILE_SYSTEM_FOLDERS = SOURCE / "crengine" / "FileSystemFolders.java"
 UTILS = SOURCE / "crengine" / "Utils.java"
 ABOUT_DIALOG = SOURCE / "crengine" / "AboutDialog.java"
 OPTIONS_DIALOG = SOURCE / "crengine" / "OptionsDialog.java"
+BOOK_INFO_DIALOGS = (
+    SOURCE / "crengine" / "BookInfoDialog.java",
+    SOURCE / "crengine" / "BookInfoEditDialog.java",
+    SOURCE / "crengine" / "OnlineStoreBookInfoDialog.java",
+    SOURCE / "crengine" / "TTSToolbarDlg.java",
+)
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -158,6 +164,8 @@ def main() -> None:
     for marker in (
         "private final Scanner mScanner",
         "private final History mHistory",
+        "private final CoverpageManager mCoverpageManager",
+        "private final GenresCollection mGenresCollection",
         "private final DocumentFileCache mDocumentCache",
         "private final ServiceLifecycle mServiceLifecycle",
     ):
@@ -216,6 +224,12 @@ def main() -> None:
         if marker not in options_text:
             violations.append(
                 f"{relative(OPTIONS_DIALOG)} omits marker: {marker}")
+
+    for path in BOOK_INFO_DIALOGS:
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"\bServices\.", text):
+            violations.append(
+                f"{relative(path)} still uses the static service locator")
 
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")

@@ -1518,7 +1518,12 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			@Override
 			public void onBookInfoReady(OnlineStoreBookInfo bookInfo) {
 				progress.hide();
-				OnlineStoreBookInfoDialog dlg = new OnlineStoreBookInfoDialog(mActivity, bookInfo, book);
+				OnlineStoreBookInfoDialog dlg = new OnlineStoreBookInfoDialog(
+						mActivity,
+						mScanner,
+						mCoverpageManager,
+						bookInfo,
+						book);
 				dlg.show();
 			}
 		});

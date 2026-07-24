@@ -47,6 +47,7 @@ import java.io.File;
 
 public class OnlineStoreBookInfoDialog extends BaseDialog {
 	private CoolReader mActivity;
+	private final CoverpageManager mCoverpageManager;
 	private OnlineStoreBookInfo mBookInfo;
 	private FileInfo mFileInfo;
 	private LayoutInflater mInflater;
@@ -59,9 +60,15 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 	
 	private ViewGroup mContentView;
 	
-	public OnlineStoreBookInfoDialog(CoolReader activity, OnlineStoreBookInfo book, FileInfo fileInfo)
+	public OnlineStoreBookInfoDialog(
+			CoolReader activity,
+			Scanner scanner,
+			CoverpageManager coverpageManager,
+			OnlineStoreBookInfo book,
+			FileInfo fileInfo)
 	{
 		super(activity, null, false, false);
+		this.mCoverpageManager = coverpageManager;
 		DisplayMetrics outMetrics = new DisplayMetrics();
 		activity.getWindowManager().getDefaultDisplay().getMetrics(outMetrics);
 		this.mWindowSize = Math.min(outMetrics.widthPixels, outMetrics.heightPixels);
@@ -69,7 +76,7 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 		this.mBookInfo = book;
 		this.mFileInfo = fileInfo;
 		this.mPlugin = OnlineStorePluginManager.getPlugin(mActivity, fileInfo.getOnlineCatalogPluginPackage());
-		File baseDir = new File(Services.getScanner().getDownloadDirectory().pathname);
+		File baseDir = new File(scanner.getDownloadDirectory().pathname);
 		this.downloadDir = new File(baseDir, mPlugin.getDescription());
 		this.downloadFilename = new File(downloadDir, book.book.downloadFileName);
 		this.downloadTrialDir = new File(baseDir, mPlugin.getDescription() + "-trials");
@@ -130,7 +137,7 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
         image.setMinimumWidth(w);
         image.setMaxWidth(w);
         Bitmap bmp = Bitmap.createBitmap(w, h, Config.RGB_565);
-        Services.getCoverpageManager().drawCoverpageFor(mActivity.getDB(), mFileInfo, bmp, false, (file, bitmap) -> {
+        mCoverpageManager.drawCoverpageFor(mActivity.getDB(), mFileInfo, bmp, false, (file, bitmap) -> {
 			BitmapDrawable drawable = new BitmapDrawable(bitmap);
 			image.setImageDrawable(drawable);
 		});
@@ -270,9 +277,6 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 	
 	private void openBook(boolean trial) {
 		File book = getBookFile(trial);
-//		FileInfo fileInfo = new FileInfo(book);
-//		FileInfo parent = Services.getScanner().findParent(fileInfo, Services.getScanner().getRoot());
-//		FileInfo bookFileInfo = parent.findItemByPathName(book.getAbsolutePath());
 		dismiss();
 		mActivity.loadDocument(
 				DocumentSource.file(book.getAbsolutePath()),

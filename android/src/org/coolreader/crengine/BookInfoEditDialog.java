@@ -50,19 +50,33 @@ import android.widget.TextView;
 
 import org.coolreader.CoolReader;
 import org.coolreader.R;
+import org.coolreader.genrescollection.GenresCollection;
 
 import java.util.ArrayList;
 
 public class BookInfoEditDialog extends BaseDialog {
 	private CoolReader mActivity;
+	private final CoverpageManager mCoverpageManager;
+	private final GenresCollection mGenresCollection;
+	private final History mHistory;
 	private BookInfo mBookInfo;
 	private FileInfo mParentDir;
 	private LayoutInflater mInflater;
 	private int mWindowSize;
 	private boolean mIsRecentBooksItem;
-	public BookInfoEditDialog(CoolReader activity, FileInfo baseDir, BookInfo book, boolean isRecentBooksItem)
+	public BookInfoEditDialog(
+			CoolReader activity,
+			CoverpageManager coverpageManager,
+			GenresCollection genresCollection,
+			History history,
+			FileInfo baseDir,
+			BookInfo book,
+			boolean isRecentBooksItem)
 	{
 		super(activity, null, false, false);
+		this.mCoverpageManager = coverpageManager;
+		this.mGenresCollection = genresCollection;
+		this.mHistory = history;
 		this.mParentDir = baseDir;
 		DisplayMetrics outMetrics = new DisplayMetrics();
 		activity.getWindowManager().getDefaultDisplay().getMetrics(outMetrics);
@@ -304,7 +318,7 @@ public class BookInfoEditDialog extends BaseDialog {
         image.setMinimumWidth(w);
         image.setMaxWidth(w);
         Bitmap bmp = Bitmap.createBitmap(w, h, Config.RGB_565);
-        Services.getCoverpageManager().drawCoverpageFor(mActivity.getDB(), file, bmp, false, (file1, bitmap) -> {
+        mCoverpageManager.drawCoverpageFor(mActivity.getDB(), file, bmp, false, (file1, bitmap) -> {
 			BitmapDrawable drawable = new BitmapDrawable(bitmap);
 			image.setImageDrawable(drawable);
 		});
@@ -345,7 +359,7 @@ public class BookInfoEditDialog extends BaseDialog {
                     if (code.length() > 0) {
                         if (genres.length() > 0)
                             genres.append("\n");
-                        genres.append(Services.getGenresCollection().translate(code));
+                        genres.append(mGenresCollection.translate(code));
                     }
                 }
                 edGenres.setText(genres.toString());
@@ -416,7 +430,7 @@ public class BookInfoEditDialog extends BaseDialog {
         if (modified) {
         	mActivity.getDB().saveBookInfo(mBookInfo);
         	mActivity.getDB().flush();
-        	BookInfo bi = Services.getHistory().getBookInfo(file);
+            BookInfo bi = mHistory.getBookInfo(file);
         	if (bi != null)
         		bi.getFileInfo().setFileProperties(file);
         	mParentDir.setFile(file);
