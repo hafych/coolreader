@@ -1,4 +1,6 @@
 #include "fb2def.h"
+#include "lvdocview.h"
+#include "lvfntman.h"
 #include "lvtinydom.h"
 #include "lvstreamutils.h"
 
@@ -7,6 +9,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -118,6 +121,183 @@ static int snapshotDocument(
     if (snapshot.selectionText != U"Needle middle needle")
         return fail("selection range text changed");
     return 0;
+}
+
+static std::string createRenderedFixture() {
+    std::string fixture =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<FictionBook><body><section>"
+            "<title><p>Rendered regression chapter</p></title>";
+    for (int index = 0; index < 80; index++) {
+        fixture += "<p>Paragraph ";
+        fixture += std::to_string(index);
+        fixture += " carries deterministic alpha beta gamma delta epsilon "
+                "text across several wrapped lines for pagination.";
+        if (index == 30) {
+            fixture += " Selection anchor bridge spans a rendered range "
+                    "whose rectangles must remain stable.";
+        }
+        fixture += "</p>";
+    }
+    fixture += "</section></body></FictionBook>";
+    return fixture;
+}
+
+struct RenderedDocumentSnapshot {
+    std::vector<int> pageStarts;
+    std::vector<int> pageHeights;
+    std::vector<lString32> pageBookmarks;
+    LVArray<lvRect> selectionRects;
+    lString32 restoredBookmark;
+    int restoredPage = -1;
+};
+
+static int snapshotRenderedDocument(
+        RenderedDocumentSnapshot &snapshot) {
+    const std::string fixture = createRenderedFixture();
+    LVStreamRef stream = LVCreateMemoryStream(
+            const_cast<char *>(fixture.data()),
+            static_cast<int>(fixture.size()),
+            true,
+            LVOM_READ);
+    if (stream.isNull())
+        return fail("rendered document fixture stream was not created");
+
+    LVDocView view(16, true);
+    view.setShowCover(false);
+    view.setPageHeaderInfo(0);
+    view.setPageMargins(lvRect(8, 8, 8, 8));
+    view.setViewMode(DVM_PAGES, 1);
+    view.overrideVisiblePageCount(1);
+    view.setDefaultFontFace(lString8("Roboto"));
+    view.setStatusFontFace(lString8("Roboto"));
+    view.setFontSize(20);
+    view.Resize(320, 240);
+    if (!view.LoadDocument(stream, U"rendered-regression.fb2", false))
+        return fail("rendered document fixture did not load");
+    view.Render(320, 240);
+
+    const int pageCount = view.getPageCount();
+    if (pageCount < 8)
+        return fail("rendered fixture did not produce enough pages");
+    snapshot.pageStarts.reserve(pageCount);
+    snapshot.pageHeights.reserve(pageCount);
+    snapshot.pageBookmarks.reserve(pageCount);
+    for (int page = 0; page < pageCount; page++) {
+        const int start = view.getPageStartY(page);
+        const int height = view.getPageHeight(page);
+        if (start < 0 || height <= 0
+                || (page > 0
+                    && start <= snapshot.pageStarts.back()))
+            return fail("rendered page sequence is not strictly ordered");
+        if (!view.goToPage(page))
+            return fail("rendered page navigation failed");
+        ldomXPointer bookmark = view.getBookmark();
+        if (bookmark.isNull()
+                || view.getBookmarkPage(bookmark) != page)
+            return fail("rendered page bookmark did not map to its page");
+        snapshot.pageStarts.push_back(start);
+        snapshot.pageHeights.push_back(height);
+        snapshot.pageBookmarks.push_back(bookmark.toString());
+    }
+
+    const int restorePage = pageCount / 2;
+    if (!view.goToPage(restorePage))
+        return fail("position restore target page was not reachable");
+    const lString32 savedBookmark = view.getBookmark().toString();
+    if (savedBookmark.empty())
+        return fail("position restore target bookmark was empty");
+    view.savePosition();
+    if (!view.goToPage(0))
+        return fail("position restore fixture could not leave target page");
+    view.restorePosition();
+    snapshot.restoredPage = view.getCurPage();
+    snapshot.restoredBookmark = view.getBookmark().toString();
+    if (snapshot.restoredPage != restorePage
+            || snapshot.restoredBookmark != savedBookmark)
+        return fail("saved rendered position did not restore exactly");
+
+    ldomDocument *document = view.getDocument();
+    ldomXPointer selectionPointer = document->createXPointer(
+            U"/FictionBook/body[1]/section[1]/p[31]/text()[1]");
+    if (selectionPointer.isNull() || !selectionPointer.isText())
+        return fail("rendered selection XPointer did not resolve");
+    lString32 selectionText = selectionPointer.getNode()->getText();
+    ldomXRange selection(
+            ldomXPointer(selectionPointer.getNode(), 0),
+            ldomXPointer(
+                    selectionPointer.getNode(), selectionText.length()));
+    selection.setFlags(0x11);
+    selection.getSegmentRects(snapshot.selectionRects);
+    if (snapshot.selectionRects.length() < 2)
+        return fail("rendered selection did not span line segments");
+    for (int index = 0;
+            index < snapshot.selectionRects.length(); index++) {
+        const lvRect &rect = snapshot.selectionRects[index];
+        if (rect.width() <= 0 || rect.height() <= 0
+                || (index > 0
+                    && rect.top
+                            < snapshot.selectionRects[index - 1].top))
+            return fail("rendered selection geometry is invalid");
+    }
+    view.selectRange(selection);
+    if (document->getSelections().length() != 1
+            || document->getSelections()[0]->getRangeText(' ', 1000)
+                    != selectionText)
+        return fail("rendered selection was not retained by the document");
+    view.clearSelection();
+    if (!document->getSelections().empty())
+        return fail("rendered selection did not clear");
+    return 0;
+}
+
+static bool equalRenderedSnapshots(
+        const RenderedDocumentSnapshot &first,
+        const RenderedDocumentSnapshot &second) {
+    if (first.pageStarts != second.pageStarts
+            || first.pageHeights != second.pageHeights
+            || first.pageBookmarks != second.pageBookmarks
+            || first.restoredPage != second.restoredPage
+            || first.restoredBookmark != second.restoredBookmark
+            || first.selectionRects.length()
+                    != second.selectionRects.length())
+        return false;
+    for (int index = 0; index < first.selectionRects.length(); index++) {
+        const lvRect &left = first.selectionRects[index];
+        const lvRect &right = second.selectionRects[index];
+        if (left.left != right.left || left.top != right.top
+                || left.right != right.right
+                || left.bottom != right.bottom)
+            return false;
+    }
+    return true;
+}
+
+static int testRenderedDocumentBehavior() {
+    if (!InitFontManager(lString8::empty_str) || !fontMan)
+        return fail("rendered fixture font manager did not initialize");
+    const lString8 fontPath(
+            COOLREADER_SOURCE_DIR
+            "/thirdparty/harfbuzz-14.2.1/test/subset/data/expected/"
+            "retain-num-glyphs/Roboto-Regular.retain-num-glyphs.all.ttf");
+    if (!fontMan->RegisterFont(fontPath)) {
+        ShutdownFontManager();
+        return fail("rendered fixture font did not register");
+    }
+
+    int result = 0;
+    {
+        RenderedDocumentSnapshot first;
+        RenderedDocumentSnapshot second;
+        if (snapshotRenderedDocument(first) != 0
+                || snapshotRenderedDocument(second) != 0)
+            result = 1;
+        else if (!equalRenderedSnapshots(first, second))
+            result = fail("equivalent renders produced different snapshots");
+    }
+    if (!ShutdownFontManager() && result == 0)
+        return fail("rendered fixture font manager did not shut down");
+    return result;
 }
 
 static int testConcurrentDocumentRegistry() {
@@ -293,6 +473,8 @@ int main() {
     }
     first.reset();
     second.reset();
+    if (testRenderedDocumentBehavior() != 0)
+        return 1;
     if (testConcurrentDocumentRegistry() != 0)
         return 1;
     return testBoundedObservableDocumentCache();

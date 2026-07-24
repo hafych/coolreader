@@ -9,9 +9,15 @@ The native `document_regression` test currently fixes these invariants:
 - a missing query returning no result;
 - serialized reading positions round-tripping through XPointer;
 - selected range text boundaries;
-- identical parse runs producing identical positions and selection text.
+- identical parse runs producing identical positions and selection text;
+- strictly ordered pagination for a fixed 320x240 single-page viewport;
+- every rendered page bookmark mapping back to the same page;
+- exact logical bookmark and page restoration through the production
+  `savePosition`/`restorePosition` history path;
+- multi-line selection rectangles with positive, ordered geometry;
+- identical page starts, heights, bookmarks, restored position and selection
+  geometry across two equivalent renders.
 
-Pagination, page-level bookmark restoration and rendered selection geometry
-remain follow-up coverage because they require a deterministic font and render
-fixture. Those checks must compare both the page sequence and restored logical
-position, rather than only a page count.
+Rendered checks register the vendored HarfBuzz Roboto fixture explicitly and
+select it by family name. This keeps pagination independent of the host's
+default font while reusing an asset already present in the source tree.

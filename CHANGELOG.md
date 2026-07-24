@@ -170,6 +170,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   Unicode string conversion and matching.
 - A native Unicode corpus now covers supplementary UTF-16, combining and
   emoji-ZWJ graphemes, bidirectional text, CJK line breaking and mixed scripts.
+- Deterministic native document renders now compare pagination, page bookmarks,
+  saved-position restoration and multi-line selection geometry across
+  equivalent runs using a vendored font fixture.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

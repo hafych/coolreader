@@ -567,6 +567,9 @@ if(BUILD_TESTING AND UNIX)
   target_link_libraries(document_regression_test
     crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}
   )
+  target_compile_definitions(document_regression_test PRIVATE
+    COOLREADER_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
   add_test(NAME document_regression COMMAND document_regression_test)
 
   add_executable(unicode_regression_test
