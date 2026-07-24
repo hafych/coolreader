@@ -28,6 +28,7 @@
 
 #include <stdlib.h>
 #include "../include/crskin.h"
+#include "../include/crrecursionguard.h"
 #include "../include/lvstsheet.h"
 #include "../include/crtrace.h"
 #include "../include/lvdrawstatesaver.h"
@@ -35,18 +36,6 @@
 
 // uncomment to trace skin XML access errors / not found elements
 //#define TRACE_SKIN_ERRORS
-
-
-class RecursionLimit
-{
-static int counter;
-public:
-    bool test( int limit = 15 ) { return counter < limit; }
-    RecursionLimit() { counter++; }
-    ~RecursionLimit() { counter--; }
-};
-int RecursionLimit::counter = 0;
-
 
 /// decodes skin percent
 int fromSkinPercent( int x, int fullx )
@@ -1457,7 +1446,7 @@ bool CRSkinContainer::readButtonSkin(  const lChar32 * path, CRButtonSkin * res 
 {
     bool flg = false;
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readButtonSkin( base.c_str(), res ) || flg;
@@ -1502,7 +1491,7 @@ bool CRSkinContainer::readScrollSkin(  const lChar32 * path, CRScrollSkin * res 
 {
     bool flg = false;
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readScrollSkin( base.c_str(), res ) || flg;
@@ -1597,7 +1586,7 @@ bool CRSkinContainer::readIconSkin(  const lChar32 * path, CRIconSkin * res )
 {
     bool flg = false;
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readIconSkin( base.c_str(), res ) || flg;
@@ -1630,7 +1619,7 @@ bool CRSkinContainer::readRectSkin(  const lChar32 * path, CRRectSkin * res )
     bool flg = false;
 
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readRectSkin( base.c_str(), res ) || flg;
@@ -1695,7 +1684,7 @@ bool CRSkinContainer::readPageSkin(  const lChar32 * path, CRPageSkin * res )
     bool flg = false;
 
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readPageSkin( base.c_str(), res ) || flg;
@@ -1733,7 +1722,7 @@ bool CRSkinContainer::readWindowSkin(  const lChar32 * path, CRWindowSkin * res 
     bool flg = false;
 
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readWindowSkin( base.c_str(), res ) || flg;
@@ -1795,7 +1784,7 @@ bool CRSkinContainer::readMenuSkin(  const lChar32 * path, CRMenuSkin * res )
     bool flg = false;
 
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readMenuSkin( base.c_str(), res ) || flg;
@@ -1908,7 +1897,7 @@ bool CRSkinContainer::readToolBarSkin(  const lChar32 * path, CRToolBarSkin * re
 {
     bool flg = false;
     lString32 base = getBasePath( path );
-    RecursionLimit limit;
+    CRThreadLocalRecursionLimit limit;
     if ( !base.empty() && limit.test() ) {
         // read base skin first
         flg = readToolBarSkin( base.c_str(), res ) || flg;

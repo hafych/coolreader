@@ -1,4 +1,5 @@
 #include "lvthread.h"
+#include "crrecursionguard.h"
 
 #include <atomic>
 #include <cstdio>
@@ -73,8 +74,44 @@ static int testMutexAcrossThreads() {
     return 0;
 }
 
+static int testThreadLocalRecursionLimit() {
+    CRThreadLocalRecursionLimit outer;
+    if (!outer.test(2))
+        return fail("recursion limit rejected the first level");
+
+    CRThreadLocalRecursionLimit inner;
+    if (inner.test(2))
+        return fail("recursion limit accepted its configured boundary");
+
+    class RecursionThread : public LVThread {
+    private:
+        std::atomic<bool> &_isolated;
+
+    protected:
+        void run() override {
+            CRThreadLocalRecursionLimit local;
+            _isolated.store(local.test(2), std::memory_order_release);
+        }
+
+    public:
+        explicit RecursionThread(std::atomic<bool> &isolated)
+            : _isolated(isolated) {
+        }
+    };
+
+    std::atomic<bool> isolated(false);
+    RecursionThread worker(isolated);
+    worker.start();
+    worker.join();
+    if (!isolated.load(std::memory_order_acquire))
+        return fail("recursion depth leaked between threads");
+    return 0;
+}
+
 int main() {
     if (testThreadCompletion() != 0)
         return 1;
-    return testMutexAcrossThreads();
+    if (testMutexAcrossThreads() != 0)
+        return 1;
+    return testThreadLocalRecursionLimit();
 }
