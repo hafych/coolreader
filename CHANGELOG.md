@@ -73,6 +73,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Library metadata scanning uses one in-flight 64-item batch, persists
   completed batches incrementally, honours cancellation between items and owns
   UI progress outside the database layer.
+- Library discovery now runs off the UI thread with iterative post-order
+  traversal, per-entry cancellation checks and coalesced initial/final UI
+  updates instead of recursive calls and an unbounded stream of UI tasks.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

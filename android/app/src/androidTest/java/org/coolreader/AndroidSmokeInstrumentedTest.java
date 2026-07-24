@@ -168,6 +168,23 @@ public class AndroidSmokeInstrumentedTest {
 				assertEquals(DocumentFormat.TXT, file.format);
 				assertTrue(file.crc32 != 0);
 			}
+
+			Scanner.ScanControl cancelled =
+					new Scanner.ScanControl();
+			cancelled.stop();
+			FileInfo cancelledBaseDir = new FileInfo(directory);
+			CountDownLatch cancellationCompleted =
+					new CountDownLatch(1);
+			InstrumentationRegistry.getInstrumentation().runOnMainSync(
+					() -> scanner.get().scanDirectory(
+							activity.getDB(), cancelledBaseDir, null,
+							scanControl ->
+									cancellationCompleted.countDown(),
+							false, cancelled));
+			assertTrue(cancellationCompleted.await(
+					TIMEOUT_MS, TimeUnit.MILLISECONDS));
+			assertTrue(cancelled.isStopped());
+			assertFalse(cancelledBaseDir.isScanned);
 		} finally {
 			control.stop();
 			finishActivity(activity);

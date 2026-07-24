@@ -61,7 +61,7 @@ public class Scanner extends FileInfoChangeSource {
 		this.dirScanEnabled = dirScanEnabled;
 	}
 	
-	private FileInfo scanZip( FileInfo zip )
+	private FileInfo scanZip(FileInfo zip, ScanControl control)
 	{
 		try {
 			File zf = new File(zip.pathname);
@@ -71,6 +71,8 @@ public class Scanner extends FileInfoChangeSource {
 			ArrayList<FileInfo> items = new ArrayList<FileInfo>();
 			//for ( Enumeration<?> e = file.entries(); e.hasMoreElements(); ) {
 			for ( ZipEntry entry : entries ) {
+				if (isScanStopped(control))
+					return null;
 				if ( entry.isDirectory() )
 					continue;
 				String name = entry.getName();
@@ -134,6 +136,16 @@ public class Scanner extends FileInfoChangeSource {
 	 */
 	public boolean listDirectory(FileInfo baseDir, boolean onlySupportedFormats, boolean scanzip, boolean rescan)
 	{
+		return listDirectory(
+				baseDir, onlySupportedFormats, scanzip, rescan, null);
+	}
+
+	private boolean listDirectory(FileInfo baseDir,
+			boolean onlySupportedFormats, boolean scanzip, boolean rescan,
+			ScanControl control)
+	{
+		if (cancelDirectoryListing(baseDir, control))
+			return false;
 		Set<String> knownItems = null;
 		if ( baseDir.isListed ) {
 			if (rescan) {
@@ -141,6 +153,8 @@ public class Scanner extends FileInfoChangeSource {
 			} else {
 				knownItems = new HashSet<String>();
 				for (int i = baseDir.itemCount() - 1; i >= 0; i--) {
+					if (cancelDirectoryListing(baseDir, control))
+						return false;
 					FileInfo item = baseDir.getItem(i);
 					if (!item.exists()) {
 						// remove item from list
@@ -165,6 +179,8 @@ public class Scanner extends FileInfoChangeSource {
 			// process normal files
 			if ( items!=null ) {
 				for ( File f : items ) {
+					if (cancelDirectoryListing(baseDir, control))
+						return false;
 					// check whether file is a link
 					if (Engine.isLink(f.getAbsolutePath()) != null) {
 						log.w("skipping " + f + " because it's a link");
@@ -189,7 +205,10 @@ public class Scanner extends FileInfoChangeSource {
 						if ( item==null ) {
 							item = new FileInfo( f );
 							if ( scanzip && isArc ) {
-								item = scanZip( item );
+								item = scanZip(item, control);
+								if (cancelDirectoryListing(
+										baseDir, control))
+									return false;
 								if ( item==null )
 									continue;
 								if ( item.isDirectory ) {
@@ -219,6 +238,8 @@ public class Scanner extends FileInfoChangeSource {
 				}
 				// process directories 
 				for ( File f : items ) {
+					if (cancelDirectoryListing(baseDir, control))
+						return false;
 					if ( f.isDirectory() ) {
 						if ( f.getName().startsWith(".") )
 							continue; // treat dirs beginning with '.' as hidden
@@ -233,10 +254,25 @@ public class Scanner extends FileInfoChangeSource {
 			baseDir.isListed = true;
 			return true;
 		} catch ( Exception e ) {
+			if (cancelDirectoryListing(baseDir, control))
+				return false;
 			L.e("Exception while listing directory " + baseDir.pathname, e);
 			baseDir.isListed = true;
 			return false;
 		}
+	}
+
+	private static boolean isScanStopped(ScanControl control) {
+		return control != null && control.isStopped();
+	}
+
+	private static boolean cancelDirectoryListing(
+			FileInfo directory, ScanControl control) {
+		if (!isScanStopped(control))
+			return false;
+		directory.isListed = false;
+		directory.isScanned = false;
+		return true;
 	}
 	
 	public static class ScanControl {
@@ -471,11 +507,10 @@ public class Scanner extends FileInfoChangeSource {
 		BackgroundThread.ensureGUI();
 
 		log.d("scanDirectory(" + baseDir.getPathName() + ") " + (recursiveScan ? "recursive" : ""));
-		
-		listDirectory(baseDir, true, false);
-		if (null != initialUpdateCallback)
-			initialUpdateCallback.run();
-		listSubtreeBg(baseDir, mHideEmptyDirs ? Integer.MAX_VALUE : 2, scanControl, () -> {
+
+		listSubtreeBg(
+				baseDir, mHideEmptyDirs ? Integer.MAX_VALUE : 2,
+				scanControl, initialUpdateCallback, () -> {
 			if ( (!getDirScanEnabled() || baseDir.isScanned) && !recursiveScan || scanControl.isStopped() ) {
 				readyListener.onComplete(scanControl);
 				return;
@@ -839,16 +874,38 @@ public class Scanner extends FileInfoChangeSource {
 	 * @param scanControl is to stop long scanning
 	 * @param readyCallback ready callback, can be null
 	 */
-	private void listSubtreeBg(FileInfo root, int maxDepth, ScanControl scanControl, Runnable readyCallback) {
+	private void listSubtreeBg(FileInfo root, int maxDepth,
+			ScanControl scanControl, Runnable initialUpdateCallback,
+			Runnable readyCallback) {
 		BackgroundThread.instance().postBackground(() -> {
 			// make a copy to scan in background
-			FileInfo dir = new FileInfo(root);
+			FileInfo dir = copyDirectorySnapshot(root);
 			dir.parent = root.parent;
-			dir.setItems(root);
-			listSubtreeBg_impl(dir, maxDepth, scanControl);
+			boolean rootListed = listDirectory(
+					dir, true, true,
+					!dir.isSpecialDir() && !dir.isArchive,
+					scanControl);
+			boolean initialUpdatePosted =
+					rootListed && initialUpdateCallback != null;
+			if (initialUpdatePosted) {
+				FileInfo initialSnapshot =
+						copyDirectorySnapshot(dir);
+				BackgroundThread.instance().postGUI(() -> {
+					root.setItems(initialSnapshot);
+					onDirectoryContentChanged(root);
+					initialUpdateCallback.run();
+				});
+			}
+			if (rootListed && !scanControl.isStopped())
+				listSubtreeBg_impl(
+						dir, maxDepth, scanControl, true);
 			BackgroundThread.instance().postGUI(() -> {
 				// transfer scanned items from background copy to update in GUI
 				root.setItems(dir);
+				onDirectoryContentChanged(root);
+				if (!initialUpdatePosted
+						&& initialUpdateCallback != null)
+					initialUpdateCallback.run();
 				if (null != readyCallback) {
 					readyCallback.run();
 				}
@@ -856,44 +913,58 @@ public class Scanner extends FileInfoChangeSource {
 		});
 	}
 
-	private boolean listSubtreeBg_impl(FileInfo dir, int maxDepth, ScanControl scanControl) {
-		BackgroundThread.ensureBackground();
-		boolean fullDepthScan = true;
-		if (maxDepth <= 0 || scanControl.isStopped())
-			return false;
-		// full rescan to scan zip-files
-		boolean res = listDirectory(dir, true, true, !dir.isSpecialDir() && !dir.isArchive);
-		if (res) {
-			for (int i = dir.dirCount() - 1; i >= -0; i--) {
-				res = listSubtreeBg_impl(dir.getDir(i), maxDepth - 1, scanControl);
-				if (!res) {
-					fullDepthScan = false;
-				}
-				if (scanControl.isStopped())
-					break;
-			}
-			if (fullDepthScan && mHideEmptyDirs) {
-				if (dir.removeEmptyDirs()) {
-					BackgroundThread.instance().postGUI(() -> {
-						// make a copy to update in GUI
-						FileInfo cp = new FileInfo(dir);
-						cp.assign(dir);
-						cp.parent = dir.parent;
-						cp.setItems(dir);
-						onDirectoryContentChanged(cp);
-					});
-				}
-			}
+	private FileInfo copyDirectorySnapshot(FileInfo directory) {
+		FileInfo copy = new FileInfo(directory);
+		copy.parent = directory.parent;
+		for (int i = 0; i < directory.fileCount(); i++) {
+			FileInfo file = new FileInfo(directory.getFile(i));
+			file.parent = copy;
+			copy.addFile(file);
 		}
-		BackgroundThread.instance().postGUI(() -> {
-			// make a copy to update in GUI
-			FileInfo cp = new FileInfo(dir);
-			cp.assign(dir);
-			cp.parent = dir.parent;
-			cp.setItems(dir);
-			onDirectoryContentChanged(cp);
-		});
-		return res;
+		for (int i = 0; i < directory.dirCount(); i++) {
+			FileInfo child = new FileInfo(directory.getDir(i));
+			child.parent = copy;
+			copy.addDir(child);
+		}
+		return copy;
+	}
+
+	private boolean listSubtreeBg_impl(FileInfo dir, int maxDepth,
+			ScanControl scanControl, boolean rootAlreadyDiscovered) {
+		BackgroundThread.ensureBackground();
+		return IterativeScanTraversal.traverse(
+				dir, maxDepth, scanControl::isStopped,
+				new IterativeScanTraversal.Adapter<FileInfo>() {
+					@Override
+					public boolean discover(FileInfo directory) {
+						if (rootAlreadyDiscovered
+								&& directory == dir)
+							return true;
+						return listDirectory(
+								directory, true, true,
+								!directory.isSpecialDir()
+										&& !directory.isArchive,
+								scanControl);
+					}
+
+					@Override
+					public int childCount(FileInfo directory) {
+						return directory.dirCount();
+					}
+
+					@Override
+					public FileInfo childAt(
+							FileInfo directory, int index) {
+						return directory.getDir(index);
+					}
+
+					@Override
+					public void onCompleted(
+							FileInfo directory, boolean fullDepth) {
+						if (fullDepth && mHideEmptyDirs)
+							directory.removeEmptyDirs();
+					}
+				});
 	}
 
 	public FileInfo setSearchResults( FileInfo[] results ) {
