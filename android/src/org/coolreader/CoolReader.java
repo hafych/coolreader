@@ -78,6 +78,7 @@ import org.coolreader.crengine.ErrorDialog;
 import org.coolreader.crengine.FileBrowser;
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.FileInfoOperationListener;
+import org.coolreader.crengine.FileSystemFolders;
 import org.coolreader.crengine.History;
 import org.coolreader.crengine.InterfaceTheme;
 import org.coolreader.crengine.L;
@@ -130,6 +131,7 @@ public class CoolReader extends BaseActivity {
 	private History mHistory;
 	private CoverpageManager mCoverpageManager;
 	private DocumentFileCache mDocumentCache;
+	private FileSystemFolders mFileSystemFolders;
 	private ServiceLifecycle mServiceLifecycle;
 	//View startupView;
 	//CRDB mDB;
@@ -283,6 +285,7 @@ public class CoolReader extends BaseActivity {
 		mHistory = Services.getHistory();
 		mCoverpageManager = Services.getCoverpageManager();
 		mDocumentCache = Services.getDocumentCache();
+		mFileSystemFolders = Services.getFileSystemFolders();
 		mServiceLifecycle = Services.getLifecycle();
 
 		//requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -1108,7 +1111,12 @@ public class CoolReader extends BaseActivity {
 			waitForCRDBService(() -> {
 				mHistory.loadFromDB(getDB(), 200);
 
-				mHomeFrame = new CRRootView(CoolReader.this);
+				mHomeFrame = new CRRootView(
+						CoolReader.this,
+						mScanner,
+						mHistory,
+						mCoverpageManager,
+						mFileSystemFolders);
 				mCoverpageManager.addCoverpageReadyListener(mHomeFrame);
 				mHomeFrame.requestFocus();
 
@@ -1391,6 +1399,8 @@ public class CoolReader extends BaseActivity {
 						mEngine,
 						mScanner,
 						mHistory,
+						mCoverpageManager,
+						mFileSystemFolders,
 						settings().getBool(
 								PROP_APP_FILE_BROWSER_HIDE_EMPTY_GENRES,
 								false));

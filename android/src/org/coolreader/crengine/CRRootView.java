@@ -53,16 +53,27 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	private LinearLayout mFilesystemScroll;
 	private LinearLayout mLibraryScroll;
 	private LinearLayout mOnlineCatalogsScroll;
-	private CoverpageManager mCoverpageManager;
+	private final Scanner mScanner;
+	private final History mHistory;
+	private final CoverpageManager mCoverpageManager;
+	private final FileSystemFolders mFileSystemFolders;
 	private int coverWidth;
 	private int coverHeight;
 	private BookInfo currentBook;
 	private CoverpageReadyListener coverpageListener;
-	public CRRootView(CoolReader activity) {
+	public CRRootView(
+			CoolReader activity,
+			Scanner scanner,
+			History history,
+			CoverpageManager coverpageManager,
+			FileSystemFolders fileSystemFolders) {
 		super(activity);
 		this.mActivity = activity;
+		this.mScanner = scanner;
+		this.mHistory = history;
+		this.mCoverpageManager = coverpageManager;
+		this.mFileSystemFolders = fileSystemFolders;
 		this.setLayoutParams(new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT));
-		this.mCoverpageManager = Services.getCoverpageManager();
 
 
 		int screenHeight = mActivity.getWindowManager().getDefaultDisplay().getHeight();
@@ -173,8 +184,8 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 			setBookInfoItem(mView, R.id.lbl_book_series, Utils.formatSeries(item.series, item.seriesNumber));
 			String state = Utils.formatReadingState(mActivity, item);
 			state = state + " " + Utils.formatFileInfo(mActivity, item) + " ";
-			if (Services.getHistory() != null)
-				state = state + " " + Utils.formatLastPosition(mActivity, Services.getHistory().getLastPos(item));
+			state = state + " " + Utils.formatLastPosition(
+					mActivity, mHistory.getLastPos(item));
 			setBookInfoItem(mView, R.id.lbl_book_info, state);
 		} else {
 			log.w("No current book in history");
@@ -195,8 +206,8 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 		ArrayList<FileInfo> files = new ArrayList<>();
 		for (int i = 1; i <= MAX_RECENT_BOOKS && i < books.size(); i++)
 			files.add(books.get(i).getFileInfo());
-		if (books.size() > MAX_RECENT_BOOKS && Services.getScanner() != null)
-			files.add(Services.getScanner().createRecentRoot());
+		if (books.size() > MAX_RECENT_BOOKS)
+			files.add(mScanner.createRecentRoot());
 		LayoutInflater inflater = LayoutInflater.from(mActivity);
 		mRecentBooksScroll.removeAllViews();
 		for (final FileInfo item : files) {
@@ -231,7 +242,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 				}
 				view.setOnClickListener(v -> mActivity.loadDocument(item, true));
 				view.setOnLongClickListener(v -> {
-					mActivity.editBookInfo(Services.getScanner().createRecentRoot(), item);
+					mActivity.editBookInfo(mScanner.createRecentRoot(), item);
 					return true;
 				});
 			}
@@ -242,8 +253,8 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 
 	public void refreshRecentBooks() {
 		BackgroundThread.instance().postGUI(() -> mActivity.waitForCRDBService(() -> {
-			if (Services.getHistory() != null && mActivity.getDB() != null)
-				Services.getHistory().getOrLoadRecentBooks(mActivity.getDB(), bookList -> {
+			if (mActivity.getDB() != null)
+				mHistory.getOrLoadRecentBooks(mActivity.getDB(), bookList -> {
 					updateCurrentBook(bookList != null && bookList.size() > 0 ? bookList.get(0) : null);
 					updateRecentBooks(bookList);
 				});
@@ -255,7 +266,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	}
 
     public void refreshFileSystemFolders() {
-        ArrayList<FileInfo> folders = Services.getFileSystemFolders().getFileSystemFolders();
+        ArrayList<FileInfo> folders = mFileSystemFolders.getFileSystemFolders();
         updateFilesystems(folders);
     }
 
@@ -266,9 +277,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 		boolean enableLitres = mActivity.settings().getBool(Settings.PROP_APP_PLUGIN_ENABLED + "." + OnlineStorePluginManager.PLUGIN_PKG_LITRES, defEnableLitres);
 		if (enableLitres)
 			catalogs.add(0, Scanner.createOnlineLibraryPluginItem(OnlineStorePluginManager.PLUGIN_PKG_LITRES, "LitRes"));
-		if (Services.getScanner() == null)
-			return;
-		FileInfo opdsRoot = Services.getScanner().getOPDSRoot();
+		FileInfo opdsRoot = mScanner.getOPDSRoot();
 		if (opdsRoot.dirCount() == 0)
 			opdsRoot.addItems(catalogs);
 		catalogs.add(0, opdsRoot);
@@ -426,7 +435,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 			MenuInflater inflater = mActivity.getMenuInflater();
 			inflater.inflate(R.menu.cr3_favorite_folder_context_menu,contextMenu);
 			boolean isFavorite = folder.getType() == FileInfo.TYPE_NOT_SET;
-			final FileSystemFolders service = Services.getFileSystemFolders();
+			final FileSystemFolders service = mFileSystemFolders;
 			for(int idx = 0 ; idx< contextMenu.size(); ++idx){
 				MenuItem item = contextMenu.getItem(idx);
 				boolean enabled = isFavorite;
@@ -518,7 +527,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 		
 		mOnlineCatalogsScroll = mView.findViewById(R.id.scroll_online_catalogs);
 
-		updateCurrentBook(Services.getHistory().getLastBook());
+		updateCurrentBook(mHistory.getLastBook());
 		
 //		((ImageButton)mView.findViewById(R.id.btn_recent_books)).setOnClickListener(new OnClickListener() {
 //			@Override
@@ -551,22 +560,26 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 		});
 		mView.findViewById(R.id.current_book).setOnLongClickListener(v -> {
 			if (currentBook != null)
-				mActivity.editBookInfo(Services.getScanner().createRecentRoot(), currentBook.getFileInfo());
+				mActivity.editBookInfo(
+						mScanner.createRecentRoot(),
+						currentBook.getFileInfo());
 			return true;
 		});
 
 		refreshRecentBooks();
 
 		// Must be initialized FileSystemFolders.favoriteFolders firstly to exclude NullPointerException.
-		mActivity.waitForCRDBService(() -> Services.getFileSystemFolders().loadFavoriteFolders(mActivity.getDB()));
+		mActivity.waitForCRDBService(() ->
+				mFileSystemFolders.loadFavoriteFolders(mActivity.getDB()));
 
-        Services.getFileSystemFolders().addListener((object, onlyProperties) -> BackgroundThread.instance().postGUI(this::refreshFileSystemFolders));
+        mFileSystemFolders.addListener((object, onlyProperties) ->
+				BackgroundThread.instance().postGUI(
+						this::refreshFileSystemFolders));
 
 		BackgroundThread.instance().postGUI(this::refreshOnlineCatalogs);
 
 		BackgroundThread.instance().postGUI(() -> {
-			if (Services.getScanner() != null)
-				updateLibraryItems(Services.getScanner().getLibraryItems());
+			updateLibraryItems(mScanner.getLibraryItems());
 		});
 
 		removeAllViews();

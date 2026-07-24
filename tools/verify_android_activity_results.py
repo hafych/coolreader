@@ -16,6 +16,8 @@ NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
 ENGINE = SOURCE / "crengine" / "Engine.java"
 SERVICES = SOURCE / "crengine" / "Services.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
+FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
+ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
 ACTIVE_RESULT_SOURCES = (COOL_READER, DICTIONARIES, BASE_ACTIVITY)
 FORBIDDEN_RESULT_PATTERNS = (
     r"\bstartActivityForResult\s*\(",
@@ -141,6 +143,12 @@ def main() -> None:
         if marker not in reader_view_text:
             violations.append(f"{relative(READER_VIEW)} omits marker: {marker}")
 
+    for path in (FILE_BROWSER, ROOT_VIEW):
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"\bServices\.", text):
+            violations.append(
+                f"{relative(path)} still uses the static service locator")
+
     cool_reader_text = COOL_READER.read_text(encoding="utf-8")
     for marker in REQUIRED_COOL_READER_MARKERS:
         if marker not in cool_reader_text:
@@ -152,6 +160,7 @@ def main() -> None:
         "mHistory = Services.getHistory();",
         "mCoverpageManager = Services.getCoverpageManager();",
         "mDocumentCache = Services.getDocumentCache();",
+        "mFileSystemFolders = Services.getFileSystemFolders();",
         "mServiceLifecycle = Services.getLifecycle();",
     }
     for line_number, line in enumerate(

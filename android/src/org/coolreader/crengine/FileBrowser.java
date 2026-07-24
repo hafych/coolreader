@@ -71,6 +71,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	CoolReader mActivity;
 	LayoutInflater mInflater;
 	History mHistory;
+	FileSystemFolders mFileSystemFolders;
 	ListView mListView;
 	boolean mHideEmptyGenres;
 
@@ -205,7 +206,14 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	}
 	
 	CoverpageManager.CoverpageReadyListener coverpageListener;
-	public FileBrowser(CoolReader activity, Engine engine, Scanner scanner, History history, boolean hideEmptyGenres) {
+	public FileBrowser(
+			CoolReader activity,
+			Engine engine,
+			Scanner scanner,
+			History history,
+			CoverpageManager coverpageManager,
+			FileSystemFolders fileSystemFolders,
+			boolean hideEmptyGenres) {
 		super(activity);
 		this.mActivity = activity;
 		this.mEngine = engine;
@@ -213,7 +221,8 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		this.mScanControl = new Scanner.ScanControl();
 		this.mInflater = LayoutInflater.from(activity);// activity.getLayoutInflater();
 		this.mHistory = history;
-		this.mCoverpageManager = Services.getCoverpageManager();
+		this.mCoverpageManager = coverpageManager;
+		this.mFileSystemFolders = fileSystemFolders;
 		this.mHideEmptyGenres = hideEmptyGenres;
 
 		coverpageListener = files -> {
@@ -373,7 +382,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	}
 
     private void addToFavorites(FileInfo folder) {
-        Services.getFileSystemFolders().addFavoriteFolder(mActivity.getDB(), folder);
+        mFileSystemFolders.addFavoriteFolder(mActivity.getDB(), folder);
     }
 
     public void refreshOPDSRootDirectory(final boolean showInBrowser) {
@@ -709,7 +718,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						//mActivity.showToast("Starting download of " + type + " from " + url);
 						log.d("onDownloadStart: called for " + type + " "
 								+ OPDSUtil.safeUrlForLog(url));
-						downloadDir = Services.getScanner().getDownloadDirectory();
+						downloadDir = mScanner.getDownloadDirectory();
 						log.d("onDownloadStart: after getDownloadDirectory()" );
 						String subdir = null;
 						if ( fileOrDir.authors!=null ) {
@@ -1245,7 +1254,9 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 							field2.setText(Utils.formatLastPosition(mActivity, mHistory.getLastPos(item)));
 						//field3.setText(pos!=null ? formatPercent(pos.getPercent()) : null);
 						if (infoButton != null)
-							infoButton.setOnClickListener(v -> mActivity.editBookInfo(Services.getScanner().createRecentRoot(), item));
+							infoButton.setOnClickListener(v ->
+									mActivity.editBookInfo(
+											mScanner.createRecentRoot(), item));
 					} 
 					
 				}

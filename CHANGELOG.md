@@ -50,6 +50,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   lifecycle token explicitly instead of consulting the static service locator.
 - CoolReader captures one explicit service generation during creation and no
   longer performs ad-hoc global dependency lookups during user flows.
+- FileBrowser and the home/root view now receive scanner, history, cover and
+  favorite-folder services explicitly.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded
