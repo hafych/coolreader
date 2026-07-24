@@ -3743,20 +3743,28 @@ int Utf8CharCount( const lChar8 * str, int len )
     return count;
 }
 
+static inline bool isHighSurrogate(lUInt32 ch)
+{
+    return ch >= 0xD800 && ch <= 0xDBFF;
+}
+
+static inline bool isLowSurrogate(lUInt32 ch)
+{
+    return ch >= 0xDC00 && ch <= 0xDFFF;
+}
+
+static inline bool isUnicodeScalar(lUInt32 ch)
+{
+    return ch <= 0x10FFFF && !isHighSurrogate(ch) && !isLowSurrogate(ch);
+}
+
 int Utf16CharCount( const lChar16 * str )
 {
     int count = 0;
     lUInt16 ch;
     while ( (ch=*str++) ) {
-        if ( (ch >=0 && ch <= 0xD7FF) || (ch >= 0xE000 && ch <= 0xFFFF) ) {
-        } else if ( ch >= 0xD800 && ch <= 0xDBFF ) {
-            if ( !(*str++) )
-                break;
-        } else {
-            // In Unicode standard maximum length of UTF-16 sequence is 2 word!
-            // invalid first word in UTF-16 sequence, just leave as is
-            ;
-        }
+        if (isHighSurrogate(ch) && isLowSurrogate(*str))
+            str++;
         count++;
     }
     return count;
@@ -3764,21 +3772,14 @@ int Utf16CharCount( const lChar16 * str )
 
 int Utf16CharCount( const lChar16 * str, int len )
 {
-    if (len == 0)
+    if (len <= 0)
         return 0;
     int count = 0;
     lUInt16 ch;
     const lChar16 * endp = str + len;
-    while ( (ch=*str++) ) {
-        if ( (ch >=0 && ch <= 0xD7FF) || (ch >= 0xE000 && ch <= 0xFFFF) ) {
-        } else if ( ch >= 0xD800 && ch <= 0xDBFF ) {
+    while (str < endp && (ch=*str++)) {
+        if (isHighSurrogate(ch) && str < endp && isLowSurrogate(*str))
             str++;
-        } else {
-            // invalid first word of UTF-16 sequence, just leave as is
-            ;
-        }
-        if (str > endp)
-            break;
         count++;
     }
     return count;
@@ -3867,27 +3868,23 @@ int Wtf8CharCount( const lChar8 * str, int len )
 }
 
 inline int charUtf8ByteCount(lUInt32 ch) {
+    if (!isUnicodeScalar(ch))
+        return 1;
     if (!(ch & ~0x7F))
         return 1;
     if (!(ch & ~0x7FF))
         return 2;
     if (!(ch & ~0xFFFF))
         return 3;
-    if (!(ch & ~0x1FFFFF))
-        return 4;
-    // In Unicode Standard codepoint must be in range U+0000..U+10FFFF
-    // return invalid codepoint as one byte
-    return 1;
+    return 4;
 }
 
 inline int charUtf16WordCount(lUInt32 ch) {
+    if (!isUnicodeScalar(ch))
+        return 1;
     if (!(ch & ~0xFFFF))
         return 1;
-    if (!(ch & ~0x1FFFFF))
-        return 2;
-    // In Unicode Standard codepoint must be in range U+0000..U+10FFFF
-    // return invalid codepoint as one word
-    return 1;
+    return 2;
 }
 
 int Utf8ByteCount(const lChar32 * str)
@@ -4046,31 +4043,28 @@ static void DecodeWtf8(const char * s,  lChar32 * p, int len)
     }
 }
 
-static void DecodeUtf16(const lChar16 * s,  lChar32 * p, int len)
+static void DecodeUtf16(const lChar16 * s, int sourceLength,
+        lChar32 * p, int destinationLength)
 {
-    lChar32 * endp = p + len;
+    const lChar16 * ends = s + sourceLength;
+    lChar32 * endp = p + destinationLength;
     lUInt16 ch;
-    while (p < endp) {
+    while (p < endp && s < ends) {
         ch = *s++;
-        if ( (ch >=0 && ch <= 0xD7FF) || (ch >= 0xE000 && ch <= 0xFFFF) ) {
+        if (!isHighSurrogate(ch) && !isLowSurrogate(ch)) {
             *p++ = (lChar32)ch;
-        } else if ( ch >= 0xD800 && ch < 0xDC00 ) {
-            lUInt16 next = (lUInt16)*s;
-            if (next >= 0xDC00 && next < 0xE000) {
+        } else if (isHighSurrogate(ch)) {
+            if (s < ends && isLowSurrogate(*s)) {
+                lUInt16 next = *s++;
                 // convert surrogate pair into unicode code point
                 // 110110wwwwxxxxxx, 110111xxxxxxxxxx => 000uuuuuxxxxxxxxxxxxxxxx
                 //  where uuuuu = wwww+1
                 *p++ = ( ( ( (ch & 0x03C0) >> 6 ) + 1 ) << 16 ) | ((ch & 0x3F) << 10) | (next & 0x3FF);
             } else {
-                // Invalid second word in UTF-16 sequence (including '\0')
-                // Pass with mask 0x7F, to resolve exception around env->NewStringUTF()
-                *p++ = (char) (ch & 0x7F);
+                *p++ = '?';
             }
-            s++;
         } else {
-            // Invalid first word in UTF-16 sequence
-            // Pass with mask 0x7F, to resolve exception around env->NewStringUTF()
-            *p++ = (char) (ch & 0x7F);
+            *p++ = '?';
         }
     }
 }
@@ -4178,15 +4172,13 @@ void Utf16ToUnicode(const lChar16 * src,  int &srclen, lChar32 * dst, int &dstle
     while (p < endp && s < ends) {
         ch = *s;
         matched = false;
-        if ( (ch >=0 && ch <= 0xD7FF) || (ch >= 0xE000 && ch <= 0xFFFF) ) {
+        if (!isHighSurrogate(ch) && !isLowSurrogate(ch)) {
             matched = true;
             *p++ = (lChar32)ch;
             s++;
-        } else if ( ch >= 0xD800 && ch < 0xDC00 ) {
-            if (s + 2 > ends)
-                break;
-            lUInt16 next = *s;
-            if (next >= 0xDC00 && next < 0xE000) {
+        } else if (isHighSurrogate(ch)) {
+            if (s + 1 < ends && isLowSurrogate(s[1])) {
+                lUInt16 next = s[1];
                 matched = true;
                 // convert surrogate pair into unicode code point
                 // 110110wwwwxxxxxx, 110111xxxxxxxxxx => 000uuuuuxxxxxxxxxxxxxxxx
@@ -4195,9 +4187,7 @@ void Utf16ToUnicode(const lChar16 * src,  int &srclen, lChar32 * dst, int &dstle
                 s += 2;
             }
         } else {
-            // Invalid first word in UTF-16 sequence
-            // Pass with mask 0x7F, to resolve exception around env->NewStringUTF()
-            *p++ = (char) (ch & 0x7F);
+            *p++ = '?';
             s++;
             matched = true; // just to avoid next if
         }
@@ -4247,7 +4237,7 @@ lString32 Utf16ToUnicode( const lChar16 * s )
     lString32 dst;
     dst.append(len, (lChar32)0);
     lChar32 * p = dst.modify();
-    DecodeUtf16(s, p, len);
+    DecodeUtf16(s, lStr_len(s), p, len);
     return dst;
 }
 
@@ -4261,7 +4251,10 @@ lString32 Utf16ToUnicode( const lChar16 * s, int sz )
     lString32 dst;
     dst.append(len, 0);
     lChar32 * p = dst.modify();
-    DecodeUtf16(s, p, len);
+    int sourceLength = 0;
+    while (sourceLength < sz && s[sourceLength])
+        sourceLength++;
+    DecodeUtf16(s, sourceLength, p, len);
     return dst;
 }
 
@@ -4310,7 +4303,9 @@ lString8 UnicodeToUtf8(const lChar32 * s, int count)
         lUInt32 ch;
         while ((count--) > 0) {
             ch = *s++;
-            if (!(ch & ~0x7F)) {
+            if (!isUnicodeScalar(ch)) {
+                *buf++ = '?';
+            } else if (!(ch & ~0x7F)) {
                 *buf++ = ( (lUInt8)ch );
             } else if (!(ch & ~0x7FF)) {
                 *buf++ = ( (lUInt8) ( ((ch >> 6) & 0x1F) | 0xC0 ) );
@@ -4319,15 +4314,11 @@ lString8 UnicodeToUtf8(const lChar32 * s, int count)
                 *buf++ = ( (lUInt8) ( ((ch >> 12) & 0x0F) | 0xE0 ) );
                 *buf++ = ( (lUInt8) ( ((ch >> 6) & 0x3F) | 0x80 ) );
                 *buf++ = ( (lUInt8) ( ((ch ) & 0x3F) | 0x80 ) );
-            } else if (!(ch & ~0x1FFFFF)) {
+            } else {
                 *buf++ = ( (lUInt8) ( ((ch >> 18) & 0x07) | 0xF0 ) );
                 *buf++ = ( (lUInt8) ( ((ch >> 12) & 0x3F) | 0x80 ) );
                 *buf++ = ( (lUInt8) ( ((ch >> 6) & 0x3F) | 0x80 ) );
                 *buf++ = ( (lUInt8) ( ((ch ) & 0x3F) | 0x80 ) );
-            } else {
-                // invalid codepoint
-                // In Unicode Standard codepoint must be in range U+0000 .. U+10FFFF
-                *buf++ = '?';
             }
         }
     }
@@ -4348,9 +4339,11 @@ lString16 UnicodeToUtf16(const lChar32 * s, int count)
         lUInt32 ch;
         while ((count--) > 0) {
             ch = *s++;
-            if (!(ch & ~0xFFFF)) {
+            if (!isUnicodeScalar(ch)) {
+                *buf++ = L'?';
+            } else if (!(ch & ~0xFFFF)) {
                 *buf++ = (lChar16)ch;
-            } else if (!(ch & ~0x1FFFFF)) {
+            } else {
                 // put into a surrogate pair
                 // 000uuuuuxxxxxxxxxxxxxxxx => 110110wwwwxxxxxx, 110111xxxxxxxxxx
                 //   where wwww = uuuuu - 1
@@ -4358,10 +4351,6 @@ lString16 UnicodeToUtf16(const lChar32 * s, int count)
                 *buf++ = (lChar16) ( 0xD800 | ( ( ( (ch >> 16) & 0x1F ) - 1 ) << 6 ) | ( (ch >> 10) & 0x3F ) );
                 // second word
                 *buf++ = (lChar16) ( 0xDC00 | (ch & 0x3FF) );
-            } else {
-                // invalid codepoint
-                // In Unicode Standard codepoint must be in range U+0000 .. U+10FFFF
-                *buf++ = L'?';
             }
         }
     }

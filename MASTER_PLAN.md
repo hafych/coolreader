@@ -115,7 +115,7 @@ DRM или ограничений доступа, подбор/получени�
   search и восстановления позиции.
 - [x] Ввести ограниченный cache manager с наблюдаемыми hit/miss/eviction counters
   для glyph, image, cover и parsed-document caches.
-- [ ] Проверить корректность Unicode: surrogate pairs, combining marks, bidi,
+- [x] Проверить корректность Unicode: surrogate pairs, combining marks, bidi,
   grapheme boundaries, CJK и mixed scripts.
 
 ### EPUB/CSS/типографика

@@ -167,6 +167,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   file sizes, reports hit/miss/eviction counters, and correctly clears its files.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
+- A native Unicode corpus now covers supplementary UTF-16, combining and
+  emoji-ZWJ graphemes, bidirectional text, CJK line breaking and mixed scripts.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.
@@ -186,6 +188,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 
 - Android baseline is API 21+, compile/target API 35, JDK 17 and the pinned NDK
   declared in the Gradle build.
+- UTF-8/UTF-16 conversion now rejects non-scalar values, decodes valid
+  surrogate pairs in bounded buffers and replaces unpaired surrogates without
+  consuming adjacent text.
 - Android instrumentation now uses the AndroidX test runner, and the obsolete
   Jetifier compatibility pass is disabled after removal of support-library
   dependencies.
