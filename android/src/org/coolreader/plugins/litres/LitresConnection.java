@@ -56,7 +56,6 @@ import org.coolreader.plugins.OnlineStoreAuthor;
 import org.coolreader.plugins.OnlineStoreAuthors;
 import org.coolreader.plugins.OnlineStoreBook;
 import org.coolreader.plugins.OnlineStoreBooks;
-import org.coolreader.plugins.OnlineStoreRegistrationParam;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
@@ -68,14 +67,11 @@ public class LitresConnection {
 	final static String TAG = "litres";
 
 	public static final String AUTHORIZE_URL = "https://robot.litres.ru/pages/catalit_authorise/";
-	public static final String REGISTER_URL = "https://robot.litres.ru/pages/catalit_register_user/";
 	public static final String GENRES_URL = "https://robot.litres.ru/pages/catalit_genres/";
 	public static final String AUTHORS_URL = "https://robot.litres.ru/pages/catalit_persons/";
 	public static final String CATALOG_URL = "https://robot.litres.ru/pages/catalit_browser/";
 	public static final String TRIALS_URL = "https://robot.litres.ru/static/trials/";
-	public static final String PURCHASE_URL = "https://robot.litres.ru/pages/purchase_book/";
 	public static final String DOWNLOAD_BOOK_URL = "https://robot.litres.ru/pages/catalit_download_book/";
-	public static final String P_ID = "8786915";
 
 	ServiceThread workerThread;
 
@@ -814,118 +810,6 @@ public class LitresConnection {
 				} else if ("catalit-authorization-failed".equals(localName)) {
 					onError(1, "Authorization failed");
 				}
-			}
-		}, resultHandler);
-	}
-
-	private static void copyParam(HashMap<String, String> dst, HashMap<String, String> src, String dstName, String srcName) {
-		String srcv = src.get(srcName);
-		if (srcv != null && srcv.length() > 0) {
-			String dstv = srcv;
-			// TODO: conversion for some parameters, if necessary
-			if (dstv != null)
-				dst.put(dstName, dstv);
-		}
-	}
-
-	public void register(final HashMap<String, String> registerParams, final ResultHandler resultHandler) {
-		final HashMap<String, String> params = new HashMap<String, String>();
-		final String login = registerParams.get(OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_LOGIN);
-		final String pwd = registerParams.get(OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_PASSWORD);
-		params.put("lfrom", P_ID);
-		copyParam(params, registerParams, "new_login", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_LOGIN);
-		copyParam(params, registerParams, "new_pwd1", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_PASSWORD);
-		copyParam(params, registerParams, "mail", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_EMAIL);
-		copyParam(params, registerParams, "first_name", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_FIRST_NAME);
-		copyParam(params, registerParams, "middle_name", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_MIDDLE_NAME);
-		copyParam(params, registerParams, "last_name", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_LAST_NAME);
-		copyParam(params, registerParams, "city", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_CITY);
-		copyParam(params, registerParams, "phone", OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_PHONE);
-		boolean subscribe = "1".equals(registerParams.get(OnlineStoreRegistrationParam.NEW_ACCOUNT_PARAM_SUBSCRIBE));
-		if (!subscribe)
-			params.put("no_present_books", "1");
-		sendXMLRequest(REGISTER_URL, params, new ResponseHandler() {
-			LitresAuthInfo result;
-
-			@Override
-			public AsyncResponse getResponse() {
-				AsyncResponse res = super.getResponse();
-				if (res != null)
-					return res;
-				return result;
-			}
-
-			@Override
-			public void startElement(String uri, String localName,
-			                         String qName, Attributes attributes) throws SAXException {
-				if ("catalit-authorization-ok".equals(localName)) {
-					result = new LitresAuthInfo();
-					result.sid = attributes.getValue("sid");
-					result.id = attributes.getValue("user-id");
-					result.firstName = attributes.getValue("first-name");
-					result.lastName = attributes.getValue("last-name");
-					result.middleName = attributes.getValue("middle-name");
-					result.bookCount = stringToInt(attributes.getValue("books-cnt"), 0);
-					result.authorCount = stringToInt(attributes.getValue("authors-cnt"), 0);
-					result.userCount = stringToInt(attributes.getValue("users-cnt"), 0);
-					result.canRebill = stringToInt(attributes.getValue("can-rebill"), 0) == 1;
-					authInfo = result;
-					if (pwd != null)
-						lastPwd = pwd;
-					if (login != null)
-						lastLogin = login;
-					result.login = lastLogin;
-					lastSid = result.sid;
-					lastAuthorizationTimestamp = System.currentTimeMillis();
-					saveLoginInfo(login, pwd);
-				} else if ("catalit-registration-failed".equals(localName)) {
-					int error = stringToInt(attributes.getValue("error"), 0);
-					String errorMsg = attributes.getValue("coment");
-					onError(error, "Registration failed: " + errorMsg);
-				} else if ("catalit-authorization-failed".equals(localName)) {
-					onError(1, "Authorization failed");
-				}
-			}
-		}, resultHandler);
-	}
-
-	public static class PurchaseStatus implements AsyncResponse {
-		public String bookId;
-		public double newBalance;
-	}
-
-	public void purchaseBook(final String bookId, final ResultHandler resultHandler) {
-		final Map<String, String> params = new HashMap<String, String>();
-		params.put("art", bookId);
-		params.put("sid", lastSid);
-		params.put("lfrom", P_ID);
-		sendXMLRequest(PURCHASE_URL, params, new ResponseHandler() {
-			PurchaseStatus result = new PurchaseStatus();
-
-			@Override
-			public AsyncResponse getResponse() {
-				AsyncResponse res = super.getResponse();
-				if (res != null)
-					return res;
-				if (result.bookId != null)
-					return result;
-				return new ErrorResponse(0, "Unknown purchase error");
-			}
-
-			@Override
-			public void startElement(String uri, String localName,
-			                         String qName, Attributes attributes) throws SAXException {
-				if ("catalit-purchase-ok".equals(localName)) {
-					result.bookId = attributes.getValue("art");
-					result.newBalance = stringToDouble(attributes.getValue("account"), 0.0);
-				} else if ("catalit-purchase-failed".equals(localName)) {
-					int errorCode = stringToInt(attributes.getValue("error"), 0);
-					String comment = attributes.getValue("comment");
-					if (comment == null)
-						comment = attributes.getValue("coment"); // spelling error in API description
-					onError(errorCode, comment);
-				}
-
 			}
 		}, resultHandler);
 	}

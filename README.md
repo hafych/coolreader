@@ -54,6 +54,10 @@ Production signing uses an external keystore and the guarded
 `:app:bundleSignedRelease` task; see
 [docs/ANDROID_SIGNING.md](docs/ANDROID_SIGNING.md).
 
+The optional LitRes integration is consumption-only on Android: it can browse
+the catalog, download trials, and download books already owned by a signed-in
+user, but it does not create accounts or offer purchases.
+
 ### Support matrix
 
 | Target | Current status | Verified environment |

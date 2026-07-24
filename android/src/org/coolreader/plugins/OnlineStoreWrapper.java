@@ -20,8 +20,6 @@
 package org.coolreader.plugins;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
 
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.Scanner;
@@ -99,11 +97,6 @@ public class OnlineStoreWrapper {
 		plugin.authenticate(control, login, password, callback);
 		return control;
 	}
-	public AsyncOperationControl registerNewAccount(HashMap<String, String> params, AuthenticationCallback callback) {
-		AsyncOperationControl control = new AsyncOperationControl();
-		plugin.registerNewAccount(control, params, callback);
-		return control;
-	}
 	private void loadBookInfoContinue(final AsyncOperationControl control, final String bookId, final boolean isBought, final BookInfoCallback callback) {
 		plugin.getBookInfo(control, bookId, false, new BookInfoCallback() {
 			@Override
@@ -154,12 +147,6 @@ public class OnlineStoreWrapper {
 		return control;
 	}
 
-	public AsyncOperationControl purchaseBook(final String bookId, final PurchaseBookCallback callback) {
-		final AsyncOperationControl control = new AsyncOperationControl();
-		plugin.purchaseBook(control, bookId, callback);
-		return control;
-	}
-
 	public AsyncOperationControl downloadBook(OnlineStoreBook book, boolean trial, File fileToSave, DownloadBookCallback callback) {
 		final AsyncOperationControl control = new AsyncOperationControl();
 		plugin.downloadBook(control, book, trial, fileToSave, callback);
@@ -182,15 +169,4 @@ public class OnlineStoreWrapper {
 		return plugin.getName();
 	}
 	
-	public String getUrl() {
-		return plugin.getUrl();
-	}
-	
-	public String getAccountRefillUrl() {
-		return plugin.getAccountRefillUrl();
-	}
-	
-	public ArrayList<OnlineStoreRegistrationParam> getNewAccountParameters() {
-		return plugin.getNewAccountParameters();
-	}
 }

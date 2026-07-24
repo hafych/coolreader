@@ -19,13 +19,10 @@
 
 package org.coolreader.crengine;
 
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Paint;
 import android.graphics.drawable.BitmapDrawable;
-import android.net.Uri;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
@@ -45,7 +42,6 @@ import org.coolreader.plugins.OnlineStoreBook;
 import org.coolreader.plugins.OnlineStoreBookInfo;
 import org.coolreader.plugins.OnlineStorePluginManager;
 import org.coolreader.plugins.OnlineStoreWrapper;
-import org.coolreader.plugins.PurchaseBookCallback;
 
 import java.io.File;
 
@@ -157,7 +153,7 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 		lblAuthors.setText(Utils.formatAuthorsNormalNames(mBookInfo.book.getAuthors()));
 		lblSeries.setText(mBookInfo.book.getSeries());
         lblLogin.setText(mBookInfo.isLoggedIn ? mBookInfo.login : getString(R.string.online_store_please_login));
-        lblBalance.setText(mBookInfo.isLoggedIn ? getString(R.string.online_store_balance) + " " + mBookInfo.accountBalance : "");
+        lblBalance.setText("");
         lblStatus.setText(mBookInfo.isPurchased ? getString(R.string.online_store_status_purchased) : "");
         lblPrice.setText(mBookInfo.book.price > 0 ? getString(R.string.online_store_price) + " " + mBookInfo.book.price : getString(R.string.online_store_status_free));
         lblNormalPrice.setText(mBookInfo.book.price != mBookInfo.book.basePrice ? String.valueOf(mBookInfo.book.basePrice) : "");
@@ -171,14 +167,13 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
         	else
         		btnPreview.setText(R.string.online_store_download_trial);
         }
+        btnBuyOrDownload.setVisibility(View.VISIBLE);
         if (bookFileExists(false)) {
 			btnBuyOrDownload.setText(R.string.online_store_open);
-        } else if (mBookInfo.isLoggedIn) {
-			if (mBookInfo.isPurchased) {
-				btnBuyOrDownload.setText(R.string.online_store_download);
-			} else {
-				btnBuyOrDownload.setText(R.string.online_store_buy);
-			}
+        } else if (mBookInfo.isLoggedIn && mBookInfo.isPurchased) {
+			btnBuyOrDownload.setText(R.string.online_store_download);
+		} else if (mBookInfo.isLoggedIn) {
+			btnBuyOrDownload.setVisibility(View.GONE);
 		} else {
 			btnBuyOrDownload.setText(R.string.online_store_login);
 		}
@@ -198,53 +193,9 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 	protected void onBuyButtonClick() {
 		if (bookFileExists(false)) {
 			openBook(false);
-		} else if (mBookInfo.isLoggedIn) {
-			if (mBookInfo.isPurchased) {
-				download(false);
-			} else {
-				// buy
-				mActivity.askConfirmation(getString(R.string.online_store_price) + " " + mBookInfo.book.price + " " + getString(R.string.online_store_confirm_purchase), () -> {
-					String bookId = mFileInfo.getOnlineCatalogPluginId();
-					progress.show();
-					mPlugin.purchaseBook(bookId, new PurchaseBookCallback() {
-						@Override
-						public void onError(int errorCode, String errorMessage) {
-							progress.hide();
-							mActivity.showToast(getString(R.string.online_store_purchase_error) + ": " + errorMessage);
-						}
-
-						@Override
-						public void onBookPurchased(String bookId, double newAccountBalance) {
-							progress.hide();
-							mBookInfo.accountBalance = newAccountBalance;
-							mBookInfo.isPurchased = true;
-							updateInfo();
-							mActivity.showToast(getString(R.string.online_store_confirm_purchase) + " " + getString(R.string.online_store_purchase_new_balance) + " " + newAccountBalance);
-						}
-
-						@Override
-						public void onLowBalance(String bookId, double accountBalance, double bookPrice) {
-							progress.hide();
-							final String refillUrl = mPlugin.getAccountRefillUrl();
-							if (refillUrl != null) {
-								mActivity.askConfirmation(R.string.online_store_refill_account_balance_request_litres, () -> {
-									try {
-										Uri uri = Uri.parse(refillUrl);
-										Intent myIntent = new Intent(Intent.ACTION_VIEW, uri);
-										mActivity.startActivity(myIntent);
-									} catch (ActivityNotFoundException e) {
-										mActivity.showToast("Cannot open web page");
-									}
-								});
-							} else {
-								mActivity.showToast("Not enough money on account");
-							}
-						}
-
-					});
-				});
-			}
-		} else {
+		} else if (mBookInfo.isLoggedIn && mBookInfo.isPurchased) {
+			download(false);
+		} else if (!mBookInfo.isLoggedIn) {
 			// LOGIN
 			OnlineStoreLoginDialog dlg = new OnlineStoreLoginDialog(mActivity, mPlugin, this::reloadBookInfo);
 			dlg.show();

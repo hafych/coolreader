@@ -22,7 +22,6 @@ package org.coolreader.crengine;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
-import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
@@ -58,9 +57,7 @@ public class OnlineStoreLoginDialog extends BaseDialog {
 	
     TextView lblTitle;
     TextView lblDescription;
-    TextView lblURL;
     Button btnLogin;
-    Button btnRegister;
     EditText edLogin;
     EditText edPassword;
 	
@@ -76,25 +73,12 @@ public class OnlineStoreLoginDialog extends BaseDialog {
         btnLogin = view.findViewById(R.id.btn_login);
         btnLogin.setOnClickListener(v -> onPositiveButtonClick());
         
-        btnRegister = view.findViewById(R.id.btn_new_account);
-        if (mPlugin.getNewAccountParameters() == null) {
-        	btnRegister.setVisibility(View.GONE);
-        } else {
-            btnRegister.setOnClickListener(v -> {
-				OnlineStoreLoginDialog.super.onPositiveButtonClick();
-				final OnlineStoreNewAccountDialog dlg = new OnlineStoreNewAccountDialog(mActivity, mPlugin, mOnLoginHandler);
-				dlg.show();
-			});
-        }
-        
         lblTitle = view.findViewById(R.id.dlg_title);
         lblDescription = view.findViewById(R.id.lbl_description);
-        lblURL = view.findViewById(R.id.lbl_url);
         
 
 		lblTitle.setText(mPlugin.getName());
 		lblDescription.setText(mPlugin.getDescription());
-		lblURL.setText(mPlugin.getUrl());
 		
         edLogin = view.findViewById(R.id.ed_login);
         edPassword = view.findViewById(R.id.ed_password);
@@ -133,4 +117,3 @@ public class OnlineStoreLoginDialog extends BaseDialog {
 		super.onNegativeButtonClick();
 	}
 }
-

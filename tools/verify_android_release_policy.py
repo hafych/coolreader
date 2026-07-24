@@ -21,7 +21,7 @@ EXPECTED_PERMISSIONS = {
     "android.permission.INTERNET",
     "android.permission.WAKE_LOCK",
 }
-REMOVED_BILLING_PATHS = (
+REMOVED_MONETIZATION_PATHS = (
     ANDROID / "src" / "com" / "android" / "vending" / "billing"
     / "IInAppBillingService.aidl",
     ANDROID / "src" / "org" / "coolreader" / "donations"
@@ -29,6 +29,13 @@ REMOVED_BILLING_PATHS = (
     ANDROID / "res" / "layout" / "about_dialog_donation.xml",
     ANDROID / "res" / "layout" / "about_dialog_donation2.xml",
     ANDROID / "res" / "drawable" / "ic_menu_emoticons.png",
+    ANDROID / "src" / "org" / "coolreader" / "plugins"
+    / "OnlineStoreRegistrationParam.java",
+    ANDROID / "src" / "org" / "coolreader" / "plugins"
+    / "PurchaseBookCallback.java",
+    ANDROID / "src" / "org" / "coolreader" / "crengine"
+    / "OnlineStoreNewAccountDialog.java",
+    ANDROID / "res" / "layout" / "online_store_new_account_dialog.xml",
 )
 FORBIDDEN_LIVE_SOURCE = (
     "com.android.vending.BILLING",
@@ -38,6 +45,16 @@ FORBIDDEN_LIVE_SOURCE = (
     "isDonationSupported(",
     "dlg_about_donation",
     "mi_donation",
+    "catalit_register_user",
+    "catalit-purchase",
+    "purchaseBook(",
+    "registerNewAccount(",
+    "getAccountRefillUrl(",
+    "OnlineStoreNewAccountDialog",
+    "online_store_new_account",
+    "online_store_buy",
+    "online_store_confirm_purchase",
+    "online_store_purchase_",
 )
 
 
@@ -62,9 +79,11 @@ def main() -> None:
                 f"missing={missing}, extra={extra}"
             )
 
-    for path in REMOVED_BILLING_PATHS:
+    for path in REMOVED_MONETIZATION_PATHS:
         if path.exists():
-            violations.append(f"obsolete billing surface exists: {relative(path)}")
+            violations.append(
+                f"obsolete monetization surface exists: {relative(path)}"
+            )
 
     live_files = [
         *sorted((ANDROID / "src").rglob("*.java")),
@@ -98,7 +117,7 @@ def main() -> None:
 
     print(
         "Android release policy OK: least privilege; "
-        "no billing or purchase UI"
+        "no billing; LitRes is consumption-only"
     )
 
 

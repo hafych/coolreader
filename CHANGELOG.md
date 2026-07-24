@@ -66,6 +66,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - The obsolete Billing v3 AIDL integration, billing permission and non-working
   donation purchase UI were removed; the release build makes no in-app purchase
   claims.
+- The optional LitRes integration is now consumption-only: catalog browsing,
+  trials and login/download of previously purchased books remain, while account
+  creation, purchases, balance refill and direct store links were removed.
 - Notification actions are immutable, package-scoped and registered as
   non-exported.
 - Temporary document cache is capped at 512 MiB and 32 files with

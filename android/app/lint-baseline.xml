@@ -1231,22 +1231,6 @@
     <issue
         id="SuspiciousIndentation"
         message="The indentation string here is different from on the previous line (`&quot; &quot;` vs `\t`)"
-        errorLine1="  lblTitle.setText(mPlugin.getName());"
-        errorLine2="~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/OnlineStoreNewAccountDialog.java"
-            line="91"
-            column="1"/>
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/OnlineStoreNewAccountDialog.java"
-            line="89"
-            column="1"
-            message="Previous line indentation here"/>
-    </issue>
-
-    <issue
-        id="SuspiciousIndentation"
-        message="The indentation string here is different from on the previous line (`&quot; &quot;` vs `\t`)"
         errorLine1="   listView.add(new ListOption(mOwner, getString(R.string.options_css_font_face), prefix + &quot;.font-face&quot;).add(faceValues.toArray(new String[]{}), faces.toArray(new String[]{})).setIconIdByAttr(R.attr.cr3_option_font_face_drawable, R.drawable.cr3_option_font_face));"
         errorLine2="  ~">
         <location
@@ -1792,17 +1776,6 @@
             file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/OnlineStoreLoginDialog.java"
             line="72"
             column="91"/>
-    </issue>
-
-    <issue
-        id="InflateParams"
-        message="Avoid passing `null` as the view root (needed to resolve layout parameters on the inflated layout&apos;s root element)"
-        errorLine1="        ViewGroup view = (ViewGroup)mInflater.inflate(R.layout.online_store_new_account_dialog, null);"
-        errorLine2="                                                                                                ~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/OnlineStoreNewAccountDialog.java"
-            line="81"
-            column="97"/>
     </issue>
 
     <issue
@@ -2660,127 +2633,6 @@
         <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_login_dialog.xml"
             line="113"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="87"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="107"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:password` is deprecated: Use `inputType` instead"
-        errorLine1="            android:password=&quot;true&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="108"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="129"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:password` is deprecated: Use `inputType` instead"
-        errorLine1="            android:password=&quot;true&quot;"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="131"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="152"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="173"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="194"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="223"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="245"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="Deprecated"
-        message="`android:editable` is deprecated: `&lt;EditText>` is already editable"
-        errorLine1="            android:editable=&quot;true&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="266"
             column="13"/>
     </issue>
 
@@ -3782,17 +3634,6 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_login_dialog.xml"
-            line="33"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="ObsoleteLayoutParam"
-        message="Invalid layout param in a `LinearLayout`: `layout_centerVertical`"
-        errorLine1="                android:layout_centerVertical=&quot;true&quot;"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
             line="33"
             column="17"/>
     </issue>
@@ -5896,17 +5737,6 @@
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.online_store_new_account_param_birthday` appears to be unused"
-        errorLine1="    &lt;string name=&quot;online_store_new_account_param_birthday&quot;>Date of birth:&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/strings.xml"
-            line="583"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
         message="The resource `R.string.online_store_account` appears to be unused"
         errorLine1="    &lt;string name=&quot;online_store_account&quot;>Account:&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
@@ -5924,17 +5754,6 @@
         <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/strings.xml"
             line="602"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.online_store_purchase_success` appears to be unused"
-        errorLine1="    &lt;string name=&quot;online_store_purchase_success&quot;>Book has been purchased.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/values/strings.xml"
-            line="606"
             column="13"/>
     </issue>
 
@@ -7873,61 +7692,6 @@
     <issue
         id="TextFields"
         message="This text field does not specify an `inputType`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="144"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="TextFields"
-        message="This text field does not specify an `inputType`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="165"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="TextFields"
-        message="This text field does not specify an `inputType`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="186"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="TextFields"
-        message="This text field does not specify an `inputType`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="237"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="TextFields"
-        message="This text field does not specify an `inputType`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="258"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="TextFields"
-        message="This text field does not specify an `inputType`"
         errorLine1="&lt;EditText "
         errorLine2=" ~~~~~~~~">
         <location
@@ -8154,116 +7918,6 @@
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_login_dialog.xml"
             line="104"
             column="9"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="79"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="101"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="123"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="144"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="165"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="186"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="215"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="227"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="237"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="Autofill"
-        message="Missing `autofillHints` attribute"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="258"
-            column="10"/>
     </issue>
 
     <issue
@@ -8698,17 +8352,6 @@
     <issue
         id="ContentDescription"
         message="Missing `contentDescription` attribute on image"
-        errorLine1="            &lt;ImageButton android:id=&quot;@+id/base_dlg_btn_back&quot;"
-        errorLine2="             ~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="30"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="ContentDescription"
-        message="Missing `contentDescription` attribute on image"
         errorLine1="    &lt;ImageView"
         errorLine2="     ~~~~~~~~~">
         <location
@@ -9100,116 +8743,6 @@
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_login_dialog.xml"
             line="104"
             column="9"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="79"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="101"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="123"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="144"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="165"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="186"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="215"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText"
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="227"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="237"
-            column="10"/>
-    </issue>
-
-    <issue
-        id="LabelFor"
-        message="Missing accessibility label: provide either a view with an `android:labelFor` that references this view or provide an `android:hint`"
-        errorLine1="        &lt;EditText "
-        errorLine2="         ~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="258"
-            column="10"/>
     </issue>
 
     <issue
@@ -10012,50 +9545,6 @@
         <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_login_dialog.xml"
             line="121"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Plugin name&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Plugin name&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="58"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;Plugin description&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;Plugin description&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="66"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;login&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;login&quot; "
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="83"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;password&quot;, should use `@string` resource"
-        errorLine1="            android:text=&quot;password&quot; />"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="111"
             column="13"/>
     </issue>
 
@@ -11805,28 +11294,6 @@
         <location
             file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_login_dialog.xml"
             line="58"
-            column="38"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Consider replacing `android:layout_marginRight` with `android:layout_marginEnd=&quot;?android:attr/scrollbarSize&quot;` to better support right-to-left layouts"
-        errorLine1="    android:layout_marginRight=&quot;?android:attr/scrollbarSize&quot;"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="3"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="RtlHardcoded"
-        message="Use &quot;`end`&quot; instead of &quot;`right`&quot; to ensure correct behavior in right-to-left locales"
-        errorLine1="             android:layout_gravity=&quot;center_vertical|right&quot;"
-        errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*resDir*0}/layout/online_store_new_account_dialog.xml"
-            line="49"
             column="38"/>
     </issue>
 

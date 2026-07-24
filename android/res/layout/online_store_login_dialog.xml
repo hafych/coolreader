@@ -48,16 +48,6 @@
 	            android:textStyle="bold"
 	            />
 	        
-            <Button
-                android:id="@+id/btn_new_account"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="10dip"
-	            android:layout_marginRight="10dip"
-                android:minWidth="100dip"
-	            android:layout_gravity="center_vertical|right"
-                android:text="@string/online_store_new_account" />
-
 	        	    </LinearLayout>
         <TextView 
             android:id="@+id/dlg_title"
@@ -113,14 +103,5 @@
             android:editable="true" 
             android:singleLine="true"
         />
-        <TextView 
-            android:id="@+id/lbl_url"
-            style="@style/TextAppearance.Large"
-            android:singleLine="true"
-            android:layout_margin="10dp"
-            android:text="URL" 
-            android:autoLink="web"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
         </LinearLayout>
 </ScrollView>
