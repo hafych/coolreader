@@ -46,6 +46,7 @@ import java.util.zip.ZipOutputStream;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(AndroidJUnit4.class)
@@ -132,9 +133,12 @@ public class AndroidSmokeInstrumentedTest {
 				"metadata-batches-" + System.nanoTime());
 		assertTrue(directory.mkdir());
 		final int fileCount = 130;
+		File firstDocument = null;
 		for (int i = 0; i < fileCount; i++) {
 			File document = new File(
 					directory, "book-" + i + ".txt");
+			if (i == 0)
+				firstDocument = document;
 			try (FileOutputStream output =
 					new FileOutputStream(document)) {
 				output.write(("Book " + i + "\nMetadata batch test.")
@@ -193,6 +197,90 @@ public class AndroidSmokeInstrumentedTest {
 					i < deeplyNestedInfo.fileCount(); i++)
 				assertTrue(
 						deeplyNestedInfo.getFile(i).crc32 != 0);
+
+			assertNotNull(firstDocument);
+			FileInfo initialFirst = baseDir.findItemByPathName(
+					firstDocument.getAbsolutePath());
+			assertNotNull(initialFirst);
+			assertNotNull(initialFirst.scanFingerprint);
+			long initialCrc = initialFirst.crc32;
+			String initialFingerprint =
+					initialFirst.scanFingerprint;
+
+			AtomicReference<String> directoryFingerprint =
+					new AtomicReference<>();
+			CountDownLatch fingerprintLoaded =
+					new CountDownLatch(1);
+			File finalFirstDocument = firstDocument;
+			InstrumentationRegistry.getInstrumentation().runOnMainSync(
+					() -> activity.getDB()
+							.loadDirectoryFingerprint(
+									directory.getAbsolutePath(),
+									value -> {
+										directoryFingerprint.set(value);
+										fingerprintLoaded.countDown();
+									}));
+			assertTrue(fingerprintLoaded.await(
+					TIMEOUT_MS, TimeUnit.MILLISECONDS));
+			assertNotNull(directoryFingerprint.get());
+
+			FileInfo unchangedBaseDir =
+					new FileInfo(directory);
+			Scanner.ScanControl unchangedControl =
+					new Scanner.ScanControl();
+			CountDownLatch unchangedCompleted =
+					new CountDownLatch(1);
+			InstrumentationRegistry.getInstrumentation().runOnMainSync(
+					() -> scanner.get().scanDirectory(
+							activity.getDB(), unchangedBaseDir, null,
+							scanControl ->
+									unchangedCompleted.countDown(),
+							true, unchangedControl));
+			assertTrue(unchangedCompleted.await(
+					TIMEOUT_MS, TimeUnit.MILLISECONDS));
+			FileInfo unchangedFirst =
+					unchangedBaseDir.findItemByPathName(
+							finalFirstDocument.getAbsolutePath());
+			assertNotNull(unchangedFirst);
+			assertEquals(initialCrc, unchangedFirst.crc32);
+			assertEquals(
+					initialFingerprint,
+					unchangedFirst.scanFingerprint);
+
+			long previousTimestamp =
+					finalFirstDocument.lastModified();
+			try (FileOutputStream output =
+					new FileOutputStream(finalFirstDocument)) {
+				output.write(
+						"Cook 0\nMetadata batch test."
+								.getBytes(StandardCharsets.UTF_8));
+				output.getFD().sync();
+			}
+			assertTrue(finalFirstDocument.setLastModified(
+					Math.max(
+							System.currentTimeMillis(),
+							previousTimestamp + 2_000)));
+			FileInfo changedBaseDir = new FileInfo(directory);
+			Scanner.ScanControl changedControl =
+					new Scanner.ScanControl();
+			CountDownLatch changedCompleted =
+					new CountDownLatch(1);
+			InstrumentationRegistry.getInstrumentation().runOnMainSync(
+					() -> scanner.get().scanDirectory(
+							activity.getDB(), changedBaseDir, null,
+							scanControl ->
+									changedCompleted.countDown(),
+							true, changedControl));
+			assertTrue(changedCompleted.await(
+					TIMEOUT_MS, TimeUnit.MILLISECONDS));
+			FileInfo changedFirst =
+					changedBaseDir.findItemByPathName(
+							finalFirstDocument.getAbsolutePath());
+			assertNotNull(changedFirst);
+			assertNotEquals(
+					initialFingerprint,
+					changedFirst.scanFingerprint);
+			assertNotEquals(initialCrc, changedFirst.crc32);
 
 			Scanner.ScanControl cancelled =
 					new Scanner.ScanControl();

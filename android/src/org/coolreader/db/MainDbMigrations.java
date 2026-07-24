@@ -17,9 +17,10 @@ import java.util.List;
 import java.util.Map;
 
 final class MainDbMigrations {
-	static final int CURRENT_VERSION = 37;
+	static final int CURRENT_VERSION = 38;
 	static final int[] SUPPORTED_LEGACY_VERSIONS = {
-			1, 4, 6, 13, 15, 16, 21, 26, 28, 29, 30, 31, 33, 34, 35, 36
+			1, 4, 6, 13, 15, 16, 21, 26, 28, 29, 30, 31, 33, 34, 35, 36,
+			37
 	};
 
 	private static final String[] ENSURE_BASE_SCHEMA = {
@@ -59,7 +60,8 @@ final class MainDbMigrations {
 					"source_type VARCHAR DEFAULT NULL," +
 					"source_locator VARCHAR DEFAULT NULL," +
 					"archive_entry VARCHAR DEFAULT NULL," +
-					"content_hash VARCHAR DEFAULT NULL)",
+					"content_hash VARCHAR DEFAULT NULL," +
+					"scan_fingerprint VARCHAR DEFAULT NULL)",
 			"CREATE INDEX IF NOT EXISTS book_folder_index ON book (folder_fk)",
 			"CREATE INDEX IF NOT EXISTS book_filename_index ON book (filename)",
 			"CREATE UNIQUE INDEX IF NOT EXISTS book_pathname_index ON book (pathname)",
@@ -89,7 +91,10 @@ final class MainDbMigrations {
 			"CREATE TABLE IF NOT EXISTS favorite_folders (" +
 					"id INTEGER PRIMARY KEY AUTOINCREMENT," +
 					"path VARCHAR NOT NULL," +
-					"position INTEGER NOT NULL DEFAULT 0)"
+					"position INTEGER NOT NULL DEFAULT 0)",
+			"CREATE TABLE IF NOT EXISTS library_directory (" +
+					"pathname VARCHAR PRIMARY KEY," +
+					"scan_fingerprint VARCHAR NOT NULL)"
 	};
 
 	interface Backend {
@@ -269,6 +274,9 @@ final class MainDbMigrations {
 		apply(database, currentVersion, 37, "stable-book-identity",
 				() -> addStableBookIdentity(database),
 				() -> verifyStableBookIdentity(database));
+		apply(database, currentVersion, 38, "library-source-fingerprints",
+				() -> addLibrarySourceFingerprints(database),
+				() -> verifyLibrarySourceFingerprints(database));
 
 		verifyCurrentSchema(database);
 	}
@@ -277,7 +285,8 @@ final class MainDbMigrations {
 		String[] requiredTables = {
 				"author", "series", "folder", "book", "book_author", "bookmark",
 				"metadata", "genre_group", "genre", "genre_hier", "book_genre",
-				"opds_catalog", "favorite_folders", "search_history"
+				"opds_catalog", "favorite_folders", "search_history",
+				"library_directory"
 		};
 		for (String tableName : requiredTables)
 			requireTable(database, tableName);
@@ -287,7 +296,8 @@ final class MainDbMigrations {
 				"series_fk", "series_number", "format", "filesize", "arcsize",
 				"create_time", "last_access_time", "flags", "language",
 				"description", "crc32", "domVersion", "rendFlags", "book_key",
-				"source_type", "source_locator", "archive_entry", "content_hash"
+				"source_type", "source_locator", "archive_entry", "content_hash",
+				"scan_fingerprint"
 		};
 		for (String columnName : requiredBookColumns)
 			requireColumn(database, "book", columnName);
@@ -317,6 +327,7 @@ final class MainDbMigrations {
 		for (String indexName : requiredIndexes)
 			requireIndex(database, indexName);
 		verifyStableBookIdentity(database);
+		verifyLibrarySourceFingerprints(database);
 	}
 
 	private static void apply(
@@ -462,6 +473,25 @@ final class MainDbMigrations {
 								"SELECT book_key FROM book GROUP BY book_key " +
 								"HAVING count(*) > 1)") == 0,
 				"Duplicate stable book keys remain");
+	}
+
+	private static void addLibrarySourceFingerprints(Backend database) {
+		addColumnIfMissing(
+				database, "book", "scan_fingerprint",
+				"ALTER TABLE book ADD COLUMN " +
+						"scan_fingerprint VARCHAR DEFAULT NULL");
+		database.execute(
+				"CREATE TABLE IF NOT EXISTS library_directory (" +
+						"pathname VARCHAR PRIMARY KEY," +
+						"scan_fingerprint VARCHAR NOT NULL)");
+	}
+
+	private static void verifyLibrarySourceFingerprints(Backend database) {
+		requireColumn(database, "book", "scan_fingerprint");
+		requireTable(database, "library_directory");
+		requireColumn(database, "library_directory", "pathname");
+		requireColumn(
+				database, "library_directory", "scan_fingerprint");
 	}
 
 	private static void addColumnIfMissing(

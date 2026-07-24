@@ -78,6 +78,7 @@ public class FileInfo implements Parcelable {
 	public String sourceLocator; // URI or source pathname used for diagnostics
 	public String archiveEntry; // entry name for archive-backed books
 	public String contentHash; // SHA-256 of the document or archive container
+	public String scanFingerprint; // versioned scanner source fingerprint
 	public String language; // document language
 	public String description;	// book description
 	public String username; // username for online catalogs
@@ -281,6 +282,7 @@ public class FileInfo implements Parcelable {
 		sourceLocator = in.readString();
 		archiveEntry = in.readString();
 		contentHash = in.readString();
+		scanFingerprint = in.readString();
 		language = in.readString();
 		description = in.readString();
 		username = in.readString();
@@ -407,6 +409,7 @@ public class FileInfo implements Parcelable {
 		sourceLocator = v.sourceLocator;
 		archiveEntry = v.archiveEntry;
 		contentHash = v.contentHash;
+		scanFingerprint = v.scanFingerprint;
 		format = v.format;
 		flags = v.flags;
 		size = v.size;
@@ -1116,6 +1119,7 @@ public class FileInfo implements Parcelable {
 		dest.writeString(sourceLocator);
 		dest.writeString(archiveEntry);
 		dest.writeString(contentHash);
+		dest.writeString(scanFingerprint);
 		dest.writeString(language);
 		dest.writeString(description);
 		dest.writeString(username);
@@ -1310,6 +1314,9 @@ public class FileInfo implements Parcelable {
 		result = prime * result + ((authors == null) ? 0 : authors.hashCode());
 		result = prime * result + ((bookKey == null) ? 0 : bookKey.hashCode());
 		result = prime * result + ((contentHash == null) ? 0 : contentHash.hashCode());
+		result = prime * result
+				+ ((scanFingerprint == null)
+						? 0 : scanFingerprint.hashCode());
 		result = prime * result + (int) (createTime ^ (createTime >>> 32));
 		result = prime * result + ((dirs == null) ? 0 : dirs.hashCode());
 		result = prime * result
@@ -1366,6 +1373,8 @@ public class FileInfo implements Parcelable {
 		if (!eq(bookKey, other.bookKey))
 			return false;
 		if (!eq(contentHash, other.contentHash))
+			return false;
+		if (!eq(scanFingerprint, other.scanFingerprint))
 			return false;
 		if (createTime != other.createTime)
 			return false;

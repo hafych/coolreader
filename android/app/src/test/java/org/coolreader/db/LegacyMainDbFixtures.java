@@ -139,6 +139,20 @@ final class LegacyMainDbFixtures {
 			createV34GenreSchema(connection);
 		if (version >= 36)
 			execute(connection, OpdsCatalogSchema.REMOVE_CREDENTIAL_COLUMNS);
+		if (version >= 37)
+			execute(connection,
+					"ALTER TABLE book ADD COLUMN " +
+							"book_key VARCHAR DEFAULT NULL",
+					"ALTER TABLE book ADD COLUMN " +
+							"source_type VARCHAR DEFAULT NULL",
+					"ALTER TABLE book ADD COLUMN " +
+							"source_locator VARCHAR DEFAULT NULL",
+					"ALTER TABLE book ADD COLUMN " +
+							"archive_entry VARCHAR DEFAULT NULL",
+					"ALTER TABLE book ADD COLUMN " +
+							"content_hash VARCHAR DEFAULT NULL",
+					"CREATE UNIQUE INDEX book_key_index " +
+							"ON book (book_key) WHERE book_key IS NOT NULL");
 	}
 
 	private static void createLegacyOpdsSchema(Connection connection)
@@ -213,6 +227,12 @@ final class LegacyMainDbFixtures {
 						")",
 				"INSERT INTO bookmark (id, book_fk, start_pos) " +
 						"VALUES (1, 1, 'fixture-position')");
+		if (version >= 37)
+			execute(connection,
+					"UPDATE book SET book_key='legacy:1', " +
+							"source_type='FILE', " +
+							"source_locator='/fixture/book.epub' " +
+							"WHERE id=1");
 		if (version >= 6) {
 			if (version >= 36) {
 				execute(connection,

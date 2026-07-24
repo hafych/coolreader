@@ -97,6 +97,8 @@ public class Scanner extends FileInfoChangeSource {
 				//item.arcsize = entry.getCompressedSize();
 				item.arcsize = zip.size;
 				item.isArchive = true;
+				item.scanFingerprint =
+						LibrarySourceFingerprint.forDocument(item);
 				items.add(item);
 			}
 			if ( items.size()==0 ) {
@@ -116,6 +118,8 @@ public class Scanner extends FileInfoChangeSource {
 					item.parent = zip;
 					zip.addFile(item);
 				}
+				zip.scanFingerprint =
+						LibrarySourceFingerprint.forDirectory(zip);
 				return zip;
 			}
 		} catch ( Exception e ) {
@@ -271,6 +275,7 @@ public class Scanner extends FileInfoChangeSource {
 				}
 			}
 			baseDir.isListed = true;
+			updateSourceFingerprints(baseDir);
 			return true;
 		} catch ( Exception e ) {
 			if (cancelDirectoryListing(baseDir, control))
@@ -279,6 +284,17 @@ public class Scanner extends FileInfoChangeSource {
 			baseDir.isListed = true;
 			return false;
 		}
+	}
+
+	private static void updateSourceFingerprints(
+			FileInfo directory) {
+		for (int i = 0; i < directory.fileCount(); i++) {
+			FileInfo file = directory.getFile(i);
+			file.scanFingerprint =
+					LibrarySourceFingerprint.forDocument(file);
+		}
+		directory.scanFingerprint =
+				LibrarySourceFingerprint.forDirectory(directory);
 	}
 
 	private static boolean isScanStopped(ScanControl control) {
@@ -383,20 +399,26 @@ public class Scanner extends FileInfoChangeSource {
 			final LibraryMetadataExtractor metadataExtractor,
 			final FileInfo baseDir, final ScanControl control,
 			final ScanProgressTracker progress,
-			final Runnable readyCallback) {
+			final boolean directoryUnchanged,
+			final MetadataScanCompleteListener readyCallback) {
 		// GUI thread
 		BackgroundThread.ensureGUI();
 		log.d("scanDirectoryFiles(" + baseDir.getPathName() + ") ");
 
 		if (baseDir.fileCount() == 0 || control.isStopped()) {
-			readyCallback.run();
+			readyCallback.onComplete(!control.isStopped());
 			return;
 		}
 
 		new MetadataScanSession(
 				metadataStore, metadataExtractor,
 				baseDir, control,
-				progress, readyCallback).scanNextBatch();
+				progress, directoryUnchanged,
+				readyCallback).scanNextBatch();
+	}
+
+	private interface MetadataScanCompleteListener {
+		void onComplete(boolean complete);
 	}
 
 	private final class MetadataScanSession {
@@ -405,21 +427,25 @@ public class Scanner extends FileInfoChangeSource {
 		private final FileInfo baseDir;
 		private final ScanControl control;
 		private final ScanProgressTracker progress;
-		private final Runnable readyCallback;
+		private final boolean directoryUnchanged;
+		private final MetadataScanCompleteListener readyCallback;
 		private final ScanBatchCursor batches;
 		private boolean finished;
+		private boolean complete = true;
 
 		MetadataScanSession(
 				LibraryMetadataStore metadataStore,
 				LibraryMetadataExtractor metadataExtractor,
 				FileInfo baseDir, ScanControl control,
 				ScanProgressTracker progress,
-				Runnable readyCallback) {
+				boolean directoryUnchanged,
+				MetadataScanCompleteListener readyCallback) {
 			this.metadataStore = metadataStore;
 			this.metadataExtractor = metadataExtractor;
 			this.baseDir = baseDir;
 			this.control = control;
 			this.progress = progress;
+			this.directoryUnchanged = directoryUnchanged;
 			this.readyCallback = readyCallback;
 			batches = new ScanBatchCursor(
 					baseDir.fileCount(), METADATA_BATCH_SIZE,
@@ -448,6 +474,7 @@ public class Scanner extends FileInfoChangeSource {
 			log.v("onFileInfoListLoaded("
 					+ batch.start + ", " + batch.end + ")");
 			if (control.isStopped()) {
+				complete = false;
 				finish();
 				return;
 			}
@@ -457,14 +484,27 @@ public class Scanner extends FileInfoChangeSource {
 			for (FileInfo f : list)
 				mapOfFilesFoundInDb.put(f.getPathName(), f);
 
+			if (directoryUnchanged
+					&& restoreUnchangedBatch(
+							batch, mapOfFilesFoundInDb)) {
+				setProgress(batch.end);
+				scanNextBatch();
+				return;
+			}
+
 			for (int i = batch.start; i < batch.end; i++) {
 				FileInfo item = baseDir.getFile(i);
 				FileInfo fromDB = mapOfFilesFoundInDb.get(item.getPathName());
 				// check the relevance of data in the database
 				if (fromDB != null) {
-					if (fromDB.crc32 == 0 || fromDB.size != item.size || fromDB.arcsize != item.arcsize ) {
+					if (fromDB.crc32 == 0
+							|| item.scanFingerprint == null
+							|| !item.scanFingerprint.equals(
+									fromDB.scanFingerprint)) {
 						// to force rescan and update data in DB
-						log.v("The found entry in the database is outdated (crc32=0), need to rescan " + fromDB.toString());
+						log.v("The found entry in the database has an " +
+								"outdated source fingerprint, need to rescan " +
+								fromDB.toString());
 						fromDB = null;
 					}
 					if (null != fromDB && DocumentFormat.FB2 == fromDB.format && null == fromDB.genres) {
@@ -490,6 +530,7 @@ public class Scanner extends FileInfoChangeSource {
 				}
 			}
 			if (control.isStopped()) {
+				complete = false;
 				finish();
 				return;
 			}
@@ -514,6 +555,8 @@ public class Scanner extends FileInfoChangeSource {
 						if (metadataExtractor
 								.extractProperties(item))
 							filesForSave.add(item);
+						else
+							complete = false;
 						setProgress(++completed);
 					}
 					for (int i = 0; i < count2; i++) {
@@ -523,9 +566,12 @@ public class Scanner extends FileInfoChangeSource {
 						if (metadataExtractor
 								.updateFileFingerprint(item))
 							filesForSave.add(item);
+						else
+							complete = false;
 						setProgress(++completed);
 					}
 				} catch (Exception e) {
+					complete = false;
 					L.e("Exception while scanning", e);
 				}
 				BackgroundThread.instance().postGUI(
@@ -545,6 +591,7 @@ public class Scanner extends FileInfoChangeSource {
 				L.e("Exception while saving scan batch", e);
 			}
 			if (control.isStopped()) {
+				complete = false;
 				finish();
 				return;
 			}
@@ -562,7 +609,25 @@ public class Scanner extends FileInfoChangeSource {
 			if (finished)
 				return;
 			finished = true;
-			readyCallback.run();
+			readyCallback.onComplete(complete);
+		}
+
+		private boolean restoreUnchangedBatch(
+				ScanBatchCursor.Range batch,
+				Map<String, FileInfo> filesByPath) {
+			for (int i = batch.start; i < batch.end; i++) {
+				FileInfo current = baseDir.getFile(i);
+				if (!filesByPath.containsKey(
+						current.getPathName()))
+					return false;
+			}
+			for (int i = batch.start; i < batch.end; i++) {
+				FileInfo current = baseDir.getFile(i);
+				baseDir.setFile(
+						i, filesByPath.get(
+								current.getPathName()));
+			}
+			return true;
 		}
 	}
 
@@ -599,19 +664,52 @@ public class Scanner extends FileInfoChangeSource {
 				return;
 			}
 			FileInfo directory = pending.removeFirst();
-			scanDirectoryFiles(
-					metadataStore, metadataExtractor, directory,
-					control, progress, () -> {
+			String currentFingerprint =
+					directory.scanFingerprint;
+			boolean stableFingerprint =
+					hasStableDocumentFingerprints(directory);
+			metadataStore.loadDirectoryFingerprint(
+					directory.getPathName(), storedFingerprint -> {
+				if (control.isStopped()) {
+					finish();
+					return;
+				}
+				boolean directoryUnchanged =
+						stableFingerprint
+								&& currentFingerprint != null
+								&& currentFingerprint.equals(
+										storedFingerprint);
+				scanDirectoryFiles(
+						metadataStore, metadataExtractor, directory,
+						control, progress, directoryUnchanged,
+						metadataComplete -> {
 						onDirectoryContentChanged(directory);
 						if (control.isStopped()) {
 							finish();
 							return;
 						}
 						directory.isScanned = true;
+						if (metadataComplete
+								&& stableFingerprint
+								&& currentFingerprint != null) {
+							metadataStore.saveDirectoryFingerprint(
+									directory.getPathName(),
+									currentFingerprint);
+						}
 						if (recursiveScan)
 							enqueueChildren(directory);
 						scanNextDirectory();
 					});
+			});
+		}
+
+		private boolean hasStableDocumentFingerprints(
+				FileInfo directory) {
+			for (int i = 0; i < directory.fileCount(); i++) {
+				if (directory.getFile(i).scanFingerprint == null)
+					return false;
+			}
+			return true;
 		}
 
 		private void enqueueChildren(FileInfo directory) {
@@ -1015,6 +1113,8 @@ public class Scanner extends FileInfoChangeSource {
 						copyDirectorySnapshot(dir);
 				BackgroundThread.instance().postGUI(() -> {
 					root.setItems(initialSnapshot);
+					root.scanFingerprint =
+							initialSnapshot.scanFingerprint;
 					onDirectoryContentChanged(root);
 					initialUpdateCallback.run();
 				});
@@ -1026,6 +1126,7 @@ public class Scanner extends FileInfoChangeSource {
 			BackgroundThread.instance().postGUI(() -> {
 				// transfer scanned items from background copy to update in GUI
 				root.setItems(dir);
+				root.scanFingerprint = dir.scanFingerprint;
 				onDirectoryContentChanged(root);
 				if (!initialUpdatePosted
 						&& initialUpdateCallback != null)

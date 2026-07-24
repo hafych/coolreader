@@ -157,6 +157,27 @@ public class MainDbMigrationsTest {
 	}
 
 	@Test
+	public void sourceFingerprintMigrationAddsBookAndDirectoryStorage()
+			throws Exception {
+		try (Connection connection = LegacyMainDbFixtures.open(37)) {
+			JdbcMigrationBackend backend =
+					new JdbcMigrationBackend(connection);
+			assertFalse(backend.columnExists(
+					"book", "scan_fingerprint"));
+			assertFalse(backend.tableExists("library_directory"));
+
+			connection.setAutoCommit(false);
+			MainDbMigrations.upgrade(backend, 37);
+			connection.commit();
+
+			assertTrue(backend.columnExists(
+					"book", "scan_fingerprint"));
+			assertTrue(backend.tableExists("library_directory"));
+			MainDbMigrations.verifyCurrentSchema(backend);
+		}
+	}
+
+	@Test
 	public void futureSchemaIsRejectedWithoutChanges() throws Exception {
 		try (Connection connection = LegacyMainDbFixtures.open(35)) {
 			int futureVersion = MainDbMigrations.CURRENT_VERSION + 1;

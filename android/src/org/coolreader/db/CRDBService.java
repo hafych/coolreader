@@ -322,9 +322,13 @@ public class CRDBService extends BaseService {
     	void onItemGroupsLoaded(FileInfo parent);
     }
 
-    public interface FileInfoLoadingCallback {
-    	void onFileInfoListLoaded(ArrayList<FileInfo> list);
-    }
+	public interface FileInfoLoadingCallback {
+		void onFileInfoListLoaded(ArrayList<FileInfo> list);
+	}
+
+	public interface DirectoryFingerprintLoadingCallback {
+		void onDirectoryFingerprintLoaded(String fingerprint);
+	}
     
     public interface RecentBooksLoadingCallback {
     	void onRecentBooksListLoaded(ArrayList<BookInfo> bookList);
@@ -510,6 +514,34 @@ public class CRDBService extends BaseService {
 				sendTask(handler, () -> callback.onFileInfoListLoaded(list));
 			}
 		});
+	}
+
+	public void loadDirectoryFingerprint(
+			final String pathname,
+			final DirectoryFingerprintLoadingCallback callback,
+			final Handler handler) {
+		execTask(new Task("loadDirectoryFingerprint") {
+			@Override
+			public void work() {
+				final String fingerprint =
+						mainDB.loadDirectoryFingerprint(pathname);
+				sendTask(handler,
+						() -> callback.onDirectoryFingerprintLoaded(
+								fingerprint));
+			}
+		});
+	}
+
+	public void saveDirectoryFingerprint(
+			final String pathname, final String fingerprint) {
+		execTask(new Task("saveDirectoryFingerprint") {
+			@Override
+			public void work() {
+				mainDB.saveDirectoryFingerprint(
+						pathname, fingerprint);
+			}
+		});
+		flush();
 	}
 	
 	public void saveBookInfo(final BookInfo bookInfo) {
@@ -704,6 +736,19 @@ public class CRDBService extends BaseService {
 			getService().loadFileInfos(
 					pathNames, control, callback, new Handler());
     	}
+
+		public void loadDirectoryFingerprint(
+				String pathname,
+				DirectoryFingerprintLoadingCallback callback) {
+			getService().loadDirectoryFingerprint(
+					pathname, callback, new Handler());
+		}
+
+		public void saveDirectoryFingerprint(
+				String pathname, String fingerprint) {
+			getService().saveDirectoryFingerprint(
+					pathname, fingerprint);
+		}
 
     	public void deleteBook(final FileInfo fileInfo)	{
     		getService().deleteBook(new FileInfo(fileInfo));

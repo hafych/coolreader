@@ -17,8 +17,18 @@ interface LibraryMetadataStore {
 		void onLoaded(ArrayList<FileInfo> files);
 	}
 
+	interface DirectoryFingerprintCallback {
+		void onLoaded(String fingerprint);
+	}
+
 	void load(ArrayList<String> pathNames,
 			Scanner.ScanControl control, LoadCallback callback);
 
 	void save(Collection<FileInfo> files);
+
+	void loadDirectoryFingerprint(
+			String pathname, DirectoryFingerprintCallback callback);
+
+	void saveDirectoryFingerprint(
+			String pathname, String fingerprint);
 }

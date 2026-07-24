@@ -35,4 +35,17 @@ final class CrdbLibraryMetadataStore implements LibraryMetadataStore {
 	public void save(Collection<FileInfo> files) {
 		database.saveFileInfos(files);
 	}
+
+	@Override
+	public void loadDirectoryFingerprint(
+			String pathname, DirectoryFingerprintCallback callback) {
+		database.loadDirectoryFingerprint(
+				pathname, callback::onLoaded);
+	}
+
+	@Override
+	public void saveDirectoryFingerprint(
+			String pathname, String fingerprint) {
+		database.saveDirectoryFingerprint(pathname, fingerprint);
+	}
 }

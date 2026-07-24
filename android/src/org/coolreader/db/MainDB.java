@@ -1479,6 +1479,9 @@ public class MainDB extends BaseDB {
 			add("source_locator", newValue.sourceLocator, oldValue.sourceLocator);
 			add("archive_entry", newValue.archiveEntry, oldValue.archiveEntry);
 			add("content_hash", newValue.contentHash, oldValue.contentHash);
+			add("scan_fingerprint",
+					newValue.scanFingerprint,
+					oldValue.scanFingerprint);
 			add("folder_fk", getFolderId(newValue.path), getFolderId(oldValue.path));
 			add("filename", newValue.filename, oldValue.filename);
 			add("arcname", newValue.arcname, oldValue.arcname);
@@ -1526,6 +1529,7 @@ public class MainDB extends BaseDB {
 		"series_number, " +
 		"format, filesize, arcsize, " +
 		"book_key, source_type, source_locator, archive_entry, content_hash, " +
+		"scan_fingerprint, " +
 		"create_time, last_access_time, flags, language, description, crc32, domVersion, rendFlags ";
 	
 	private static final String READ_FILEINFO_SQL = 
@@ -1557,7 +1561,8 @@ public class MainDB extends BaseDB {
 		fileInfo.sourceLocator = rs.getString(i++);
 		fileInfo.archiveEntry = rs.getString(i++);
 		fileInfo.contentHash = rs.getString(i++);
-		fileInfo.createTime = rs.getInt(i++);
+		fileInfo.scanFingerprint = rs.getString(i++);
+		fileInfo.createTime = rs.getLong(i++);
 		fileInfo.lastAccessTime = rs.getInt(i++);
 		fileInfo.flags = rs.getInt(i++);
 		fileInfo.language = rs.getString(i++);
@@ -1830,6 +1835,36 @@ public class MainDB extends BaseDB {
 			log.e("Exception while loading books from DB", e);
 		}
 		return list;
+	}
+
+	public String loadDirectoryFingerprint(String pathname) {
+		if (!isOpened() || pathname == null)
+			return null;
+		try (Cursor rows = mDB.rawQuery(
+				"SELECT scan_fingerprint FROM library_directory " +
+						"WHERE pathname=?",
+				new String[] { pathname })) {
+			return rows.moveToFirst() ? rows.getString(0) : null;
+		} catch (Exception e) {
+			log.e("Exception while loading directory fingerprint", e);
+			return null;
+		}
+	}
+
+	public void saveDirectoryFingerprint(
+			String pathname, String fingerprint) {
+		if (!isOpened() || pathname == null || fingerprint == null)
+			return;
+		beginChanges();
+		try (SQLiteStatement statement = mDB.compileStatement(
+				"INSERT OR REPLACE INTO library_directory " +
+						"(pathname, scan_fingerprint) VALUES (?, ?)")) {
+			statement.bindString(1, pathname);
+			statement.bindString(2, fingerprint);
+			statement.executeInsert();
+		} catch (Exception e) {
+			log.e("Exception while saving directory fingerprint", e);
+		}
 	}
 
 	public void deleteRecentPosition( FileInfo fileInfo ) {

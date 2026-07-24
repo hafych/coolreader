@@ -86,6 +86,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   through explicit scan-state, extractor, metadata-store and progress ports,
   keeping the database and Engine adapters at the pipeline composition
   boundary.
+- Versioned document and directory source fingerprints are persisted by main
+  database schema v38, allowing unchanged directory batches to reuse stored
+  metadata while same-size files with a newer modification time are rescanned.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

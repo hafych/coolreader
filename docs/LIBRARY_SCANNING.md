@@ -38,6 +38,18 @@ Discovery owns the first 30% of determinate progress; metadata extraction owns
 the remaining 70%. Recursive scans use one discovered tree and one FIFO of
 directories rather than rediscovering descendants.
 
+## Source fingerprints
+
+`document-v1` fingerprints hash the document size, archive-container size and
+modification time. A missing modification time is treated as uncacheable, so an
+ambiguous provider cannot make the scanner claim that a document is unchanged.
+
+`directory-v1` fingerprints hash the sorted immediate file and directory
+snapshot. Main database schema v38 stores document fingerprints on `book` and
+directory fingerprints in `library_directory`. When both snapshots match, the
+bounded batch is restored directly from persisted metadata. If one same-size
+file receives a new modification time, only that document is parsed again.
+
 ## Regression coverage
 
 - `IterativeScanTraversalTest` traverses 10,000 nested nodes without recursion
@@ -48,5 +60,8 @@ directories rather than rediscovering descendants.
   progress.
 - `ScanProgressTrackerTest` checks phase mapping, monotonic updates and
   idempotent completion independently of Engine UI.
+- `LibrarySourceFingerprintTest` checks deterministic ordering, stat changes
+  and the uncacheable fallback.
 - Android instrumentation scans 133 books across three directory levels,
-  verifies metadata, then exercises user, entry and depth stops.
+  reuses an unchanged directory, detects a same-size document change and then
+  exercises user, entry and depth stops.
