@@ -38,6 +38,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Deterministic member/aggregate initialization and unambiguous parser/skin
   control flow, with misleading indentation promoted to a blocking first-party
   Clang diagnostic.
+- A machine-enforced no-telemetry decision: local crash redaction only, with
+  analytics/crash SDKs blocked until a separate consent and privacy decision.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

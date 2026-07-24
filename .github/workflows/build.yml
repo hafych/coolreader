@@ -150,6 +150,9 @@ jobs:
       - name: Verify Android release policy
         run: python3 tools/verify_android_release_policy.py
 
+      - name: Verify no-telemetry policy
+        run: python3 tools/verify_no_telemetry.py
+
       - name: Verify Play release documentation
         run: python3 tools/verify_play_release_docs.py
 

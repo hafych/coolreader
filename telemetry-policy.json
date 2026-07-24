@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "status": "disabled",
+  "decisionRequiredBeforeEnable": true,
+  "forbiddenSdkTokens": [
+    "com.google.firebase",
+    "firebase-analytics",
+    "firebase-crashlytics",
+    "io.sentry",
+    "sentry-android",
+    "com.bugsnag",
+    "bugsnag-android",
+    "com.microsoft.appcenter",
+    "appcenter-crashes",
+    "com.amplitude",
+    "mixpanel-android",
+    "segment-analytics",
+    "com.appsflyer",
+    "com.adjust.sdk"
+  ],
+  "requiredDecisionTopics": [
+    "privacy assessment",
+    "explicit opt-in consent UX",
+    "self-hosted or third-party processor",
+    "data minimization and redaction",
+    "retention and deletion",
+    "privacy policy and Play Data safety update"
+  ]
+}

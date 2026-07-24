@@ -78,6 +78,8 @@ Pull request fork classification and delta-ledger rules are documented in
 [docs/PR_GOVERNANCE.md](docs/PR_GOVERNANCE.md).
 Prepared minimal upstream contributions and verification evidence are listed in
 [docs/UPSTREAM_CONTRIBUTIONS.md](docs/UPSTREAM_CONTRIBUTIONS.md).
+The enforced default of local crash redaction without telemetry is documented
+in [docs/TELEMETRY_POLICY.md](docs/TELEMETRY_POLICY.md).
 
 ### Support matrix
 

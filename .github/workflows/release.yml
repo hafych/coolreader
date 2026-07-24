@@ -101,6 +101,7 @@ jobs:
           python3 tools/verify_release_version.py --tag "${RELEASE_TAG}"
           python3 tools/verify_android_storage_policy.py
           python3 tools/verify_android_release_policy.py
+          python3 tools/verify_no_telemetry.py
           python3 tools/verify_android_http_policy.py
           python3 tools/verify_android_log_privacy.py
           python3 tools/verify_parse_budget_contract.py
