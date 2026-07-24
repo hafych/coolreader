@@ -35,6 +35,9 @@ run_instrumentation \
     'phase0-scoped-storage-policy' \
     'org.coolreader.AndroidSmokeInstrumentedTest#scopedStorageUsesOnlyPrivateFilesystemRoots'
 run_instrumentation \
+    'phase0-custom-toast-lifecycle' \
+    'org.coolreader.AndroidSmokeInstrumentedTest#customToastUiStateClosesWithItsActivity'
+run_instrumentation \
     'phase0-open-ordinary-file' \
     'org.coolreader.AndroidSmokeInstrumentedTest#ordinaryFileOpensFromGenericMimeIntent'
 run_instrumentation \

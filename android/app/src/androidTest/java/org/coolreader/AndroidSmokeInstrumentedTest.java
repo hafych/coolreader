@@ -15,6 +15,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.widget.Toast;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -26,6 +27,7 @@ import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.ScanStopReason;
+import org.coolreader.crengine.ToastView;
 import org.coolreader.tts.OnTTSStatusListener;
 import org.coolreader.tts.TTSControlBinder;
 import org.coolreader.tts.TTSControlService;
@@ -52,6 +54,29 @@ import static org.junit.Assert.assertTrue;
 public class AndroidSmokeInstrumentedTest {
 	private static final long TIMEOUT_MS = 30_000;
 	private static final int TTS_NOTIFICATION_ID = 1;
+
+	@Test
+	public void customToastUiStateClosesWithItsActivity()
+			throws Exception {
+		Context target = targetContext();
+		Instrumentation instrumentation =
+				InstrumentationRegistry.getInstrumentation();
+		CoolReader activity = (CoolReader) launchMainActivity(
+				target, instrumentation);
+		try {
+			instrumentation.runOnMainSync(() -> {
+				ToastView toastView = new ToastView();
+				toastView.showToast(
+						activity.getContentView(),
+						"Activity-owned toast",
+						Toast.LENGTH_LONG,
+						20);
+				toastView.close();
+			});
+		} finally {
+			finishActivity(activity);
+		}
+	}
 
 	@Test
 	public void ordinaryFileOpensFromGenericMimeIntent() throws Exception {

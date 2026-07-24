@@ -24,6 +24,7 @@ package org.coolreader.crengine;
 
 import android.content.Context;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -34,82 +35,123 @@ import android.widget.TextView;
 
 import org.coolreader.R;
 
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.ArrayDeque;
+import java.util.Queue;
 
 /**
  * User: Victor Soskin
  * Date: 11/3/11
  * Time: 2:51 PM
  */
-public class ToastView {
-    private static class Toast {
-        private View anchor;
-        private String msg;
-        private int duration;
+public final class ToastView {
+	private static final class ToastMessage {
+		private final View anchor;
+		private final String message;
+		private final int duration;
+		private final int textSize;
 
-        private Toast(View anchor, String msg, int duration) {
-            this.anchor = anchor;
-            this.msg = msg;
-            this.duration = duration;
-        }
-    }
+		private ToastMessage(
+				View anchor,
+				String message,
+				int duration,
+				int textSize) {
+			this.anchor = anchor;
+			this.message = message;
+			this.duration = duration;
+			this.textSize = textSize;
+		}
+	}
 
-	private static View mReaderView;
-    private static LinkedBlockingQueue<Toast> queue = new LinkedBlockingQueue<>();
-    private static AtomicBoolean showing = new AtomicBoolean(false);
-    private static Handler mHandler = new Handler();
-    private static PopupWindow window = null;
+	private final Queue<ToastMessage> queue = new ArrayDeque<>();
+	private final Handler handler = new Handler(Looper.getMainLooper());
+	private PopupWindow window;
+	private boolean showing;
+	private boolean closed;
 
-    private static final Runnable handleDismiss = () -> {
-        if (window != null) {
-            window.dismiss();
-            show();
-        }
-    };
+	private final Runnable handleDismiss = () -> {
+		if (window != null) {
+			window.dismiss();
+			window = null;
+		}
+		showNext();
+	};
 
-    static int fontSize = 24;
-    public static void showToast(View anchor, String msg, int duration, int textSize) {
-    	mReaderView = anchor;
-    	fontSize = textSize;
-        try {
-            queue.put(new Toast(anchor, msg, duration));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            Log.w("cr3", "Toast queue interrupted", e);
-        }
-        if (showing.compareAndSet(false, true)) {
-            show();
-        }
-    }
+	public void showToast(
+			View anchor,
+			String message,
+			int duration,
+			int textSize) {
+		if (Looper.myLooper() != Looper.getMainLooper()) {
+			handler.post(() -> showToast(
+					anchor,
+					message,
+					duration,
+					textSize));
+			return;
+		}
+		if (closed)
+			return;
+		queue.offer(new ToastMessage(
+				anchor,
+				message,
+				duration,
+				textSize));
+		if (!showing) {
+			showing = true;
+			showNext();
+		}
+	}
 
-    private static void show() {
-        if (queue.size() == 0) {
-            showing.compareAndSet(true, false);
-            return;
-        }
-        Toast t = queue.poll();
-        window = new PopupWindow(t.anchor.getContext());
-        window.setWidth(WindowManager.LayoutParams.FILL_PARENT);
-        window.setHeight(WindowManager.LayoutParams.WRAP_CONTENT);
-        window.setTouchable(false);
-        window.setFocusable(false);
-        window.setOutsideTouchable(true);
-        window.setBackgroundDrawable(null);
-        /* LinearLayout ll = new LinearLayout(t.anchor.getContext());
-        ll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.FILL_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+	private void showNext() {
+		if (closed)
+			return;
+		ToastMessage toast = queue.poll();
+		if (toast == null) {
+			showing = false;
+			return;
+		}
+		window = new PopupWindow(toast.anchor.getContext());
+		window.setWidth(WindowManager.LayoutParams.FILL_PARENT);
+		window.setHeight(WindowManager.LayoutParams.WRAP_CONTENT);
+		window.setTouchable(false);
+		window.setFocusable(false);
+		window.setOutsideTouchable(true);
+		window.setBackgroundDrawable(null);
+		LayoutInflater inflater = (LayoutInflater) toast.anchor
+				.getContext()
+				.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+		window.setContentView(inflater.inflate(
+				R.layout.custom_toast,
+				null,
+				true));
+		TextView text = window.getContentView().findViewById(R.id.toast);
+		text.setTextSize(
+				TypedValue.COMPLEX_UNIT_PX,
+				toast.textSize);
+		text.setText(toast.message);
+		text.setGravity(Gravity.CENTER);
+		window.showAtLocation(
+				toast.anchor,
+				Gravity.NO_GRAVITY,
+				0,
+				0);
+		handler.postDelayed(
+				handleDismiss,
+				toast.duration == 0 ? 2000 : 3000);
+	}
 
-        TextView tv = new TextView(t.anchor.getContext());
-        tv.setText(t.msg);
-        ll.setGravity(Gravity.CENTER);
-        ll.addView(tv);*/
-        LayoutInflater inflater = (LayoutInflater) t.anchor.getContext().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        window.setContentView(inflater.inflate(R.layout.custom_toast, null, true));
-        TextView tv = (TextView) window.getContentView().findViewById(R.id.toast);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize);
-        tv.setText(t.msg);
-        tv.setGravity(Gravity.CENTER);
-        window.showAtLocation(t.anchor, Gravity.NO_GRAVITY, 0, 0);
-        mHandler.postDelayed(handleDismiss, t.duration == 0 ? 2000 : 3000);
-    }
+	public void close() {
+		if (Looper.myLooper() != Looper.getMainLooper()) {
+			handler.post(this::close);
+			return;
+		}
+		closed = true;
+		handler.removeCallbacksAndMessages(null);
+		queue.clear();
+		showing = false;
+		if (window != null) {
+			window.dismiss();
+			window = null;
+		}
+	}
 }

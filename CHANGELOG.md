@@ -71,6 +71,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Each BaseActivity now owns its service graph instance and immutable dependency
   snapshot; teardown closes only that Activity generation and cannot clear a
   newer graph through a static registry.
+- Custom E-Ink toast queues, handlers and popup windows are now owned and
+  cancelled by their Activity instead of retaining Views in static fields.
 - Archive metadata lookup is a stateless Engine operation, so FileInfo no
   longer reaches through the global service locator.
 - Library metadata scanning uses one in-flight 64-item batch, persists

@@ -16,6 +16,7 @@ NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
 ENGINE = SOURCE / "crengine" / "Engine.java"
 SERVICES = SOURCE / "crengine" / "Services.java"
 SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
+TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -156,6 +157,22 @@ def main() -> None:
         violations.append(
             f"{relative(SERVICES)} lets Activity teardown stop the "
             "process-scoped dispatcher")
+
+    toast_text = TOAST_VIEW.read_text(encoding="utf-8")
+    if re.search(
+            r"\bstatic\s+(?:final\s+)?(?:View|Handler|PopupWindow|"
+            r"Queue<|LinkedBlockingQueue<|AtomicBoolean)\b",
+            toast_text):
+        violations.append(
+            f"{relative(TOAST_VIEW)} retains static Activity-owned UI state")
+    for marker in (
+        "public final class ToastView",
+        "private final Queue<ToastMessage> queue",
+        "public void close()",
+    ):
+        if marker not in toast_text:
+            violations.append(
+                f"{relative(TOAST_VIEW)} omits lifecycle marker: {marker}")
 
     dependencies_text = SERVICE_DEPENDENCIES.read_text(encoding="utf-8")
     for marker in (
@@ -327,6 +344,8 @@ def main() -> None:
                     f"{relative(path)} omits lifecycle marker: {marker}")
 
     for marker in (
+        "private final ToastView mToastView = new ToastView()",
+        "mToastView.close()",
         "private final Services mServices = new Services()",
         "mServiceDependencies = mServices.startServices(this)",
         "public final ServiceDependencies getServiceDependencies()",

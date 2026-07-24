@@ -20,6 +20,10 @@ graph and detaches its Engine. Queued work that captures the lifecycle must
 discard callbacks after the lifecycle closes. A stale Activity therefore
 cannot clear or stop a graph owned by a newer Activity.
 
+Activity UI helpers follow the same rule. For example, each `BaseActivity` owns
+its custom E-Ink toast queue, main-thread handler and popup window, then cancels
+and dismisses them during `onDestroy`.
+
 ## Process-scoped infrastructure
 
 `BackgroundThread` remains a process-scoped dispatcher. Activity teardown does

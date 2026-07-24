@@ -90,6 +90,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 	private static final Logger log = L.create("ba");
 	private View mDecorView;
+	private final ToastView mToastView = new ToastView();
 
 	private CRDBServiceAccessor mCRDBService;
 	private final Services mServices = new Services();
@@ -301,6 +302,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 	@Override
 	protected void onDestroy() {
+		mToastView.close();
 		super.onDestroy();
 		unbindCRDBService();
 	}
@@ -1246,7 +1248,13 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	public void showToast(String msg, int duration) {
 		log.v("showing toast: " + msg);
 		if (DeviceInfo.USE_CUSTOM_TOAST) {
-			ToastView.showToast(getContentView(), msg, Toast.LENGTH_LONG, settings().getInt(ReaderView.PROP_FONT_SIZE, 20));
+			mToastView.showToast(
+					getContentView(),
+					msg,
+					duration,
+					settings().getInt(
+							ReaderView.PROP_FONT_SIZE,
+							20));
 		} else {
 			// classic Toast
 			Toast toast = Toast.makeText(this, msg, duration);
