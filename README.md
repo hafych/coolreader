@@ -66,6 +66,8 @@ Release preparation documents:
 [identity/asset decisions](docs/IDENTITY_AND_ASSETS.md).
 Dependency licensing and SPDX generation are documented in
 [docs/DEPENDENCY_POLICY.md](docs/DEPENDENCY_POLICY.md).
+Release performance thresholds and reproducible synthetic fixtures are
+documented in [docs/PERFORMANCE_BUDGETS.md](docs/PERFORMANCE_BUDGETS.md).
 
 ### Support matrix
 

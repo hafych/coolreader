@@ -13,6 +13,8 @@ AAB.
 - Listing assets, content rating, Data safety and published privacy policy
   reviewed against the exact artifact.
 - Unit, lint, native, instrumentation and policy gates green.
+- Strict performance-budget results from the documented reference environments
+  attached to the release evidence.
 
 ## Internal test
 

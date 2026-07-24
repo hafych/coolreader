@@ -150,6 +150,9 @@ jobs:
       - name: Verify Play release documentation
         run: python3 tools/verify_play_release_docs.py
 
+      - name: Verify performance budgets
+        run: python3 tools/verify_performance_budgets.py
+
       - name: Verify Android HTTP policy
         run: python3 tools/verify_android_http_policy.py
 

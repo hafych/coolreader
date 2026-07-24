@@ -20,6 +20,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   distributable artifacts.
 - A CI-enforced dependency and license allowlist plus an SPDX 2.3 SBOM for the
   resolved Android release runtime and native components.
+- Explicit Android release performance budgets and deterministic synthetic
+  large-book/10,000-book-library fixture generation.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

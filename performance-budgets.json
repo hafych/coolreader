@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "referenceEnvironment": {
+    "id": "android-pixel5-api35-release",
+    "device": "Pixel 5 or equivalent",
+    "apiLevel": 35,
+    "buildType": "release",
+    "animations": false,
+    "power": "battery at least 50%, thermal state nominal",
+    "storage": "internal flash with at least 5 GiB free"
+  },
+  "measurementPolicy": {
+    "minimumRuns": 5,
+    "warmupRuns": 1,
+    "allowedRegressionPercent": 15,
+    "hardLimitAction": "block_release",
+    "targetMissAction": "investigate_or_record_owner_waiver"
+  },
+  "scenarios": [
+    {
+      "id": "cold_start",
+      "description": "Process-cold launch from force-stop until the library is interactive",
+      "metric": "elapsed_time",
+      "unit": "ms",
+      "statistic": "p95",
+      "target": 2500,
+      "hardLimit": 4000,
+      "fixture": "empty private state"
+    },
+    {
+      "id": "open_large_book",
+      "description": "Open the generated 50 MiB FB2 until the first page is interactive",
+      "metric": "elapsed_time",
+      "unit": "ms",
+      "statistic": "p95",
+      "target": 7000,
+      "hardLimit": 12000,
+      "fixture": "large-book.fb2"
+    },
+    {
+      "id": "page_turn_lcd",
+      "description": "Input-to-present latency for 100 forward page turns on an LCD profile",
+      "metric": "input_to_present",
+      "unit": "ms",
+      "statistic": "p95",
+      "target": 50,
+      "hardLimit": 100,
+      "fixture": "large-book.fb2"
+    },
+    {
+      "id": "page_turn_eink",
+      "description": "Input-to-present latency for 100 forward page turns on approved E-Ink hardware",
+      "metric": "input_to_present",
+      "unit": "ms",
+      "statistic": "p95",
+      "target": 250,
+      "hardLimit": 500,
+      "fixture": "large-book.fb2"
+    },
+    {
+      "id": "search_large_book",
+      "description": "Search from the beginning for the deterministic needle near the end of the 50 MiB FB2",
+      "metric": "elapsed_time",
+      "unit": "ms",
+      "statistic": "p95",
+      "target": 2500,
+      "hardLimit": 5000,
+      "fixture": "large-book.fb2"
+    },
+    {
+      "id": "scan_10000_books",
+      "description": "Initial metadata scan and persistence of a generated 10000-book SAF library",
+      "metric": "elapsed_time",
+      "unit": "ms",
+      "statistic": "p95",
+      "target": 180000,
+      "hardLimit": 300000,
+      "fixture": "library-10000"
+    },
+    {
+      "id": "peak_pss_large_book",
+      "description": "Peak proportional set size while opening, searching and paging the 50 MiB FB2",
+      "metric": "peak_pss",
+      "unit": "MiB",
+      "statistic": "max",
+      "target": 384,
+      "hardLimit": 512,
+      "fixture": "large-book.fb2"
+    }
+  ]
+}
