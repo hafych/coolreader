@@ -1,6 +1,7 @@
 #include "lvstreamutils.h"
 #include "lvthread.h"
 #include "hyphman.h"
+#include "lvfntman.h"
 #include "lvrend.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
@@ -464,6 +465,22 @@ static int testConcurrentTextLangConfigCache() {
     HyphMan::uninit();
     if (failed.load(std::memory_order_acquire))
         return fail("text-language main language was published partially");
+    return 0;
+}
+
+static int testFontManagerLifecycleOwnership() {
+    ShutdownFontManager();
+    if (!InitFontManager(lString8::empty_str) || !fontMan)
+        return fail("font manager did not initialize");
+    LVFontManager *first = fontMan;
+    if (!InitFontManager(lString8::empty_str) || fontMan != first) {
+        ShutdownFontManager();
+        return fail("font manager initialization replaced a live instance");
+    }
+    if (!ShutdownFontManager() || fontMan)
+        return fail("font manager shutdown did not release ownership");
+    if (ShutdownFontManager())
+        return fail("font manager shutdown was not idempotent");
     return 0;
 }
 
@@ -1030,6 +1047,8 @@ int main() {
     if (testConcurrentTextLangRuntimeOptions() != 0)
         return 1;
     if (testConcurrentTextLangConfigCache() != 0)
+        return 1;
+    if (testFontManagerLifecycleOwnership() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

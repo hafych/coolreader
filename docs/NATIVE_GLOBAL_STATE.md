@@ -61,5 +61,11 @@ process-lifecycle operation and must not race readers. Main-language and cached
 tag storage use deep copies at the lock boundary because desktop `lString`
 reference counts are not atomic.
 
-Known follow-up groups include font/cache singletons. Each group must be
-migrated separately with an impact check and focused regression tests.
+The process-wide font-manager lifetime is serialized and owned by a private
+`std::unique_ptr`. The public `fontMan` pointer remains a non-owning compatibility
+view between successful `InitFontManager()` and `ShutdownFontManager()` calls.
+Those lifecycle calls are quiescent operations and must not race font users.
+
+Known follow-up groups include font-manager settings and its internal caches.
+Each group must be migrated separately with an impact check and focused
+regression tests.

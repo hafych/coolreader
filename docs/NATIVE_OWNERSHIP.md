@@ -44,3 +44,8 @@ only a non-owning lookup index.
 `std::vector<std::unique_ptr<TextLangCfg>>`. Lookup returns a non-owning pointer
 whose address stays stable across cache reordering and growth. It is invalidated
 only by the quiescent `HyphMan::uninit()` lifecycle operation.
+
+The global font manager has a private `std::unique_ptr` owner. The legacy
+`fontMan` symbol is a non-owning compatibility view and is cleared before the
+owner is destroyed. Failed initialization releases the candidate manager
+without leaving a dangling published pointer.

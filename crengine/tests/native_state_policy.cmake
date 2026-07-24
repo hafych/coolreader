@@ -13,6 +13,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/hyphman.cpp" HYPH_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/textlang.cpp" TEXTLANG_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/textlang.h" TEXTLANG_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -153,6 +154,16 @@ require_source_text(
   "_main_lang = lString32(lang_tag.c_str(), lang_tag.length())"
   "main-language writes must not retain a caller-owned desktop string chunk"
 )
+require_source_text(
+  "${FONT_MANAGER_SOURCE}"
+  "std::unique_ptr<LVFontManager> g_font_manager_owner"
+  "the process-wide font manager must have explicit ownership"
+)
+require_source_text(
+  "${FONT_MANAGER_SOURCE}"
+  "std::mutex g_font_manager_lifecycle_mutex"
+  "font-manager lifecycle operations must be serialized"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -258,4 +269,9 @@ forbid_source_text(
   "${TEXTLANG_HEADER}"
   "getLangCfgList()"
   "the mutable text-language cache container must not be exposed"
+)
+forbid_source_text(
+  "${FONT_MANAGER_SOURCE}"
+  "delete fontMan"
+  "font-manager shutdown must use RAII ownership"
 )

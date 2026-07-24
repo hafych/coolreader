@@ -148,6 +148,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   hyphenation-method selection internally consistent.
 - The text-language configuration cache now has synchronized lookup, RAII
   ownership and a documented process-lifecycle teardown boundary.
+- The process-wide font manager now has RAII ownership, serialized lifecycle
+  operations and rollback-safe initialization.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
 - SQLite fixture matrices for every supported main and cover database migration,

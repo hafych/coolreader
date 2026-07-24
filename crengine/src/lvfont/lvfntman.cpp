@@ -26,10 +26,18 @@
 #include "lvwin32fontman.h"
 #include "lvbitmapfontman.h"
 
+#include <memory>
+#include <mutex>
+
 #define GAMMA_TABLES_IMPL
 #include "gammatbl.h"
 
 LVFontManager *fontMan = NULL;
+
+namespace {
+std::unique_ptr<LVFontManager> g_font_manager_owner;
+std::mutex g_font_manager_lifecycle_mutex;
+}
 
 static double gammaLevel = 1.0;
 int gammaIndex = GAMMA_NO_CORRECTION_INDEX;
@@ -114,25 +122,33 @@ void LVFontManager::SetGamma( double gamma ) {
 }
 
 bool InitFontManager(lString8 path) {
+    std::lock_guard<std::mutex> guard(g_font_manager_lifecycle_mutex);
     if (fontMan) {
         return true;
-        //delete fontMan;
     }
 #if (USE_WIN32_FONTS == 1)
-    fontMan = new LVWin32FontManager;
+    std::unique_ptr<LVFontManager> candidate(new LVWin32FontManager);
 #elif (USE_FREETYPE == 1)
-    fontMan = new LVFreeTypeFontManager;
+    std::unique_ptr<LVFontManager> candidate(new LVFreeTypeFontManager);
 #else
-    fontMan = new LVBitmapFontManager;
+    std::unique_ptr<LVFontManager> candidate(new LVBitmapFontManager);
 #endif
-    return fontMan->Init(path);
+    // Platform discovery still reaches the compatibility pointer from Init().
+    // Initialization and shutdown are quiescent lifecycle operations.
+    fontMan = candidate.get();
+    if (!fontMan->Init(path)) {
+        fontMan = NULL;
+        return false;
+    }
+    g_font_manager_owner = std::move(candidate);
+    return true;
 }
 
 bool ShutdownFontManager() {
-    if (fontMan) {
-        delete fontMan;
-        fontMan = NULL;
-        return true;
-    }
-    return false;
+    std::lock_guard<std::mutex> guard(g_font_manager_lifecycle_mutex);
+    if (!fontMan)
+        return false;
+    fontMan = NULL;
+    g_font_manager_owner.reset();
+    return true;
 }
