@@ -602,6 +602,23 @@ if(BUILD_TESTING AND UNIX)
   )
   add_test(NAME css_regression COMMAND css_regression_test)
 
+  add_executable(hyphenation_regression_test
+    ${CMAKE_SOURCE_DIR}/crengine/tests/hyphenation_regression_test.cpp
+  )
+  target_compile_definitions(hyphenation_regression_test PRIVATE
+    COOLREADER_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
+  target_link_libraries(hyphenation_regression_test
+    crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}
+  )
+  add_test(NAME hyphenation_regression COMMAND hyphenation_regression_test)
+
+  add_test(NAME hyphenation_resource_sync
+    COMMAND ${CMAKE_COMMAND}
+      "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+      -P "${CMAKE_SOURCE_DIR}/crengine/tests/hyphenation_resource_sync.cmake"
+  )
+
   add_test(NAME native_state_policy
     COMMAND ${CMAKE_COMMAND}
       "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}"
@@ -618,6 +635,7 @@ if(USE_CLANG_WARNING_GATE)
     unicode_regression_test
     typography_regression_test
     css_regression_test
+    hyphenation_regression_test
     fb2props
     fb2propstest
     cr3

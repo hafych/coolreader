@@ -515,8 +515,7 @@ public:
     }
     bool isValid() const {
         return !_title.empty() && !_langTag.empty() &&
-               _left_hyphen_min > 0 && _right_hyphen_min > 0 &&
-               (NULL == _dataPtr || (NULL != _dataPtr && _dataPtr->length() > 0));
+               _left_hyphen_min > 0 && _right_hyphen_min > 0;
     }
     /// called on parsing end
     virtual void OnStop() { }
@@ -1043,8 +1042,6 @@ bool TexHyph::load( LVStreamRef stream )
             CRLog::error("Invalid/incomplete hyphenation dictionary!");
             return false;
         }
-        if (!data.length())
-            return false;
         _left_hyphen_min = reader.GetLeftHyphenMin();
         _right_hyphen_min = reader.GetRightHyphenMin();
         for (int i = 0; i < (int)data.length(); i++) {
@@ -1065,7 +1062,9 @@ bool TexHyph::load( LVStreamRef stream )
                 patternCount++;
             }
         }
-        return patternCount>0;
+        // Empty XML dictionaries are valid for languages whose packaged
+        // policy intentionally disables automatic hyphenation.
+        return true;
     }
 }
 

@@ -1,31 +1,32 @@
 #!/bin/sh
 
-hyph_dir="../cr3gui/data/hyph"
-res_dir="./res/raw"
+set -eu
 
-list=`ls ${hyph_dir}/*.pattern`
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+hyph_dir="${script_dir}/../cr3gui/data/hyph"
+res_dir="${script_dir}/res/raw"
+mode=${1:-update}
 
-if [ ! -f local.properties ]
-then
-    echo "Can't find file \"local.properties\""
-    echo "You must call this script from the \"android\" subfolder of the project directory."
-    exit 1
+if [ "${mode}" != "update" ] && [ "${mode}" != "--check" ]; then
+    echo "usage: $0 [--check]" >&2
+    exit 2
 fi
 
-for f in ${list}
+status=0
+for source_pattern in "${hyph_dir}"/*.pattern
 do
-    aname=`basename $f`
-    echo "updating ${aname}..."
-    if [ ! -f "${f}" ]
-    then
-        echo "Error: ${fname} NOT found!"
-        continue
+    source_name=$(basename "${source_pattern}")
+    android_name=$(printf '%s\n' "${source_name}" | sed 's/[-,]/_/g')
+    android_pattern="${res_dir}/${android_name}"
+    if [ "${mode}" = "--check" ]; then
+        if [ ! -f "${android_pattern}" ] \
+                || ! cmp -s "${source_pattern}" "${android_pattern}"; then
+            echo "out of sync: ${source_name}" >&2
+            status=1
+        fi
+    else
+        echo "updating ${source_name}..."
+        cp -p "${source_pattern}" "${android_pattern}"
     fi
-    if echo "${f}" | grep -v -E '^.*\.pattern$'
-    then
-        echo "Error: Unsupported file extension ${f}!"
-        continue
-    fi
-    dstname=`echo ${aname} | sed -e 's/[-,]/_/g'`
-    cp -p "${f}" "${res_dir}/${dstname}"
 done
+exit "${status}"

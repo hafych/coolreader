@@ -177,6 +177,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   document-scoped embedded-font precedence and ordered CJK fallback.
 - Native CSS regressions now cover declaration units, pagination aliases,
   cascade specificity, source order and computed inheritance.
+- German, Portuguese and Ukrainian hyphenation patterns are refreshed from a
+  pinned upstream source; language goldens and desktop/Android parity checks
+  now cover all packaged dictionaries.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.
@@ -202,6 +205,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Document-scoped fonts now override an equally named process font only for
   their owning book, and fallback selection accepts a valid first registered
   font while discarding unknown families.
+- Intentionally empty Arabic and Persian no-hyphenation dictionaries now load
+  as valid packaged policies instead of falling back after a parse error.
 - Android instrumentation now uses the AndroidX test runner, and the obsolete
   Jetifier compatibility pass is disabled after removal of support-library
   dependencies.

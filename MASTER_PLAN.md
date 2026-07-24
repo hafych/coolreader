@@ -124,7 +124,7 @@ DRM или ограничений доступа, подбор/получени�
   тестовым corpus.
 - [x] Определить поддерживаемое CSS-подмножество, добавить тесты cascade,
   specificity, inheritance, units и page-break.
-- [ ] Обновить hyphenation dictionaries, проверить их лицензии и добавить
+- [x] Обновить hyphenation dictionaries, проверить их лицензии и добавить
   языковые golden tests.
 - [x] Добавить variable-font/font-fallback tests и контролируемый выбор системных и
   встроенных шрифтов.

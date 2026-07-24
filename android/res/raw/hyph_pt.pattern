@@ -4,13 +4,13 @@
     from original file: tex-hyphen/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-pt.tex
 
 title: Hyphenation patterns for Portuguese
-copyright: Copyright (C) 1987, 1994, 1996, 2015 Pedro J. de Rezende, 1996, 2015 J. Joao Dias Almeida
+copyright: Copyright (C) 1987, 1994, 1996, 2015 Pedro J. de Rezende, 1996, 2015 J. Joao Dias Almeida, 2024 Leonardo Araujo and Aline Benevides
 notice: This file is part of the hyph-utf8 package.
     See http://www.hyphenation.org/tex for more information.
 language:
     name: Portuguese
     tag: pt
-version: 1.3 2015-12-08
+version: 1.4 2024-07-13
 authors:
   -
     name: Pedro J. de Rezende
@@ -18,6 +18,12 @@ authors:
   -
     name: J. Joao Dias Almeida
     contact: jj (at) di.uminho.pt
+  -
+    name: Leonardo Araujo
+    contact: leolca (at) gmail.com
+  -
+    name: Aline Benevides
+    contact: benevides.aline12 (at) gmail.com
 licence:
     name: BSD 3-clause licence
     url: https://opensource.org/licenses/BSD-3-Clause
@@ -52,6 +58,7 @@ hyphenmins:
         left: 2
         right: 3
 changes:
+    - Version 1.4 Release date: 13/07/2024 Leonardo Araujo and Aline Benevides
     - Version 1.3 Release date: 12/08/2015 Pedro J. de Rezende and J. Joao Dias Almeida
     - Version 1.2 Release date: 07/21/1996 Pedro J. de Rezende and J. Joao Dias Almeida
     - Version 1.1 Release date: 04/12/1994 Pedro J. de Rezende
@@ -375,6 +382,126 @@ texlive:
   <pattern>u3e</pattern>
   <pattern>u3o</pattern>
   <pattern>u3u</pattern>
+  <pattern> p2si</pattern>
+  <pattern> p2sí</pattern>
+  <pattern> g2no</pattern>
+  <pattern> g2nó</pattern>
+  <pattern> g2nô</pattern>
+  <pattern>t2c</pattern>
+  <pattern>1p2neu</pattern>
+  <pattern> t2m</pattern>
+  <pattern> p2t</pattern>
+  <pattern>su2b3r</pattern>
+  <pattern>su2b3l</pattern>
+  <pattern> su3b4li</pattern>
+  <pattern>a1ir </pattern>
+  <pattern>u1ir </pattern>
+  <pattern>1qu</pattern>
+  <pattern>1vô</pattern>
+  <pattern>1lô</pattern>
+  <pattern>1cô</pattern>
+  <pattern>1gô</pattern>
+  <pattern>1bô</pattern>
+  <pattern>1tô</pattern>
+  <pattern>1rô</pattern>
+  <pattern>1pô</pattern>
+  <pattern>a1é</pattern>
+  <pattern>a1í</pattern>
+  <pattern>a1ó</pattern>
+  <pattern>a1ú</pattern>
+  <pattern>e1á</pattern>
+  <pattern>e1â</pattern>
+  <pattern>e1ã</pattern>
+  <pattern>e1é</pattern>
+  <pattern>e1ê</pattern>
+  <pattern>e1í</pattern>
+  <pattern>e1ó</pattern>
+  <pattern>é1o</pattern>
+  <pattern>e1ú</pattern>
+  <pattern>i1á</pattern>
+  <pattern>i1ã</pattern>
+  <pattern>í1a</pattern>
+  <pattern>i1é</pattern>
+  <pattern>i1í</pattern>
+  <pattern>i1ó</pattern>
+  <pattern>í1o</pattern>
+  <pattern>i1u</pattern>
+  <pattern>i1ú</pattern>
+  <pattern>o1á</pattern>
+  <pattern>o1é</pattern>
+  <pattern>o1í</pattern>
+  <pattern>o1ó</pattern>
+  <pattern>u1á</pattern>
+  <pattern>u1ã</pattern>
+  <pattern>u1â</pattern>
+  <pattern>u1í</pattern>
+  <pattern>ú1o</pattern>
+  <pattern>1qu2á</pattern>
+  <pattern>1qu2â</pattern>
+  <pattern>1qu2í</pattern>
+  <pattern>1gu2í</pattern>
+  <pattern>a1ind</pattern>
+  <pattern>a1i1nh</pattern>
+  <pattern>e1imp</pattern>
+  <pattern>e1inc</pattern>
+  <pattern>e1inf</pattern>
+  <pattern>e1ing</pattern>
+  <pattern>e1ins</pattern>
+  <pattern>e1int</pattern>
+  <pattern>e1inv</pattern>
+  <pattern>u1iz </pattern>
+  <pattern>a1iz </pattern>
+  <pattern>4a </pattern>
+  <pattern>4e </pattern>
+  <pattern>4o </pattern>
+  <pattern>1gu2á</pattern>
+  <pattern>1gu2ã</pattern>
+  <pattern>1qu2ã</pattern>
+  <pattern> m2n</pattern>
+  <pattern>c2za</pattern>
+  <pattern> s2</pattern>
+  <pattern>1p2seu1d</pattern>
+  <pattern>1dô</pattern>
+  <pattern>1fô</pattern>
+  <pattern>1mô</pattern>
+  <pattern>1nô</pattern>
+  <pattern>1sô</pattern>
+  <pattern>1zô</pattern>
+  <pattern>tu1i</pattern>
+  <pattern>tu2it</pattern>
+  <pattern>tu2id</pattern>
+  <pattern>bu1i</pattern>
+  <pattern>nu1i</pattern>
+  <pattern>o1in</pattern>
+  <pattern>u1in</pattern>
+  <pattern>su1i</pattern>
+  <pattern>í1e</pattern>
+  <pattern>ju1i</pattern>
+  <pattern>fu1i</pattern>
+  <pattern>du1i</pattern>
+  <pattern>do1im</pattern>
+  <pattern>au1i</pattern>
+  <pattern>u1i1ç</pattern>
+  <pattern>u1ê</pattern>
+  <pattern>1gu2ê</pattern>
+  <pattern>1qu2ê</pattern>
+  <pattern>1çô</pattern>
+  <pattern>u1é</pattern>
+  <pattern>1gu2é</pattern>
+  <pattern>1qu2é</pattern>
+  <pattern>1xô</pattern>
+  <pattern>a1â</pattern>
+  <pattern>a1ã</pattern>
+  <pattern>a1ô</pattern>
+  <pattern>e1ô</pattern>
+  <pattern> ne4o</pattern>
+  <pattern>o1ã</pattern>
+  <pattern>o1ê</pattern>
+  <pattern>o1im</pattern>
+  <pattern>o2i1na</pattern>
+  <pattern>pro1i1b</pattern>
+  <pattern>co2ima</pattern>
+  <pattern> t2</pattern>
   <pattern>1-</pattern>
 <!--  Do NOT make any alterations to this list! --- PdR -->
   <pattern>h8a8r8d7w8a8r8e</pattern>
