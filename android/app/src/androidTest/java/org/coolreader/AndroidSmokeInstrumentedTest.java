@@ -140,6 +140,19 @@ public class AndroidSmokeInstrumentedTest {
 						.getBytes(StandardCharsets.UTF_8));
 			}
 		}
+		File nested = new File(directory, "nested");
+		File deeplyNested = new File(nested, "deeper");
+		assertTrue(nested.mkdir());
+		assertTrue(deeplyNested.mkdir());
+		for (int i = 0; i < 3; i++) {
+			File document = new File(
+					deeplyNested, "nested-book-" + i + ".txt");
+			try (FileOutputStream output =
+					new FileOutputStream(document)) {
+				output.write(("Nested book " + i)
+						.getBytes(StandardCharsets.UTF_8));
+			}
+		}
 
 		CoolReader activity = (CoolReader) launchMainActivity(
 				target, InstrumentationRegistry.getInstrumentation());
@@ -156,7 +169,7 @@ public class AndroidSmokeInstrumentedTest {
 					() -> scanner.get().scanDirectory(
 							activity.getDB(), baseDir, null,
 							scanControl -> completed.countDown(),
-							false, control));
+							true, control));
 
 			assertTrue(completed.await(
 					TIMEOUT_MS, TimeUnit.MILLISECONDS));
@@ -168,6 +181,17 @@ public class AndroidSmokeInstrumentedTest {
 				assertEquals(DocumentFormat.TXT, file.format);
 				assertTrue(file.crc32 != 0);
 			}
+			assertEquals(1, baseDir.dirCount());
+			FileInfo nestedInfo = baseDir.getDir(0);
+			assertTrue(nestedInfo.isScanned);
+			assertEquals(1, nestedInfo.dirCount());
+			FileInfo deeplyNestedInfo = nestedInfo.getDir(0);
+			assertTrue(deeplyNestedInfo.isScanned);
+			assertEquals(3, deeplyNestedInfo.fileCount());
+			for (int i = 0;
+					i < deeplyNestedInfo.fileCount(); i++)
+				assertTrue(
+						deeplyNestedInfo.getFile(i).crc32 != 0);
 
 			Scanner.ScanControl cancelled =
 					new Scanner.ScanControl();
@@ -188,11 +212,7 @@ public class AndroidSmokeInstrumentedTest {
 		} finally {
 			control.stop();
 			finishActivity(activity);
-			File[] children = directory.listFiles();
-			assertNotNull(children);
-			for (File child : children)
-				assertTrue(child.delete());
-			assertTrue(directory.delete());
+			deleteRecursively(directory);
 		}
 	}
 
@@ -349,6 +369,16 @@ public class AndroidSmokeInstrumentedTest {
 		String canonicalRoot = root.getCanonicalPath();
 		return canonicalPath.equals(canonicalRoot)
 				|| canonicalPath.startsWith(canonicalRoot + File.separator);
+	}
+
+	private static void deleteRecursively(File file) {
+		if (file.isDirectory()) {
+			File[] children = file.listFiles();
+			assertNotNull(children);
+			for (File child : children)
+				deleteRecursively(child);
+		}
+		assertTrue(file.delete() || !file.exists());
 	}
 
 	private static ReaderView readerView(CoolReader activity)

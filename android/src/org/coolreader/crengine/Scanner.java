@@ -28,6 +28,7 @@ import org.coolreader.plugins.OnlineStorePluginManager;
 import org.coolreader.plugins.OnlineStoreWrapper;
 
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -313,17 +314,7 @@ public class Scanner extends FileInfoChangeSource {
 		BackgroundThread.ensureGUI();
 		log.d("scanDirectoryFiles(" + baseDir.getPathName() + ") ");
 
-		// list all subdirectories
-		for (int i=0; i < baseDir.dirCount(); i++) {
-			if (control.isStopped())
-				break;
-			FileInfo dir = baseDir.getDir(i);
-			if (!dir.isListed)
-				listDirectory(dir);
-		}
-
 		if (baseDir.fileCount() == 0 || control.isStopped()) {
-			progress.hide();
 			readyCallback.run();
 			return;
 		}
@@ -489,8 +480,69 @@ public class Scanner extends FileInfoChangeSource {
 			if (finished)
 				return;
 			finished = true;
-			progress.hide();
 			readyCallback.run();
+		}
+	}
+
+	private final class DirectoryMetadataIterator {
+		private final CRDBService.LocalBinder db;
+		private final ScanControl control;
+		private final Engine.ProgressControl progress;
+		private final ScanCompleteListener readyListener;
+		private final boolean recursiveScan;
+		private final ArrayDeque<FileInfo> pending = new ArrayDeque<>();
+		private boolean finished;
+
+		DirectoryMetadataIterator(CRDBService.LocalBinder db,
+				FileInfo baseDir, ScanControl control,
+				Engine.ProgressControl progress,
+				ScanCompleteListener readyListener,
+				boolean recursiveScan) {
+			this.db = db;
+			this.control = control;
+			this.progress = progress;
+			this.readyListener = readyListener;
+			this.recursiveScan = recursiveScan;
+			pending.addLast(baseDir);
+		}
+
+		void scanNextDirectory() {
+			BackgroundThread.ensureGUI();
+			if (control.isStopped() || pending.isEmpty()) {
+				finish();
+				return;
+			}
+			FileInfo directory = pending.removeFirst();
+			scanDirectoryFiles(
+					db, directory, control, progress, () -> {
+						onDirectoryContentChanged(directory);
+						if (control.isStopped()) {
+							finish();
+							return;
+						}
+						directory.isScanned = true;
+						if (recursiveScan)
+							enqueueChildren(directory);
+						scanNextDirectory();
+					});
+		}
+
+		private void enqueueChildren(FileInfo directory) {
+			for (int i = directory.dirCount() - 1; i >= 0; i--) {
+				FileInfo child = directory.getDir(i);
+				File path = new File(child.getPathName());
+				if (!engine.getPathCorrector()
+						.isRecursivePath(path))
+					pending.addLast(child);
+			}
+		}
+
+		private void finish() {
+			if (finished)
+				return;
+			finished = true;
+			progress.hide();
+			readyListener.onComplete(control);
 		}
 	}
 	
@@ -507,62 +559,24 @@ public class Scanner extends FileInfoChangeSource {
 		BackgroundThread.ensureGUI();
 
 		log.d("scanDirectory(" + baseDir.getPathName() + ") " + (recursiveScan ? "recursive" : ""));
+		Engine.ProgressControl progress = engine.createProgress(
+				recursiveScan ? 0 : R.string.progress_scanning,
+				scanControl);
 
 		listSubtreeBg(
-				baseDir, mHideEmptyDirs ? Integer.MAX_VALUE : 2,
+				baseDir,
+				recursiveScan || mHideEmptyDirs
+						? Integer.MAX_VALUE : 2,
 				scanControl, initialUpdateCallback, () -> {
 			if ( (!getDirScanEnabled() || baseDir.isScanned) && !recursiveScan || scanControl.isStopped() ) {
+				progress.hide();
 				readyListener.onComplete(scanControl);
 				return;
 			}
-			Engine.ProgressControl progress = engine.createProgress(recursiveScan ? 0 : R.string.progress_scanning, scanControl);
-			scanDirectoryFiles(db, baseDir, scanControl, progress, () -> {
-				// GUI thread
-				onDirectoryContentChanged(baseDir);
-				try {
-					if (scanControl.isStopped()) {
-						// scan is stopped
-						readyListener.onComplete(scanControl);
-					} else {
-						baseDir.isScanned = true;
-
-						if ( recursiveScan ) {
-							if (scanControl.isStopped()) {
-								// scan is stopped
-								readyListener.onComplete(scanControl);
-								return;
-							}
-							// make list of subdirectories to scan
-							final ArrayList<FileInfo> dirsToScan = new ArrayList<>();
-							for ( int i=baseDir.dirCount()-1; i>=0; i-- ) {
-								File dir = new File(baseDir.getDir(i).getPathName());
-								if (!engine.getPathCorrector().isRecursivePath(dir))
-									dirsToScan.add(baseDir.getDir(i));
-							}
-							final ScanCompleteListener dirIterator = new ScanCompleteListener() {
-								@Override
-								public void onComplete(ScanControl scanControl) {
-									// process next directory from list
-									if (dirsToScan.size() == 0 || scanControl.isStopped()) {
-										readyListener.onComplete(scanControl);
-										return;
-									}
-									final FileInfo dir = dirsToScan.get(0);
-									dirsToScan.remove(0);
-									final ScanCompleteListener listener = this;
-									BackgroundThread.instance().postGUI(() -> scanDirectory(db, dir, null, listener, true, scanControl));
-								}
-							};
-							dirIterator.onComplete(scanControl);
-						} else {
-							readyListener.onComplete(scanControl);
-						}
-					}
-				} catch (Exception e) {
-					// treat as finished
-					readyListener.onComplete(scanControl);
-				}
-			});
+			new DirectoryMetadataIterator(
+					db, baseDir, scanControl, progress,
+					readyListener, recursiveScan)
+					.scanNextDirectory();
 		});
 	}
 	

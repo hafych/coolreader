@@ -76,6 +76,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Library discovery now runs off the UI thread with iterative post-order
   traversal, per-entry cancellation checks and coalesced initial/final UI
   updates instead of recursive calls and an unbounded stream of UI tasks.
+- Recursive library scans reuse the discovered tree and feed directories
+  through one bounded FIFO metadata pipeline instead of rediscovering every
+  descendant once per ancestor.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application
