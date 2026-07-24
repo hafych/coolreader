@@ -52,6 +52,10 @@ jobs:
     needs: validate
     runs-on: ubuntu-24.04
     environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        rebuild: [1, 2]
     env:
       RELEASE_TAG: ${{ needs.validate.outputs.tag }}
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
@@ -62,6 +66,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Set reproducible build epoch
+        run: git show -s --format='SOURCE_DATE_EPOCH=%ct' >> "${GITHUB_ENV}"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -132,7 +139,7 @@ jobs:
       - name: Upload Android release artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: release-android
+          name: candidate-android-${{ matrix.rebuild }}
           path: release-artifacts/
           if-no-files-found: error
 
@@ -140,6 +147,10 @@ jobs:
     name: Linux desktop archive
     needs: validate
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        rebuild: [1, 2]
     env:
       RELEASE_TAG: ${{ needs.validate.outputs.tag }}
     steps:
@@ -183,7 +194,7 @@ jobs:
       - name: Upload Linux release artifact
         uses: actions/upload-artifact@v7
         with:
-          name: release-linux
+          name: candidate-linux-${{ matrix.rebuild }}
           path: release-artifacts/
           if-no-files-found: error
 
@@ -191,6 +202,10 @@ jobs:
     name: macOS arm64 desktop archive
     needs: validate
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        rebuild: [1, 2]
     env:
       RELEASE_TAG: ${{ needs.validate.outputs.tag }}
     steps:
@@ -235,7 +250,58 @@ jobs:
       - name: Upload macOS release artifact
         uses: actions/upload-artifact@v7
         with:
-          name: release-macos
+          name: candidate-macos-${{ matrix.rebuild }}
+          path: release-artifacts/
+          if-no-files-found: error
+
+  reproducibility:
+    name: Compare clean release rebuilds
+    needs:
+      - validate
+      - android
+      - linux
+      - macos
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Download candidate builds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: candidate-*
+          path: candidate-artifacts
+
+      - name: Require byte-identical rebuilds
+        run: |
+          python3 tools/compare_release_builds.py \
+            --left candidate-artifacts/candidate-android-1 \
+            --right candidate-artifacts/candidate-android-2 \
+            --label Android
+          python3 tools/compare_release_builds.py \
+            --left candidate-artifacts/candidate-linux-1 \
+            --right candidate-artifacts/candidate-linux-2 \
+            --label Linux
+          python3 tools/compare_release_builds.py \
+            --left candidate-artifacts/candidate-macos-1 \
+            --right candidate-artifacts/candidate-macos-2 \
+            --label macOS
+
+      - name: Assemble and verify canonical artifact set
+        run: |
+          mkdir release-artifacts
+          cp candidate-artifacts/candidate-android-1/* release-artifacts/
+          cp candidate-artifacts/candidate-linux-1/* release-artifacts/
+          cp candidate-artifacts/candidate-macos-1/* release-artifacts/
+          python3 tools/write_release_checksums.py \
+            --directory release-artifacts
+          python3 tools/verify_release_artifacts.py \
+            --directory release-artifacts
+
+      - name: Upload reproducible release set
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-verified
           path: release-artifacts/
           if-no-files-found: error
 
@@ -244,9 +310,7 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs:
       - validate
-      - android
-      - linux
-      - macos
+      - reproducibility
     runs-on: ubuntu-24.04
     environment: release
     permissions:
@@ -261,14 +325,11 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: release-*
+          name: release-verified
           path: release-artifacts
-          merge-multiple: true
 
-      - name: Generate checksums and release notes
+      - name: Re-verify set and generate release notes
         run: |
-          python3 tools/write_release_checksums.py \
-            --directory release-artifacts
           python3 tools/verify_release_artifacts.py \
             --directory release-artifacts
           python3 tools/extract_release_notes.py \

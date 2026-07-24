@@ -27,6 +27,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - A tag-verified release workflow producing signed Android artifacts, native
   symbols, SPDX, deterministic desktop archives, checksums and a draft GitHub
   Release, plus rollback/hotfix gates.
+- A two-clean-runner release reproducibility gate with normalized archive,
+  native-symbol and SPDX timestamps.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

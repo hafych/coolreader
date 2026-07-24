@@ -272,6 +272,8 @@ tasks.register('packageNativeDebugSymbols', Zip) {
     destinationDirectory = file("$buildDir/outputs/native-debug-symbols/release")
     duplicatesStrategy = DuplicatesStrategy.FAIL
     includeEmptyDirs = false
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
     from(fileTree("$buildDir/intermediates/cxx/RelWithDebInfo") {
         include '**/obj/*/*.so'
     }) {

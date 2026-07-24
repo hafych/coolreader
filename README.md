@@ -72,6 +72,8 @@ The shared Android/desktop version scheme is documented in
 [docs/VERSIONING.md](docs/VERSIONING.md).
 The tag-to-draft workflow, artifact set, rollback and hotfix gates are in
 [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
+The two-clean-runner reproducibility contract and its explicit boundary are in
+[docs/REPRODUCIBLE_BUILDS.md](docs/REPRODUCIBLE_BUILDS.md).
 
 ### Support matrix
 

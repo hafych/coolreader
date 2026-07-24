@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -258,7 +259,18 @@ def main() -> None:
         }
         for item in packages
     )
-    created = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    source_date_epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    if source_date_epoch is None:
+        created = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    else:
+        try:
+            created = dt.datetime.fromtimestamp(
+                int(source_date_epoch), tz=dt.timezone.utc
+            )
+        except (OverflowError, ValueError) as error:
+            raise RuntimeError(
+                "SOURCE_DATE_EPOCH must be a valid Unix timestamp"
+            ) from error
     namespace_digest = hashlib.sha256(
         "\n".join(
             f"{item['name']}@{item['versionInfo']}" for item in packages

@@ -15,6 +15,8 @@ distributing desktop archives remains an explicit owner action.
       the exact release candidate.
 - [ ] Full CI, instrumentation, license/SBOM and strict performance evidence are
       green.
+- [ ] Both clean-runner rebuilds pass `REPRODUCIBLE_BUILDS.md`; investigate any
+      mismatch rather than adding an artifact-specific exception.
 - [ ] Clean install, previous-version upgrade, SAF root, database migration,
       OPDS, consumption-only LitRes and TTS checks pass.
 - [ ] Linux and macOS archives start on their declared clean reference systems.
