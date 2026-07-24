@@ -2,9 +2,11 @@
 #include "lvtinydom.h"
 #include "lvstreamutils.h"
 
+#include <atomic>
 #include <cstdio>
 #include <memory>
-#include <string>
+#include <thread>
+#include <vector>
 
 #define XS_IMPLEMENT_SCHEME 1
 #include "fb2def.h"
@@ -116,6 +118,44 @@ static int snapshotDocument(
     return 0;
 }
 
+static int testConcurrentDocumentRegistry() {
+    static const int workerCount = 8;
+    static const int iterations = 200;
+    std::atomic<int> ready(0);
+    std::atomic<bool> start(false);
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([&ready, &start, &failed]() {
+            ready.fetch_add(1, std::memory_order_release);
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            for (int iteration = 0;
+                    iteration < iterations; iteration++) {
+                std::unique_ptr<ldomDocument> document(
+                        new ldomDocument());
+                ldomNode *root = document->getRootNode();
+                if (root == NULL
+                        || root->getDocument() != document.get()) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    while (ready.load(std::memory_order_acquire) < workerCount)
+        std::this_thread::yield();
+    start.store(true, std::memory_order_release);
+    for (std::thread &worker : workers)
+        worker.join();
+    if (failed.load(std::memory_order_acquire))
+        return fail("concurrent documents shared a registry slot");
+    return 0;
+}
+
 int main() {
     std::unique_ptr<ldomDocument> first = parseFixture();
     DocumentSnapshot firstSnapshot;
@@ -134,5 +174,7 @@ int main() {
                     != secondSnapshot.selectionText) {
         return fail("document results changed between equivalent parses");
     }
-    return 0;
+    first.reset();
+    second.reset();
+    return testConcurrentDocumentRegistry();
 }

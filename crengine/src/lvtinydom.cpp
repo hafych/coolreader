@@ -307,21 +307,35 @@ void enableCacheFileContentsValidation(bool enable) {
 	_enableCacheFileContentsValidation = enable;
 }
 
-static int _nextDocumentIndex = 0;
-ldomDocument * ldomNode::_documentInstances[MAX_DOCUMENT_INSTANCE_COUNT] = {NULL,};
+static std::atomic<unsigned int> _nextDocumentIndex(0);
+std::atomic<ldomDocument *>
+        ldomNode::_documentInstances[MAX_DOCUMENT_INSTANCE_COUNT] = {
+            nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr
+        };
 
 /// adds document to list, returns ID of allocated document, -1 if no space in instance array
 int ldomNode::registerDocument( ldomDocument * doc )
 {
-    for ( int i=0; i<MAX_DOCUMENT_INSTANCE_COUNT; i++ ) {
-        if ( _nextDocumentIndex<0 || _nextDocumentIndex>=MAX_DOCUMENT_INSTANCE_COUNT )
-            _nextDocumentIndex = 0;
-        if ( _documentInstances[_nextDocumentIndex]==NULL) {
-            _documentInstances[_nextDocumentIndex] = doc;
-            CRLog::info("ldomNode::registerDocument() - new index = %d", _nextDocumentIndex);
-            return _nextDocumentIndex++;
+    const unsigned int start = _nextDocumentIndex.fetch_add(
+            1, std::memory_order_relaxed)
+            % MAX_DOCUMENT_INSTANCE_COUNT;
+    for ( unsigned int offset = 0;
+            offset < MAX_DOCUMENT_INSTANCE_COUNT; offset++ ) {
+        const unsigned int index =
+                (start + offset) % MAX_DOCUMENT_INSTANCE_COUNT;
+        ldomDocument * expected = nullptr;
+        if ( _documentInstances[index].compare_exchange_strong(
+                    expected, doc,
+                    std::memory_order_release,
+                    std::memory_order_relaxed) ) {
+            CRLog::info(
+                    "ldomNode::registerDocument() - new index = %d",
+                    static_cast<int>(index));
+            return static_cast<int>(index);
         }
-        _nextDocumentIndex++;
     }
     return -1;
 }
@@ -330,9 +344,13 @@ int ldomNode::registerDocument( ldomDocument * doc )
 void ldomNode::unregisterDocument( ldomDocument * doc )
 {
     for ( int i=0; i<MAX_DOCUMENT_INSTANCE_COUNT; i++ ) {
-        if ( _documentInstances[i]==doc ) {
+        ldomDocument * expected = doc;
+        if ( _documentInstances[i].compare_exchange_strong(
+                    expected, nullptr,
+                    std::memory_order_release,
+                    std::memory_order_relaxed) ) {
             CRLog::info("ldomNode::unregisterDocument() - for index %d", i);
-            _documentInstances[i] = NULL;
+            return;
         }
     }
 }

@@ -44,6 +44,8 @@
 #ifndef __LV_TINYDOM_H_INCLUDED__
 #define __LV_TINYDOM_H_INCLUDED__
 
+#include <atomic>
+
 #include "lvmemman.h"
 #include "lvstring.h"
 #include "lstridmap.h"
@@ -782,7 +784,9 @@ struct ldomNode
 
 private:
 
-    static ldomDocument * _documentInstances[MAX_DOCUMENT_INSTANCE_COUNT];
+    // Atomically published registry slots do not extend document lifetime.
+    static std::atomic<ldomDocument *>
+            _documentInstances[MAX_DOCUMENT_INSTANCE_COUNT];
 
     /// adds document to list, returns ID of allocated document, -1 if no space in instance array
     static int registerDocument( ldomDocument * doc );
@@ -886,7 +890,10 @@ public:
     /// returns data index of node's registration in document data storage
     inline lInt32 getDataIndex() const { return TNINDEX; }
     /// returns pointer to document
-    inline ldomDocument * getDocument() const { return _documentInstances[_handle._docIndex]; }
+    inline ldomDocument * getDocument() const {
+        return _documentInstances[_handle._docIndex].load(
+                std::memory_order_acquire);
+    }
     /// returns pointer to parent node, NULL if node has no parent
     ldomNode * getParentNode() const;
     /// returns node type, either LXML_TEXT_NODE or LXML_ELEMENT_NODE

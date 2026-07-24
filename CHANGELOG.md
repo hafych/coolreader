@@ -132,6 +132,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   per thread, and libunibreak initialization is synchronized exactly once.
 - Deterministic native document regressions cover forward/reverse search,
   selection boundaries and serialized reading-position restoration.
+- The fixed-size native DOM registry now publishes document slots atomically
+  and is stress-tested with concurrent construction and destruction.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

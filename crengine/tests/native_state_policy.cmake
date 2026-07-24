@@ -6,6 +6,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvrend.cpp" RENDER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -51,6 +53,16 @@ require_source_text(
   "static thread_local lUInt8 glyph_buf[16384]"
   "bitmap glyph scratch must be isolated per thread"
 )
+require_source_text(
+  "${DOM_HEADER}"
+  "static std::atomic<ldomDocument *>"
+  "document registry slots must be atomic"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "compare_exchange_strong"
+  "document registry updates must be atomic"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -61,4 +73,9 @@ forbid_source_text(
   "${SKIN_SOURCE}"
   "static int counter"
   "skin recursion depth must not be process-wide"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "static int _nextDocumentIndex"
+  "document registry index must not have unsynchronized writes"
 )

@@ -25,6 +25,11 @@ measurement and bitmap glyph scratch buffers are also thread-local, while
 libunibreak table initialization uses `std::call_once`. Native concurrency and
 source-policy tests protect these boundaries.
 
+The fixed-size DOM document registry now uses atomic slots and atomic
+round-robin allocation. Concurrent construction and destruction are covered by
+the document regression test; callers must still ensure no node outlives its
+owning document.
+
 Known follow-up groups include render configuration globals, hyphenation
-registries, document instance tracking and font/cache singletons. Each group
-must be migrated separately with an impact check and focused regression tests.
+registries and font/cache singletons. Each group must be migrated separately
+with an impact check and focused regression tests.
