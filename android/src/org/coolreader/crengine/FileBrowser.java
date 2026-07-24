@@ -71,7 +71,9 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	CoolReader mActivity;
 	LayoutInflater mInflater;
 	History mHistory;
+	ServiceLifecycle mServiceLifecycle;
 	FileSystemFolders mFileSystemFolders;
+	private OPDSUtil.DownloadTask mDownloadTask;
 	ListView mListView;
 	boolean mHideEmptyGenres;
 
@@ -212,6 +214,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			Scanner scanner,
 			History history,
 			CoverpageManager coverpageManager,
+			ServiceLifecycle serviceLifecycle,
 			FileSystemFolders fileSystemFolders,
 			boolean hideEmptyGenres) {
 		super(activity);
@@ -222,6 +225,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		this.mInflater = LayoutInflater.from(activity);// activity.getLayoutInflater();
 		this.mHistory = history;
 		this.mCoverpageManager = coverpageManager;
+		this.mServiceLifecycle = serviceLifecycle;
 		this.mFileSystemFolders = fileSystemFolders;
 		this.mHideEmptyGenres = hideEmptyGenres;
 
@@ -257,6 +261,10 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 
 	public void onClose() {
 		mScanControl.stop();
+		if (mDownloadTask != null) {
+			mDownloadTask.cancel();
+			mDownloadTask = null;
+		}
 		this.mCoverpageManager.removeCoverpageReadyListener(coverpageListener);
 		coverpageListener = null;
 		super.onDetachedFromWindow();
@@ -769,9 +777,11 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 				String defFileName = Utils.transcribeFileName( fileOrDir.title!=null ? fileOrDir.title : fileOrDir.filename );
 				if ( fileOrDir.format!=null )
 					defFileName = defFileName + fileOrDir.format.getExtensions()[0];
-				final OPDSUtil.DownloadTask downloadTask = OPDSUtil.create(mActivity, uri, defFileName, fileOrDir.isDirectory?"application/atom+xml":fileMimeType, 
+				if (mDownloadTask != null)
+					mDownloadTask.cancel();
+				mDownloadTask = OPDSUtil.create(mActivity, mEngine, mServiceLifecycle, uri, defFileName, fileOrDir.isDirectory?"application/atom+xml":fileMimeType,
 						myCurrDirectory.getOPDSUrl(), callback, fileOrDir.username, fileOrDir.password);
-				downloadTask.run();
+				mDownloadTask.run();
 			} catch (MalformedURLException e) {
 				log.e("MalformedURLException: " + OPDSUtil.safeUrlForLog(url));
 				mActivity.showToast("Wrong URI: " + url);

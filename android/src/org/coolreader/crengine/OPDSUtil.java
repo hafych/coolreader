@@ -477,6 +477,8 @@ xml:base="http://lib.ololo.cc/opds/">
 	
 	public static class DownloadTask {
 		final private CoolReader coolReader; 
+		final private Engine engine;
+		final private ServiceLifecycle serviceLifecycle;
 		private URL url;
 		private String username;
 		private String password;
@@ -488,9 +490,11 @@ xml:base="http://lib.ololo.cc/opds/">
 		private HttpURLConnection connection;
 		private DelayedProgress delayedProgress;
 		OPDSHandler handler;
-		public DownloadTask(CoolReader coolReader, URL url, String defaultFileName, String expectedType, String referer, DownloadCallback callback, String username, String password) {
+		public DownloadTask(CoolReader coolReader, Engine engine, ServiceLifecycle serviceLifecycle, URL url, String defaultFileName, String expectedType, String referer, DownloadCallback callback, String username, String password) {
 			this.url = url;
 			this.coolReader = coolReader;
+			this.engine = engine;
+			this.serviceLifecycle = serviceLifecycle;
 			this.callback = callback; 
 			this.referer = referer;
 			this.expectedType = expectedType;
@@ -506,8 +510,8 @@ xml:base="http://lib.ololo.cc/opds/">
 		}
 		// call in GUI thread only!
 		private void hideProgress() {
-			if ( progressShown && Services.getEngine() != null)
-				Services.getEngine().hideProgress();
+			if (progressShown && serviceLifecycle.isActive())
+				engine.hideProgress();
 			if ( delayedProgress != null ) {
 				delayedProgress.cancel();
 				delayedProgress.hide();
@@ -515,6 +519,8 @@ xml:base="http://lib.ololo.cc/opds/">
 		}
 		private void onError(final String msg) {
 			BackgroundThread.instance().executeGUI(() -> {
+				if (!serviceLifecycle.isActive())
+					return;
 				hideProgress();
 				callback.onError(msg);
 			});
@@ -679,7 +685,7 @@ xml:base="http://lib.ololo.cc/opds/">
 				long nextSpaceCheck = 0;
 				int bytesRead;
 				while ((bytesRead = is.read(buf)) != -1) {
-					if (cancelled)
+					if (cancelled || !serviceLifecycle.isActive())
 						throw new InterruptedIOException("OPDS download cancelled");
 					if (totalWritten + bytesRead > MAX_BOOK_DOWNLOAD_BYTES)
 						throw new ParseBudget.LimitExceededException(
@@ -716,7 +722,10 @@ xml:base="http://lib.ololo.cc/opds/">
 				}
 			}
 			L.d("Download finished");
-			BackgroundThread.instance().executeGUI(() -> callback.onDownloadEnd(type, url, outFile));
+			BackgroundThread.instance().executeGUI(() -> {
+				if (serviceLifecycle.isActive())
+					callback.onDownloadEnd(type, url, outFile);
+			});
 		}
 		public static int findSubstring( byte[]buf, String str ) {
 			for ( int i=0; i<buf.length-str.length(); i++ ) {
@@ -738,6 +747,8 @@ xml:base="http://lib.ololo.cc/opds/">
 		}
 
 		public void runInternal() {
+			if (!serviceLifecycle.isActive())
+				return;
 			connection = null;
 			final URL credentialOrigin = url;
 			final boolean hasCredentials = username != null && username.length() > 0
@@ -761,7 +772,7 @@ xml:base="http://lib.ololo.cc/opds/">
 					if (!partialDownloadCompleted) {
 						if (delayedProgress != null)
 							delayedProgress.cancel();
-						delayedProgress = Services.getEngine().showProgressDelayed(0, progressMessage, PROGRESS_DELAY_MILLIS);
+						delayedProgress = engine.showProgressDelayed(0, progressMessage, PROGRESS_DELAY_MILLIS);
 					}
 					URL newURL = url;
 					boolean useOrobotProxy = false;
@@ -842,7 +853,7 @@ xml:base="http://lib.ololo.cc/opds/">
 						return;
 					}
 					
-					if (cancelled)
+					if (cancelled || !serviceLifecycle.isActive())
 						break;
 					
 					String contentType = connection.getContentType();
@@ -922,8 +933,8 @@ xml:base="http://lib.ololo.cc/opds/">
 					}
 				} catch (Exception e) {
 					L.e("Exception while trying to open URI " + safeUrlForLog(url), e);
-					if ( progressShown )
-						Services.getEngine().hideProgress();
+					if (progressShown && serviceLifecycle.isActive())
+						engine.hideProgress();
 					onError("Error occured while reading OPDS catalog");
 					break;
 				} finally {
@@ -944,23 +955,27 @@ xml:base="http://lib.ololo.cc/opds/">
 			
 				partialDownloadCompleted = true; // don't show progress
 				
-				if (loadNext && !cancelled) {
+				if (loadNext && !cancelled && serviceLifecycle.isActive()) {
 					// partially loaded
-					if ( progressShown )
-						Services.getEngine().hideProgress();
+					if (progressShown && serviceLifecycle.isActive())
+						engine.hideProgress();
 					final ArrayList<EntryInfo> entries = new ArrayList<>(handler.entries);
 					BackgroundThread.instance().executeGUI(() -> {
+						if (!serviceLifecycle.isActive())
+							return;
 						L.d("Parsing is partially. " + handler.entries.size() + " entries found -- updating view");
 						if (!callback.onEntries(handler.docInfo, entries))
 							cancel();
 					});
 				}
-			} while (loadNext && !cancelled);
+			} while (loadNext && !cancelled && serviceLifecycle.isActive());
 			if (delayedProgress != null)
 				delayedProgress.cancel();
 			hideProgress();
-			if (itemsLoadedPartially && !cancelled) {
+			if (itemsLoadedPartially && !cancelled && serviceLifecycle.isActive()) {
 				BackgroundThread.instance().executeGUI(() -> {
+					if (!serviceLifecycle.isActive())
+						return;
 					L.d("Parsing is finished successfully. " + handler.entries.size() + " entries found");
 					hideProgress();
 					if (!callback.onFinish(handler.docInfo, handler.entries))
@@ -971,6 +986,8 @@ xml:base="http://lib.ololo.cc/opds/">
 
 		public void run() {
 			BackgroundThread.instance().postBackground(() -> {
+				if (!serviceLifecycle.isActive())
+					return;
 				try {
 					runInternal();
 				} catch ( Exception e ) {
@@ -1016,7 +1033,7 @@ xml:base="http://lib.ololo.cc/opds/">
 			}
 
 			private void ensureActive() throws IOException {
-				if (cancelled)
+				if (cancelled || !serviceLifecycle.isActive())
 					throw new InterruptedIOException("OPDS transfer cancelled");
 			}
 
@@ -1031,7 +1048,7 @@ xml:base="http://lib.ololo.cc/opds/">
 						percent = (int)(bytesRead * 10000L / totalSize);
 					}
 					if ( !partialDownloadCompleted && (!progressShown || percent!=lastPercent) && (progressShown || percent<maxPercentToStartShowingProgress || delay > TIMEOUT*2 ) ) {
-						Services.getEngine().showProgress(percent, progressMessage);
+						engine.showProgress(percent, progressMessage);
 						lastPercent = percent;
 						progressShown = true;
 					}
@@ -1066,13 +1083,8 @@ xml:base="http://lib.ololo.cc/opds/">
 		}
 		
 	}
-	private static DownloadTask currentTask;
-	public static DownloadTask create(CoolReader coolReader, URL uri, String defaultFileName, String expectedType, String referer, DownloadCallback callback, String username, String password) {
-		if (currentTask != null)
-			currentTask.cancel();
-		final DownloadTask task = new DownloadTask(coolReader, uri, defaultFileName, expectedType, referer, callback, username, password);
-		currentTask = task;
-		return task;
+	public static DownloadTask create(CoolReader coolReader, Engine engine, ServiceLifecycle serviceLifecycle, URL uri, String defaultFileName, String expectedType, String referer, DownloadCallback callback, String username, String password) {
+		return new DownloadTask(coolReader, engine, serviceLifecycle, uri, defaultFileName, expectedType, referer, callback, username, password);
 	}
 
 	static class SubstTable {

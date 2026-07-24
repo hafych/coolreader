@@ -31,6 +31,7 @@ BOOK_INFO_DIALOGS = (
     SOURCE / "crengine" / "TTSToolbarDlg.java",
 )
 SYNCHRONIZER = SOURCE / "sync2" / "Synchronizer.java"
+OPDS_UTIL = SOURCE / "crengine" / "OPDSUtil.java"
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -243,6 +244,23 @@ def main() -> None:
         if marker not in synchronizer_text:
             violations.append(
                 f"{relative(SYNCHRONIZER)} omits marker: {marker}")
+
+    opds_text = OPDS_UTIL.read_text(encoding="utf-8")
+    if re.search(r"\bServices\.", opds_text):
+        violations.append(
+            f"{relative(OPDS_UTIL)} still uses the static service locator")
+    if re.search(
+            r"\bstatic\s+DownloadTask\s+\w+\s*(?:=|;)",
+            opds_text):
+        violations.append(
+            f"{relative(OPDS_UTIL)} statically retains an Activity-owned task")
+    for marker in (
+        "final private Engine engine",
+        "final private ServiceLifecycle serviceLifecycle",
+        "cancelled || !serviceLifecycle.isActive()",
+    ):
+        if marker not in opds_text:
+            violations.append(f"{relative(OPDS_UTIL)} omits marker: {marker}")
 
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")

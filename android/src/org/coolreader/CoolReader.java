@@ -1415,6 +1415,7 @@ public class CoolReader extends BaseActivity {
 						mScanner,
 						mHistory,
 						mCoverpageManager,
+						mServiceLifecycle,
 						mFileSystemFolders,
 						settings().getBool(
 								PROP_APP_FILE_BROWSER_HIDE_EMPTY_GENRES,
