@@ -75,9 +75,10 @@ DRM или ограничений доступа, подбор/получени�
 
 ### Матрица сборок и CI
 
-- [-] Clang job уже блокирует high-confidence diagnostics без frozen baseline;
-  постепенно исправлять оставшиеся предупреждения и расширять набор
-  `-Werror` для изменяемого first-party кода.
+- [-] Clang job блокирует high-confidence diagnostics без frozen baseline,
+  включая enum switch и C++ linkage; постепенно исправлять оставшиеся
+  first-party предупреждения и расширять `-Werror` только после зелёной
+  native/Android проверки класса.
 - [-] Проверить первый полный CI-прогон после закрепления Linux/Android jobs на
   Ubuntu 24.04 и macOS job на macOS 15; после зелёного прогона убрать этот пункт.
 

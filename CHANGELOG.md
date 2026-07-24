@@ -33,6 +33,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   and consistent `FORK_DELTA.md` declarations.
 - Two verified, brand-independent upstream patch candidates for C++17 CMake
   selection and reliable checksum-pinned third-party downloads.
+- Explicit glyph-format handling and named packed ZIP headers, with the
+  corresponding Clang diagnostics promoted to first-party build errors.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

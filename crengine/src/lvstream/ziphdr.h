@@ -27,7 +27,7 @@
 
 #pragma pack(push, 1)
 
-typedef struct {
+struct ZipLocalFileHdr {
     lUInt32  Mark;      // 0
     lUInt8   UnpVer;    // 4
     lUInt8   UnpOS;     // 5
@@ -71,7 +71,10 @@ typedef struct {
     //  Omitted fields (which follow this structure):
     // FileName (size = NameLen)
     // ExtraField (size = AddLen)
-} ZipLocalFileHdr;
+};
+
+static_assert(sizeof(ZipLocalFileHdr) == 0x1E,
+              "ZIP local header layout drift");
 
 struct ZipHd2
 {

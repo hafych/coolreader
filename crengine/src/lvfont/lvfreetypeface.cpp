@@ -301,6 +301,12 @@ static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lChar32
             if ( gammaIndex!=GAMMA_NO_CORRECTION_INDEX )
                 cr_correct_gamma_buf(item->bmp, bmp_sz, gammaIndex);
             break;
+        case BMP_PIXEL_FORMAT_MONO:
+        case BMP_PIXEL_FORMAT_GRAY2:
+        case BMP_PIXEL_FORMAT_GRAY4:
+        case BMP_PIXEL_FORMAT_BGRA:
+            // Packed monochrome/gray and color glyphs are not gamma-adjusted.
+            break;
         }
     }
     item->origin_x = (lInt16) slot->bitmap_left;
@@ -342,6 +348,12 @@ static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lUInt32
             // correct gamma
             if ( gammaIndex!=GAMMA_NO_CORRECTION_INDEX )
                 cr_correct_gamma_buf(item->bmp, bmp_sz, gammaIndex);
+            break;
+        case BMP_PIXEL_FORMAT_MONO:
+        case BMP_PIXEL_FORMAT_GRAY2:
+        case BMP_PIXEL_FORMAT_GRAY4:
+        case BMP_PIXEL_FORMAT_BGRA:
+            // Packed monochrome/gray and color glyphs are not gamma-adjusted.
             break;
         }
     }

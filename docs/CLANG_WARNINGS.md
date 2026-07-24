@@ -7,7 +7,9 @@ CoolReader-owned targets:
 - C and C++: missing return values;
 - C: implicit function declarations and incompatible pointer types;
 - C++: uninitialized values and deleting through a base without a virtual
-  destructor.
+  destructor;
+- C++: incomplete enum switches and anonymous non-C-compatible types used for
+  linkage.
 
 Enable the same gate locally with:
 
