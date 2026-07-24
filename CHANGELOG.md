@@ -50,6 +50,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   lifecycle token explicitly instead of consulting the static service locator.
 - CoolReader captures one explicit service generation during creation and no
   longer performs ad-hoc global dependency lookups during user flows.
+- BaseActivity and CoolReader now receive that generation as one immutable
+  dependency snapshot instead of reading individual global service slots.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

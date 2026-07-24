@@ -92,6 +92,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	private View mDecorView;
 
 	private CRDBServiceAccessor mCRDBService;
+	private ServiceDependencies mServiceDependencies;
 	protected Dictionaries mDictionaries;
 	private final ActivityResultLauncher<Intent> mDictionaryLauncher =
 			registerForActivityResult(
@@ -118,7 +119,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	protected void bindCRDBService() {
 		if (mCRDBService == null) {
 			mCRDBService = new CRDBServiceAccessor(
-					this, Services.getEngine().getPathCorrector());
+					this, getServiceDependencies().getEngine().getPathCorrector());
 		}
 		mCRDBService.bind(null);
 	}
@@ -131,7 +132,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	public synchronized void waitForCRDBService(Runnable readyCallback) {
 		if (mCRDBService == null) {
 			mCRDBService = new CRDBServiceAccessor(
-					this, Services.getEngine().getPathCorrector());
+					this, getServiceDependencies().getEngine().getPathCorrector());
 		}
 		mCRDBService.bind(readyCallback);
 	}
@@ -142,6 +143,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 	public CRDBService.LocalBinder getDB() {
 		return mCRDBService != null ? mCRDBService.get() : null;
+	}
+
+	protected final ServiceDependencies getServiceDependencies() {
+		if (mServiceDependencies == null)
+			throw new IllegalStateException("Services have not been started");
+		return mServiceDependencies;
 	}
 
 	public Properties settings() {
@@ -201,7 +208,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		// create settings
 		mSettingsManager = new SettingsManager(this);
 		// create rest of settings
-		Services.startServices(this);
+		mServiceDependencies = Services.startServices(this);
 	}
 
 	@SuppressLint("NewApi")
@@ -842,7 +849,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			setSystemUiVisibility();
 		}
 		// thread safe
-		return Services.getEngine().setKeyBacklight(value);
+		return getServiceDependencies().getEngine().setKeyBacklight(value);
 	}
 
 
@@ -910,7 +917,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			setKeyBacklight(0);
 		}
 		// repeat again in short interval
-		if (!Services.getEngine().setKeyBacklight(0)) {
+		if (!getServiceDependencies().getEngine().setKeyBacklight(0)) {
 			//log.w("Cannot control key backlight directly");
 			return;
 		}
@@ -918,7 +925,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		Runnable task = () -> {
 			if (!isStarted())
 				return;
-			if (!Services.getEngine().setKeyBacklight(0)) {
+			if (!getServiceDependencies().getEngine().setKeyBacklight(0)) {
 				//log.w("Cannot control key backlight directly (delayed)");
 			}
 		};
@@ -931,7 +938,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			return;
 		setKeyBacklight(1);
 		// repeat again in short interval
-		if (!Services.getEngine().setKeyBacklight(1)) {
+		if (!getServiceDependencies().getEngine().setKeyBacklight(1)) {
 			//log.w("Cannot control key backlight directly");
 			return;
 		}
@@ -939,7 +946,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		Runnable task = () -> {
 			if (!isStarted())
 				return;
-			if (!Services.getEngine().setKeyBacklight(1)) {
+			if (!getServiceDependencies().getEngine().setKeyBacklight(1)) {
 				//log.w("Cannot control key backlight directly (delayed)");
 			}
 		};
@@ -1351,7 +1358,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 					.postBackground(() -> BackgroundThread.instance()
 							.postGUI(() -> setScreenBacklightLevel(n))), 100);
 		} else if (key.equals(PROP_APP_FILE_BROWSER_HIDE_EMPTY_FOLDERS)) {
-			Services.getScanner().setHideEmptyDirs(flg);
+			getServiceDependencies().getScanner().setHideEmptyDirs(flg);
 		}
 		// Don't apply screen brightness on e-ink devices on program startup and at any other events
 		// On e-ink in ReaderView gesture handlers setScreenBacklightLevel() & setScreenWarmBacklightLevel() called directly

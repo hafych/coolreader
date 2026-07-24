@@ -15,6 +15,7 @@ BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
 NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
 ENGINE = SOURCE / "crengine" / "Engine.java"
 SERVICES = SOURCE / "crengine" / "Services.java"
+SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -126,6 +127,16 @@ def main() -> None:
             violations.append(
                 f"{relative(SERVICES)} omits lifecycle marker: {marker}")
 
+    dependencies_text = SERVICE_DEPENDENCIES.read_text(encoding="utf-8")
+    for marker in (
+        "public final class ServiceDependencies",
+        "private final ServiceLifecycle lifecycle",
+        "public ServiceLifecycle getLifecycle()",
+    ):
+        if marker not in dependencies_text:
+            violations.append(
+                f"{relative(SERVICE_DEPENDENCIES)} omits marker: {marker}")
+
     for path in sorted(SOURCE.rglob("*.java")):
         text = path.read_text(encoding="utf-8")
         find_pattern(
@@ -167,26 +178,29 @@ def main() -> None:
                 violations.append(
                     f"{relative(path)} omits lifecycle marker: {marker}")
 
+    if re.search(r"\bServices\.get", base_text):
+        violations.append(
+            f"{relative(BASE_ACTIVITY)} still reads the static service locator")
+    for marker in (
+        "mServiceDependencies = Services.startServices(this)",
+        "protected final ServiceDependencies getServiceDependencies()",
+    ):
+        if marker not in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} omits lifecycle marker: {marker}")
+
     cool_reader_text = COOL_READER.read_text(encoding="utf-8")
     for marker in REQUIRED_COOL_READER_MARKERS:
         if marker not in cool_reader_text:
             violations.append(
                 f"{relative(COOL_READER)} omits marker: {marker}")
-    allowed_composition_reads = {
-        "mEngine = Services.getEngine();",
-        "mScanner = Services.getScanner();",
-        "mHistory = Services.getHistory();",
-        "mCoverpageManager = Services.getCoverpageManager();",
-        "mDocumentCache = Services.getDocumentCache();",
-        "mFileSystemFolders = Services.getFileSystemFolders();",
-        "mServiceLifecycle = Services.getLifecycle();",
-    }
-    for line_number, line in enumerate(
-            cool_reader_text.splitlines(), start=1):
-        if "Services.get" in line and line.strip() not in allowed_composition_reads:
-            violations.append(
-                f"{relative(COOL_READER)}:{line_number}: reads the static "
-                "service locator outside the composition root")
+    if re.search(r"\bServices\.get", cool_reader_text):
+        violations.append(
+            f"{relative(COOL_READER)} still reads the static service locator")
+    if "ServiceDependencies dependencies = getServiceDependencies()" not in (
+            cool_reader_text):
+        violations.append(
+            f"{relative(COOL_READER)} does not capture its service generation")
 
     command = "python3 tools/verify_android_activity_results.py"
     for workflow in (

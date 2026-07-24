@@ -92,7 +92,7 @@ public class Services {
 		return null == mEngine || null == mScanner || null == mHistory || null == mCoverpageManager || null == mFSFolders || null == mGenresCollection || null == mDocumentCache;
 	}
 
-	public static void startServices(BaseActivity activity) {
+	public static ServiceDependencies startServices(BaseActivity activity) {
 		log.i("First activity is created");
 		mGeneration++;
 		mLifecycle = new ServiceLifecycle(mGeneration);
@@ -108,6 +108,15 @@ public class Services {
 		mFSFolders = new FileSystemFolders(mScanner);
 		mGenresCollection = GenresCollection.getInstance(activity);
 		mDocumentCache = new DocumentFileCache(activity);
+		return new ServiceDependencies(
+				mEngine,
+				mScanner,
+				mHistory,
+				mCoverpageManager,
+				mFSFolders,
+				mGenresCollection,
+				mDocumentCache,
+				mLifecycle);
 	}
 
 	public static void stopServices(BaseActivity activity) {

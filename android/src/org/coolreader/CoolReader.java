@@ -96,6 +96,7 @@ import org.coolreader.crengine.ReaderCommand;
 import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.ReaderViewLayout;
 import org.coolreader.crengine.Scanner;
+import org.coolreader.crengine.ServiceDependencies;
 import org.coolreader.crengine.ServiceLifecycle;
 import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Utils;
@@ -278,13 +279,14 @@ public class CoolReader extends BaseActivity {
 		activityIsRunning = false;
 		isInterfaceCreated = false;
 
-		mEngine = Services.getEngine();
-		mScanner = Services.getScanner();
-		mHistory = Services.getHistory();
-		mCoverpageManager = Services.getCoverpageManager();
-		mDocumentCache = Services.getDocumentCache();
-		mFileSystemFolders = Services.getFileSystemFolders();
-		mServiceLifecycle = Services.getLifecycle();
+		ServiceDependencies dependencies = getServiceDependencies();
+		mEngine = dependencies.getEngine();
+		mScanner = dependencies.getScanner();
+		mHistory = dependencies.getHistory();
+		mCoverpageManager = dependencies.getCoverpageManager();
+		mDocumentCache = dependencies.getDocumentCache();
+		mFileSystemFolders = dependencies.getFileSystemFolders();
+		mServiceLifecycle = dependencies.getLifecycle();
 
 		// Service-backed settings require the captured generation.
 		onSettingsChanged(settings(), null);
