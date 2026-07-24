@@ -89,6 +89,7 @@ public:
 	bool open(const char * fileName);
 	CRIniFileTranslator() : _map(3000) {}
 	virtual ~CRIniFileTranslator() {}
+	// Transfers ownership to the caller; returns NULL when loading fails.
 	static CRIniFileTranslator * create(const char * fileName);
 };
 

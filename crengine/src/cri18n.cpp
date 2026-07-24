@@ -30,6 +30,9 @@
 #include "../include/crlog.h"
 #include "../include/lvstring8collection.h"
 
+#include <memory>
+#include <vector>
+
 CRI18NTranslator * CRI18NTranslator::_translator = NULL;
 CRI18NTranslator * CRI18NTranslator::_defTranslator = NULL;
 
@@ -231,11 +234,11 @@ const char * CRIniFileTranslator::getText( const char * src )
 
 CRIniFileTranslator * CRIniFileTranslator::create(const char * fileName)
 {
-	CRIniFileTranslator * res = new CRIniFileTranslator();
+	std::unique_ptr<CRIniFileTranslator> res(
+			new CRIniFileTranslator());
 	if (res->open(fileName))
-		return res;
+		return res.release();
 	CRLog::error("Cannot load language resources from %s", fileName);
-	delete res;
 	return NULL;
 }
 
@@ -249,14 +252,13 @@ bool CRIniFileTranslator::open(const char * fileName)
     lvsize_t sz = stream->GetSize() - stream->GetPos();
     if ( sz<=0 )
         return false;
-    char * buf = new char[sz + 3];
+    std::vector<char> buf(sz + 3, 0);
     lvsize_t bytesRead = 0;
-    if ( stream->Read( buf, sz, &bytesRead )!=LVERR_OK ) {
-        delete[] buf;
+    if ( stream->Read( buf.data(), sz, &bytesRead )!=LVERR_OK ) {
         return false;
     }
     buf[sz] = 0;
-    char * p = buf;
+    char * p = buf.data();
     if( (unsigned char)buf[0] == 0xEF && (unsigned char)buf[1]==0xBB && (unsigned char)buf[2]==0xBF )
         p += 3;
     // read lines from buffer
@@ -279,7 +281,5 @@ bool CRIniFileTranslator::open(const char * fileName)
 		while ( *p=='\r' || *p=='\n' )
 			p++;
     }
-    // cleanup
-    delete[] buf;
     return _map.length() > 0;
 }

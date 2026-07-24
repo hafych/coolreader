@@ -2,6 +2,7 @@
 #include "lvthread.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
+#include "cri18n.h"
 #include "logredactor.h"
 #include "parsebudget.h"
 
@@ -125,6 +126,58 @@ static int testBorrowedDescriptor() {
     }
     close(fd);
     unlink(path);
+    return 0;
+}
+
+static int testIniTranslatorOwnership() {
+    char path[] = "/tmp/coolreader-i18n-test-XXXXXX";
+    int fd = mkstemp(path);
+    if (fd < 0)
+        return fail("i18n mkstemp failed");
+
+    const unsigned char payload[] = {
+        0xEF, 0xBB, 0xBF,
+        'h', 'e', 'l', 'l', 'o', '=', 'w', 'o', 'r', 'l', 'd', '\n',
+        'b', 'o', 'o', 'k', '=', 'r', 'e', 'a', 'd', 'e', 'r', '\n'
+    };
+    if (write(fd, payload, sizeof(payload))
+            != static_cast<ssize_t>(sizeof(payload))) {
+        close(fd);
+        unlink(path);
+        return fail("i18n fixture write failed");
+    }
+    close(fd);
+
+    CRIniFileTranslator translator;
+    if (!translator.open(path)) {
+        unlink(path);
+        return fail("INI translator rejected a valid file");
+    }
+    lString8 translated;
+    if (!translator._map.get(lString8("hello"), translated)
+            || translated != lString8("world")) {
+        unlink(path);
+        return fail("INI translator did not parse BOM-prefixed content");
+    }
+    if (!translator._map.get(lString8("book"), translated)
+            || translated != lString8("reader")) {
+        unlink(path);
+        return fail("INI translator did not parse the second entry");
+    }
+
+    CRIniFileTranslator *created =
+            CRIniFileTranslator::create(path);
+    unlink(path);
+    if (created == NULL)
+        return fail("INI translator factory rejected a valid file");
+    delete created;
+
+    CRIniFileTranslator *missing =
+            CRIniFileTranslator::create(path);
+    if (missing != NULL) {
+        delete missing;
+        return fail("INI translator factory accepted a missing file");
+    }
     return 0;
 }
 
@@ -541,6 +594,8 @@ int main() {
     if (testOwnedDescriptor() != 0)
         return 1;
     if (testBorrowedDescriptor() != 0)
+        return 1;
+    if (testIniTranslatorOwnership() != 0)
         return 1;
     if (testZipArchiveBudgets() != 0)
         return 1;

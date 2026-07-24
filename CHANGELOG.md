@@ -123,6 +123,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   safe startup after a clean uninstall/reinstall cycle.
 - Unit and native regression tests for XML, OPDS, stream and hostile document
   resource limits.
+- A documented native ownership policy now requires engine reference wrappers,
+  standard containers or `unique_ptr`; the INI translator factory and parsing
+  buffer are the first migrated RAII path with a native regression test.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.
