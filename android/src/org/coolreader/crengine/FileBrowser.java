@@ -979,6 +979,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 							dir.sort(mSortOrder);
 						showDirectoryInternal(dir, file);
 					}
+					showScanStopReason(scanControl);
 					mActivity.setBrowserProgressStatus(false);
 				}, false, mScanControl);
 			}
@@ -1009,9 +1010,25 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 					currDirectory.sort(mSortOrder);
 				showDirectoryInternal(currDirectory, null);
 			}
+			showScanStopReason(scanControl);
 			if (dlg.isShowing())
 				dlg.dismiss();
 		}, true, mScanControl);
+	}
+
+	private void showScanStopReason(
+			Scanner.ScanControl scanControl) {
+		if (scanControl.getStopReason()
+				== ScanStopReason.ENTRY_LIMIT) {
+			mActivity.showToast(
+					R.string.scan_entry_limit_reached,
+					scanControl.getDiscoveredEntryCount());
+		} else if (scanControl.getStopReason()
+				== ScanStopReason.DEPTH_LIMIT) {
+			mActivity.showToast(
+					R.string.scan_depth_limit_reached,
+					scanControl.getMaxDepth());
+		}
 	}
 
 

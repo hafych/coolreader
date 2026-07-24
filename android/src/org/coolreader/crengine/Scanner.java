@@ -40,6 +40,9 @@ public class Scanner extends FileInfoChangeSource {
 	
 	public static final Logger log = L.create("sc");
 	private static final int METADATA_BATCH_SIZE = 64;
+	private static final int DISCOVERY_PROGRESS_MAX = 3000;
+	private static final int DEFAULT_MAX_DISCOVERY_ENTRIES = 100_000;
+	private static final int DEFAULT_MAX_DISCOVERY_DEPTH = 256;
 	
 	HashMap<String, FileInfo> mFileList = new HashMap<>();
 //	ArrayList<FileInfo> mFilesForParsing = new ArrayList<FileInfo>();
@@ -73,6 +76,9 @@ public class Scanner extends FileInfoChangeSource {
 			//for ( Enumeration<?> e = file.entries(); e.hasMoreElements(); ) {
 			for ( ZipEntry entry : entries ) {
 				if (isScanStopped(control))
+					return null;
+				if (!recordDiscoveryEntry(
+						control, entry.isDirectory()))
 					return null;
 				if ( entry.isDirectory() )
 					continue;
@@ -182,6 +188,13 @@ public class Scanner extends FileInfoChangeSource {
 				for ( File f : items ) {
 					if (cancelDirectoryListing(baseDir, control))
 						return false;
+					if (!f.isDirectory()
+							&& !recordDiscoveryEntry(
+									control, false)) {
+						cancelDirectoryListing(
+								baseDir, control);
+						return false;
+					}
 					// check whether file is a link
 					if (Engine.isLink(f.getAbsolutePath()) != null) {
 						log.w("skipping " + f + " because it's a link");
@@ -242,6 +255,12 @@ public class Scanner extends FileInfoChangeSource {
 					if (cancelDirectoryListing(baseDir, control))
 						return false;
 					if ( f.isDirectory() ) {
+						if (!recordDiscoveryEntry(
+								control, true)) {
+							cancelDirectoryListing(
+									baseDir, control);
+							return false;
+						}
 						if ( f.getName().startsWith(".") )
 							continue; // treat dirs beginning with '.' as hidden
 						FileInfo item = new FileInfo( f );
@@ -267,6 +286,12 @@ public class Scanner extends FileInfoChangeSource {
 		return control != null && control.isStopped();
 	}
 
+	private static boolean recordDiscoveryEntry(
+			ScanControl control, boolean directory) {
+		return control == null
+				|| control.recordDiscoveryEntry(directory);
+	}
+
 	private static boolean cancelDirectoryListing(
 			FileInfo directory, ScanControl control) {
 		if (!isScanStopped(control))
@@ -277,12 +302,60 @@ public class Scanner extends FileInfoChangeSource {
 	}
 	
 	public static class ScanControl {
-		volatile private boolean stopped = false;
-		public boolean isStopped() {
-			return stopped;
+		private final LibraryScanState state;
+
+		public ScanControl() {
+			this(DEFAULT_MAX_DISCOVERY_ENTRIES,
+					DEFAULT_MAX_DISCOVERY_DEPTH);
 		}
+
+		public ScanControl(int maxEntries, int maxDepth) {
+			state = new LibraryScanState(maxEntries, maxDepth);
+		}
+
+		public boolean isStopped() {
+			return state.isStopped();
+		}
+
 		public void stop() {
-			stopped = true;
+			state.stopByUser();
+		}
+
+		public ScanStopReason getStopReason() {
+			return state.getStopReason();
+		}
+
+		public int getDiscoveredEntryCount() {
+			return state.getDiscoveredEntries();
+		}
+
+		public int getMaxEntries() {
+			return state.getMaxEntries();
+		}
+
+		public int getMaxDepth() {
+			return state.getMaxDepth();
+		}
+
+		private boolean recordDiscoveryEntry(boolean directory) {
+			return state.recordEntry(directory);
+		}
+
+		private void startRootDirectory() {
+			state.startRootDirectory();
+		}
+
+		private void completeDirectory() {
+			state.completeDirectory();
+		}
+
+		private int discoveryProgress() {
+			return state.discoveryProgress(
+					DISCOVERY_PROGRESS_MAX);
+		}
+
+		private void stopAtDepthLimit() {
+			state.stopAtDepthLimit();
 		}
 	}
 
@@ -472,8 +545,14 @@ public class Scanner extends FileInfoChangeSource {
 		private void setProgress(int completedCount) {
 			int totalCount = batches.getTotalCount();
 			progress.setProgress(
-					(int) Math.min(10000L,
-							(long) completedCount * 10000 / totalCount));
+					DISCOVERY_PROGRESS_MAX
+							+ (int) Math.min(
+									10000L
+											- DISCOVERY_PROGRESS_MAX,
+									(long) completedCount
+											* (10000
+													- DISCOVERY_PROGRESS_MAX)
+											/ totalCount));
 		}
 
 		private void finish() {
@@ -562,12 +641,13 @@ public class Scanner extends FileInfoChangeSource {
 		Engine.ProgressControl progress = engine.createProgress(
 				recursiveScan ? 0 : R.string.progress_scanning,
 				scanControl);
+		boolean fullDiscovery = recursiveScan || mHideEmptyDirs;
 
 		listSubtreeBg(
 				baseDir,
-				recursiveScan || mHideEmptyDirs
-						? Integer.MAX_VALUE : 2,
-				scanControl, initialUpdateCallback, () -> {
+				fullDiscovery ? scanControl.getMaxDepth() : 2,
+				scanControl, progress, fullDiscovery,
+				initialUpdateCallback, () -> {
 			if ( (!getDirScanEnabled() || baseDir.isScanned) && !recursiveScan || scanControl.isStopped() ) {
 				progress.hide();
 				readyListener.onComplete(scanControl);
@@ -889,16 +969,20 @@ public class Scanner extends FileInfoChangeSource {
 	 * @param readyCallback ready callback, can be null
 	 */
 	private void listSubtreeBg(FileInfo root, int maxDepth,
-			ScanControl scanControl, Runnable initialUpdateCallback,
+			ScanControl scanControl, Engine.ProgressControl progress,
+			boolean enforceDepthLimit, Runnable initialUpdateCallback,
 			Runnable readyCallback) {
 		BackgroundThread.instance().postBackground(() -> {
 			// make a copy to scan in background
 			FileInfo dir = copyDirectorySnapshot(root);
 			dir.parent = root.parent;
+			scanControl.startRootDirectory();
 			boolean rootListed = listDirectory(
 					dir, true, true,
 					!dir.isSpecialDir() && !dir.isArchive,
 					scanControl);
+			progress.setProgress(
+					scanControl.discoveryProgress());
 			boolean initialUpdatePosted =
 					rootListed && initialUpdateCallback != null;
 			if (initialUpdatePosted) {
@@ -912,7 +996,8 @@ public class Scanner extends FileInfoChangeSource {
 			}
 			if (rootListed && !scanControl.isStopped())
 				listSubtreeBg_impl(
-						dir, maxDepth, scanControl, true);
+						dir, maxDepth, scanControl, progress,
+						true, enforceDepthLimit);
 			BackgroundThread.instance().postGUI(() -> {
 				// transfer scanned items from background copy to update in GUI
 				root.setItems(dir);
@@ -944,10 +1029,16 @@ public class Scanner extends FileInfoChangeSource {
 	}
 
 	private boolean listSubtreeBg_impl(FileInfo dir, int maxDepth,
-			ScanControl scanControl, boolean rootAlreadyDiscovered) {
+			ScanControl scanControl, Engine.ProgressControl progress,
+			boolean rootAlreadyDiscovered,
+			boolean enforceDepthLimit) {
 		BackgroundThread.ensureBackground();
 		return IterativeScanTraversal.traverse(
 				dir, maxDepth, scanControl::isStopped,
+				enforceDepthLimit
+						? scanControl::stopAtDepthLimit
+						: () -> {
+						},
 				new IterativeScanTraversal.Adapter<FileInfo>() {
 					@Override
 					public boolean discover(FileInfo directory) {
@@ -977,6 +1068,9 @@ public class Scanner extends FileInfoChangeSource {
 							FileInfo directory, boolean fullDepth) {
 						if (fullDepth && mHideEmptyDirs)
 							directory.removeEmptyDirs();
+						scanControl.completeDirectory();
+						progress.setProgress(
+								scanControl.discoveryProgress());
 					}
 				});
 	}

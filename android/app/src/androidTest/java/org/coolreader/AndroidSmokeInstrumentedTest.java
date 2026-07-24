@@ -26,6 +26,7 @@ import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.Services;
+import org.coolreader.crengine.ScanStopReason;
 import org.coolreader.tts.OnTTSStatusListener;
 import org.coolreader.tts.TTSControlBinder;
 import org.coolreader.tts.TTSControlService;
@@ -209,6 +210,46 @@ public class AndroidSmokeInstrumentedTest {
 					TIMEOUT_MS, TimeUnit.MILLISECONDS));
 			assertTrue(cancelled.isStopped());
 			assertFalse(cancelledBaseDir.isScanned);
+
+			Scanner.ScanControl entryLimited =
+					new Scanner.ScanControl(64, 256);
+			FileInfo entryLimitedBaseDir =
+					new FileInfo(directory);
+			CountDownLatch entryLimitCompleted =
+					new CountDownLatch(1);
+			InstrumentationRegistry.getInstrumentation().runOnMainSync(
+					() -> scanner.get().scanDirectory(
+							activity.getDB(), entryLimitedBaseDir, null,
+							scanControl ->
+									entryLimitCompleted.countDown(),
+							false, entryLimited));
+			assertTrue(entryLimitCompleted.await(
+					TIMEOUT_MS, TimeUnit.MILLISECONDS));
+			assertEquals(
+					ScanStopReason.ENTRY_LIMIT,
+					entryLimited.getStopReason());
+			assertEquals(
+					64, entryLimited.getDiscoveredEntryCount());
+			assertFalse(entryLimitedBaseDir.isScanned);
+
+			Scanner.ScanControl depthLimited =
+					new Scanner.ScanControl(1_000, 2);
+			FileInfo depthLimitedBaseDir =
+					new FileInfo(directory);
+			CountDownLatch depthLimitCompleted =
+					new CountDownLatch(1);
+			InstrumentationRegistry.getInstrumentation().runOnMainSync(
+					() -> scanner.get().scanDirectory(
+							activity.getDB(), depthLimitedBaseDir, null,
+							scanControl ->
+									depthLimitCompleted.countDown(),
+							true, depthLimited));
+			assertTrue(depthLimitCompleted.await(
+					TIMEOUT_MS, TimeUnit.MILLISECONDS));
+			assertEquals(
+					ScanStopReason.DEPTH_LIMIT,
+					depthLimited.getStopReason());
+			assertFalse(depthLimitedBaseDir.isScanned);
 		} finally {
 			control.stop();
 			finishActivity(activity);

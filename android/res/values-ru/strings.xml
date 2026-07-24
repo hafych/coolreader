@@ -12,6 +12,8 @@
     <string name="progress_loading">Загрузка книги</string>
     <string name="progress_formatting">Форматирование книги</string>
     <string name="progress_scanning">Сканирование директории</string>
+    <string name="scan_entry_limit_reached">Сканирование библиотеки остановлено после %1$d элементов. Выберите папку меньшего размера.</string>
+    <string name="scan_depth_limit_reached">Сканирование библиотеки остановлено на глубине %1$d. Выберите папку с меньшей вложенностью.</string>
     <string name="context_menu_title_bookmark">Закладка</string>
     <string name="context_menu_title_book">Книга</string>
     <string name="context_menu_title_recent_book">Запись</string>

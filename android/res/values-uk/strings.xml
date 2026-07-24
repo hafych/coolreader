@@ -16,6 +16,8 @@
     <string name="progress_loading">Відкриття документу</string>
     <string name="progress_formatting">Форматування документу</string>
     <string name="progress_scanning">Сканування теки</string>
+    <string name="scan_entry_limit_reached">Сканування бібліотеки зупинено після %1$d елементів. Виберіть меншу теку.</string>
+    <string name="scan_depth_limit_reached">Сканування бібліотеки зупинено на глибині %1$d. Виберіть теку з меншою вкладеністю.</string>
     <string name="context_menu_title_bookmark">Закладка</string>
     <string name="context_menu_title_book">Книга</string>
     <string name="context_menu_title_recent_book">Запис</string>

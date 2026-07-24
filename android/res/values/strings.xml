@@ -16,6 +16,8 @@
     <string name="progress_loading">Loading document</string>
     <string name="progress_formatting">Formatting document</string>
     <string name="progress_scanning">Scanning directory</string>
+    <string name="scan_entry_limit_reached">Library scan stopped after %1$d entries. Choose a smaller folder.</string>
+    <string name="scan_depth_limit_reached">Library scan stopped at nesting depth %1$d. Choose a shallower folder.</string>
     <string name="context_menu_title_bookmark">Bookmark</string>
     <string name="context_menu_title_book">Book</string>
     <string name="context_menu_title_recent_book">Recent book</string>

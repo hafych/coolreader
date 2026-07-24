@@ -79,6 +79,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Recursive library scans reuse the discovered tree and feed directories
   through one bounded FIFO metadata pipeline instead of rediscovering every
   descendant once per ancestor.
+- Full-tree discovery has explicit 100,000-entry and 256-level budgets, reports
+  stable stop reasons, reserves a progress phase and shows an actionable
+  message instead of silently truncating oversized libraries.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

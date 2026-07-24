@@ -44,6 +44,14 @@ final class IterativeScanTraversal {
 
 	static <T> boolean traverse(T root, int maxDepth,
 			StopSignal stopSignal, Adapter<T> adapter) {
+		return traverse(
+				root, maxDepth, stopSignal, () -> {
+				}, adapter);
+	}
+
+	static <T> boolean traverse(T root, int maxDepth,
+			StopSignal stopSignal, Runnable depthLimitReached,
+			Adapter<T> adapter) {
 		if (root == null)
 			throw new IllegalArgumentException("root must not be null");
 		if (stopSignal == null)
@@ -51,6 +59,9 @@ final class IterativeScanTraversal {
 					"stopSignal must not be null");
 		if (adapter == null)
 			throw new IllegalArgumentException("adapter must not be null");
+		if (depthLimitReached == null)
+			throw new IllegalArgumentException(
+					"depthLimitReached must not be null");
 		if (maxDepth <= 0 || stopSignal.isStopped())
 			return false;
 
@@ -77,6 +88,7 @@ final class IterativeScanTraversal {
 						frame.node, frame.nextChild--);
 				if (frame.remainingDepth <= 1) {
 					frame.fullDepth = false;
+					depthLimitReached.run();
 				} else {
 					stack.push(new Frame<>(
 							child, frame.remainingDepth - 1));

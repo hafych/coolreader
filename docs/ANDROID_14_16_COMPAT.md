@@ -53,7 +53,7 @@ Evidence recorded on July 24, 2026:
 | Platform | Profile | Evidence |
 | --- | --- | --- |
 | Android 14 / API 34 | `coolreader_api34_atd`, clean phone data | 7/7 instrumentation phases passed; background TTS controls passed |
-| Android 15 / API 35 | `coolreader_api35_atd`, clean phone data | 9/9 instrumentation phases passed, including locator-free archive metadata and a 130-book bounded scan; background TTS controls passed |
+| Android 15 / API 35 | `coolreader_api35_atd`, clean phone data | 9/9 instrumentation phases passed, including locator-free archive metadata and a three-level 133-book scan with entry/depth stops; background TTS controls passed |
 | Android 16 / API 36 | `coolreader_api36_phone`, clean phone data | 7/7 instrumentation phases passed; background TTS controls passed |
 | Android 16 / API 36 | `coolreader_api36_tablet`, 2560×1600 | cold start, background TTS controls and portrait/landscape visual checks passed |
 

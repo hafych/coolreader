@@ -70,12 +70,15 @@ public class IterativeScanTraversalTest {
 		Node root = deepTree(4);
 		AtomicInteger discovered = new AtomicInteger();
 		AtomicInteger completed = new AtomicInteger();
+		AtomicInteger limitReached = new AtomicInteger();
 
 		assertFalse(IterativeScanTraversal.traverse(
 				root, 2, () -> false,
+				limitReached::incrementAndGet,
 				adapter(discovered, completed)));
 		assertEquals(2, discovered.get());
 		assertEquals(2, completed.get());
+		assertEquals(1, limitReached.get());
 	}
 
 	private static IterativeScanTraversal.Adapter<Node> adapter(
