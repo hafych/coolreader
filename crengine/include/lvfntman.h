@@ -31,6 +31,8 @@
 #ifndef __LV_FNT_MAN_H_INCLUDED__
 #define __LV_FNT_MAN_H_INCLUDED__
 
+#include <atomic>
+#include <mutex>
 #include <stdlib.h>
 #include "crsetup.h"
 #include "lvstring.h"
@@ -42,10 +44,11 @@
 /// font manager interface class
 class LVFontManager {
 protected:
-    bool _allowKerning;
-    font_antialiasing_t _antialiasMode;
-    shaping_mode_t _shapingMode;
-    hinting_mode_t _hintingMode;
+    std::atomic<bool> _allowKerning;
+    std::atomic<font_antialiasing_t> _antialiasMode;
+    std::atomic<shaping_mode_t> _shapingMode;
+    std::atomic<hinting_mode_t> _hintingMode;
+    std::mutex _renderSettingsMutex;
 public:
     /// garbage collector frees unused fonts
     virtual void gc() = 0;
@@ -110,29 +113,42 @@ public:
     virtual void clearGlyphCache() {}
 
     /// get antialiasing mode
-    virtual font_antialiasing_t GetAntialiasMode() { return _antialiasMode; }
+    virtual font_antialiasing_t GetAntialiasMode() {
+        return _antialiasMode.load(std::memory_order_relaxed);
+    }
 
     /// set antialiasing mode
     virtual void SetAntialiasMode(font_antialiasing_t mode) {
-        _antialiasMode = mode;
+        std::lock_guard<std::mutex> guard(_renderSettingsMutex);
+        _antialiasMode.store(mode, std::memory_order_relaxed);
         gc();
         clearGlyphCache();
     }
 
     /// get kerning mode: true==ON, false=OFF
-    virtual bool GetKerning() { return _allowKerning; }
+    virtual bool GetKerning() {
+        return _allowKerning.load(std::memory_order_relaxed);
+    }
 
     /// get kerning mode: true==ON, false=OFF
     virtual void SetKerning(bool kerningEnabled) {
-        _allowKerning = kerningEnabled;
+        std::lock_guard<std::mutex> guard(_renderSettingsMutex);
+        _allowKerning.store(kerningEnabled, std::memory_order_relaxed);
         gc();
         clearGlyphCache();
     }
 
     /// get shaping mode
-    virtual shaping_mode_t GetShapingMode() { return _shapingMode; }
+    virtual shaping_mode_t GetShapingMode() {
+        return _shapingMode.load(std::memory_order_relaxed);
+    }
     /// set shaping mode
-    virtual void SetShapingMode( shaping_mode_t mode ) { _shapingMode = mode; gc(); clearGlyphCache(); }
+    virtual void SetShapingMode(shaping_mode_t mode) {
+        std::lock_guard<std::mutex> guard(_renderSettingsMutex);
+        _shapingMode.store(mode, std::memory_order_relaxed);
+        gc();
+        clearGlyphCache();
+    }
     /// constructor
     LVFontManager() : _allowKerning(false), _antialiasMode(font_aa_all), _shapingMode(SHAPING_MODE_FREETYPE), _hintingMode(HINTING_MODE_AUTOHINT) { }
     /// destructor

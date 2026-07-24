@@ -101,11 +101,13 @@ public:
 
     /// sets current gamma level
     virtual hinting_mode_t GetHintingMode() {
-        return _hintingMode;
+        return _hintingMode.load(std::memory_order_relaxed);
     }
 
     /// get kerning mode
-    virtual bool GetKerning() { return _allowKerning; }
+    virtual bool GetKerning() {
+        return _allowKerning.load(std::memory_order_relaxed);
+    }
 
     /// set kerning mode
     virtual void SetKerning(bool kerningEnabled);
@@ -114,7 +116,9 @@ public:
     virtual void SetShapingMode( shaping_mode_t mode );
 
     /// get shaping mode
-    virtual shaping_mode_t GetShapingMode() { return _shapingMode; }
+    virtual shaping_mode_t GetShapingMode() {
+        return _shapingMode.load(std::memory_order_relaxed);
+    }
 
     /// clear glyph cache
     virtual void clearGlyphCache();

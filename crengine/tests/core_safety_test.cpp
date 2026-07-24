@@ -533,6 +533,63 @@ static int testConcurrentFontGammaSettings() {
     return 0;
 }
 
+static bool isValidAntialiasMode(font_antialiasing_t mode) {
+    return mode >= font_aa_none && mode <= font_aa_lcd_v_pentile_m;
+}
+
+static bool isValidHintingMode(hinting_mode_t mode) {
+    return mode >= HINTING_MODE_DISABLED && mode <= HINTING_MODE_AUTOHINT;
+}
+
+static bool isValidShapingMode(shaping_mode_t mode) {
+    return mode >= SHAPING_MODE_FREETYPE && mode <= SHAPING_MODE_HARFBUZZ;
+}
+
+static int testConcurrentFontRenderSettings() {
+    if (!InitFontManager(lString8::empty_str) || !fontMan)
+        return fail("font render settings fixture manager did not initialize");
+
+    static const int workerCount = 8;
+    static const int iterations = 100;
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, &failed]() {
+            for (int iteration = 0; iteration < iterations; iteration++) {
+                const bool alternate = (workerIndex + iteration) % 2 != 0;
+                fontMan->SetAntialiasMode(
+                        alternate ? font_aa_none : font_aa_all);
+                fontMan->SetHintingMode(alternate
+                        ? HINTING_MODE_DISABLED : HINTING_MODE_AUTOHINT);
+                fontMan->SetKerning(alternate);
+                fontMan->SetShapingMode(alternate
+                        ? SHAPING_MODE_FREETYPE
+                        : SHAPING_MODE_HARFBUZZ_LIGHT);
+
+                if (!isValidAntialiasMode(fontMan->GetAntialiasMode())
+                        || !isValidHintingMode(fontMan->GetHintingMode())
+                        || !isValidShapingMode(fontMan->GetShapingMode())) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+
+    fontMan->SetAntialiasMode(font_aa_all);
+    fontMan->SetHintingMode(HINTING_MODE_AUTOHINT);
+    fontMan->SetKerning(false);
+    fontMan->SetShapingMode(SHAPING_MODE_FREETYPE);
+    ShutdownFontManager();
+    if (failed.load(std::memory_order_acquire))
+        return fail("font render settings published an invalid value");
+    return 0;
+}
+
 static int testLogRedactor() {
     if (CRRedactLogMessage("Rendered 42 pages") != "Rendered 42 pages")
         return fail("safe native diagnostic was unexpectedly changed");
@@ -1100,6 +1157,8 @@ int main() {
     if (testFontManagerLifecycleOwnership() != 0)
         return 1;
     if (testConcurrentFontGammaSettings() != 0)
+        return 1;
+    if (testConcurrentFontRenderSettings() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

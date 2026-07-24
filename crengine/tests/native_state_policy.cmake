@@ -14,6 +14,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/textlang.cpp" TEXTLANG_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/textlang.h" TEXTLANG_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvfntman.h" FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
@@ -174,6 +175,31 @@ require_source_text(
   "${FONT_MANAGER_SOURCE}"
   "std::mutex g_font_gamma_mutex"
   "font gamma changes and cache invalidation must be serialized"
+)
+require_source_text(
+  "${FONT_MANAGER_HEADER}"
+  "std::atomic<font_antialiasing_t> _antialiasMode"
+  "font antialiasing mode must be synchronized"
+)
+require_source_text(
+  "${FONT_MANAGER_HEADER}"
+  "std::atomic<bool> _allowKerning"
+  "font kerning mode must be synchronized"
+)
+require_source_text(
+  "${FONT_MANAGER_HEADER}"
+  "std::atomic<shaping_mode_t> _shapingMode"
+  "font shaping mode must be synchronized"
+)
+require_source_text(
+  "${FONT_MANAGER_HEADER}"
+  "std::atomic<hinting_mode_t> _hintingMode"
+  "font hinting mode must be synchronized"
+)
+require_source_text(
+  "${FONT_MANAGER_HEADER}"
+  "std::mutex _renderSettingsMutex"
+  "font render setting changes must be serialized"
 )
 
 forbid_source_text(

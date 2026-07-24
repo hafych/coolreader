@@ -294,7 +294,7 @@ LVFontRef LVFreeTypeFontManager::GetFallbackFont(int size, int weight, bool ital
 
 bool LVFreeTypeFontManager::isBitmapModeForSize(int size) {
     bool isBitmap = false;
-    switch (_antialiasMode) {
+    switch (GetAntialiasMode()) {
         case font_aa_none:
             isBitmap = true;
             break;
@@ -310,7 +310,9 @@ bool LVFreeTypeFontManager::isBitmapModeForSize(int size) {
 }
 
 void LVFreeTypeFontManager::SetAntialiasMode(font_antialiasing_t mode) {
-    _antialiasMode = mode;
+    std::lock_guard<std::mutex> settingsGuard(_renderSettingsMutex);
+    FONT_MAN_GUARD
+    _antialiasMode.store(mode, std::memory_order_relaxed);
     int error;
 #ifdef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
     // ClearType-style LCD rendering
@@ -403,19 +405,19 @@ void LVFreeTypeFontManager::SetAntialiasMode(font_antialiasing_t mode) {
 #endif
     gc();
     clearGlyphCache();
-    FONT_MAN_GUARD
     LVPtrVector<LVFontCacheItem> *fonts = _cache.getInstances();
     for (int i = 0; i < fonts->length(); i++) {
         LVFontRef font = fonts->get(i)->getFont();
-        font->SetAntialiasMode(_antialiasMode);
+        font->SetAntialiasMode(mode);
         font->setBitmapMode(isBitmapModeForSize(font->getHeight()));
     }
 }
 
 void LVFreeTypeFontManager::SetHintingMode(hinting_mode_t mode) {
+    std::lock_guard<std::mutex> settingsGuard(_renderSettingsMutex);
     FONT_MAN_GUARD
     CRLog::debug("Hinting mode is changed: %d", (int) mode);
-    _hintingMode = mode;
+    _hintingMode.store(mode, std::memory_order_relaxed);
     gc();
     clearGlyphCache();
     LVPtrVector<LVFontCacheItem> *fonts = _cache.getInstances();
@@ -426,9 +428,10 @@ void LVFreeTypeFontManager::SetHintingMode(hinting_mode_t mode) {
 
 void LVFreeTypeFontManager::SetKerning(bool kerningEnabled)
 {
+    std::lock_guard<std::mutex> settingsGuard(_renderSettingsMutex);
     FONT_MAN_GUARD
     CRLog::debug("Kerning mode is changed: %d", (int) kerningEnabled);
-    _allowKerning = kerningEnabled;
+    _allowKerning.store(kerningEnabled, std::memory_order_relaxed);
     gc();
     clearGlyphCache();
     LVPtrVector<LVFontCacheItem> *fonts = _cache.getInstances();
@@ -439,9 +442,10 @@ void LVFreeTypeFontManager::SetKerning(bool kerningEnabled)
 
 void LVFreeTypeFontManager::SetShapingMode( shaping_mode_t mode )
 {
+    std::lock_guard<std::mutex> settingsGuard(_renderSettingsMutex);
     FONT_MAN_GUARD
     CRLog::debug("Shaping mode is changed: %d", (int) mode);
-    _shapingMode = mode;
+    _shapingMode.store(mode, std::memory_order_relaxed);
     gc();
     clearGlyphCache();
     LVPtrVector< LVFontCacheItem > * fonts = _cache.getInstances();

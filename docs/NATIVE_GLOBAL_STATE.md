@@ -70,6 +70,9 @@ The font gamma setting is stored as one atomic table index, while setters
 serialize index changes with glyph-cache invalidation. Glyph creation takes one
 index snapshot for each bitmap correction.
 
-Known follow-up groups include the remaining font-manager settings and its
-internal caches. Each group must be migrated separately with an impact check
-and focused regression tests.
+The antialiasing, hinting, kerning and shaping settings use atomic storage for
+readers. Their setters are serialized with cache invalidation and propagation
+to live font instances.
+
+Known follow-up groups include the font manager's internal caches. Each group
+must be migrated separately with an impact check and focused regression tests.
