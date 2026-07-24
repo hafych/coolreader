@@ -108,7 +108,7 @@ deploy_package()
 		then
 			rm -f "${SRCFILE}"
 		fi
-		curl -f -L -O ${URL} || die "Failed to fetch sources!"
+		curl --fail --location --retry 3 --output "${SRCFILE}" "${URL}" || die "Failed to fetch sources!"
 		if [ ! -f "${SRCFILE}" ]
 		then
 			die "Something wrong... source file not found!"
