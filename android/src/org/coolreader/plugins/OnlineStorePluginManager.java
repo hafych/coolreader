@@ -19,32 +19,46 @@
 
 package org.coolreader.plugins;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.plugins.litres.LitresPlugin;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 
 public class OnlineStorePluginManager {
-	private static Map<String, OnlineStoreWrapper> pluginMap = new HashMap<String, OnlineStoreWrapper>();
-	public static OnlineStoreWrapper getPlugin(Activity activity, String path) {
+	private static final ConcurrentMap<String, OnlineStoreWrapper> pluginMap =
+			new ConcurrentHashMap<>();
+
+	public static OnlineStoreWrapper getPlugin(Context context, String path) {
+		if (context == null)
+			return null;
 		if (!path.startsWith(FileInfo.ONLINE_CATALOG_PLUGIN_PREFIX))
 			path = FileInfo.ONLINE_CATALOG_PLUGIN_PREFIX + path;
 		int pos = path.indexOf(":");
 		String packageName = path.substring(pos + 1);
 		OnlineStoreWrapper wrapper = pluginMap.get(packageName);
 		if (wrapper == null) {
-			SharedPreferences preferences = null;
-			if (activity != null)
-				preferences = activity.getSharedPreferences(FileInfo.ONLINE_CATALOG_PLUGIN_PREFIX, Context.MODE_PRIVATE);
+			Context applicationContext = context.getApplicationContext();
+			if (applicationContext == null)
+				return null;
+			SharedPreferences preferences =
+					applicationContext.getSharedPreferences(
+							FileInfo.ONLINE_CATALOG_PLUGIN_PREFIX,
+							Context.MODE_PRIVATE);
 			if (LitresPlugin.PACKAGE_NAME.equals(packageName))
-				wrapper = new OnlineStoreWrapper(new LitresPlugin(activity, preferences));
-			if (wrapper != null)
-				pluginMap.put(packageName, wrapper);
+				wrapper = new OnlineStoreWrapper(
+						new LitresPlugin(
+								applicationContext,
+								preferences));
+			if (wrapper != null) {
+				OnlineStoreWrapper existing =
+						pluginMap.putIfAbsent(packageName, wrapper);
+				if (existing != null)
+					wrapper = existing;
+			}
 		}
 		return wrapper;
 	}

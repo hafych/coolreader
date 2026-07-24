@@ -38,6 +38,9 @@ run_instrumentation \
     'phase0-custom-toast-lifecycle' \
     'org.coolreader.AndroidSmokeInstrumentedTest#customToastUiStateClosesWithItsActivity'
 run_instrumentation \
+    'phase0-online-store-application-context' \
+    'org.coolreader.AndroidSmokeInstrumentedTest#onlineStorePluginWorksWithoutRetainingActivity'
+run_instrumentation \
     'phase0-open-ordinary-file' \
     'org.coolreader.AndroidSmokeInstrumentedTest#ordinaryFileOpensFromGenericMimeIntent'
 run_instrumentation \

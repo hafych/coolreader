@@ -28,6 +28,7 @@ import org.coolreader.crengine.ReaderView;
 import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.ScanStopReason;
 import org.coolreader.crengine.ToastView;
+import org.coolreader.plugins.litres.LitresPlugin;
 import org.coolreader.tts.OnTTSStatusListener;
 import org.coolreader.tts.TTSControlBinder;
 import org.coolreader.tts.TTSControlService;
@@ -73,6 +74,29 @@ public class AndroidSmokeInstrumentedTest {
 						20);
 				toastView.close();
 			});
+		} finally {
+			finishActivity(activity);
+		}
+	}
+
+	@Test
+	public void onlineStorePluginWorksWithoutRetainingActivity()
+			throws Exception {
+		Context target = targetContext();
+		CoolReader activity = (CoolReader) launchMainActivity(
+				target, InstrumentationRegistry.getInstrumentation());
+		try {
+			FileInfo pluginRoot = activity.getServiceDependencies()
+					.getScanner()
+					.pathToFileInfo(
+							FileInfo.ONLINE_CATALOG_PLUGIN_PREFIX
+									+ LitresPlugin.PACKAGE_NAME);
+			assertNotNull(pluginRoot);
+			assertTrue(pluginRoot.isDirectory);
+			assertEquals(
+					FileInfo.ONLINE_CATALOG_PLUGIN_PREFIX
+							+ LitresPlugin.PACKAGE_NAME,
+					pluginRoot.pathname);
 		} finally {
 			finishActivity(activity);
 		}

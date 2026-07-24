@@ -17,6 +17,7 @@ ENGINE = SOURCE / "crengine" / "Engine.java"
 SERVICES = SOURCE / "crengine" / "Services.java"
 SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
+SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -36,6 +37,10 @@ OPDS_UTIL = SOURCE / "crengine" / "OPDSUtil.java"
 MAIN_DB = SOURCE / "db" / "MainDB.java"
 CRDB_SERVICE = SOURCE / "db" / "CRDBService.java"
 FILE_INFO = SOURCE / "crengine" / "FileInfo.java"
+ONLINE_STORE_PLUGIN_MANAGER = (
+    SOURCE / "plugins" / "OnlineStorePluginManager.java"
+)
+LITRES_PLUGIN = SOURCE / "plugins" / "litres" / "LitresPlugin.java"
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -183,6 +188,34 @@ def main() -> None:
         if marker not in dependencies_text:
             violations.append(
                 f"{relative(SERVICE_DEPENDENCIES)} omits marker: {marker}")
+
+    scanner_text = SCANNER.read_text(encoding="utf-8")
+    if re.search(r"\bBaseActivity\s+\w+\s*(?:=|;)", scanner_text):
+        violations.append(
+            f"{relative(SCANNER)} strongly retains its Activity")
+    for marker in (
+        "private final Context mContext",
+        "Context applicationContext = context.getApplicationContext()",
+    ):
+        if marker not in scanner_text:
+            violations.append(f"{relative(SCANNER)} omits marker: {marker}")
+
+    plugin_manager_text = ONLINE_STORE_PLUGIN_MANAGER.read_text(
+        encoding="utf-8")
+    litres_plugin_text = LITRES_PLUGIN.read_text(encoding="utf-8")
+    for path, text in (
+            (ONLINE_STORE_PLUGIN_MANAGER, plugin_manager_text),
+            (LITRES_PLUGIN, litres_plugin_text)):
+        if re.search(r"\bActivity\s+\w+\s*(?:=|;|,|\))", text):
+            violations.append(
+                f"{relative(path)} retains an Activity in the plugin cache")
+    if "context.getApplicationContext()" not in plugin_manager_text:
+        violations.append(
+            f"{relative(ONLINE_STORE_PLUGIN_MANAGER)} does not normalize "
+            "cached plugins to application context")
+    if "private final Context applicationContext" not in litres_plugin_text:
+        violations.append(
+            f"{relative(LITRES_PLUGIN)} does not retain application context")
 
     for path in sorted(SOURCE.rglob("*.java")):
         text = path.read_text(encoding="utf-8")

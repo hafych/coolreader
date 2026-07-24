@@ -9,9 +9,12 @@
 
 package org.coolreader.crengine;
 
+import android.app.Activity;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import org.coolreader.plugins.litres.LitresPlugin;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
@@ -37,6 +40,21 @@ public class ActivityOwnershipPolicyTest {
 					"Toast UI state must belong to its Activity: "
 							+ field.getName(),
 					Modifier.isStatic(field.getModifiers()));
+		}
+	}
+
+	@Test
+	public void scannerAndCachedStorePluginRetainNoActivity() {
+		assertRetainsNoActivity(Scanner.class);
+		assertRetainsNoActivity(LitresPlugin.class);
+	}
+
+	private static void assertRetainsNoActivity(Class<?> type) {
+		for (Field field : type.getDeclaredFields()) {
+			assertFalse(
+					type.getSimpleName() + " retains Activity field "
+							+ field.getName(),
+					Activity.class.isAssignableFrom(field.getType()));
 		}
 	}
 }

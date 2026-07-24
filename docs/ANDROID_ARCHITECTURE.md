@@ -35,6 +35,10 @@ Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.
 
+Scanner filesystem/resource access and cached online-store plugins also retain
+only application context. Cached process objects must never capture the
+Activity that first requested them.
+
 ## Migration rule
 
 New Android components should:
