@@ -2310,7 +2310,7 @@ public class CoolReader extends BaseActivity {
 					});
 				}
 			};
-			BackgroundThread.instance().postBackground(() -> Utils.deleteFolder(item, bookDeleteCallback, (fileInfo, errorStatus) -> {
+			BackgroundThread.instance().postBackground(() -> Utils.deleteFolder(item, mScanner, bookDeleteCallback, (fileInfo, errorStatus) -> {
 				if (0 == errorStatus) {
 					BackgroundThread.instance().executeGUI(() -> directoryUpdated(fileInfo.parent));
 				} else {
@@ -2319,7 +2319,7 @@ public class CoolReader extends BaseActivity {
 					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 						Uri sdCardUri = getExtSDURIByFileInfo(item);
 						if (null != sdCardUri) {
-							Utils.deleteFolderDocTree(item, this, sdCardUri, bookDeleteCallback, (fileInfo2, errorStatus2) -> {
+							Utils.deleteFolderDocTree(item, mScanner, this, sdCardUri, bookDeleteCallback, (fileInfo2, errorStatus2) -> {
 								BackgroundThread.instance().executeGUI(() -> {
 									if (0 == errorStatus2) {
 										directoryUpdated(fileInfo2.parent);

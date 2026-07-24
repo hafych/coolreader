@@ -254,28 +254,27 @@ public class Utils {
 		return found ? file : null;
 	}
 
-	public static boolean deleteFolder(FileInfo folder, FileInfoOperationListener bookDeleteCallback, FileInfoOperationListener readyCallback) {
-		boolean res = deleteFolder_impl(new FileInfo(folder), bookDeleteCallback);
+	public static boolean deleteFolder(FileInfo folder, Scanner scanner, FileInfoOperationListener bookDeleteCallback, FileInfoOperationListener readyCallback) {
+		boolean res = deleteFolder_impl(new FileInfo(folder), scanner, bookDeleteCallback);
 		readyCallback.onStatus(folder, res ? 0 : -1);
 		return res;
 	}
 
 	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
-	public static boolean deleteFolderDocTree(FileInfo folder, Context context, Uri sdCardUri, FileInfoOperationListener bookDeleteCallback, FileInfoOperationListener readyCallback) {
-		boolean res = deleteFolderDocTree_impl(new FileInfo(folder), context, sdCardUri, bookDeleteCallback);
+	public static boolean deleteFolderDocTree(FileInfo folder, Scanner scanner, Context context, Uri sdCardUri, FileInfoOperationListener bookDeleteCallback, FileInfoOperationListener readyCallback) {
+		boolean res = deleteFolderDocTree_impl(new FileInfo(folder), scanner, context, sdCardUri, bookDeleteCallback);
 		readyCallback.onStatus(folder, res ? 0 : -1);
 		return res;
 	}
 
 	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
-	private static boolean deleteFolderDocTree_impl(FileInfo folder, Context context, Uri sdCardUri, FileInfoOperationListener bookDeleteCallback) {
+	private static boolean deleteFolderDocTree_impl(FileInfo folder, Scanner scanner, Context context, Uri sdCardUri, FileInfoOperationListener bookDeleteCallback) {
 		boolean res = true;
-		Scanner scanner = Services.getScanner();
 		scanner.listDirectory(folder, false, false);
 		Uri documentUri;
 		int i;
 		for (i = 0; i < folder.dirCount(); i++) {
-			res = deleteFolderDocTree_impl(folder.getDir(i), context, sdCardUri, bookDeleteCallback);
+			res = deleteFolderDocTree_impl(folder.getDir(i), scanner, context, sdCardUri, bookDeleteCallback);
 			if (!res)
 				break;
 		}
@@ -304,14 +303,13 @@ public class Utils {
 		return res;
 	}
 
-	private static boolean deleteFolder_impl(FileInfo folder, FileInfoOperationListener bookDeleteCallback) {
+	private static boolean deleteFolder_impl(FileInfo folder, Scanner scanner, FileInfoOperationListener bookDeleteCallback) {
 		boolean res = true;
-		Scanner scanner = Services.getScanner();
 		scanner.listDirectory(folder, false, false);
 		int i;
 		// delete recursively all child folders
 		for (i = 0; i < folder.dirCount(); i++) {
-			res = deleteFolder_impl(folder.getDir(i), bookDeleteCallback);
+			res = deleteFolder_impl(folder.getDir(i), scanner, bookDeleteCallback);
 			if (!res)
 				break;
 		}

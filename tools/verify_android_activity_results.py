@@ -20,6 +20,8 @@ READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
 COVERPAGE_MANAGER = SOURCE / "crengine" / "CoverpageManager.java"
+FILE_SYSTEM_FOLDERS = SOURCE / "crengine" / "FileSystemFolders.java"
+UTILS = SOURCE / "crengine" / "Utils.java"
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -180,6 +182,24 @@ def main() -> None:
         if marker not in coverpage_manager_text:
             violations.append(
                 f"{relative(COVERPAGE_MANAGER)} omits marker: {marker}")
+
+    for path in (FILE_SYSTEM_FOLDERS, UTILS):
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"\bServices\.", text):
+            violations.append(
+                f"{relative(path)} still uses the static service locator")
+    folders_text = FILE_SYSTEM_FOLDERS.read_text(encoding="utf-8")
+    if "private final Scanner mScanner" not in folders_text:
+        violations.append(
+            f"{relative(FILE_SYSTEM_FOLDERS)} does not retain its Scanner "
+            "dependency")
+    utils_text = UTILS.read_text(encoding="utf-8")
+    for marker in (
+        "deleteFolder(FileInfo folder, Scanner scanner",
+        "deleteFolderDocTree(FileInfo folder, Scanner scanner",
+    ):
+        if marker not in utils_text:
+            violations.append(f"{relative(UTILS)} omits marker: {marker}")
 
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")

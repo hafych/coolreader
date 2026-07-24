@@ -40,7 +40,7 @@ public class FileSystemFolders extends FileInfoChangeSource {
 
         }
     };
-    private Scanner mScanner;
+    private final Scanner mScanner;
 
     private ArrayList<FileInfo> favoriteFolders = null;
 
@@ -62,12 +62,10 @@ public class FileSystemFolders extends FileInfoChangeSource {
             dirs.add(dir);
         }
         dirs.addAll(filter(favoriteFolders));
-        if (Services.getScanner() != null) {
-            FileInfo downloadDirectory = mScanner.getDownloadDirectory();
-            if (downloadDirectory != null) {
-            	downloadDirectory.setType(FileInfo.TYPE_DOWNLOAD_DIR);
-            	dirs.add(downloadDirectory);
-            }
+        FileInfo downloadDirectory = mScanner.getDownloadDirectory();
+        if (downloadDirectory != null) {
+            downloadDirectory.setType(FileInfo.TYPE_DOWNLOAD_DIR);
+            dirs.add(downloadDirectory);
         }
         return dirs;
     }
