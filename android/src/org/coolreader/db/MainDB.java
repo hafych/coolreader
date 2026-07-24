@@ -42,7 +42,6 @@ import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.MountPathCorrector;
 import org.coolreader.crengine.OPDSConst;
 import org.coolreader.crengine.Scanner;
-import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Utils;
 import org.coolreader.genrescollection.GenresCollection;
 
@@ -56,6 +55,11 @@ import java.util.Map;
 public class MainDB extends BaseDB {
 	public static final Logger log = L.create("mdb");
 	public static final Logger vlog = L.create("mdb", Log.VERBOSE);
+	private final GenresCollection mGenresCollection;
+
+	public MainDB(GenresCollection genresCollection) {
+		mGenresCollection = genresCollection;
+	}
 	
 	private boolean pathCorrectionRequired = false;
 	public final int DB_VERSION = MainDbMigrations.CURRENT_VERSION;
@@ -192,14 +196,14 @@ public class MainDB extends BaseDB {
 		boolean res = true;
 		boolean needUpgrade = false;
 		Long version = longQuery("SELECT value FROM metadata WHERE param='genre_version'");
-		if (null == version || version != Services.getGenresCollection().getVersion())
+		if (null == version || version != mGenresCollection.getVersion())
 			needUpgrade = true;
 		if (needUpgrade) {
 			mDB.beginTransaction();
 			try {
 				// fill/append table "genre_group"
 				SQLiteStatement stmt = mDB.compileStatement("INSERT OR IGNORE INTO genre_group (id, code) VALUES (?,?)");
-				Map<String, GenresCollection.GenreRecord> collection = Services.getGenresCollection().getCollection();
+				Map<String, GenresCollection.GenreRecord> collection = mGenresCollection.getCollection();
 				for (Map.Entry<String, GenresCollection.GenreRecord> entry : collection.entrySet()) {
 					GenresCollection.GenreRecord group = entry.getValue();
 					if (group.getLevel() == 0) {
@@ -234,7 +238,7 @@ public class MainDB extends BaseDB {
 				}
 				// Update genres data version in metadata
 				stmt = mDB.compileStatement("INSERT OR REPLACE INTO metadata (param, value) VALUES ('genre_version', ?)");
-				stmt.bindLong(1, Services.getGenresCollection().getVersion());
+				stmt.bindLong(1, mGenresCollection.getVersion());
 				stmt.executeInsert();
 				mDB.setTransactionSuccessful();
 			} catch (SQLException e) {
@@ -734,7 +738,7 @@ public class MainDB extends BaseDB {
 						FileInfo item = new FileInfo();
 						item.isDirectory = true;
 						item.pathname = FileInfo.GENRES_PREFIX + code;
-						item.filename = Services.getGenresCollection().translate(code);
+						item.filename = mGenresCollection.translate(code);
 						item.isListed = true;
 						item.isScanned = true;
 						item.id = (long) -1;        // fake id
@@ -979,7 +983,7 @@ public class MainDB extends BaseDB {
 		String[] codes = keywords.split("\\|");
 		if ( codes==null || codes.length==0 )
 			return null;
-		GenresCollection genresCollection = Services.getGenresCollection();
+		GenresCollection genresCollection = mGenresCollection;
 		ArrayList<Integer> ids = new ArrayList<Integer>(codes.length);
 		for ( String code : codes ) {
 			GenresCollection.GenreRecord genre = genresCollection.byCode(code);
@@ -1681,7 +1685,7 @@ public class MainDB extends BaseDB {
 			OutpuSubGenres = false;
 			genreCode = genreCode.substring(0, genreCode.length() - 4);
 		}
-		GenresCollection.GenreRecord genreRecord = Services.getGenresCollection().byCode(genreCode);
+		GenresCollection.GenreRecord genreRecord = mGenresCollection.byCode(genreCode);
 		if (null == genreRecord)
 			return list;
 		int book_count = 0;
@@ -1734,7 +1738,7 @@ public class MainDB extends BaseDB {
 							item = new FileInfo();
 							item.isDirectory = true;
 							item.pathname = FileInfo.GENRES_PREFIX + code;
-							item.filename = Services.getGenresCollection().translate(code);
+							item.filename = mGenresCollection.translate(code);
 							item.isListed = true;
 							item.isScanned = true;
 							item.id = (long) -1;            // fake id

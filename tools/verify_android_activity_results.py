@@ -32,6 +32,8 @@ BOOK_INFO_DIALOGS = (
 )
 SYNCHRONIZER = SOURCE / "sync2" / "Synchronizer.java"
 OPDS_UTIL = SOURCE / "crengine" / "OPDSUtil.java"
+MAIN_DB = SOURCE / "db" / "MainDB.java"
+CRDB_SERVICE = SOURCE / "db" / "CRDBService.java"
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -261,6 +263,23 @@ def main() -> None:
     ):
         if marker not in opds_text:
             violations.append(f"{relative(OPDS_UTIL)} omits marker: {marker}")
+
+    main_db_text = MAIN_DB.read_text(encoding="utf-8")
+    if re.search(r"\bServices\.", main_db_text):
+        violations.append(
+            f"{relative(MAIN_DB)} still uses the static service locator")
+    for marker in (
+        "private final GenresCollection mGenresCollection",
+        "public MainDB(GenresCollection genresCollection)",
+    ):
+        if marker not in main_db_text:
+            violations.append(f"{relative(MAIN_DB)} omits marker: {marker}")
+    crdb_service_text = CRDB_SERVICE.read_text(encoding="utf-8")
+    if (
+            "new MainDB(GenresCollection.getInstance("
+            "getApplicationContext()))" not in crdb_service_text):
+        violations.append(
+            f"{relative(CRDB_SERVICE)} does not assemble MainDB dependencies")
 
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")

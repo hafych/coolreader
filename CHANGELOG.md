@@ -66,6 +66,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - OPDS downloads receive Engine and lifecycle dependencies from FileBrowser;
   stale-generation work stops updating progress or delivering callbacks, and
   the active task is no longer retained in static Activity-owned state.
+- MainDB receives its genre handbook from CRDBService instead of depending on
+  the Activity-owned global service graph.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

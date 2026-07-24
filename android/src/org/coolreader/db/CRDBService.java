@@ -37,6 +37,7 @@ import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.MountPathCorrector;
 import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.Utils;
+import org.coolreader.genrescollection.GenresCollection;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -46,7 +47,7 @@ public class CRDBService extends BaseService {
 	public static final Logger log = L.create("db");
 	public static final Logger vlog = L.create("db", Log.ASSERT);
 
-    private MainDB mainDB = new MainDB();
+    private MainDB mainDB;
     private CoverDB coverDB = new CoverDB();
 
 	public CRDBService() {
@@ -57,6 +58,7 @@ public class CRDBService extends BaseService {
     public void onCreate() {
     	log.i("onCreate()");
     	super.onCreate();
+        mainDB = new MainDB(GenresCollection.getInstance(getApplicationContext()));
     	execTask(new OpenDatabaseTask());
     }
 
