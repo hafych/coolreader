@@ -491,7 +491,7 @@ public class CoolReader extends BaseActivity {
 		// DeviceInfo.getSDKLevel() not applicable here -> compile error about Android API compatibility
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
 			GoogleDriveRemoteAccess googleDriveRemoteAccess = new GoogleDriveRemoteAccess(this, 30);
-			mGoogleDriveSync = new Synchronizer(this, googleDriveRemoteAccess, getString(R.string.app_name), REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN);
+			mGoogleDriveSync = new Synchronizer(this, mScanner, googleDriveRemoteAccess, getString(R.string.app_name), REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN);
 			mGoogleDriveSyncStatusListener = new OnSyncStatusListener() {
 				@Override
 				public void onSyncStarted(Synchronizer.SyncDirection direction, boolean showProgress, boolean interactively) {

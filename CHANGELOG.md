@@ -61,6 +61,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   browser and TTS entry points.
 - Book information, online-store and TTS cover UI receive cover, genre, history
   and scanner dependencies from their owning reader or browser generation.
+- The optional cloud synchronizer receives its Scanner explicitly for restored
+  downloads and cloud-sync storage.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application

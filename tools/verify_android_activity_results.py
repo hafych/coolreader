@@ -30,6 +30,7 @@ BOOK_INFO_DIALOGS = (
     SOURCE / "crengine" / "OnlineStoreBookInfoDialog.java",
     SOURCE / "crengine" / "TTSToolbarDlg.java",
 )
+SYNCHRONIZER = SOURCE / "sync2" / "Synchronizer.java"
 SERVICE_ACCESSORS = (
     SOURCE / "db" / "CRDBServiceAccessor.java",
     SOURCE / "sync2" / "SyncServiceAccessor.java",
@@ -230,6 +231,18 @@ def main() -> None:
         if re.search(r"\bServices\.", text):
             violations.append(
                 f"{relative(path)} still uses the static service locator")
+
+    synchronizer_text = SYNCHRONIZER.read_text(encoding="utf-8")
+    if re.search(r"\bServices\.", synchronizer_text):
+        violations.append(
+            f"{relative(SYNCHRONIZER)} still uses the static service locator")
+    for marker in (
+        "private final Scanner mScanner",
+        "CoolReader coolReader,\n\t\t\tScanner scanner,",
+    ):
+        if marker not in synchronizer_text:
+            violations.append(
+                f"{relative(SYNCHRONIZER)} omits marker: {marker}")
 
     for path in SERVICE_ACCESSORS:
         text = path.read_text(encoding="utf-8")

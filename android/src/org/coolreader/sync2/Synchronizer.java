@@ -36,7 +36,6 @@ import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.Properties;
 import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.SecureXml;
-import org.coolreader.crengine.Services;
 import org.coolreader.crengine.Settings;
 import org.coolreader.crengine.Utils;
 import org.coolreader.db.CRDBService;
@@ -120,6 +119,7 @@ public class Synchronizer {
 
 	private RemoteAccess m_remoteAccess;
 	private CoolReader m_coolReader;
+	private final Scanner mScanner;
 	private int m_signInRequestCode;
 	private String m_appName;
 	private boolean m_isBusy;
@@ -187,8 +187,14 @@ public class Synchronizer {
 	private static final int CURRENTBOOKINFO_BUNDLE_VERSION = 3;
 
 
-	public Synchronizer(CoolReader coolReader, RemoteAccess remoteAccess, String appName, int signInRequestCode) {
+	public Synchronizer(
+			CoolReader coolReader,
+			Scanner scanner,
+			RemoteAccess remoteAccess,
+			String appName,
+			int signInRequestCode) {
 		m_coolReader = coolReader;
+		mScanner = scanner;
 		m_remoteAccess = remoteAccess;
 		m_syncTargets = new HashMap<>();
 		m_signInRequestCode = signInRequestCode;
@@ -1432,7 +1438,7 @@ public class Synchronizer {
 													throw new IOException("Invalid size of file, saved " + totalSize + ", must be " + sourceSize);
 												// parse & save in DB
 												BackgroundThread.instance().executeGUI(() -> m_coolReader.waitForCRDBService(() -> {
-													Services.getScanner().scanDirectory(m_coolReader.getDB(), new FileInfo(outDir), null, (scanControl) -> onContinue.run(), false, new Scanner.ScanControl());
+													mScanner.scanDirectory(m_coolReader.getDB(), new FileInfo(outDir), null, (scanControl) -> onContinue.run(), false, new Scanner.ScanControl());
 												}));
 												log.d("File \"" + file.getAbsolutePath() + "\" successfully saved.");
 											} catch (Exception e) {
@@ -2036,7 +2042,7 @@ public class Synchronizer {
 	}
 
 	private File getDownloadDir() {
-		FileInfo downloadDir = Services.getScanner().getDownloadDirectory();
+		FileInfo downloadDir = mScanner.getDownloadDirectory();
 		if (null == downloadDir)
 			return null;
 		String subdir = "cloud-sync";
