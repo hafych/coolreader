@@ -24,6 +24,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   large-book/10,000-book-library fixture generation.
 - A single verified fork version source shared by Android and desktop, with a
   monotonic date/sequence Android version-code scheme.
+- A tag-verified release workflow producing signed Android artifacts, native
+  symbols, SPDX, deterministic desktop archives, checksums and a draft GitHub
+  Release, plus rollback/hotfix gates.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

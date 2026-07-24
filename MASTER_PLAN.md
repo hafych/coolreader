@@ -90,13 +90,10 @@ DRM или ограничений доступа, подбор/получени�
 
 ### Release engineering
 
-- [ ] Автоматизировать release workflow: tag, changelog, AAB/APK, desktop archives,
-  checksums, SBOM, symbols и GitHub Release.
 - [ ] Проверить воспроизводимость двух release-сборок в чистых окружениях и
   документировать допустимые различия.
 - [ ] Добавить crash reporting только после отдельного решения о приватности,
   consent и self-hosted/third-party модели; по умолчанию не собирать телеметрию.
-- [ ] Создать release checklist для Android/desktop, rollback и hotfix.
 
 ## P2 — развитие продукта после безопасного релиза
 

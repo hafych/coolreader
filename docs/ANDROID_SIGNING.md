@@ -48,6 +48,12 @@ CI should inject these environment variables from its protected secret store:
 - `COOLREADER_RELEASE_KEY_ALIAS`
 - `COOLREADER_RELEASE_KEY_PASSWORD`
 
+The tag release workflow reconstructs the temporary file from an additional
+protected `COOLREADER_RELEASE_STORE_BASE64` secret and sets
+`COOLREADER_RELEASE_STORE_FILE` to the runner's temporary directory. Base64 is
+transport encoding, not encryption; restrict the base64 keystore and three
+value secrets to the protected `release` environment and never print them.
+
 The equivalent Gradle `-P` properties are:
 
 - `coolreader.release.storeFile`

@@ -8,6 +8,27 @@ if (!releaseVersionFile.isFile())
     throw new GradleException('Missing release-version.json')
 def releaseVersion = new JsonSlurper().parse(releaseVersionFile)
 
+def debugLintBaselineFile = file('lint-baseline.xml')
+def releaseLintBaselineFile = layout.buildDirectory.file(
+        'generated/lint/lint-baseline-release.xml')
+def releaseLintRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase(Locale.ROOT).contains('release')
+}
+tasks.register('prepareReleaseLintBaseline') {
+    group = 'verification'
+    description = 'Map the checked debug baseline to release source providers.'
+    inputs.file(debugLintBaselineFile)
+    outputs.file(releaseLintBaselineFile)
+    doLast {
+        def target = releaseLintBaselineFile.get().asFile
+        target.parentFile.mkdirs()
+        target.setText(
+                debugLintBaselineFile.getText('UTF-8')
+                        .replace('*debug*', '*release*'),
+                'UTF-8')
+    }
+}
+
 def releaseSigningPropertiesFile =
         rootProject.file('release-signing.properties')
 def releaseSigningProperties = new Properties()
@@ -170,7 +191,9 @@ android {
     }
     lintOptions {
         disable 'MissingTranslation'
-        baseline file("lint-baseline.xml")
+        baseline releaseLintRequested
+                ? releaseLintBaselineFile.get().asFile
+                : debugLintBaselineFile
         checkReleaseBuilds true
         abortOnError true
     }
@@ -192,6 +215,13 @@ android {
 }
 
 task prepareKotlinBuildScriptModel {}
+
+tasks.configureEach { task ->
+    def taskName = task.name.toLowerCase(Locale.ROOT)
+    if (task.name != 'prepareReleaseLintBaseline'
+            && taskName.contains('lint') && taskName.contains('release'))
+        task.dependsOn tasks.named('prepareReleaseLintBaseline')
+}
 
 tasks.register('verifyReleaseSigning') {
     group = 'verification'

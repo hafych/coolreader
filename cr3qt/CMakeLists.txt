@@ -211,7 +211,11 @@ INSTALL( DIRECTORY data/textures DESTINATION Contents/Resources )
 INSTALL( DIRECTORY data/backgrounds DESTINATION Contents/Resources )
 #INSTALL( FILES ${CR3_MAN_PAGES} DESTINATION share/doc/cr3 )
 INSTALL( FILES ${QM_FILES} DESTINATION Contents/Resources/i18n )
-INSTALL( DIRECTORY ${QT_INCLUDE_DIR}/../src/gui/mac/qt_menu.nib DESTINATION Contents/Resources )
+IF(DEFINED QT_INCLUDE_DIR AND
+   EXISTS "${QT_INCLUDE_DIR}/../src/gui/mac/qt_menu.nib")
+  INSTALL( DIRECTORY ${QT_INCLUDE_DIR}/../src/gui/mac/qt_menu.nib
+    DESTINATION Contents/Resources )
+ENDIF()
 INSTALL( FILES src/desktop/Info.plist DESTINATION Contents )
 INSTALL( FILES src/desktop/PkgInfo DESTINATION Contents )
 #INSTALL( FILES src/desktop/cr3.png DESTINATION share/pixmaps )

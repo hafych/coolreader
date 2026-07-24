@@ -70,6 +70,8 @@ Release performance thresholds and reproducible synthetic fixtures are
 documented in [docs/PERFORMANCE_BUDGETS.md](docs/PERFORMANCE_BUDGETS.md).
 The shared Android/desktop version scheme is documented in
 [docs/VERSIONING.md](docs/VERSIONING.md).
+The tag-to-draft workflow, artifact set, rollback and hotfix gates are in
+[docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
 
 ### Support matrix
 
