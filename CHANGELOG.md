@@ -138,6 +138,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   weight without a native data race.
 - Render DPI settings now use a synchronized API with coherent multi-value
   scaling snapshots instead of directly exposed mutable globals.
+- Hyphenation minima and soft-hyphen policy updates are now race-free during
+  concurrent rendering.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.

@@ -86,9 +86,12 @@ const static struct lang_tag_alias s_langTag_aliases[] = {
     { NULL, NULL }
 };
 
-int HyphMan::_OverriddenLeftHyphenMin = HYPH_DEFAULT_HYPHEN_MIN;
-int HyphMan::_OverriddenRightHyphenMin = HYPH_DEFAULT_HYPHEN_MIN;
-int HyphMan::_TrustSoftHyphens = HYPH_DEFAULT_TRUST_SOFT_HYPHENS;
+std::atomic<int> HyphMan::_OverriddenLeftHyphenMin(
+        HYPH_DEFAULT_HYPHEN_MIN);
+std::atomic<int> HyphMan::_OverriddenRightHyphenMin(
+        HYPH_DEFAULT_HYPHEN_MIN);
+std::atomic<int> HyphMan::_TrustSoftHyphens(
+        HYPH_DEFAULT_TRUST_SOFT_HYPHENS);
 LVHashTable<lString32, HyphMethod*> HyphMan::_loaded_hyph_methods(16);
 HyphDataLoader* HyphMan::_dataLoader = NULL;
 
@@ -256,7 +259,8 @@ void HyphMan::setDataLoader(HyphDataLoader* loader) {
 
 bool HyphMan::overrideLeftHyphenMin(int left_hyphen_min) {
     if (left_hyphen_min >= HYPH_MIN_HYPHEN_MIN && left_hyphen_min <= HYPH_MAX_HYPHEN_MIN) {
-        HyphMan::_OverriddenLeftHyphenMin = left_hyphen_min;
+        HyphMan::_OverriddenLeftHyphenMin.store(
+                left_hyphen_min, std::memory_order_relaxed);
         return true;
     }
     return false;
@@ -264,14 +268,16 @@ bool HyphMan::overrideLeftHyphenMin(int left_hyphen_min) {
 
 bool HyphMan::overrideRightHyphenMin(int right_hyphen_min) {
     if (right_hyphen_min >= HYPH_MIN_HYPHEN_MIN && right_hyphen_min <= HYPH_MAX_HYPHEN_MIN) {
-        HyphMan::_OverriddenRightHyphenMin = right_hyphen_min;
+        HyphMan::_OverriddenRightHyphenMin.store(
+                right_hyphen_min, std::memory_order_relaxed);
         return true;
     }
     return false;
 }
 
 bool HyphMan::setTrustSoftHyphens( int trust_soft_hyphens ) {
-    HyphMan::_TrustSoftHyphens = trust_soft_hyphens;
+    HyphMan::_TrustSoftHyphens.store(
+            trust_soft_hyphens, std::memory_order_relaxed);
     return true;
 }
 
@@ -1091,7 +1097,7 @@ bool TexHyph::match( const lChar32 * str, char * mask )
 
 bool TexHyph::hyphenate( const lChar32 * str, int len, lUInt16 * widths, lUInt8 * flags, lUInt16 hyphCharWidth, lUInt16 maxWidth, size_t flagSize )
 {
-    if ( HyphMan::_TrustSoftHyphens ) {
+    if ( HyphMan::getTrustSoftHyphens() ) {
         if ( softhyphens_hyphenate(str, len, widths, flags, hyphCharWidth, maxWidth, flagSize) )
             return true;
     }
@@ -1161,8 +1167,12 @@ bool TexHyph::hyphenate( const lChar32 * str, int len, lUInt16 * widths, lUInt8 
 
     // Use HyphMan global left/right hyphen min, unless set to 0 (the default)
     // which means we should use the HyphMethod specific values.
-    int left_hyphen_min = HyphMan::_OverriddenLeftHyphenMin > 0 ? HyphMan::_OverriddenLeftHyphenMin : _left_hyphen_min;
-    int right_hyphen_min = HyphMan::_OverriddenRightHyphenMin > 0 ? HyphMan::_OverriddenRightHyphenMin : _right_hyphen_min;
+    const int overridden_left = HyphMan::getOverriddenLeftHyphenMin();
+    const int overridden_right = HyphMan::getOverriddenRightHyphenMin();
+    int left_hyphen_min = overridden_left > 0
+            ? overridden_left : _left_hyphen_min;
+    int right_hyphen_min = overridden_right > 0
+            ? overridden_right : _right_hyphen_min;
 
     // Moves allowed hyphenation positions from 'mask' to the provided 'flags',
     // taking soft-hyphen shifts into account
@@ -1201,15 +1211,19 @@ bool TexHyph::hyphenate( const lChar32 * str, int len, lUInt16 * widths, lUInt8 
 
 bool AlgoHyph::hyphenate( const lChar32 * str, int len, lUInt16 * widths, lUInt8 * flags, lUInt16 hyphCharWidth, lUInt16 maxWidth, size_t flagSize )
 {
-    if ( HyphMan::_TrustSoftHyphens ) {
+    if ( HyphMan::getTrustSoftHyphens() ) {
         if ( softhyphens_hyphenate(str, len, widths, flags, hyphCharWidth, maxWidth, flagSize) )
             return true;
     }
 
     // Use HyphMan global left/right hyphen min, unless set to 0 (the default)
     // which means we should use the HyphMethod specific values.
-    int left_hyphen_min = HyphMan::_OverriddenLeftHyphenMin ? HyphMan::_OverriddenLeftHyphenMin : _left_hyphen_min;
-    int right_hyphen_min = HyphMan::_OverriddenRightHyphenMin ? HyphMan::_OverriddenRightHyphenMin : _right_hyphen_min;
+    const int overridden_left = HyphMan::getOverriddenLeftHyphenMin();
+    const int overridden_right = HyphMan::getOverriddenRightHyphenMin();
+    int left_hyphen_min = overridden_left
+            ? overridden_left : _left_hyphen_min;
+    int right_hyphen_min = overridden_right
+            ? overridden_right : _right_hyphen_min;
 
     lUInt16 chprops[WORD_LENGTH];
     if ( len > WORD_LENGTH-2 )

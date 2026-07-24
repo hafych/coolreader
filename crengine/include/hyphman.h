@@ -29,6 +29,8 @@
 #ifndef _HYPHEN_
 #define _HYPHEN_
 
+#include <atomic>
+
 #include "lvtypes.h"
 #include "lvstring.h"
 #include "lvstream.h"
@@ -152,9 +154,9 @@ class HyphMan
     static HyphDictionaryList * _dictList; // available hyph dict files (+ none/algo/softhyphens)
     static LVHashTable<lString32, HyphMethod*> _loaded_hyph_methods; // methods with loaded dictionaries
     static HyphDataLoader* _dataLoader;
-    static int _OverriddenLeftHyphenMin;
-    static int _OverriddenRightHyphenMin;
-    static int _TrustSoftHyphens;
+    static std::atomic<int> _OverriddenLeftHyphenMin;
+    static std::atomic<int> _OverriddenRightHyphenMin;
+    static std::atomic<int> _TrustSoftHyphens;
     static HyphMethod* getHyphMethodForLang_impl(lString32 lang_tag);
 public:
     static void uninit();
@@ -164,11 +166,17 @@ public:
     static void setDataLoader(HyphDataLoader* loader);
     static bool activateDictionary(lString32 id) { return _dictList->activate(id); }
     static HyphDictionary* getSelectedDictionary(); // was: { return _selectedDictionary; }
-    static int getOverriddenLeftHyphenMin() { return _OverriddenLeftHyphenMin; }
-    static int getOverriddenRightHyphenMin() { return _OverriddenRightHyphenMin; }
+    static int getOverriddenLeftHyphenMin() {
+        return _OverriddenLeftHyphenMin.load(std::memory_order_relaxed);
+    }
+    static int getOverriddenRightHyphenMin() {
+        return _OverriddenRightHyphenMin.load(std::memory_order_relaxed);
+    }
     static bool overrideLeftHyphenMin(int left_hyphen_min);
     static bool overrideRightHyphenMin(int right_hyphen_min);
-    static int getTrustSoftHyphens() { return _TrustSoftHyphens; }
+    static int getTrustSoftHyphens() {
+        return _TrustSoftHyphens.load(std::memory_order_relaxed);
+    }
     static bool setTrustSoftHyphens( int trust_soft_hyphen );
     static bool isEnabled();
     static HyphMethod* getHyphMethodForDictionary(lString32 id);

@@ -39,6 +39,10 @@ Their storage is private and atomic, access is limited to explicit setter/getter
 functions, and multi-value scaling sites take one DPI snapshot where their
 calculations must agree. The unused `gRootFontSize` declaration was removed.
 
-Known follow-up groups include hyphenation registries and font/cache singletons.
-Each group must be migrated separately with an impact check and focused
-regression tests.
+Process-wide hyphenation minima and the soft-hyphen policy are atomically
+published, range-checked where applicable and covered by concurrent regression
+tests.
+
+Known follow-up groups include the owning hyphenation dictionary registry and
+font/cache singletons. Each group must be migrated separately with an impact
+check and focused regression tests.

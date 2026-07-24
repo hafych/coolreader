@@ -9,6 +9,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrend.h" RENDER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/hyphman.cpp" HYPH_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -79,6 +81,21 @@ require_source_text(
   "compare_exchange_strong"
   "document registry updates must be atomic"
 )
+require_source_text(
+  "${HYPH_HEADER}"
+  "static std::atomic<int> _OverriddenLeftHyphenMin"
+  "left hyphen minimum must be synchronized"
+)
+require_source_text(
+  "${HYPH_HEADER}"
+  "static std::atomic<int> _OverriddenRightHyphenMin"
+  "right hyphen minimum must be synchronized"
+)
+require_source_text(
+  "${HYPH_HEADER}"
+  "static std::atomic<int> _TrustSoftHyphens"
+  "soft-hyphen policy must be synchronized"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -124,4 +141,19 @@ forbid_source_text(
   "${RENDER_HEADER}"
   "gRenderScaleFontWithDPI"
   "font DPI scaling storage must remain private"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "int HyphMan::_OverriddenLeftHyphenMin"
+  "left hyphen minimum must not have unsynchronized storage"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "int HyphMan::_OverriddenRightHyphenMin"
+  "right hyphen minimum must not have unsynchronized storage"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "int HyphMan::_TrustSoftHyphens"
+  "soft-hyphen policy must not have unsynchronized storage"
 )

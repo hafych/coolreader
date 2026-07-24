@@ -1,5 +1,6 @@
 #include "lvstreamutils.h"
 #include "lvthread.h"
+#include "hyphman.h"
 #include "lvrend.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
@@ -136,6 +137,57 @@ static int testConcurrentRenderDPISettings() {
     LVRendSetScaleFontWithDPI(DEF_RENDER_SCALE_FONT_WITH_DPI != 0);
     if (failed.load(std::memory_order_acquire))
         return fail("render DPI settings published an invalid value");
+    return 0;
+}
+
+static int testConcurrentHyphenationSettings() {
+    HyphMan::overrideLeftHyphenMin(4);
+    HyphMan::overrideRightHyphenMin(5);
+    if (HyphMan::overrideLeftHyphenMin(-1)
+            || HyphMan::overrideRightHyphenMin(
+                    HYPH_MAX_HYPHEN_MIN + 1)
+            || HyphMan::getOverriddenLeftHyphenMin() != 4
+            || HyphMan::getOverriddenRightHyphenMin() != 5)
+        return fail("invalid hyphen minima changed the configured values");
+
+    static const int workerCount = 8;
+    static const int iterations = 1000;
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, &failed]() {
+            for (int iteration = 0; iteration < iterations; iteration++) {
+                const int value = (workerIndex + iteration)
+                        % (HYPH_MAX_HYPHEN_MIN + 1);
+                HyphMan::overrideLeftHyphenMin(value);
+                HyphMan::overrideRightHyphenMin(
+                        HYPH_MAX_HYPHEN_MIN - value);
+                HyphMan::setTrustSoftHyphens(value % 2);
+                const int left =
+                        HyphMan::getOverriddenLeftHyphenMin();
+                const int right =
+                        HyphMan::getOverriddenRightHyphenMin();
+                const int trust = HyphMan::getTrustSoftHyphens();
+                if (left < HYPH_MIN_HYPHEN_MIN
+                        || left > HYPH_MAX_HYPHEN_MIN
+                        || right < HYPH_MIN_HYPHEN_MIN
+                        || right > HYPH_MAX_HYPHEN_MIN
+                        || (trust != 0 && trust != 1)) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+    HyphMan::overrideLeftHyphenMin(HYPH_DEFAULT_HYPHEN_MIN);
+    HyphMan::overrideRightHyphenMin(HYPH_DEFAULT_HYPHEN_MIN);
+    HyphMan::setTrustSoftHyphens(HYPH_DEFAULT_TRUST_SOFT_HYPHENS);
+    if (failed.load(std::memory_order_acquire))
+        return fail("hyphenation settings published an invalid value");
     return 0;
 }
 
@@ -692,6 +744,8 @@ int main() {
     if (testConcurrentRenderBaseWeight() != 0)
         return 1;
     if (testConcurrentRenderDPISettings() != 0)
+        return 1;
+    if (testConcurrentHyphenationSettings() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;
