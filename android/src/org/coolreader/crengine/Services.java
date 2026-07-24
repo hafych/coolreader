@@ -99,12 +99,6 @@ public class Services {
 		mDocumentCache = new DocumentFileCache(activity);
 	}
 
-	// called after user grant permissions for external storage
-	public static void refreshServices(BaseActivity activity) {
-		mEngine.initAgain();
-		mScanner.initRoots(Engine.getMountedRootsMap(), mEngine.getAppPrivateDirs());
-	}
-
 	public static void stopServices() {
 		log.i("Last activity is destroyed");
 		if (mCoverpageManager == null) {

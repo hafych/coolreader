@@ -305,7 +305,6 @@ public class BaseActivity extends Activity implements Settings {
 	protected static String PREF_LAST_BOOK = "LastBook";
 	protected static String PREF_LAST_LOCATION = "LastLocation";
 	protected static String PREF_LAST_NOTIFICATION_MASK = "LastNoticeMask";
-	protected static String PREF_EXT_DATADIR_CREATETIME = "ExtDataDirCreateTime";
 	protected static String PREF_LAST_LOGCAT = "LastLogcat";
 
 	@Override
@@ -334,13 +333,6 @@ public class BaseActivity extends Activity implements Settings {
 
 	public String getVersion() {
 		return mVersion;
-	}
-
-	public void rebaseSettings() {
-		// if rootFs changed (for example, when external storage permission firstly granted) open config from new root
-		Properties oldProps = mSettingsManager.mSettings;
-		mSettingsManager.rebaseSettings();
-		onSettingsChanged(settings(), oldProps);
 	}
 
 	public Properties loadSettings(int profile) {
@@ -1564,10 +1556,6 @@ public class BaseActivity extends Activity implements Settings {
 			mSettings = loadSettings();
 		}
 
-		public void rebaseSettings() {
-			mSettings = loadSettings();
-		}
-
 		//int lastSaveId = 0;
 		public void setSettings(Properties settings, int delayMillis, boolean notify) {
 			Properties oldSettings = mSettings;
@@ -2083,13 +2071,7 @@ public class BaseActivity extends Activity implements Settings {
 			} else {
 				File propsDir = defaultSettingsDir;
 				propsFile = new File(propsDir, SETTINGS_FILE_NAME);
-				File dataDir = Engine.getExternalSettingsDir();
-				if (dataDir != null) {
-					log.d("external settings dir: " + dataDir);
-					propsFile = Engine.checkOrMoveFile(dataDir, propsDir, SETTINGS_FILE_NAME);
-				} else {
-					propsDir.mkdirs();
-				}
+				propsDir.mkdirs();
 			}
 
 			Properties props = loadSettings(mActivity, propsFile);

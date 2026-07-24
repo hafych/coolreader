@@ -24,14 +24,12 @@ package org.coolreader.db;
 
 import android.content.Intent;
 import android.os.Binder;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import org.coolreader.crengine.Log;
 
 import org.coolreader.crengine.BookInfo;
 import org.coolreader.crengine.Bookmark;
-import org.coolreader.crengine.DeviceInfo;
 import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.FileInfo;
 import org.coolreader.crengine.L;
@@ -82,18 +80,9 @@ public class CRDBService extends BaseService {
     }
 
     private File getDatabaseDir() {
-    	//File storage = Environment.getExternalStorageDirectory();
-    	File storage = DeviceInfo.EINK_NOOK ? new File("/media/") : Environment.getExternalStorageDirectory();
-    	File cr3dir = new File(storage, ".cr3");
-    	if (cr3dir.isDirectory())
-    		cr3dir.mkdirs();
-    	if (!cr3dir.isDirectory() || !cr3dir.canWrite()) {
-	    	log.w("Cannot use " + cr3dir + " for writing database, will use data directory instead");
-	    	log.w("getFilesDir=" + getFilesDir() + " getDataDirectory=" + Environment.getDataDirectory());
-    		cr3dir = getFilesDir(); //Environment.getDataDirectory();
-    	}
-    	log.i("DB directory: " + cr3dir);
-    	return cr3dir;
+		File cr3dir = getFilesDir();
+		log.i("DB directory: " + cr3dir);
+		return cr3dir;
     }
     
     private class OpenDatabaseTask extends Task {

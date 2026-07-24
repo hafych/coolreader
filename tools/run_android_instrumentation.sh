@@ -27,6 +27,9 @@ install_test_apks() {
 mkdir -p "${report_dir}"
 install_test_apks
 run_instrumentation \
+    'phase0-scoped-storage-policy' \
+    'org.coolreader.AndroidSmokeInstrumentedTest#scopedStorageUsesOnlyPrivateFilesystemRoots'
+run_instrumentation \
     'phase0-open-ordinary-file' \
     'org.coolreader.AndroidSmokeInstrumentedTest#ordinaryFileOpensFromGenericMimeIntent'
 run_instrumentation \

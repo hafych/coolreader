@@ -63,8 +63,8 @@ DRM или ограничений доступа, подбор/получени�
 
 ### Данные, SAF и Android permissions
 
-- [ ] После завершения SAF-перехода удалить legacy storage permissions,
-  `requestLegacyExternalStorage` и прямое сканирование недоступных каталогов.
+- ~~После завершения SAF-перехода удалить legacy storage permissions,
+  `requestLegacyExternalStorage` и прямое сканирование недоступных каталогов.~~
 
 ## P1 — воспроизводимость, качество и сопровождение форка
 

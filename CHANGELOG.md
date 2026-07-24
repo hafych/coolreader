@@ -57,6 +57,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android document-open flows now carry typed file, archive, temporary-import
   and `content://` sources through the reader task boundary instead of
   collapsing them back to a pathname.
+- Android no longer requests broad external-storage permissions, opts into
+  legacy storage, probes mount tables or scans hardcoded shared-storage paths.
+  Databases and native caches now remain in app-private storage; user-selected
+  library access goes through persisted SAF grants.
 - Notification actions are immutable, package-scoped and registered as
   non-exported.
 - Temporary document cache is capped at 512 MiB and 32 files with

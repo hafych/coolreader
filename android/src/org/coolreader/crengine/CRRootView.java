@@ -582,29 +582,6 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 //		});
 	}
 
-	// called after user grant permissions for external storage
-	public void refreshView() {
-		updateDelimiterTheme(R.id.delimiter1);
-		updateDelimiterTheme(R.id.delimiter2);
-		updateDelimiterTheme(R.id.delimiter3);
-		updateDelimiterTheme(R.id.delimiter4);
-		updateDelimiterTheme(R.id.delimiter5);
-
-		// Must be initialized FileSystemFolders.favoriteFolders firstly to exclude NullPointerException.
-		mActivity.waitForCRDBService(() -> Services.getFileSystemFolders().loadFavoriteFolders(mActivity.getDB()));
-
-		updateCurrentBook(Services.getHistory().getLastBook());
-		refreshRecentBooks();
-
-		BackgroundThread.instance().postGUI(this::refreshFileSystemFolders);
-
-		BackgroundThread.instance().postGUI(() -> {
-			refreshOnlineCatalogs();
-			if (Services.getScanner() != null)
-				updateLibraryItems(Services.getScanner().getLibraryItems());
-		});
-	}
-
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
 		log.d("CRRootView.onTouchEvent(" + event.getAction() + ")");

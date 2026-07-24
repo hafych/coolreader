@@ -23,7 +23,7 @@ HTML, CHM, PDB and more.
 
 | Focus | What is already implemented |
 | --- | --- |
-| Modern Android | API 35 build, API 21 minimum, pinned toolchain and Storage Access Framework file-descriptor loading |
+| Modern Android | API 35 build, API 21 minimum, pinned toolchain, SAF library roots and no broad storage permission |
 | Privacy and security | Normal TLS validation, HTTPS-only LitRes flows, bounded responses, hardened XML parsing and plaintext credential cleanup |
 | Untrusted ebooks | ZIP, image and document resource budgets plus native safety regression tests |
 | Reliability | Database schema 35 repair, Android unit tests, native CTest and Linux/macOS/Android CI |
@@ -46,6 +46,9 @@ cd android
 ```
 
 The debug APK is written to `android/app/build/outputs/apk/debug/`.
+Books outside app-private storage are opened through Android's document picker
+or a persisted SAF library root; the app does not request legacy broad access
+to shared storage.
 
 ### Support matrix
 
@@ -53,7 +56,7 @@ The debug APK is written to `android/app/build/outputs/apk/debug/`.
 | --- | --- | --- |
 | Android | Actively verified preview | API 21 minimum, API 35 target, JDK 17, pinned NDK |
 | Native engine/tools | Actively verified | Ubuntu and macOS CI, C++17, CMake |
-| Qt desktop | Best effort until Qt 6 CI lands | Legacy Qt 5 build path |
+| Qt desktop | Actively verified | Qt 6 on Ubuntu CI; Qt 5 best effort through 2026 |
 | wxWidgets, Windows and E-Ink frontends | Community-tested | No blocking CI yet |
 
 “Best effort” means the code is retained and fixes are welcome, but every commit

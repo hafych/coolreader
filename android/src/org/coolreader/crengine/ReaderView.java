@@ -3093,7 +3093,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			doc.setPageBackgroundTexture(data, currentBackgroundTexture.tiled ? 1 : 0);
 
 			//File historyDir = activity.getDir("settings", Context.MODE_PRIVATE);
-			//File historyDir = new File(Environment.getExternalStorageDirectory(), ".cr3");
 			//historyDir.mkdirs();
 			//File historyFile = new File(historyDir, "cr3hist.ini");
 

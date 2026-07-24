@@ -9,6 +9,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
@@ -18,6 +20,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.coolreader.crengine.BookInfo;
+import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.ReaderView;
 import org.coolreader.tts.OnTTSStatusListener;
 import org.coolreader.tts.TTSControlBinder;
@@ -81,6 +84,39 @@ public class AndroidSmokeInstrumentedTest {
 
 		finishActivity(activity);
 		assertTrue(document.delete());
+	}
+
+	@Test
+	public void scopedStorageUsesOnlyPrivateFilesystemRoots() throws Exception {
+		Context target = targetContext();
+		PackageInfo packageInfo = target.getPackageManager().getPackageInfo(
+				target.getPackageName(), PackageManager.GET_PERMISSIONS);
+		String[] requestedPermissions = packageInfo.requestedPermissions;
+		if (requestedPermissions != null) {
+			for (String permission : requestedPermissions) {
+				assertFalse(android.Manifest.permission.READ_EXTERNAL_STORAGE
+						.equals(permission));
+				assertFalse(android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+						.equals(permission));
+				assertFalse("android.permission.MANAGE_EXTERNAL_STORAGE"
+						.equals(permission));
+			}
+		}
+
+		Activity activity = launchMainActivity(
+				target, InstrumentationRegistry.getInstrumentation());
+		try {
+			assertTrue(Engine.getMountedRootsMap().isEmpty());
+			Engine engine = Engine.getInstance((CoolReader) activity);
+			for (String path : engine.getAppPrivateDirs().keySet()) {
+				File directory = new File(path);
+				assertTrue(isUnder(directory, target.getFilesDir())
+						|| isUnder(directory, target.getCacheDir()));
+			}
+			assertTrue(new File(target.getCacheDir(), "engine").isDirectory());
+		} finally {
+			finishActivity(activity);
+		}
 	}
 
 	@Test
@@ -194,6 +230,13 @@ public class AndroidSmokeInstrumentedTest {
 
 	private static Context targetContext() {
 		return InstrumentationRegistry.getInstrumentation().getTargetContext();
+	}
+
+	private static boolean isUnder(File path, File root) throws Exception {
+		String canonicalPath = path.getCanonicalPath();
+		String canonicalRoot = root.getCanonicalPath();
+		return canonicalPath.equals(canonicalRoot)
+				|| canonicalPath.startsWith(canonicalRoot + File.separator);
 	}
 
 	private static ReaderView readerView(CoolReader activity)

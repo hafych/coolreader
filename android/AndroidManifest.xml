@@ -17,9 +17,6 @@
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
     
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <!-- uses-permission android:name="android.permission.WRITE_MEDIA_STORAGE"/-->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- foreground TTS control service, for API >= 28 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>

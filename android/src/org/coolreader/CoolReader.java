@@ -25,7 +25,6 @@
 // Main Class
 package org.coolreader;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
@@ -35,7 +34,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.UriPermission;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -158,12 +156,9 @@ public class CoolReader extends BaseActivity {
 	private boolean activityIsRunning = false;
 	private boolean isInterfaceCreated = false;
 
-	private boolean dataDirIsRemoved = false;
-
 	private String ttsEnginePackage = "";
 	private TTSControlServiceAccessor ttsControlServiceAccessor = null;
 
-	private static final int REQUEST_CODE_STORAGE_PERM = 1;
 	private static final int REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN = 3;
 	private static final int REQUEST_CODE_OPEN_DOCUMENT_TREE = 11;
 	private static final int REQUEST_CODE_SELECT_LIBRARY_ROOT = 12;
@@ -250,10 +245,6 @@ public class CoolReader extends BaseActivity {
 		activityIsRunning = false;
 		isInterfaceCreated = false;
 
-		// Can request only one set of permissions at a time
-		// Then request all permission at a time.
-		requestStoragePermissions();
-
 		// apply settings
 		onSettingsChanged(settings(), null);
 
@@ -293,14 +284,6 @@ public class CoolReader extends BaseActivity {
 		N2EpdController.n2MainActivity = this;
 
 		showRootWindow();
-
-		if (null != Engine.getExternalSettingsDirName()) {
-			// if external data directory created or already exist.
-			if (!Engine.DATADIR_IS_EXIST_AT_START && getExtDataDirCreateTime() > 0) {
-				dataDirIsRemoved = true;
-				log.e("DataDir removed by other application!");
-			}
-		}
 
 		log.i("CoolReader.onCreate() exiting");
 	}
@@ -904,18 +887,7 @@ public class CoolReader extends BaseActivity {
 					filePath = filePath.replace("%00", "@/");
 					filePath = Uri.decode(filePath);
 				}
-				if ("com.android.externalstorage.documents".equals(host)) {
-					// application "Files" by Google, package="com.android.externalstorage.documents"
-					if (filePath.matches("^/document/.*:.*$")) {
-						// decode special uri form: /document/primary:<somebody>
-						//                          /document/XXXX-XXXX:<somebody>
-						String shortcut = filePath.replaceFirst("^/document/(.*):.*$", "$1");
-						String mountRoot = Engine.getMountRootByShortcut(shortcut);
-						if (mountRoot != null) {
-							filePath = filePath.replaceFirst("^/document/.*:(.*)$", mountRoot + "/$1");
-						}
-					}
-				} else if ("com.google.android.apps.nbu.files.provider".equals(host)) {
+				if ("com.google.android.apps.nbu.files.provider".equals(host)) {
 					// application "Files" by Google, package="com.google.android.apps.nbu.files"
 					if (filePath.startsWith("/1////")) {
 						// skip "/1///"
@@ -1144,16 +1116,6 @@ public class CoolReader extends BaseActivity {
 			if (!processIntent(getIntent()))
 				showLastLocation();
 		}
-		if (dataDirIsRemoved) {
-			// show message
-			ErrorDialog dlg = new ErrorDialog(this, getString(R.string.error), getString(R.string.datadir_is_removed, Engine.getExternalSettingsDirName()));
-			dlg.show();
-		}
-		if (Engine.getExternalSettingsDirName() != null) {
-			setExtDataDirCreateTime(new Date());
-		} else {
-			setExtDataDirCreateTime(null);
-		}
 		stopped = false;
 
 		log.i("CoolReader.onStart() exiting");
@@ -1173,69 +1135,6 @@ public class CoolReader extends BaseActivity {
 			mReaderView.close();
 
 		log.i("CoolReader.onStop() exiting");
-	}
-
-	private void requestStoragePermissions() {
-		// check or request permission for storage
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-			int readExtStoragePermissionCheck = checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE);
-			int writeExtStoragePermissionCheck = checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-			ArrayList<String> needPerms = new ArrayList<>();
-			if (PackageManager.PERMISSION_GRANTED != readExtStoragePermissionCheck) {
-				needPerms.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-			} else {
-				log.i("READ_EXTERNAL_STORAGE permission already granted.");
-			}
-			if (PackageManager.PERMISSION_GRANTED != writeExtStoragePermissionCheck) {
-				needPerms.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-			} else {
-				log.i("WRITE_EXTERNAL_STORAGE permission already granted.");
-			}
-			if (!needPerms.isEmpty()) {
-				// TODO: Show an explanation to the user
-				// Show an explanation to the user *asynchronously* -- don't block
-				// this thread waiting for the user's response! After the user
-				// sees the explanation, try again to request the permission.
-				String[] templ = new String[0];
-				log.i("Some permissions DENIED, requesting from user these permissions: " + needPerms.toString());
-				// request permission from user
-				requestPermissions(needPerms.toArray(templ), REQUEST_CODE_STORAGE_PERM);
-			}
-		}
-	}
-
-	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-		log.i("CoolReader.onRequestPermissionsResult()");
-		if (REQUEST_CODE_STORAGE_PERM == requestCode) {        // external storage read & write permissions
-			int ext_sd_perm_count = 0;
-			//boolean read_phone_state_granted = false;
-			for (int i = 0; i < permissions.length; i++) {
-				if (grantResults[i] == PackageManager.PERMISSION_GRANTED)
-					log.i("Permission " + permissions[i] + " GRANTED");
-				else
-					log.i("Permission " + permissions[i] + " DENIED");
-				if (permissions[i].compareTo(Manifest.permission.READ_EXTERNAL_STORAGE) == 0 && grantResults[i] == PackageManager.PERMISSION_GRANTED)
-					ext_sd_perm_count++;
-				else if (permissions[i].compareTo(Manifest.permission.WRITE_EXTERNAL_STORAGE) == 0 && grantResults[i] == PackageManager.PERMISSION_GRANTED)
-					ext_sd_perm_count++;
-			}
-			if (2 == ext_sd_perm_count) {
-				log.i("read&write to storage permissions GRANTED, adding sd card mount point...");
-				Services.refreshServices(this);
-				rebaseSettings();
-				waitForCRDBService(() -> {
-					getDBService().setPathCorrector(Engine.getInstance(CoolReader.this).getPathCorrector());
-					getDB().reopenDatabase();
-					Services.getHistory().loadFromDB(getDB(), 200);
-				});
-				mHomeFrame.refreshView();
-			}
-			if (Engine.getExternalSettingsDirName() != null) {
-				setExtDataDirCreateTime(new Date());
-			} else {
-				setExtDataDirCreateTime(null);
-			}
-		}
 	}
 
 	private static Debug.MemoryInfo info = new Debug.MemoryInfo();
@@ -2671,22 +2570,6 @@ public class CoolReader extends BaseActivity {
 		}
 		// TODO: support other locations as well
 		showRootWindow();
-	}
-
-	public void setExtDataDirCreateTime(Date d) {
-		try {
-			SharedPreferences.Editor editor = getPrefs().edit();
-			editor.putLong(PREF_EXT_DATADIR_CREATETIME, (null != d) ? d.getTime() : 0);
-			editor.commit();
-		} catch (Exception e) {
-			// ignore
-		}
-	}
-
-	public long getExtDataDirCreateTime() {
-		long res = getPrefs().getLong(PREF_EXT_DATADIR_CREATETIME, 0);
-		log.i("getExtDataDirCreateTime() = " + res);
-		return res;
 	}
 
 	private boolean updateExtSDURI(FileInfo fi, Uri extSDUri) {

@@ -34,18 +34,14 @@ import org.coolreader.R;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 
@@ -95,36 +91,6 @@ public class Engine {
 
 	public static Map<String, String> getMountedRootsMap() {
 		return mountedRootsMap;
-	}
-
-	/**
-	 * @param shortcut File system shortcut that return application "Files" by Google (package="com.android.externalstorage.documents")
-	 *                 "primary" for internal storage,
-	 *                 "XXXX-XXXX" (file system serial number) for any external storage like sdcard, usb disk, etc.
-	 * @return path to mount root for given file system.
-	 */
-	public static String getMountRootByShortcut(String shortcut) {
-		String mountRoot = null;
-		if ("primary".equals(shortcut)) {
-			// "/document/primary:/.*"
-			for (Map.Entry<String, String> entry : mountedRootsMap.entrySet()) {
-				if ("SD".equals(entry.getValue())) {
-					mountRoot = entry.getKey();
-					break;
-				}
-			}
-		} else {
-			// "/document/XXXX-XXXX/.*"
-			String pattern = "/storage/" + shortcut;
-			for (Map.Entry<String, String> entry : mountedRootsMap.entrySet()) {
-				// Android 6 ext storage, @see addMountRoot()
-				if ("EXT SD".equals(entry.getValue()) && entry.getKey().startsWith(pattern)) {
-					mountRoot = entry.getKey();
-					break;
-				}
-			}
-		}
-		return mountRoot;
 	}
 
 	private final Map<String, String> mAppPrivateDirs = new HashMap<String, String>();
@@ -622,25 +588,7 @@ public class Engine {
 	 */
 	private Engine(BaseActivity activity) {
 		setParams(activity);
-	}
-
-	public void initAgain() {
-		initMountRoots();
-		File[] dataDirs = Engine.getDataDirectories(null, false, true);
-		if (dataDirs != null && dataDirs.length > 0) {
-			log.i("Engine.initAgain() : DataDir exist at start.");
-			DATADIR_IS_EXIST_AT_START = true;
-		} else {
-			log.i("Engine.initAgain() : DataDir NOT exist at start.");
-		}
-		mFonts = findFonts();
-		findExternalHyphDictionaries();
-		if (!initInternal(mFonts, DeviceInfo.getSDKLevel())) {
-			log.i("Engine.initInternal failed!");
-			throw new RuntimeException("Cannot initialize CREngine JNI");
-		}
 		initCacheDirectory();
-		log.i("Engine() : initialization done");
 	}
 
 	// Native functions
@@ -1036,513 +984,26 @@ public class Engine {
 
 	final static int CACHE_DIR_SIZE = 32000000;
 
-	private static String createCacheDir(File baseDir, String subDir) {
-		String cacheDirName = null;
-		if (baseDir.isDirectory()) {
-			if (baseDir.canWrite()) {
-				if (subDir != null) {
-					baseDir = new File(baseDir, subDir);
-					baseDir.mkdir();
-				}
-				if (baseDir.exists() && baseDir.canWrite()) {
-					File cacheDir = new File(baseDir, "cache");
-					if (cacheDir.exists() || cacheDir.mkdirs()) {
-						if (cacheDir.canWrite()) {
-							cacheDirName = cacheDir.getAbsolutePath();
-							CR3_SETTINGS_DIR_NAME = baseDir.getAbsolutePath();
-						}
-					}
-				}
-			} else {
-				log.i(baseDir.toString() + " is read only");
-			}
-		} else {
-			log.i(baseDir.toString() + " is not found");
-		}
-		return cacheDirName;
-	}
-
-	public static String getExternalSettingsDirName() {
-		return CR3_SETTINGS_DIR_NAME;
-	}
-
-	public static File getExternalSettingsDir() {
-		return CR3_SETTINGS_DIR_NAME != null ? new File(CR3_SETTINGS_DIR_NAME) : null;
-	}
-
-	public static boolean moveFile(File oldPlace, File newPlace) {
-		boolean removeNewFile = true;
-		log.i("Moving file " + oldPlace.getAbsolutePath() + " to " + newPlace.getAbsolutePath());
-		if (!oldPlace.exists()) {
-			log.e("File " + oldPlace.getAbsolutePath() + " does not exist!");
-			return false;
-		}
-		try {
-			FileInputStream is = new FileInputStream(oldPlace);
-			FileOutputStream os = new FileOutputStream(newPlace);
-			byte[] buf = new byte[0x10000];				// 64kB
-			for (; ; ) {
-				int bytesRead = is.read(buf);
-				if (bytesRead <= 0)
-					break;
-				os.write(buf, 0, bytesRead);
-			}
-			os.close();
-			is.close();
-			removeNewFile = false;
-			oldPlace.delete();
-			return true;
-		} catch (IOException e) {
-			return false;
-		} finally {
-			if (removeNewFile) {
-				// Write to new file failed, remove it.
-				log.e("Failed to write into file " + newPlace.getAbsolutePath() + "!");
-				newPlace.delete();
-			}
-		}
-	}
-
-	/**
-	 * Checks whether file under old path exists, and moves it to better place when necessary.
-	 * Can be slow if big file is being moved.
-	 *
-	 * @param bestPlace is desired directory for file (e.g. new place after migration)
-	 * @param oldPlace  is old (obsolete) directory for file (e.g. location from older releases)
-	 * @param filename  is name of file
-	 * @return file to use (from old or new place)
-	 */
-	public static File checkOrMoveFile(File bestPlace, File oldPlace, String filename) {
-		if (!bestPlace.exists()) {
-			bestPlace.mkdirs();
-		}
-		File oldFile = new File(oldPlace, filename);
-		if (bestPlace.isDirectory() && bestPlace.canWrite()) {
-			File bestFile = new File(bestPlace, filename);
-			if (bestFile.exists())
-				return bestFile; // already exists
-			if (oldFile.exists() && oldFile.isFile()) {
-				// move file
-				if (moveFile(oldFile, bestFile))
-					return bestFile;
-				return oldFile;
-			}
-			return bestFile;
-		}
-		return oldFile;
-	}
-
-	private static String CR3_SETTINGS_DIR_NAME;
-
-	public final static String CACHE_BASE_DIR_NAME = ".cr3"; // "Books"
 
 	private static void initCacheDirectory() {
-		String cacheDirName = null;
-		// SD card
-		cacheDirName = createCacheDir(
-				DeviceInfo.EINK_NOOK ? new File("/media/") : Environment.getExternalStorageDirectory(), CACHE_BASE_DIR_NAME);
-		// non-standard SD mount points
-		log.i(cacheDirName
-				+ " will be used for cache, maxCacheSize=" + CACHE_DIR_SIZE);
-		if (cacheDirName == null) {
-			for (String dirname : mountedRootsMap.keySet()) {
-				cacheDirName = createCacheDir(new File(dirname),
-						CACHE_BASE_DIR_NAME);
-				if (cacheDirName != null)
-					break;
-			}
-		}
-		// internal flash
-//		if (cacheDirName == null) {
-//			File cacheDir = mActivity.getCacheDir();
-//			if (!cacheDir.isDirectory())
-//				cacheDir.mkdir();
-//			cacheDirName = createCacheDir(cacheDir, null);
-//			// File cacheDir = mActivity.getDir("cache", Context.MODE_PRIVATE);
-////			if (cacheDir.isDirectory() && cacheDir.canWrite())
-////				cacheDirName = cacheDir.getAbsolutePath();
-//		}
-		// set cache directory for engine
-		if (cacheDirName != null) {
-			log.i(cacheDirName
+		if (instance == null || instance.mActivity == null)
+			return;
+		File cacheDir = new File(instance.mActivity.getCacheDir(), "engine");
+		if (cacheDir.isDirectory() || cacheDir.mkdirs()) {
+			log.i(cacheDir
 					+ " will be used for cache, maxCacheSize=" + CACHE_DIR_SIZE);
-			setCacheDirectoryInternal(cacheDirName, CACHE_DIR_SIZE);
+			setCacheDirectoryInternal(cacheDir.getAbsolutePath(), CACHE_DIR_SIZE);
 		} else {
-			log.w("No directory for cache is available!");
+			log.w("Cannot create private engine cache directory");
 		}
 	}
-
-	private static boolean addMountRoot(Map<String, String> list, String pathname, int resourceId) {
-		return addMountRoot(list, pathname, pathname); //mActivity.getResources().getString(resourceId));
-	}
-
-	public static boolean isStorageDir(String path) {
-		if (path == null)
-			return false;
-		String normalized = pathCorrector.normalizeIfPossible(path);
-		String sdpath = pathCorrector.normalizeIfPossible(Environment.getExternalStorageDirectory().getAbsolutePath());
-		if (sdpath != null && sdpath.equals(normalized))
-			return true;
-		return false;
-	}
-
-	public static boolean isExternalStorageDir(String path) {
-		if (path == null)
-			return false;
-		if (path.contains("/ext"))
-			return true;
-		return false;
-	}
-
-	private static boolean addMountRoot(Map<String, String> list, String path, String name) {
-		if (list.containsKey(path))
-			return false;
-		if (path.equals("/storage/emulated/legacy")) {
-			for (String key : list.keySet()) {
-				if (key.equals("/storage/emulated/0"))
-					return false; // don't add "/storage/emulated/legacy" after "/storage/emulated/0"
-			}
-		}
-		String plink = folowLink(path);
-		for (String key : list.keySet()) {
-			//if (pathCorrector.normalizeIfPossible(path).equals(pathCorrector.normalizeIfPossible(key))) {
-			if (plink.equals(folowLink(key))) { // path.startsWith(key + "/")
-				log.w("Skipping duplicate path " + path + " == " + key);
-				return false; // duplicate subpath
-			}
-		}
-		try {
-			File dir = new File(path);
-			if (dir.isDirectory()) {
-//				String[] d = dir.list();
-//				if ((d!=null && d.length>0) || dir.canWrite()) {
-				// Android 6 ext storage
-				if (name.startsWith("/storage/") && name.length() == 18 && name.charAt(13) == '-')
-					name = "EXT SD";
-				log.i("Adding FS root: " + path + " " + name);
-				list.put(path, name);
-//					return true;
-//				} else {
-//					log.i("Skipping mount point " + path + " : no files or directories found here, and writing is disabled");
-//				}
-			}
-		} catch (Exception e) {
-			// ignore
-		}
-		return false;
-	}
-
-	public static HashSet<String> listStorageDir() {
-		final HashSet<String> out = new HashSet<String>();
-		File dir = new File("/storage");
-		try {
-			if (dir.exists() && dir.isDirectory()) {
-				File[] files = dir.listFiles();
-				for (File file : files) {
-					if (file.isDirectory() && file.canRead() && !"/storage/emulated".equals(file.getName())) {
-						log.d("listStorageDir path found: " + file.getAbsolutePath());
-						out.add(file.getAbsolutePath());
-					}
-				}
-			}
-		} catch (Exception e) {
-			// ignore
-		}
-		return out;
-	}
-
-	public static HashSet<String> getExternalMounts() {
-		final HashSet<String> out = new HashSet<String>();
-		try {
-			String reg = "(?i).*vold.*(vfat|ntfs|exfat|fat32|ext3|ext4).*rw.*";
-			String reg2 = "(?i).*fuse.*(vfat|ntfs|exfat|fat32|ext3|ext4|fuse).*rw.*";
-			String s = "";
-			try {
-				final Process process = new ProcessBuilder().command("mount")
-						.redirectErrorStream(true).start();
-				ProcessIOWithTimeout processIOWithTimeout = new ProcessIOWithTimeout(process, 1024);
-				int exitCode = processIOWithTimeout.waitForProcess(200);
-				if (exitCode == ProcessIOWithTimeout.EXIT_CODE_TIMEOUT) {
-					// Timeout
-					log.e("Timed out waiting for mount command output, " +
-							"please add CoolReader to MagiskHide list!");
-					process.destroy();
-					return out;
-				}
-				s = processIOWithTimeout.receivedText();
-			} catch (final Exception e) {
-				log.e("Failed to inspect mount entries", e);
-			}
-
-			// parse output
-			final String[] lines = s.split("\n");
-			for (String line : lines) {
-				if (!line.toLowerCase(Locale.US).contains("asec")) {
-					log.d("mount entry: " + line);
-					if (line.matches(reg) || line.matches(reg2)) {
-						String[] parts = line.split(" ");
-						for (String part : parts) {
-							if (part.startsWith("/"))
-								if (!part.toLowerCase(Locale.US).contains("vold"))
-									out.add(part);
-						}
-					}
-				}
-			}
-		} catch (Exception e) {
-			// ignore
-			log.d("exception", e);
-		}
-		log.d("mount pathes: " + out);
-		return out;
-	}
-
-	private static HashSet<String> readMountsFile() {
-		final HashSet<String> out = new HashSet<String>();
-		/*
-		 * Scan the /proc/mounts file and look for lines like this:
-		 * /dev/block/vold/179:1 /mnt/sdcard vfat
-		 * rw,dirsync,nosuid,nodev,noexec,
-		 * relatime,uid=1000,gid=1015,fmask=0602,dmask
-		 * =0602,allow_utime=0020,codepage
-		 * =cp437,iocharset=iso8859-1,shortname=mixed,utf8,errors=remount-ro 0 0
-		 *
-		 * When one is found, split it into its elements and then pull out the
-		 * path to the that mount point and add it to the arraylist
-		 */
-
-		try {
-			String s = loadFileUtf8(new File("/proc/mounts"));
-			if (s != null) {
-				String[] rows = s.split("\n");
-				for (String line : rows) {
-					if (line.startsWith("/dev/block/vold/") || line.startsWith("/dev/fuse ")) {
-						String[] lineElements = line.split(" ");
-						String element = lineElements[1];
-						if (element.startsWith("/"))
-							out.add(element);
-					}
-				}
-			}
-		} catch (Exception e) {
-			// ignore
-		}
-		return out;
-	}
-
 
 	private static void initMountRoots() {
-
-		log.i("initMountRoots()");
-		HashSet<String> mountedPathsFromMountCmd = getExternalMounts();
-		HashSet<String> mountedPathsFromMountFile = readMountsFile();
-		HashSet<String> mountedPathsStorageDir = listStorageDir();
-		log.i("mountedPathsFromMountCmd: " + mountedPathsFromMountCmd);
-		log.i("mountedPathsFromMountFile: " + mountedPathsFromMountFile);
-		log.i("mountedPathsStorageDir: " + mountedPathsStorageDir);
-
-		Map<String, String> map = new LinkedHashMap<String, String>();
-
-		// standard external directory
-		String sdpath = DeviceInfo.EINK_NOOK ? "/media/" : Environment.getExternalStorageDirectory().getAbsolutePath();
-		// dirty fix
-		if ("/nand".equals(sdpath) && new File("/sdcard").isDirectory())
-			sdpath = "/sdcard";
-		//String sdlink = isLink(sdpath);
-		//if (sdlink != null)
-		//	sdpath = sdlink;
-
-		// main storage
-		addMountRoot(map, sdpath, "SD");
-
-		// retrieve list of mount points from system
-		String[] fstabLocations = new String[]{
-				"/system/etc/vold.conf",
-				"/system/etc/vold.fstab",
-				"/etc/vold.conf",
-				"/etc/vold.fstab",
-		};
-		String s = null;
-		String fstabFileName = null;
-		for (String fstabFile : fstabLocations) {
-			fstabFileName = fstabFile;
-			s = loadFileUtf8(new File(fstabFile));
-			if (s != null)
-				log.i("found fstab file " + fstabFile);
-		}
-		if (s == null)
-			log.w("fstab file not found");
-		if (s != null) {
-			String[] rows = s.split("\n");
-			int rulesFound = 0;
-			for (String row : rows) {
-				if (row != null && row.startsWith("dev_mount")) {
-					log.d("mount rule: " + row);
-					rulesFound++;
-					String[] cols = Utils.splitByWhitespace(row);
-					if (cols.length >= 5) {
-						String name = Utils.ntrim(cols[1]);
-						String point = Utils.ntrim(cols[2]);
-						String mode = Utils.ntrim(cols[3]);
-						String dev = Utils.ntrim(cols[4]);
-						if (Utils.empty(name) || Utils.empty(point) || Utils.empty(mode) || Utils.empty(dev))
-							continue;
-						String label = null;
-						boolean hasusb = dev.indexOf("usb") >= 0;
-						boolean hasmmc = dev.indexOf("mmc") >= 0;
-						log.i("*** mount point '" + name + "' *** " + point + "  (" + dev + ")");
-						if ("auto".equals(mode)) {
-							// assume AUTO is for externally automount devices
-							if (hasusb)
-								label = "USB Storage";
-							else if (hasmmc)
-								label = "External SD";
-							else
-								label = "External Storage";
-						} else {
-							if (hasmmc)
-								label = "Internal SD";
-							else
-								label = "Internal Storage";
-						}
-						if (!point.equals(sdpath)) {
-							// external SD
-							addMountRoot(map, point, label + " (" + point + ")");
-						}
-					}
-				}
-			}
-			if (rulesFound == 0)
-				log.w("mount point rules not found in " + fstabFileName);
-		}
-
-		// TODO: probably, hardcoded list is not necessary after /etc/vold parsing 
-		String[] knownMountPoints = new String[]{
-				"/system/media/sdcard", // internal SD card on Nook
-				"/media",
-				"/nand",
-				"/PocketBook701", // internal SD card on PocketBook 701 IQ
-				"/mnt/extsd",
-				"/mnt/external1",
-				"/mnt/external_sd",
-				"/mnt/udisk",
-				"/mnt/sdcard2",
-				"/mnt/ext.sd",
-				"/ext.sd",
-				"/extsd",
-				"/storage/sdcard",
-				"/storage/sdcard0",
-				"/storage/sdcard1",
-				"/storage/sdcard2",
-				"/mnt/extSdCard",
-				"/sdcard",
-				"/sdcard2",
-				"/mnt/udisk",
-				"/sdcard-ext",
-				"/sd-ext",
-				"/mnt/external1",
-				"/mnt/external2",
-				"/mnt/sdcard1",
-				"/mnt/sdcard2",
-				"/mnt/usb_storage",
-				"/mnt/external_SD",
-				"/emmc",
-				"/external",
-				"/Removable/SD",
-				"/Removable/MicroSD",
-				"/Removable/USBDisk1",
-				"/storage/sdcard1",
-				"/mnt/sdcard/extStorages/SdCard",
-				"/storage/extSdCard",
-				"/storage/external_SD",
-		};
-		// collect mount points from all possible sources
-		HashSet<String> mountPointsToAdd = new HashSet<>();
-		mountPointsToAdd.addAll(Arrays.asList(knownMountPoints));
-		mountPointsToAdd.addAll(mountedPathsFromMountCmd);
-		mountPointsToAdd.addAll(mountedPathsFromMountFile);
-		mountPointsToAdd.addAll(mountedPathsStorageDir);
-		mountPointsToAdd.add(Environment.getExternalStorageDirectory().getAbsolutePath());
-		String storageList = System.getenv("SECONDARY_STORAGE");
-		if (storageList != null) {
-			for (String point : storageList.split(":")) {
-				if (point.startsWith("/"))
-					mountPointsToAdd.add(point);
-			}
-		}
-		// add mount points
-
-		for (String point : mountPointsToAdd) {
-			if (point == null)
-				continue;
-			point = point.trim();
-			if (point.length() == 0)
-				continue;
-			File dir = new File(point);
-			if (dir.isDirectory() && dir.canRead()) {
-				String[] files = dir.list();
-				if (files != null && files.length > 0) {
-					String link = isLink(point);
-					if (link != null) {
-						log.d("found mount point path is link: " + point + " > " + link);
-						addMountRoot(map, link, link);
-					} else {
-						addMountRoot(map, point, point);
-					}
-				}
-			}
-		}
-
-		// auto detection
-		//autoAddRoots(map, "/", SYSTEM_ROOT_PATHS);
-		//autoAddRoots(map, "/mnt", new String[] {});
-
-		mountedRootsMap = map;
-		Collection<File> list = new ArrayList<File>();
-
-		for (String f : map.keySet()) {
-			File path = new File(f);
-			list.add(path);
-		}
-
-		mountedRootsList = list.toArray(new File[]{});
+		mountedRootsMap = Collections.emptyMap();
+		mountedRootsList = new File[]{};
 		pathCorrector = new MountPathCorrector(mountedRootsList);
-
-		for (String point : mountPointsToAdd) {
-			String link = isLink(point);
-			if (link != null) {
-				log.d("pathCorrector.addRootLink(" + point + ", " + link + ")");
-				pathCorrector.addRootLink(point, link);
-			}
-		}
-
-		Log.i("cr3", "Root list: " + list + ", root links: " + pathCorrector);
-
-
-		log.i("Mount ROOTS:");
-		for (String f : map.keySet()) {
-			File path = new File(f);
-			String label = map.get(f);
-			if (isStorageDir(f)) {
-				label = "SD";
-				map.put(f, label);
-			} else if (isExternalStorageDir(f)) {
-				label = "Ext SD";
-				map.put(f, label);
-			}
-
-			log.i("*** " + f + " '" + label + "' isDirectory=" + path.isDirectory() + " canRead=" + path.canRead() + " canWrite=" + path.canRead() + " isLink=" + isLink(f));
-		}
-
-//		testPathNormalization("/sdcard/books/test.fb2");
-//		testPathNormalization("/mnt/sdcard/downloads/test.fb2");
-//		testPathNormalization("/mnt/sd/dir/test.fb2");
+		log.i("Legacy filesystem root discovery is disabled; use SAF library roots");
 	}
-
-//	private void testPathNormalization(String path) {
-//		Log.i("cr3", "normalization: " + path + " => " + normalizePathUsingRootLinks(new File(path)));
-//	}
-
 
 	// public void waitTasksCompletion()
 	// {
@@ -1566,11 +1027,6 @@ public class Engine {
 //			initialized = false;
 //		}
 		instance = null;
-		// to suppress further messages about data directory removed
-		// if activity destroyed but process is not unloaded from memory
-		// and if application data directory already exist at this point
-		if (null != CR3_SETTINGS_DIR_NAME)
-			DATADIR_IS_EXIST_AT_START = true;
 	}
 
 	protected void finalize() throws Throwable {
@@ -1974,20 +1430,12 @@ public class Engine {
 	private static Map<String, String> mountedRootsMap;
 	private static MountPathCorrector pathCorrector;
 	private static String[] mFonts;
-	public static boolean DATADIR_IS_EXIST_AT_START = false;
 
 	// static initialization
 	static {
 		log.i("Engine() : static initialization");
 		installLibrary();
 		initMountRoots();
-		File[] dataDirs = Engine.getDataDirectories(null, false, true);
-		if (dataDirs != null && dataDirs.length > 0) {
-			log.i("Engine() : DataDir exist at start.");
-			DATADIR_IS_EXIST_AT_START = true;
-		} else {
-			log.i("Engine() : DataDir NOT exist at start.");
-		}
 		mFonts = findFonts();
 		findExternalHyphDictionaries();
 		if (!initInternal(mFonts, DeviceInfo.getSDKLevel())) {
@@ -1995,7 +1443,6 @@ public class Engine {
 			throw new RuntimeException("Cannot initialize CREngine JNI");
 		}
 		initDictionaries(HyphDict.values());
-		initCacheDirectory();
 		DOM_VERSION_CURRENT = getDomVersionCurrent();
 		log.i("Engine() : initialization done");
 	}

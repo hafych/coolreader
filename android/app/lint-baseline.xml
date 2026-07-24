@@ -24,28 +24,6 @@
     </issue>
 
     <issue
-        id="ScopedStorage"
-        message="WRITE_EXTERNAL_STORAGE is deprecated (and is not granted) when targeting Android 13+. If you need to write to shared storage, use the `MediaStore.createWriteRequest` intent."
-        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.WRITE_EXTERNAL_STORAGE&quot;/>"
-        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/AndroidManifest.xml"
-            line="16"
-            column="36"/>
-    </issue>
-
-    <issue
-        id="ScopedStorage"
-        message="READ_EXTERNAL_STORAGE is deprecated (and is not granted) when targeting Android 13+. If you need to query or interact with MediaStore or media files on the shared storage, you should instead use one or more new storage permissions: `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO` or `READ_MEDIA_AUDIO`."
-        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.READ_EXTERNAL_STORAGE&quot;/>"
-        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/AndroidManifest.xml"
-            line="17"
-            column="36"/>
-    </issue>
-
-    <issue
         id="ApplySharedPref"
         message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
         errorLine1="  pref.edit().putString(PREF_HELP_FILE, v).commit();"
@@ -892,82 +870,6 @@
             column="46"/>
     </issue>
 
-    <issue
-        id="SdCardPath"
-        message="Do not hardcode &quot;/sdcard/&quot;; use `Environment.getExternalStorageDirectory().getPath()` instead"
-        errorLine1="  if (&quot;/nand&quot;.equals(sdpath) &amp;&amp; new File(&quot;/sdcard&quot;).isDirectory())"
-        errorLine2="                                         ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/Engine.java"
-            line="1350"
-            column="42"/>
-    </issue>
-
-    <issue
-        id="SdCardPath"
-        message="Do not hardcode &quot;/sdcard/&quot;; use `Environment.getExternalStorageDirectory().getPath()` instead"
-        errorLine1="   sdpath = &quot;/sdcard&quot;;"
-        errorLine2="            ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/Engine.java"
-            line="1351"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="SdCardPath"
-        message="Do not hardcode &quot;/sdcard/&quot;; use `Environment.getExternalStorageDirectory().getPath()` instead"
-        errorLine1="    &quot;/system/media/sdcard&quot;, // internal SD card on Nook"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/Engine.java"
-            line="1422"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="SdCardPath"
-        message="Do not hardcode &quot;/sdcard/&quot;; use `Environment.getExternalStorageDirectory().getPath()` instead"
-        errorLine1="    &quot;/sdcard&quot;,"
-        errorLine2="    ~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/Engine.java"
-            line="1439"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="SdCardPath"
-        message="Do not hardcode &quot;/sdcard/&quot;; use `Environment.getExternalStorageDirectory().getPath()` instead"
-        errorLine1="    &quot;/sdcard2&quot;,"
-        errorLine2="    ~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/Engine.java"
-            line="1440"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="SdCardPath"
-        message="Do not hardcode &quot;/sdcard/&quot;; use `Environment.getExternalStorageDirectory().getPath()` instead"
-        errorLine1="    &quot;/sdcard-ext&quot;,"
-        errorLine2="    ~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/Engine.java"
-            line="1442"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="SdCardPath"
-        message="Do not hardcode &quot;/sdcard/&quot;; use `Environment.getExternalStorageDirectory().getPath()` instead"
-        errorLine1="    &quot;/mnt/sdcard/extStorages/SdCard&quot;,"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/org/coolreader/crengine/Engine.java"
-            line="1456"
-            column="5"/>
-    </issue>
 
     <issue
         id="SuspiciousIndentation"
