@@ -26,6 +26,7 @@
 package org.coolreader.crengine;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.os.Environment;
@@ -36,6 +37,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -58,7 +60,9 @@ public class Engine {
 
 	static final private String LIBRARY_NAME = "cr3engine-3-2-X";
 
-	private BaseActivity mActivity;
+	private final Context mAppContext;
+	private static volatile Context sNativeAppContext;
+	private WeakReference<BaseActivity> mActivityRef;
 
 	public enum font_lang_compat {
 		font_lang_compat_invalid_tag,
@@ -270,7 +274,12 @@ public class Engine {
 	}
 
 	public void fatalError(String msg) {
-		AlertDialog dlg = new AlertDialog.Builder(mActivity).setMessage(msg)
+		BaseActivity activity = getActivity();
+		if (activity == null) {
+			log.e("Fatal engine error without an attached Activity: " + msg);
+			return;
+		}
+		AlertDialog dlg = new AlertDialog.Builder(activity).setMessage(msg)
 				.setTitle("CoolReader fatal error").show();
 		try {
 			Thread.sleep(10);
@@ -278,7 +287,7 @@ public class Engine {
 			// do nothing
 		}
 		dlg.dismiss();
-		mActivity.finish();
+		activity.finish();
 	}
 
 	private ProgressDialog mProgress;
@@ -307,12 +316,12 @@ public class Engine {
 
 	public void showProgress(final int mainProgress, final int resourceId) {
 		showProgress(mainProgress,
-				mActivity.getResources().getString(resourceId));
+				mAppContext.getResources().getString(resourceId));
 	}
 
 	public void showProgress(final int mainProgress, final int resourceId, Scanner.ScanControl scanControl) {
 		showProgress(mainProgress,
-				mActivity.getResources().getString(resourceId), scanControl);
+				mAppContext.getResources().getString(resourceId), scanControl);
 	}
 
 	private String mProgressMessage = null;
@@ -408,8 +417,9 @@ public class Engine {
 				if (mProgress == null) {
 					//log.v("showProgress() - creating progress window");
 					try {
-						if (mActivity != null && mActivity.isStarted()) {
-							mProgress = new ProgressDialog(mActivity);
+						BaseActivity activity = getActivity();
+						if (activity != null && activity.isStarted()) {
+							mProgress = new ProgressDialog(activity);
 							mProgress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 							if (progressIcon != null)
 								mProgress.setIcon(progressIcon);
@@ -418,7 +428,7 @@ public class Engine {
 							mProgress.setMax(10000);
 							mProgress.setCancelable(null != scanControl);
 							mProgress.setProgress(mainProgress);
-							mProgress.setTitle(mActivity
+							mProgress.setTitle(activity
 											.getResources()
 											.getString(
 													R.string.progress_please_wait));
@@ -503,7 +513,8 @@ public class Engine {
 
 	public String loadResourceUtf8(int id) {
 		try {
-			return loadResourceUtf8(mActivity.getResources().openRawResource(id));
+			return loadResourceUtf8(
+					mAppContext.getResources().openRawResource(id));
 		} catch (Exception e) {
 			log.e("cannot load resource " + id);
 			return null;
@@ -527,7 +538,8 @@ public class Engine {
 
 	public byte[] loadResourceBytes(int id) {
 		try {
-			return loadResourceBytes(mActivity.getResources().openRawResource(id));
+			return loadResourceBytes(
+					mAppContext.getResources().openRawResource(id));
 		} catch (Exception e) {
 			log.e("cannot load resource");
 			return null;
@@ -560,21 +572,36 @@ public class Engine {
 		}
 	}
 
-	private static Engine instance;
-
-	public static Engine getInstance(BaseActivity activity) {
-		if (instance == null) {
-			instance = new Engine(activity);
-		} else {
-			instance.setParams(activity);
-		}
-		return instance;
+	private void attachActivity(BaseActivity activity) {
+		mActivityRef = new WeakReference<>(activity);
 	}
 
-	private void setParams(BaseActivity activity) {
-		this.mActivity = activity;
-		File cacheDir = mActivity.getCacheDir();
-		File filesDir = mActivity.getFilesDir();
+	private BaseActivity getActivity() {
+		return mActivityRef != null ? mActivityRef.get() : null;
+	}
+
+	boolean isAttachedTo(BaseActivity activity) {
+		return getActivity() == activity;
+	}
+
+	public void detachActivity(BaseActivity activity) {
+		BaseActivity attached = getActivity();
+		if (attached != activity)
+			return;
+		++nextProgressId;
+		if (mProgress != null) {
+			if (mProgress.isShowing())
+				mProgress.dismiss();
+			mProgress = null;
+		}
+		progressShown = false;
+		progressIcon = null;
+		mActivityRef.clear();
+	}
+
+	private void configurePrivateDirectories() {
+		File cacheDir = mAppContext.getCacheDir();
+		File filesDir = mAppContext.getFilesDir();
 		File bookCacheDir = new File(cacheDir, "bookCache");
 		File downloadDir = new File(filesDir, "downloads");
 		mAppPrivateDirs.put(downloadDir.getAbsolutePath(), "downloads");
@@ -586,8 +613,14 @@ public class Engine {
 	 *
 	 * @param activity base application activity
 	 */
-	private Engine(BaseActivity activity) {
-		setParams(activity);
+	Engine(BaseActivity activity) {
+		Context applicationContext = activity.getApplicationContext();
+		if (applicationContext == null)
+			throw new IllegalStateException("Application context is unavailable");
+		mAppContext = applicationContext;
+		sNativeAppContext = applicationContext;
+		attachActivity(activity);
+		configurePrivateDirectories();
 		initCacheDirectory();
 	}
 
@@ -871,7 +904,8 @@ public class Engine {
 	public static byte[] loadHyphDictData(String id) {
 		// id - language id under which it was registered using the HyphMan::addDictionaryItem() method
 		//  matches the language code under which the language was registered in the HyphDict class (field 'code')
-		if (null == instance) {
+		Context appContext = sNativeAppContext;
+		if (appContext == null) {
 			log.e("Engine not initialized yet!");
 			return null;
 		}
@@ -879,7 +913,13 @@ public class Engine {
 		HyphDict dict = HyphDict.byCode(id);
 		if (null != dict && HYPH_DICT == dict.type) {
 			if (dict.resource != 0) {
-				data = instance.loadResourceBytes(dict.resource);
+				try {
+					data = loadResourceBytes(
+							appContext.getResources()
+									.openRawResource(dict.resource));
+				} catch (Exception e) {
+					log.e("Cannot load hyphenation resource", e);
+				}
 			} else if (dict.file != null) {
 				data = loadResourceBytes(dict.file);
 			}
@@ -985,10 +1025,8 @@ public class Engine {
 	final static int CACHE_DIR_SIZE = 32000000;
 
 
-	private static void initCacheDirectory() {
-		if (instance == null || instance.mActivity == null)
-			return;
-		File cacheDir = new File(instance.mActivity.getCacheDir(), "engine");
+	private void initCacheDirectory() {
+		File cacheDir = new File(mAppContext.getCacheDir(), "engine");
 		if (cacheDir.isDirectory() || cacheDir.mkdirs()) {
 			log.i(cacheDir
 					+ " will be used for cache, maxCacheSize=" + CACHE_DIR_SIZE);
@@ -1026,7 +1064,9 @@ public class Engine {
 //			}
 //			initialized = false;
 //		}
-		instance = null;
+		BaseActivity activity = getActivity();
+		if (activity != null)
+			detachActivity(activity);
 	}
 
 	protected void finalize() throws Throwable {

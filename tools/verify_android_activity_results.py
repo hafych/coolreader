@@ -13,6 +13,8 @@ COOL_READER = SOURCE / "CoolReader.java"
 DICTIONARIES = SOURCE / "Dictionaries.java"
 BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
 NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
+ENGINE = SOURCE / "crengine" / "Engine.java"
+SERVICES = SOURCE / "crengine" / "Services.java"
 ACTIVE_RESULT_SOURCES = (COOL_READER, DICTIONARIES, BASE_ACTIVITY)
 FORBIDDEN_RESULT_PATTERNS = (
     r"\bstartActivityForResult\s*\(",
@@ -90,6 +92,40 @@ def main() -> None:
         violations.append(
             f"{relative(NOOK_CONTROLLER)} retains the vendor controller "
             "statically")
+
+    engine_text = ENGINE.read_text(encoding="utf-8")
+    if re.search(r"\bBaseActivity\s+mActivity\s*[=;]", engine_text):
+        violations.append(
+            f"{relative(ENGINE)} strongly retains an Activity")
+    if re.search(r"\bstatic\s+Engine\s+instance\b", engine_text):
+        violations.append(
+            f"{relative(ENGINE)} retains the legacy Engine singleton")
+    for marker in (
+        "WeakReference<BaseActivity>",
+        "mAppContext",
+        "detachActivity",
+    ):
+        if marker not in engine_text:
+            violations.append(f"{relative(ENGINE)} omits marker: {marker}")
+
+    services_text = SERVICES.read_text(encoding="utf-8")
+    for marker in (
+        "!mEngine.isAttachedTo(activity)",
+        "Engine engine = mEngine",
+        "mGeneration == stoppedGeneration",
+    ):
+        if marker not in services_text:
+            violations.append(
+                f"{relative(SERVICES)} omits lifecycle marker: {marker}")
+
+    for path in sorted(SOURCE.rglob("*.java")):
+        text = path.read_text(encoding="utf-8")
+        find_pattern(
+            path,
+            text,
+            r"\bEngine\.getInstance\s*\(",
+            "uses the legacy Activity-owned Engine singleton",
+            violations)
 
     cool_reader_text = COOL_READER.read_text(encoding="utf-8")
     for marker in REQUIRED_COOL_READER_MARKERS:

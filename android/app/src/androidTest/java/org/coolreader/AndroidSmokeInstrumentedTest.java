@@ -22,6 +22,7 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import org.coolreader.crengine.BookInfo;
 import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.ReaderView;
+import org.coolreader.crengine.Services;
 import org.coolreader.tts.OnTTSStatusListener;
 import org.coolreader.tts.TTSControlBinder;
 import org.coolreader.tts.TTSControlService;
@@ -107,7 +108,7 @@ public class AndroidSmokeInstrumentedTest {
 				target, InstrumentationRegistry.getInstrumentation());
 		try {
 			assertTrue(Engine.getMountedRootsMap().isEmpty());
-			Engine engine = Engine.getInstance((CoolReader) activity);
+			Engine engine = Services.getEngine();
 			for (String path : engine.getAppPrivateDirs().keySet()) {
 				File directory = new File(path);
 				assertTrue(isUnder(directory, target.getFilesDir())

@@ -106,7 +106,7 @@ public class AboutDialog extends BaseDialog implements TabContentFactory {
 		hyph_dir.setText(sbuf.toString());
 
 		mLicenseTab = inflater.inflate(R.layout.about_dialog_license, null);
-		String license = Engine.getInstance(mCoolReader).loadResourceUtf8(R.raw.license);
+		String license = Services.getEngine().loadResourceUtf8(R.raw.license);
 		((TextView)mLicenseTab.findViewById(R.id.license)).setText(license);
 		
 		tabs.setup();

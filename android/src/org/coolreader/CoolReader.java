@@ -268,7 +268,7 @@ public class CoolReader extends BaseActivity {
 		// apply settings
 		onSettingsChanged(settings(), null);
 
-		mEngine = Engine.getInstance(this);
+		mEngine = Services.getEngine();
 
 		//requestWindowFeature(Window.FEATURE_NO_TITLE);
 
@@ -342,7 +342,7 @@ public class CoolReader extends BaseActivity {
 		log.i("CoolReader.onDestroy() exiting");
 		super.onDestroy();
 
-		Services.stopServices();
+		Services.stopServices(this);
 	}
 
 	public ReaderView getReaderView() {

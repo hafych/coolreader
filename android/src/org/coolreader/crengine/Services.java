@@ -29,13 +29,14 @@ public class Services {
 
 	public static final Logger log = L.create("sv");
 
-	private static Engine mEngine;
+	private static volatile Engine mEngine;
 	private static Scanner mScanner;
 	private static History mHistory;
 	private static CoverpageManager mCoverpageManager;
 	private static FileSystemFolders mFSFolders;
 	private static GenresCollection mGenresCollection;
 	private static DocumentFileCache mDocumentCache;
+	private static volatile long mGeneration;
 
 	public static Engine getEngine() {
 		if (null != mEngine)
@@ -85,10 +86,11 @@ public class Services {
 
 	public static void startServices(BaseActivity activity) {
 		log.i("First activity is created");
+		mGeneration++;
 		// testing background thread
 		//mSettings = activity.settings();
 		BackgroundThread.instance().setGUIHandler(new Handler());
-		mEngine = Engine.getInstance(activity);
+		mEngine = new Engine(activity);
 		mScanner = new Scanner(activity, mEngine);
 		mScanner.initRoots(Engine.getMountedRootsMap(), mEngine.getAppPrivateDirs());
 		mHistory = new History(mScanner);
@@ -99,20 +101,29 @@ public class Services {
 		mDocumentCache = new DocumentFileCache(activity);
 	}
 
-	public static void stopServices() {
+	public static void stopServices(BaseActivity activity) {
 		log.i("Last activity is destroyed");
+		if (mEngine != null && !mEngine.isAttachedTo(activity)) {
+			log.i("Ignoring stop from a stale activity generation");
+			return;
+		}
 		if (mCoverpageManager == null) {
 			log.i("Will not destroy services: finish only activity creation detected");
 			return;
 		}
 		mCoverpageManager.clear();
+		Engine engine = mEngine;
+		long stoppedGeneration = mGeneration;
+		mEngine = null;
+		if (engine != null)
+			engine.detachActivity(activity);
 		BackgroundThread.instance().postBackground(() -> {
 			log.i("Stopping background thread");
-			if (mEngine == null)
+			if (engine == null)
 				return;
-			mEngine.uninit();
-			BackgroundThread.instance().quit();
-			mEngine = null;
+			engine.uninit();
+			if (mGeneration == stoppedGeneration && mEngine == null)
+				BackgroundThread.instance().quit();
 		});
 		mHistory = null;
 		mScanner = null;

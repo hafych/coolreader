@@ -117,7 +117,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 	protected void bindCRDBService() {
 		if (mCRDBService == null) {
-			mCRDBService = new CRDBServiceAccessor(this, Engine.getInstance(this).getPathCorrector());
+			mCRDBService = new CRDBServiceAccessor(
+					this, Services.getEngine().getPathCorrector());
 		}
 		mCRDBService.bind(null);
 	}
@@ -129,7 +130,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	 */
 	public synchronized void waitForCRDBService(Runnable readyCallback) {
 		if (mCRDBService == null) {
-			mCRDBService = new CRDBServiceAccessor(this, Engine.getInstance(this).getPathCorrector());
+			mCRDBService = new CRDBServiceAccessor(
+					this, Services.getEngine().getPathCorrector());
 		}
 		mCRDBService.bind(readyCallback);
 	}
@@ -840,7 +842,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			setSystemUiVisibility();
 		}
 		// thread safe
-		return Engine.getInstance(this).setKeyBacklight(value);
+		return Services.getEngine().setKeyBacklight(value);
 	}
 
 
@@ -908,7 +910,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			setKeyBacklight(0);
 		}
 		// repeat again in short interval
-		if (!Engine.getInstance(this).setKeyBacklight(0)) {
+		if (!Services.getEngine().setKeyBacklight(0)) {
 			//log.w("Cannot control key backlight directly");
 			return;
 		}
@@ -916,7 +918,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		Runnable task = () -> {
 			if (!isStarted())
 				return;
-			if (!Engine.getInstance(BaseActivity.this).setKeyBacklight(0)) {
+			if (!Services.getEngine().setKeyBacklight(0)) {
 				//log.w("Cannot control key backlight directly (delayed)");
 			}
 		};
@@ -929,7 +931,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			return;
 		setKeyBacklight(1);
 		// repeat again in short interval
-		if (!Engine.getInstance(this).setKeyBacklight(1)) {
+		if (!Services.getEngine().setKeyBacklight(1)) {
 			//log.w("Cannot control key backlight directly");
 			return;
 		}
@@ -937,7 +939,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		Runnable task = () -> {
 			if (!isStarted())
 				return;
-			if (!Engine.getInstance(BaseActivity.this).setKeyBacklight(1)) {
+			if (!Services.getEngine().setKeyBacklight(1)) {
 				//log.w("Cannot control key backlight directly (delayed)");
 			}
 		};
