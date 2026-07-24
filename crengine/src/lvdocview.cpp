@@ -227,8 +227,8 @@ LVDocView::LVDocView(int bitsPerPixel, bool noDefaultDocument) :
 #ifdef ANDROID
 		, m_rotateAngleInfo(CR_ROTATE_ANGLE_0)
 #endif
-			, m_section_bounds_externally_updated(false)
-			, m_section_bounds_valid(false), m_doc_format(doc_format_none),
+			, m_section_bounds_valid(false)
+			, m_section_bounds_externally_updated(false), m_doc_format(doc_format_none),
 			m_callback(NULL), m_swapDone(false), m_drawBufferBits(
 					GRAY_BACKBUFFER_BITS) {
 #if (COLOR_BACKBUFFER==1)

@@ -179,6 +179,7 @@ The historical Debian changelog remains in [`changelog`](changelog).
   cascade specificity, source order and computed inheritance.
 - An in-memory EPUB 3 corpus now covers nested navigation, landmarks fallback,
   page lists, refined metadata, semantic notes and static media-overlay policy.
+- The Clang warning gate now rejects constructor initializer-order regressions.
 - German, Portuguese and Ukrainian hyphenation patterns are refreshed from a
   pinned upstream source; language goldens and desktop/Android parity checks
   now cover all packaged dictionaries.
