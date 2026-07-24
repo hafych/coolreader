@@ -28,6 +28,8 @@
 #include "lvstring.h"
 #include "cssdef.h"
 
+#include <atomic>
+
 #if USE_HARFBUZZ==1
 #include <hb.h>
 #include <hb-ft.h>
@@ -60,17 +62,25 @@ struct ldomNode;
 class TextLangMan
 {
     friend class TextLangCfg;
+    enum RuntimeOption {
+        RUNTIME_HYPHENATION_ENABLED = 1U << 0,
+        RUNTIME_HYPH_FORCE_ALGORITHMIC = 1U << 1,
+        RUNTIME_HYPH_SOFT_HYPHENS_ONLY = 1U << 2,
+        RUNTIME_EMBEDDED_LANGS_ENABLED = 1U << 3
+    };
+
     static lString32 _main_lang;
-    static bool _embedded_langs_enabled;
     static LVPtrVector<TextLangCfg> _lang_cfg_list;
 
-    static bool _overridden_hyph_method; // (to avoid checking the 3 following bool)
-    static bool _hyphenation_enabled;
-    static bool _hyphenation_soft_hyphens_only;
-    static bool _hyphenation_force_algorithmic;
+    static std::atomic<lUInt32> _runtime_options;
     static HyphMethod * _no_hyph_method;       // instance of hyphman NoHyph
     static HyphMethod * _soft_hyphens_method;  // instance of hyphman SoftHyphensHyph
     static HyphMethod * _algo_hyph_method;     // instance of hyphman AlgoHyph
+
+    static lUInt32 getRuntimeOptions() {
+        return _runtime_options.load(std::memory_order_relaxed);
+    }
+    static void setRuntimeOption(lUInt32 option, bool enabled);
 public:
     static void uninit();
     static lUInt32 getHash();
@@ -79,25 +89,32 @@ public:
     static void setMainLangFromHyphDict( lString32 id ); // For HyphMan legacy methods
     static lString32 getMainLang() { return _main_lang; }
 
-    static void setEmbeddedLangsEnabled( bool enabled ) { _embedded_langs_enabled = enabled; }
-    static bool getEmbeddedLangsEnabled() { return _embedded_langs_enabled; }
+    static void setEmbeddedLangsEnabled( bool enabled ) {
+        setRuntimeOption(RUNTIME_EMBEDDED_LANGS_ENABLED, enabled);
+    }
+    static bool getEmbeddedLangsEnabled() {
+        return (getRuntimeOptions() & RUNTIME_EMBEDDED_LANGS_ENABLED) != 0;
+    }
 
-    static bool getHyphenationEnabled() { return _hyphenation_enabled; }
+    static bool getHyphenationEnabled() {
+        return (getRuntimeOptions() & RUNTIME_HYPHENATION_ENABLED) != 0;
+    }
     static void setHyphenationEnabled( bool enabled ) {
-        _hyphenation_enabled = enabled;
-        _overridden_hyph_method = !_hyphenation_enabled || _hyphenation_soft_hyphens_only || _hyphenation_force_algorithmic;
+        setRuntimeOption(RUNTIME_HYPHENATION_ENABLED, enabled);
     }
 
-    static bool getHyphenationSoftHyphensOnly() { return _hyphenation_soft_hyphens_only; }
+    static bool getHyphenationSoftHyphensOnly() {
+        return (getRuntimeOptions() & RUNTIME_HYPH_SOFT_HYPHENS_ONLY) != 0;
+    }
     static void setHyphenationSoftHyphensOnly( bool enabled ) {
-        _hyphenation_soft_hyphens_only = enabled;
-        _overridden_hyph_method = !_hyphenation_enabled || _hyphenation_soft_hyphens_only || _hyphenation_force_algorithmic;
+        setRuntimeOption(RUNTIME_HYPH_SOFT_HYPHENS_ONLY, enabled);
     }
 
-    static bool getHyphenationForceAlgorithmic() { return _hyphenation_force_algorithmic; }
+    static bool getHyphenationForceAlgorithmic() {
+        return (getRuntimeOptions() & RUNTIME_HYPH_FORCE_ALGORITHMIC) != 0;
+    }
     static void setHyphenationForceAlgorithmic( bool enabled ) {
-        _hyphenation_force_algorithmic = enabled;
-        _overridden_hyph_method = !_hyphenation_enabled || _hyphenation_soft_hyphens_only || _hyphenation_force_algorithmic;
+        setRuntimeOption(RUNTIME_HYPH_FORCE_ALGORITHMIC, enabled);
     }
 
     static TextLangCfg * getTextLangCfg(); // get LangCfg for _main_lang
@@ -154,15 +171,13 @@ public:
     lString32 getLangTag() const { return _lang_tag; }
 
     HyphMethod * getHyphMethod() const {
-        if ( !TextLangMan::_overridden_hyph_method )
-            return _hyph_method;
-        if ( !TextLangMan::_hyphenation_enabled )
+        lUInt32 options = TextLangMan::getRuntimeOptions();
+        if ( !(options & TextLangMan::RUNTIME_HYPHENATION_ENABLED) )
             return TextLangMan::_no_hyph_method;
-        if ( TextLangMan::_hyphenation_soft_hyphens_only )
+        if ( options & TextLangMan::RUNTIME_HYPH_SOFT_HYPHENS_ONLY )
             return TextLangMan::_soft_hyphens_method;
-        if ( TextLangMan::_hyphenation_force_algorithmic )
+        if ( options & TextLangMan::RUNTIME_HYPH_FORCE_ALGORITHMIC )
             return TextLangMan::_algo_hyph_method;
-        // Should not be reached
         return _hyph_method;
     }
     HyphMethod * getDefaultHyphMethod() const {

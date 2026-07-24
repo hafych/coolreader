@@ -11,6 +11,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrend.h" RENDER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hyphman.cpp" HYPH_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/textlang.cpp" TEXTLANG_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/textlang.h" TEXTLANG_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -116,6 +118,16 @@ require_source_text(
   "std::lock_guard<std::mutex> guard(g_hyph_method_cache_mutex)"
   "loaded hyphenation method cache must be synchronized"
 )
+require_source_text(
+  "${TEXTLANG_HEADER}"
+  "static std::atomic<lUInt32> _runtime_options"
+  "text-language runtime options must be synchronized"
+)
+require_source_text(
+  "${TEXTLANG_SOURCE}"
+  "_runtime_options.compare_exchange_weak"
+  "text-language option updates must preserve one coherent snapshot"
+)
 
 forbid_source_text(
   "${FORMATTER_SOURCE}"
@@ -191,4 +203,24 @@ forbid_source_text(
   "${HYPH_SOURCE}"
   "delete pair->value"
   "loaded hyphenation methods must use RAII teardown"
+)
+forbid_source_text(
+  "${TEXTLANG_HEADER}"
+  "static bool _embedded_langs_enabled"
+  "embedded-language mode must not have unsynchronized storage"
+)
+forbid_source_text(
+  "${TEXTLANG_HEADER}"
+  "static bool _hyphenation_enabled"
+  "text-language hyphenation mode must not have unsynchronized storage"
+)
+forbid_source_text(
+  "${TEXTLANG_HEADER}"
+  "static bool _hyphenation_soft_hyphens_only"
+  "soft-hyphen-only mode must not have unsynchronized storage"
+)
+forbid_source_text(
+  "${TEXTLANG_HEADER}"
+  "static bool _hyphenation_force_algorithmic"
+  "algorithmic hyphenation mode must not have unsynchronized storage"
 )

@@ -75,15 +75,17 @@ static bool langStartsWith(const lString32 lang_tag, const char * prefix) {
 
 // Init global TextLangMan members
 lString32 TextLangMan::_main_lang = TEXTLANG_DEFAULT_MAIN_LANG_32;
-bool TextLangMan::_embedded_langs_enabled = TEXTLANG_DEFAULT_EMBEDDED_LANGS_ENABLED;
 LVPtrVector<TextLangCfg> TextLangMan::_lang_cfg_list;
 
-bool TextLangMan::_hyphenation_enabled = TEXTLANG_DEFAULT_HYPHENATION_ENABLED;
-bool TextLangMan::_hyphenation_soft_hyphens_only = TEXTLANG_DEFAULT_HYPH_SOFT_HYPHENS_ONLY;
-bool TextLangMan::_hyphenation_force_algorithmic = TEXTLANG_DEFAULT_HYPH_FORCE_ALGORITHMIC;
-bool TextLangMan::_overridden_hyph_method =   !TEXTLANG_DEFAULT_HYPHENATION_ENABLED
-                                            || TEXTLANG_DEFAULT_HYPH_SOFT_HYPHENS_ONLY
-                                            || TEXTLANG_DEFAULT_HYPH_FORCE_ALGORITHMIC ;
+std::atomic<lUInt32> TextLangMan::_runtime_options(
+        (TEXTLANG_DEFAULT_HYPHENATION_ENABLED
+                ? TextLangMan::RUNTIME_HYPHENATION_ENABLED : 0U)
+        | (TEXTLANG_DEFAULT_HYPH_FORCE_ALGORITHMIC
+                ? TextLangMan::RUNTIME_HYPH_FORCE_ALGORITHMIC : 0U)
+        | (TEXTLANG_DEFAULT_HYPH_SOFT_HYPHENS_ONLY
+                ? TextLangMan::RUNTIME_HYPH_SOFT_HYPHENS_ONLY : 0U)
+        | (TEXTLANG_DEFAULT_EMBEDDED_LANGS_ENABLED
+                ? TextLangMan::RUNTIME_EMBEDDED_LANGS_ENABLED : 0U));
 // These will be set when we can
 HyphMethod * TextLangMan::_no_hyph_method = NULL;
 HyphMethod * TextLangMan::_algo_hyph_method = NULL;
@@ -95,13 +97,20 @@ TextLangMan::TextLangMan() {
 TextLangMan::~TextLangMan() {
 }
 
+void TextLangMan::setRuntimeOption(lUInt32 option, bool enabled) {
+    lUInt32 current = _runtime_options.load(std::memory_order_relaxed);
+    lUInt32 updated;
+    do {
+        updated = enabled ? current | option : current & ~option;
+    } while (!_runtime_options.compare_exchange_weak(
+            current, updated, std::memory_order_relaxed,
+            std::memory_order_relaxed));
+}
+
 lUInt32 TextLangMan::getHash() {
     lUInt32 hash = _main_lang.getHash();
     hash = hash << 4;
-    hash = hash + (_embedded_langs_enabled << 3);
-    hash = hash + (_hyphenation_soft_hyphens_only << 2);
-    hash = hash + (_hyphenation_force_algorithmic << 1);
-    hash = hash + _hyphenation_enabled;
+    hash = hash + getRuntimeOptions();
     // printf("TextLangMan::getHash %x\n", hash);
     return hash;
 }
@@ -139,7 +148,7 @@ void TextLangMan::setMainLangFromHyphDict( lString32 id ) {
 
 // Return the (single and cached) TextLangCfg for the provided lang_tag
 TextLangCfg * TextLangMan::getTextLangCfg( lString32 lang_tag ) {
-    if ( !_embedded_langs_enabled ) {
+    if ( !getEmbeddedLangsEnabled() ) {
         // Drop provided lang_tag: always return main lang TextLangCfg
         lang_tag = _main_lang;
     }
@@ -169,7 +178,7 @@ TextLangCfg * TextLangMan::getTextLangCfg() {
 }
 
 TextLangCfg * TextLangMan::getTextLangCfg( ldomNode * node ) {
-    if ( !_embedded_langs_enabled || !node ) {
+    if ( !getEmbeddedLangsEnabled() || !node ) {
         // No need to look at nodes: return main lang one
         return TextLangMan::getTextLangCfg( _main_lang );
     }
@@ -191,8 +200,8 @@ TextLangCfg * TextLangMan::getTextLangCfg( ldomNode * node ) {
 }
 
 int TextLangMan::getLangNodeIndex( ldomNode * node ) {
-    if ( !_embedded_langs_enabled || !node ) {
-        // No need to look up if !_embedded_langs_enabled
+    if ( !getEmbeddedLangsEnabled() || !node ) {
+        // No need to look up if embedded languages are disabled
         return 0;
     }
     if ( node->isText() )

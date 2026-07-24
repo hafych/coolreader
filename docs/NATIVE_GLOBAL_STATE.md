@@ -51,6 +51,11 @@ The loaded hyphenation-method cache owns values through `std::unique_ptr` and
 serializes lookup/load/publication. Concurrent requests for one dictionary are
 covered by a regression that requires one load and one shared method instance.
 
-Known follow-up groups include text-language configuration and font/cache
-singletons. Each group must be migrated separately with an impact check and
-focused regression tests.
+Text-language mode flags are published as one atomic bitmask. Hyphenation
+method selection consumes one coherent snapshot, so it cannot combine a stale
+derived override flag with newer mode values. The main-language string and
+language-configuration cache remain a separate lifecycle group.
+
+Known follow-up groups include the remaining text-language lifecycle and
+font/cache singletons. Each group must be migrated separately with an impact
+check and focused regression tests.

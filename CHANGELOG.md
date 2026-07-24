@@ -144,6 +144,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   ownership with regression coverage for replacement and teardown.
 - Concurrent requests for a hyphenation dictionary now share one synchronized,
   RAII-owned method-cache entry.
+- Text-language runtime flags now use one atomic snapshot, keeping concurrent
+  hyphenation-method selection internally consistent.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
 - SQLite fixture matrices for every supported main and cover database migration,

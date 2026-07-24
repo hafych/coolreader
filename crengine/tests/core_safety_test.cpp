@@ -7,6 +7,7 @@
 #include "cri18n.h"
 #include "logredactor.h"
 #include "parsebudget.h"
+#include "textlang.h"
 
 #include <atomic>
 #include <cerrno>
@@ -313,6 +314,89 @@ static int testConcurrentHyphenationMethodCache() {
         return fail("hyphenation method cache returned inconsistent methods");
     if (loadCount != 1)
         return fail("hyphenation method cache loaded one dictionary repeatedly");
+    return 0;
+}
+
+static int testConcurrentTextLangRuntimeOptions() {
+    if (!HyphMan::initDictionaries(lString32::empty_str, true))
+        return fail("text-language fixture registry did not initialize");
+
+    TextLangCfg *langCfg = TextLangMan::getTextLangCfg(U"en");
+    HyphMethod *defaultMethod = langCfg->getDefaultHyphMethod();
+    HyphMethod *noMethod =
+            HyphMan::getHyphMethodForDictionary(HYPH_DICT_ID_NONE);
+    HyphMethod *softMethod =
+            HyphMan::getHyphMethodForDictionary(HYPH_DICT_ID_SOFTHYPHENS);
+    HyphMethod *algoMethod =
+            HyphMan::getHyphMethodForDictionary(HYPH_DICT_ID_ALGORITHM);
+    if (!defaultMethod || !noMethod || !softMethod || !algoMethod) {
+        HyphMan::uninit();
+        return fail("text-language fixture methods were not initialized");
+    }
+
+    TextLangMan::setHyphenationEnabled(true);
+    TextLangMan::setHyphenationSoftHyphensOnly(false);
+    TextLangMan::setHyphenationForceAlgorithmic(false);
+    if (langCfg->getHyphMethod() != defaultMethod) {
+        HyphMan::uninit();
+        return fail("text-language default hyphenation method was not selected");
+    }
+    TextLangMan::setHyphenationEnabled(false);
+    if (langCfg->getHyphMethod() != noMethod) {
+        HyphMan::uninit();
+        return fail("text-language disabled hyphenation method was not selected");
+    }
+    TextLangMan::setHyphenationEnabled(true);
+    TextLangMan::setHyphenationSoftHyphensOnly(true);
+    if (langCfg->getHyphMethod() != softMethod) {
+        HyphMan::uninit();
+        return fail("text-language soft-hyphen method was not selected");
+    }
+    TextLangMan::setHyphenationSoftHyphensOnly(false);
+    TextLangMan::setHyphenationForceAlgorithmic(true);
+    if (langCfg->getHyphMethod() != algoMethod) {
+        HyphMan::uninit();
+        return fail("text-language algorithmic method was not selected");
+    }
+
+    static const int workerCount = 8;
+    static const int iterations = 1000;
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0;
+            workerIndex < workerCount; workerIndex++) {
+        workers.emplace_back([workerIndex, langCfg, defaultMethod, noMethod,
+                              softMethod, algoMethod, &failed]() {
+            for (int iteration = 0; iteration < iterations; iteration++) {
+                const int selector = (workerIndex + iteration) % 4;
+                TextLangMan::setEmbeddedLangsEnabled((selector & 1) != 0);
+                TextLangMan::setHyphenationEnabled(selector != 0);
+                TextLangMan::setHyphenationSoftHyphensOnly(selector == 2);
+                TextLangMan::setHyphenationForceAlgorithmic(selector == 3);
+                HyphMethod *observed = langCfg->getHyphMethod();
+                if (observed != defaultMethod && observed != noMethod
+                        && observed != softMethod && observed != algoMethod) {
+                    failed.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+
+    TextLangMan::setEmbeddedLangsEnabled(
+            TEXTLANG_DEFAULT_EMBEDDED_LANGS_ENABLED);
+    TextLangMan::setHyphenationEnabled(
+            TEXTLANG_DEFAULT_HYPHENATION_ENABLED);
+    TextLangMan::setHyphenationSoftHyphensOnly(
+            TEXTLANG_DEFAULT_HYPH_SOFT_HYPHENS_ONLY);
+    TextLangMan::setHyphenationForceAlgorithmic(
+            TEXTLANG_DEFAULT_HYPH_FORCE_ALGORITHMIC);
+    HyphMan::uninit();
+    if (failed.load(std::memory_order_acquire))
+        return fail("text-language options published an invalid method");
     return 0;
 }
 
@@ -875,6 +959,8 @@ int main() {
     if (testHyphenationRegistryOwnership() != 0)
         return 1;
     if (testConcurrentHyphenationMethodCache() != 0)
+        return 1;
+    if (testConcurrentTextLangRuntimeOptions() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;
