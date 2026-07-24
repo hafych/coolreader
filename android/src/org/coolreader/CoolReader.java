@@ -2123,7 +2123,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showAboutDialog() {
-		AboutDialog dlg = new AboutDialog(this);
+		AboutDialog dlg = new AboutDialog(this, mEngine);
 		dlg.show();
 	}
 
@@ -2166,7 +2166,13 @@ public class CoolReader extends BaseActivity {
 		BackgroundThread.instance().postBackground(() -> {
 			final String[] mFontFaces = Engine.getFontFaceList();
 			BackgroundThread.instance().executeGUI(() -> {
-				OptionsDialog dlg = new OptionsDialog(CoolReader.this, mode, mReaderView, mFontFaces, null);
+				OptionsDialog dlg = new OptionsDialog(
+						CoolReader.this,
+						mEngine,
+						mode,
+						mReaderView,
+						mFontFaces,
+						null);
 				dlg.show();
 			});
 		});

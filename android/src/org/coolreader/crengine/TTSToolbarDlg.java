@@ -622,7 +622,13 @@ public class TTSToolbarDlg implements Settings {
 				v -> mCoolReader.sendBroadcast(new Intent(TTSControlService.TTS_CONTROL_ACTION_NEXT)
 						.setPackage(mCoolReader.getPackageName())));
 		optionsButton.setOnClickListener(v -> mTTSControl.bind(ttsbinder -> {
-			OptionsDialog dlg = new OptionsDialog(mCoolReader, OptionsDialog.Mode.TTS, null, null, ttsbinder);
+			OptionsDialog dlg = new OptionsDialog(
+					mCoolReader,
+					mReaderView.getEngine(),
+					OptionsDialog.Mode.TTS,
+					null,
+					null,
+					ttsbinder);
 			dlg.show();
 		}));
 		stopButton.setOnClickListener(v -> stopAndClose());

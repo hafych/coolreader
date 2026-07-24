@@ -76,6 +76,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 
 	ReaderView mReaderView;
 	BaseActivity mActivity;
+	private final Engine mEngine;
 	String[] mFontFaces;
 
 	TTSControlBinder mTTSBinder;
@@ -1447,7 +1448,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		private void asyncFilterFontsByLanguage(String langTag, FontScanCompleted onComplete) {
 			BackgroundThread.ensureGUI();
 			final Scanner.ScanControl control = new Scanner.ScanControl();
-			final Engine.ProgressControl progress = Services.getEngine().createProgress(R.string.scanning_font_files, control);
+			final Engine.ProgressControl progress = mEngine.createProgress(R.string.scanning_font_files, control);
 			final ArrayList<Pair> filtered = new ArrayList<Pair>();
 			BackgroundThread.instance().postBackground(() -> {
 				int i = 0;
@@ -1864,7 +1865,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			super.updateItemContents(layout, item, listView, position);
 			ImageView img = layout.findViewById(R.id.option_value_image);
 			int cl = mProperties.getColor(PROP_BACKGROUND_COLOR, Color.WHITE);
-			BackgroundTextureInfo texture = Services.getEngine().getTextureInfoById(item.value);
+			BackgroundTextureInfo texture = mEngine.getTextureInfoById(item.value);
 			img.setBackgroundColor(cl);
 			if ( texture.resourceId!=0 ) {
 //				img.setImageDrawable(null);
@@ -1951,11 +1952,12 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		BROWSER,
 		TTS,
 	}
-	public OptionsDialog(BaseActivity activity, Mode mode, ReaderView readerView, String[] fontFaces, TTSControlBinder ttsbinder)
+	public OptionsDialog(BaseActivity activity, Engine engine, Mode mode, ReaderView readerView, String[] fontFaces, TTSControlBinder ttsbinder)
 	{
 		super(activity, null, false, false);
 		
 		mActivity = activity;
+		mEngine = engine;
 		mReaderView = readerView;
 		mFontFaces = fontFaces;
 		mTTSBinder = ttsbinder;

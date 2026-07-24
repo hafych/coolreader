@@ -40,7 +40,7 @@ public class AboutDialog extends BaseDialog implements TabContentFactory {
 	private View mDirsTab;
 	private View mLicenseTab;
 
-	public AboutDialog( CoolReader activity)
+	public AboutDialog(CoolReader activity, Engine engine)
 	{
 		super(activity);
 		mCoolReader = activity;
@@ -106,7 +106,7 @@ public class AboutDialog extends BaseDialog implements TabContentFactory {
 		hyph_dir.setText(sbuf.toString());
 
 		mLicenseTab = inflater.inflate(R.layout.about_dialog_license, null);
-		String license = Services.getEngine().loadResourceUtf8(R.raw.license);
+		String license = engine.loadResourceUtf8(R.raw.license);
 		((TextView)mLicenseTab.findViewById(R.id.license)).setText(license);
 		
 		tabs.setup();

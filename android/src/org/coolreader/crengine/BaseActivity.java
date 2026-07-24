@@ -1527,7 +1527,13 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	public void showBrowserOptionsDialog() {
-		OptionsDialog dlg = new OptionsDialog(BaseActivity.this, OptionsDialog.Mode.BROWSER, null, null, null);
+		OptionsDialog dlg = new OptionsDialog(
+				BaseActivity.this,
+				getServiceDependencies().getEngine(),
+				OptionsDialog.Mode.BROWSER,
+				null,
+				null,
+				null);
 		dlg.show();
 	}
 

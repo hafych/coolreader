@@ -57,6 +57,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   work is discarded when its service generation closes.
 - Favorite-folder assembly and recursive folder deletion now use the Scanner
   captured by their caller instead of resolving global scanner state.
+- About and options dialogs receive the active Engine explicitly, including
+  browser and TTS entry points.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application
