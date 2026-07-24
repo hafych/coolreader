@@ -10,7 +10,14 @@ Select exactly one and update `FORK_DELTA.md` when the permanent delta changes.
 - [ ] `temporary-delta` — compatibility bridge with a stated removal condition
 - [ ] `fork-only` — intentional downstream product or policy choice
 
-Upstream issue/PR or reason it is not applicable:
+Upstream issue/PR or non-upstream reason: <!-- required -->
+
+Temporary-delta removal condition: <!-- required for temporary-delta -->
+
+Select exactly one:
+
+- [ ] `no-delta-change` — active fork delta rows do not change
+- [ ] `delta-updated` — `FORK_DELTA.md` is updated in this PR
 
 ## Verification
 

@@ -74,6 +74,8 @@ The tag-to-draft workflow, artifact set, rollback and hotfix gates are in
 [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
 The two-clean-runner reproducibility contract and its explicit boundary are in
 [docs/REPRODUCIBLE_BUILDS.md](docs/REPRODUCIBLE_BUILDS.md).
+Pull request fork classification and delta-ledger rules are documented in
+[docs/PR_GOVERNANCE.md](docs/PR_GOVERNANCE.md).
 
 ### Support matrix
 

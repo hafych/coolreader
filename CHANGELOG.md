@@ -29,6 +29,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   Release, plus rollback/hotfix gates.
 - A two-clean-runner release reproducibility gate with normalized archive,
   native-symbol and SPDX timestamps.
+- A trusted-base pull request governance check enforcing fork classification
+  and consistent `FORK_DELTA.md` declarations.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

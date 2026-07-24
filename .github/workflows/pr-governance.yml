@@ -1,0 +1,44 @@
+name: Pull Request Governance
+
+on:
+  pull_request_target:
+    branches: [master, main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-governance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  classification:
+    name: Validate PR classification
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout trusted base revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Fetch PR tree without executing it
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags --depth=1 origin \
+            "pull/${PR_NUMBER}/head:refs/remotes/origin/pr-head"
+          git diff --name-only --diff-filter=ACMR \
+            "${BASE_SHA}" refs/remotes/origin/pr-head \
+            > "${RUNNER_TEMP}/pr-changed-files.txt"
+
+      - name: Test governance validator
+        run: python3 -m unittest discover -s tools/tests -p 'test_*.py'
+
+      - name: Validate PR classification and delta declaration
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 tools/verify_pr_classification.py \
+            --changed-files-file "${RUNNER_TEMP}/pr-changed-files.txt"
