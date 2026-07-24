@@ -122,7 +122,7 @@ DRM или ограничений доступа, подбор/получени�
 
 - [ ] Расширить EPUB3 nav/landmarks, metadata, footnotes и media-overlay policy с
   тестовым corpus.
-- [ ] Определить поддерживаемое CSS-подмножество, добавить тесты cascade,
+- [x] Определить поддерживаемое CSS-подмножество, добавить тесты cascade,
   specificity, inheritance, units и page-break.
 - [ ] Обновить hyphenation dictionaries, проверить их лицензии и добавить
   языковые golden tests.

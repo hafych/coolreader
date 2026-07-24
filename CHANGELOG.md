@@ -175,6 +175,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   equivalent runs using a vendored font fixture.
 - Native typography regressions now cover variable-font shaping,
   document-scoped embedded-font precedence and ordered CJK fallback.
+- Native CSS regressions now cover declaration units, pagination aliases,
+  cascade specificity, source order and computed inheritance.
 - SQLite fixture matrices for every supported main and cover database migration,
   including atomic rollback, repeat runs, damaged downstream schema repair and
   future-version rejection.
