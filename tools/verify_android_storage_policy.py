@@ -60,7 +60,7 @@ def main() -> None:
     ).read_text(encoding="utf-8")
     if "mountedRootsMap = Collections.emptyMap();" not in engine:
         violations.append("Engine does not disable legacy filesystem roots")
-    if 'new File(instance.mActivity.getCacheDir(), "engine")' not in engine:
+    if 'new File(mAppContext.getCacheDir(), "engine")' not in engine:
         violations.append("native engine cache is not app-private")
 
     database = (

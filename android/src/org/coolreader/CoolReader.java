@@ -277,9 +277,6 @@ public class CoolReader extends BaseActivity {
 		activityIsRunning = false;
 		isInterfaceCreated = false;
 
-		// apply settings
-		onSettingsChanged(settings(), null);
-
 		mEngine = Services.getEngine();
 		mScanner = Services.getScanner();
 		mHistory = Services.getHistory();
@@ -287,6 +284,9 @@ public class CoolReader extends BaseActivity {
 		mDocumentCache = Services.getDocumentCache();
 		mFileSystemFolders = Services.getFileSystemFolders();
 		mServiceLifecycle = Services.getLifecycle();
+
+		// Service-backed settings require the captured generation.
+		onSettingsChanged(settings(), null);
 
 		//requestWindowFeature(Window.FEATURE_NO_TITLE);
 
