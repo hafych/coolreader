@@ -40,7 +40,6 @@ public class Scanner extends FileInfoChangeSource {
 	
 	public static final Logger log = L.create("sc");
 	private static final int METADATA_BATCH_SIZE = 64;
-	private static final int DISCOVERY_PROGRESS_MAX = 3000;
 	private static final int DEFAULT_MAX_DISCOVERY_ENTRIES = 100_000;
 	private static final int DEFAULT_MAX_DISCOVERY_DEPTH = 256;
 	
@@ -351,7 +350,7 @@ public class Scanner extends FileInfoChangeSource {
 
 		private int discoveryProgress() {
 			return state.discoveryProgress(
-					DISCOVERY_PROGRESS_MAX);
+					ScanProgressTracker.DISCOVERY_MAX);
 		}
 
 		private void stopAtDepthLimit() {
@@ -379,9 +378,11 @@ public class Scanner extends FileInfoChangeSource {
 	 * @param readyCallback is Runable to call when operation is finished or stopped (will be called in GUI thread)
 	 * @param control allows to stop long operation
 	 */
-	private void scanDirectoryFiles(final CRDBService.LocalBinder db,
+	private void scanDirectoryFiles(
+			final LibraryMetadataStore metadataStore,
+			final LibraryMetadataExtractor metadataExtractor,
 			final FileInfo baseDir, final ScanControl control,
-			final Engine.ProgressControl progress,
+			final ScanProgressTracker progress,
 			final Runnable readyCallback) {
 		// GUI thread
 		BackgroundThread.ensureGUI();
@@ -393,22 +394,29 @@ public class Scanner extends FileInfoChangeSource {
 		}
 
 		new MetadataScanSession(
-				db, baseDir, control, progress, readyCallback).scanNextBatch();
+				metadataStore, metadataExtractor,
+				baseDir, control,
+				progress, readyCallback).scanNextBatch();
 	}
 
 	private final class MetadataScanSession {
-		private final CRDBService.LocalBinder db;
+		private final LibraryMetadataStore metadataStore;
+		private final LibraryMetadataExtractor metadataExtractor;
 		private final FileInfo baseDir;
 		private final ScanControl control;
-		private final Engine.ProgressControl progress;
+		private final ScanProgressTracker progress;
 		private final Runnable readyCallback;
 		private final ScanBatchCursor batches;
 		private boolean finished;
 
-		MetadataScanSession(CRDBService.LocalBinder db, FileInfo baseDir,
-				ScanControl control, Engine.ProgressControl progress,
+		MetadataScanSession(
+				LibraryMetadataStore metadataStore,
+				LibraryMetadataExtractor metadataExtractor,
+				FileInfo baseDir, ScanControl control,
+				ScanProgressTracker progress,
 				Runnable readyCallback) {
-			this.db = db;
+			this.metadataStore = metadataStore;
+			this.metadataExtractor = metadataExtractor;
 			this.baseDir = baseDir;
 			this.control = control;
 			this.progress = progress;
@@ -429,7 +437,7 @@ public class Scanner extends FileInfoChangeSource {
 					new ArrayList<>(batch.size());
 			for (int i = batch.start; i < batch.end; i++)
 				pathNames.add(baseDir.getFile(i).getPathName());
-			db.loadFileInfos(
+			metadataStore.load(
 					pathNames, control,
 					list -> onFileInfoListLoaded(batch, list));
 		}
@@ -503,7 +511,8 @@ public class Scanner extends FileInfoChangeSource {
 						if (control.isStopped())
 							break;
 						FileInfo item = filesForParsing.get(i);
-						if (engine.scanBookProperties(item))
+						if (metadataExtractor
+								.extractProperties(item))
 							filesForSave.add(item);
 						setProgress(++completed);
 					}
@@ -511,7 +520,8 @@ public class Scanner extends FileInfoChangeSource {
 						if (control.isStopped())
 							break;
 						FileInfo item = filesForCRC32Update.get(i);
-						if (Engine.updateFileCRC32(item))
+						if (metadataExtractor
+								.updateFileFingerprint(item))
 							filesForSave.add(item);
 						setProgress(++completed);
 					}
@@ -528,7 +538,7 @@ public class Scanner extends FileInfoChangeSource {
 			BackgroundThread.ensureGUI();
 			try {
 				if (!filesForSave.isEmpty())
-					db.saveFileInfos(filesForSave);
+					metadataStore.save(filesForSave);
 				for (FileInfo file : filesForSave)
 					baseDir.setFile(file);
 			} catch (Exception e) {
@@ -544,15 +554,8 @@ public class Scanner extends FileInfoChangeSource {
 
 		private void setProgress(int completedCount) {
 			int totalCount = batches.getTotalCount();
-			progress.setProgress(
-					DISCOVERY_PROGRESS_MAX
-							+ (int) Math.min(
-									10000L
-											- DISCOVERY_PROGRESS_MAX,
-									(long) completedCount
-											* (10000
-													- DISCOVERY_PROGRESS_MAX)
-											/ totalCount));
+			progress.setMetadataProgress(
+					completedCount, totalCount);
 		}
 
 		private void finish() {
@@ -564,20 +567,24 @@ public class Scanner extends FileInfoChangeSource {
 	}
 
 	private final class DirectoryMetadataIterator {
-		private final CRDBService.LocalBinder db;
+		private final LibraryMetadataStore metadataStore;
+		private final LibraryMetadataExtractor metadataExtractor;
 		private final ScanControl control;
-		private final Engine.ProgressControl progress;
+		private final ScanProgressTracker progress;
 		private final ScanCompleteListener readyListener;
 		private final boolean recursiveScan;
 		private final ArrayDeque<FileInfo> pending = new ArrayDeque<>();
 		private boolean finished;
 
-		DirectoryMetadataIterator(CRDBService.LocalBinder db,
+		DirectoryMetadataIterator(
+				LibraryMetadataStore metadataStore,
+				LibraryMetadataExtractor metadataExtractor,
 				FileInfo baseDir, ScanControl control,
-				Engine.ProgressControl progress,
+				ScanProgressTracker progress,
 				ScanCompleteListener readyListener,
 				boolean recursiveScan) {
-			this.db = db;
+			this.metadataStore = metadataStore;
+			this.metadataExtractor = metadataExtractor;
 			this.control = control;
 			this.progress = progress;
 			this.readyListener = readyListener;
@@ -593,7 +600,8 @@ public class Scanner extends FileInfoChangeSource {
 			}
 			FileInfo directory = pending.removeFirst();
 			scanDirectoryFiles(
-					db, directory, control, progress, () -> {
+					metadataStore, metadataExtractor, directory,
+					control, progress, () -> {
 						onDirectoryContentChanged(directory);
 						if (control.isStopped()) {
 							finish();
@@ -638,9 +646,25 @@ public class Scanner extends FileInfoChangeSource {
 		BackgroundThread.ensureGUI();
 
 		log.d("scanDirectory(" + baseDir.getPathName() + ") " + (recursiveScan ? "recursive" : ""));
-		Engine.ProgressControl progress = engine.createProgress(
+		Engine.ProgressControl engineProgress = engine.createProgress(
 				recursiveScan ? 0 : R.string.progress_scanning,
 				scanControl);
+		ScanProgressTracker progress = new ScanProgressTracker(
+				new ScanProgressTracker.Sink() {
+					@Override
+					public void setProgress(int value) {
+						engineProgress.setProgress(value);
+					}
+
+					@Override
+					public void hide() {
+						engineProgress.hide();
+					}
+				});
+		LibraryMetadataStore metadataStore =
+				new CrdbLibraryMetadataStore(db);
+		LibraryMetadataExtractor metadataExtractor =
+				new EngineLibraryMetadataExtractor(engine);
 		boolean fullDiscovery = recursiveScan || mHideEmptyDirs;
 
 		listSubtreeBg(
@@ -654,7 +678,8 @@ public class Scanner extends FileInfoChangeSource {
 				return;
 			}
 			new DirectoryMetadataIterator(
-					db, baseDir, scanControl, progress,
+					metadataStore, metadataExtractor,
+					baseDir, scanControl, progress,
 					readyListener, recursiveScan)
 					.scanNextDirectory();
 		});
@@ -969,7 +994,7 @@ public class Scanner extends FileInfoChangeSource {
 	 * @param readyCallback ready callback, can be null
 	 */
 	private void listSubtreeBg(FileInfo root, int maxDepth,
-			ScanControl scanControl, Engine.ProgressControl progress,
+			ScanControl scanControl, ScanProgressTracker progress,
 			boolean enforceDepthLimit, Runnable initialUpdateCallback,
 			Runnable readyCallback) {
 		BackgroundThread.instance().postBackground(() -> {
@@ -981,7 +1006,7 @@ public class Scanner extends FileInfoChangeSource {
 					dir, true, true,
 					!dir.isSpecialDir() && !dir.isArchive,
 					scanControl);
-			progress.setProgress(
+			progress.setDiscoveryProgress(
 					scanControl.discoveryProgress());
 			boolean initialUpdatePosted =
 					rootListed && initialUpdateCallback != null;
@@ -1029,7 +1054,7 @@ public class Scanner extends FileInfoChangeSource {
 	}
 
 	private boolean listSubtreeBg_impl(FileInfo dir, int maxDepth,
-			ScanControl scanControl, Engine.ProgressControl progress,
+			ScanControl scanControl, ScanProgressTracker progress,
 			boolean rootAlreadyDiscovered,
 			boolean enforceDepthLimit) {
 		BackgroundThread.ensureBackground();
@@ -1069,7 +1094,7 @@ public class Scanner extends FileInfoChangeSource {
 						if (fullDepth && mHideEmptyDirs)
 							directory.removeEmptyDirs();
 						scanControl.completeDirectory();
-						progress.setProgress(
+						progress.setDiscoveryProgress(
 								scanControl.discoveryProgress());
 					}
 				});

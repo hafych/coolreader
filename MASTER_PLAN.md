@@ -100,7 +100,7 @@ DRM или ограничений доступа, подбор/получени�
 
 - [x] Сделать сканер инкрементальным и отменяемым, с bounded parallelism и
   backpressure.
-- [-] Отделить discovery, metadata extraction, persistence и UI progress.
+- [x] Отделить discovery, metadata extraction, persistence и UI progress.
 - [ ] Добавить fingerprint каталога/документа и не перечитывать неизменённые книги.
 - [x] Обрабатывать огромные каталоги с bounded limits и понятным прогрессом.
 - [ ] Добавить corpus-тесты на десятки тысяч книг и измерять время/память.

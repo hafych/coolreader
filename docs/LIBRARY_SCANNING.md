@@ -11,6 +11,17 @@ Only one database/metadata batch is in flight, so producers cannot outrun the
 database or parser. User cancellation is checked between filesystem entries,
 archive entries, database lookups and parsed files.
 
+## Component boundaries
+
+- `IterativeScanTraversal` discovers the directory tree without knowing about
+  the database, metadata parser or UI.
+- `MetadataScanSession` coordinates bounded batches through
+  `LibraryMetadataExtractor` and `LibraryMetadataStore`; their Engine and CRDB
+  adapters live at the composition boundary.
+- `LibraryScanState` owns cancellation, limits and stable stop reasons.
+- `ScanProgressTracker` maps discovery and metadata phases to a monotonic
+  progress sink; only the public Scanner entry point adapts it to Engine UI.
+
 ## Discovery budgets
 
 Full-tree discovery stops at either:
@@ -35,5 +46,7 @@ directories rather than rediscovering descendants.
   maximum batch.
 - `LibraryScanStateTest` checks entry budgets, stable stop reasons and monotonic
   progress.
+- `ScanProgressTrackerTest` checks phase mapping, monotonic updates and
+  idempotent completion independently of Engine UI.
 - Android instrumentation scans 133 books across three directory levels,
   verifies metadata, then exercises user, entry and depth stops.

@@ -82,6 +82,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Full-tree discovery has explicit 100,000-entry and 256-level budgets, reports
   stable stop reasons, reserves a progress phase and shows an actionable
   message instead of silently truncating oversized libraries.
+- Library discovery, metadata extraction, persistence and UI progress now meet
+  through explicit scan-state, extractor, metadata-store and progress ports,
+  keeping the database and Engine adapters at the pipeline composition
+  boundary.
 - FileBrowser and the home/root view now receive scanner, history, cover and
   favorite-folder services explicitly.
 - Database, synchronization and TTS service connectors bind through application
