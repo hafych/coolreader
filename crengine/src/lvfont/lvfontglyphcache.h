@@ -30,9 +30,11 @@
 #ifndef __LV_FONTGLYPHCACHE_H_INCLUDED__
 #define __LV_FONTGLYPHCACHE_H_INCLUDED__
 
+#include <atomic>
 #include <stdlib.h>
 #include <stddef.h>
 #include "crsetup.h"
+#include "lvcache.h"
 #include "lvtypes.h"
 #include "lvhashtable.h"
 #include "lvdrawbuf.h"
@@ -46,8 +48,11 @@ class LVFontGlobalGlyphCache {
 private:
     LVFontGlyphCacheItem *head;
     LVFontGlyphCacheItem *tail;
-    int size;
+    std::atomic<int> size;
     int max_size;
+    std::atomic<lUInt64> hit_count;
+    std::atomic<lUInt64> miss_count;
+    std::atomic<lUInt64> eviction_count;
 
     void removeNoLock(LVFontGlyphCacheItem *item);
 
@@ -55,7 +60,8 @@ private:
 
 public:
     LVFontGlobalGlyphCache(int maxSize)
-            : head(NULL), tail(NULL), size(0), max_size(maxSize) {
+            : head(NULL), tail(NULL), size(0), max_size(maxSize),
+              hit_count(0), miss_count(0), eviction_count(0) {
     }
 
     ~LVFontGlobalGlyphCache() {
@@ -67,6 +73,12 @@ public:
     void remove(LVFontGlyphCacheItem *item);
 
     void refresh(LVFontGlyphCacheItem *item);
+
+    void recordLookup(bool hit);
+
+    LVCacheStats getStats() const;
+
+    void resetStats();
 
     void clear();
 };
@@ -81,7 +93,7 @@ class LVLocalGlyphCacheHashTableStorage
     LVLocalGlyphCacheHashTableStorage& operator=( const LVLocalGlyphCacheHashTableStorage& );
 public:
     LVLocalGlyphCacheHashTableStorage(LVFontGlobalGlyphCache *global_cache) :
-        m_global_cache(global_cache), hashTable(GLYPHCACHE_TABLE_SZ) {}
+        hashTable(GLYPHCACHE_TABLE_SZ), m_global_cache(global_cache) {}
     ~LVLocalGlyphCacheHashTableStorage() {
         clear();
     }

@@ -39,6 +39,7 @@
 #include "lvstring32collection.h"
 #include "lvfont.h"
 #include "lvarray.h"
+#include "lvcache.h"
 #include "lvcontainer.h"
 
 /// font manager interface class
@@ -111,6 +112,12 @@ public:
 
     /// clear glyph cache
     virtual void clearGlyphCache() {}
+
+    /// get observable glyph cache state
+    virtual LVCacheStats GetGlyphCacheStats() { return LVCacheStats(); }
+
+    /// reset observable glyph cache counters
+    virtual void ResetGlyphCacheStats() {}
 
     /// get antialiasing mode
     virtual font_antialiasing_t GetAntialiasMode() {

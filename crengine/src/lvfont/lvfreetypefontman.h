@@ -123,6 +123,14 @@ public:
     /// clear glyph cache
     virtual void clearGlyphCache();
 
+    virtual LVCacheStats GetGlyphCacheStats() {
+        return _globalCache.getStats();
+    }
+
+    virtual void ResetGlyphCacheStats() {
+        _globalCache.resetStats();
+    }
+
     virtual int GetFontCount() {
         return _cache.length();
     }

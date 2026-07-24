@@ -66,6 +66,14 @@ public:
     virtual bool Init( lString8 path );
     /// clear glyph cache
     virtual void clearGlyphCache();
+    virtual LVCacheStats GetGlyphCacheStats()
+    {
+        return _globalCache.getStats();
+    }
+    virtual void ResetGlyphCacheStats()
+    {
+        _globalCache.resetStats();
+    }
     virtual void getFaceList( lString32Collection & list )
     {
         _cache.getFaceList(list);

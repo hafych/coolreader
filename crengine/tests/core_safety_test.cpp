@@ -9,6 +9,7 @@
 #include "logredactor.h"
 #include "parsebudget.h"
 #include "textlang.h"
+#include "../src/lvfont/lvfontglyphcache.h"
 
 #include <atomic>
 #include <cerrno>
@@ -590,6 +591,66 @@ static int testConcurrentFontRenderSettings() {
     return 0;
 }
 
+static LVFontGlyphCacheItem *newGlyphCacheTestItem(
+        LVFontLocalGlyphCache *localCache, lUInt32 key) {
+    static const int width = 4;
+    static const int height = 4;
+    static const int pitch = 4;
+    return LVFontGlyphCacheItem::newItem(
+            localCache, key, width, height, pitch, pitch * height);
+}
+
+static int testBoundedObservableGlyphCache() {
+    LVFontGlyphCacheItem *sizeProbe = newGlyphCacheTestItem(NULL, 0);
+    if (!sizeProbe)
+        return fail("glyph cache size probe allocation failed");
+    const int itemSize = sizeProbe->getSize();
+    LVFontGlyphCacheItem::freeItem(sizeProbe);
+
+    LVFontGlobalGlyphCache globalCache(itemSize * 2);
+    LVFontLocalGlyphCache localCache(&globalCache);
+    if (localCache.get(1) != NULL)
+        return fail("empty glyph cache unexpectedly returned an item");
+
+    LVFontGlyphCacheItem *first = newGlyphCacheTestItem(&localCache, 1);
+    LVFontGlyphCacheItem *second = newGlyphCacheTestItem(&localCache, 2);
+    LVFontGlyphCacheItem *third = newGlyphCacheTestItem(&localCache, 3);
+    if (!first || !second || !third) {
+        LVFontGlyphCacheItem::freeItem(first);
+        LVFontGlyphCacheItem::freeItem(second);
+        LVFontGlyphCacheItem::freeItem(third);
+        return fail("glyph cache fixture allocation failed");
+    }
+    localCache.put(first);
+    localCache.put(second);
+    if (localCache.get(1) != first)
+        return fail("glyph cache did not return the first item");
+    localCache.put(third);
+
+    if (localCache.get(1) != first)
+        return fail("recently used glyph was evicted");
+    if (localCache.get(2) != NULL)
+        return fail("least recently used glyph was not evicted");
+    if (localCache.get(3) != third)
+        return fail("new glyph was not cached");
+
+    LVCacheStats stats = globalCache.getStats();
+    if (stats.capacity != itemSize * 2 || stats.size != itemSize * 2)
+        return fail("glyph cache byte bounds are incorrect");
+    if (stats.hits != 3 || stats.misses != 2 || stats.evictions != 1)
+        return fail("glyph cache counters are incorrect");
+
+    localCache.clear();
+    stats = globalCache.getStats();
+    if (stats.size != 0)
+        return fail("glyph cache retained size after removing the last item");
+    globalCache.resetStats();
+    stats = globalCache.getStats();
+    if (stats.hits != 0 || stats.misses != 0 || stats.evictions != 0)
+        return fail("glyph cache counters did not reset");
+    return 0;
+}
+
 static int testLogRedactor() {
     if (CRRedactLogMessage("Rendered 42 pages") != "Rendered 42 pages")
         return fail("safe native diagnostic was unexpectedly changed");
@@ -1159,6 +1220,8 @@ int main() {
     if (testConcurrentFontGammaSettings() != 0)
         return 1;
     if (testConcurrentFontRenderSettings() != 0)
+        return 1;
+    if (testBoundedObservableGlyphCache() != 0)
         return 1;
     if (testLogRedactor() != 0)
         return 1;

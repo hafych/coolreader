@@ -154,6 +154,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized
   with their cache invalidation and live-font updates.
+- The bounded glyph LRU cache now reports hit, miss, eviction and byte counters;
+  regression coverage also preserves true least-recently-used eviction and
+  exact size accounting when the final entry is removed.
 - The Clang warning gate now prevents signed-comparison and unused-set-variable
   regressions in the hyphenation engine.
 - SQLite fixture matrices for every supported main and cover database migration,

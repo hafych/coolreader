@@ -26,7 +26,7 @@
 
 void LVFontGlobalGlyphCache::refresh(LVFontGlyphCacheItem *item) {
     FONT_GLYPH_CACHE_GUARD
-    if (tail != item) {
+    if (head != item) {
         //move to head
         removeNoLock(item);
         putNoLock(item);
@@ -41,13 +41,14 @@ void LVFontGlobalGlyphCache::put(LVFontGlyphCacheItem *item) {
 void LVFontGlobalGlyphCache::putNoLock(LVFontGlyphCacheItem *item) {
     int sz = item->getSize();
     // remove extra items from tail
-    while (sz + size > max_size) {
+    while (sz + size.load(std::memory_order_relaxed) > max_size) {
         LVFontGlyphCacheItem *removed_item = tail;
         if (!removed_item)
             break;
         removeNoLock(removed_item);
         removed_item->local_cache->remove(removed_item);
         LVFontGlyphCacheItem::freeItem(removed_item);
+        eviction_count.fetch_add(1, std::memory_order_relaxed);
     }
     // add new item to head
     item->next_global = head;
@@ -56,7 +57,7 @@ void LVFontGlobalGlyphCache::putNoLock(LVFontGlyphCacheItem *item) {
     head = item;
     if (!tail)
         tail = item;
-    size += sz;
+    size.fetch_add(sz, std::memory_order_relaxed);
 }
 
 void LVFontGlobalGlyphCache::remove(LVFontGlyphCacheItem *item) {
@@ -65,29 +66,59 @@ void LVFontGlobalGlyphCache::remove(LVFontGlyphCacheItem *item) {
 }
 
 void LVFontGlobalGlyphCache::removeNoLock(LVFontGlyphCacheItem *item) {
-    if (item == head)
-        head = item->next_global;
-    if (item == tail)
-        tail = item->prev_global;
-    if (!head || !tail)
+    if (!item)
+        return;
+    const bool linked = item == head || item == tail
+            || item->prev_global || item->next_global;
+    if (!linked)
         return;
     if (item->prev_global)
         item->prev_global->next_global = item->next_global;
+    else if (item == head)
+        head = item->next_global;
     if (item->next_global)
         item->next_global->prev_global = item->prev_global;
+    else if (item == tail)
+        tail = item->prev_global;
     item->next_global = NULL;
     item->prev_global = NULL;
-    size -= item->getSize();
+    int old_size =
+            size.fetch_sub(item->getSize(), std::memory_order_relaxed);
+    if (old_size < item->getSize())
+        size.store(0, std::memory_order_relaxed);
+}
+
+void LVFontGlobalGlyphCache::recordLookup(bool hit) {
+    if (hit)
+        hit_count.fetch_add(1, std::memory_order_relaxed);
+    else
+        miss_count.fetch_add(1, std::memory_order_relaxed);
+}
+
+LVCacheStats LVFontGlobalGlyphCache::getStats() const {
+    return LVCacheStats(
+            max_size,
+            size.load(std::memory_order_relaxed),
+            hit_count.load(std::memory_order_relaxed),
+            miss_count.load(std::memory_order_relaxed),
+            eviction_count.load(std::memory_order_relaxed));
+}
+
+void LVFontGlobalGlyphCache::resetStats() {
+    hit_count.store(0, std::memory_order_relaxed);
+    miss_count.store(0, std::memory_order_relaxed);
+    eviction_count.store(0, std::memory_order_relaxed);
 }
 
 void LVFontGlobalGlyphCache::clear() {
     FONT_GLYPH_CACHE_GUARD
     while (head) {
         LVFontGlyphCacheItem *ptr = head;
-        remove(ptr);
+        removeNoLock(ptr);
         ptr->local_cache->remove(ptr);
         LVFontGlyphCacheItem::freeItem(ptr);
     }
+    size.store(0, std::memory_order_relaxed);
 }
 
 LVFontGlyphCacheItem *LVFontGlyphCacheItem::newItem(LVFontLocalGlyphCache* local_cache, LVFontGlyphCacheKeyType ch_or_index, int w, int h, unsigned int bmp_pitch, unsigned int bmp_sz)
@@ -118,7 +149,9 @@ void LVFontGlyphCacheItem::freeItem(LVFontGlyphCacheItem *item) {
 LVFontGlyphCacheItem *LVLocalGlyphCacheHashTableStorage::get(lUInt32 ch)
 {
     LVFontGlyphCacheItem *ptr = 0;
-    if (hashTable.get(ch, ptr))
+    const bool found = hashTable.get(ch, ptr);
+    m_global_cache->recordLookup(found);
+    if (found)
         m_global_cache->refresh(ptr);
     return ptr;
 }
@@ -152,10 +185,12 @@ LVFontGlyphCacheItem *LVLocalGlyphCacheListStorage::get(lUInt32 ch)
     LVFontGlyphCacheItem *ptr = head;
     for (; ptr; ptr = ptr->next_local) {
         if (ptr->data == ch) {
+            m_global_cache->recordLookup(true);
             m_global_cache->refresh(ptr);
             return ptr;
         }
     }
+    m_global_cache->recordLookup(false);
     return NULL;
 }
 
@@ -172,16 +207,16 @@ void LVLocalGlyphCacheListStorage::put(LVFontGlyphCacheItem *item)
 
 void LVLocalGlyphCacheListStorage::remove(LVFontGlyphCacheItem *item)
 {
-    if (item == head)
-        head = item->next_local;
-    if (item == tail)
-        tail = item->prev_local;
-    if (!head || !tail)
+    if (!item)
         return;
     if (item->prev_local)
         item->prev_local->next_local = item->next_local;
+    else if (item == head)
+        head = item->next_local;
     if (item->next_local)
         item->next_local->prev_local = item->prev_local;
+    else if (item == tail)
+        tail = item->prev_local;
     item->next_local = NULL;
     item->prev_local = NULL;
 }

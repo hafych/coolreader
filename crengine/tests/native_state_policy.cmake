@@ -16,6 +16,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/textlang.h" TEXTLANG_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfntman.h" FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -200,6 +202,26 @@ require_source_text(
   "${FONT_MANAGER_HEADER}"
   "std::mutex _renderSettingsMutex"
   "font render setting changes must be serialized"
+)
+require_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "std::atomic<lUInt64> hit_count"
+  "glyph cache hits must be observable"
+)
+require_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "std::atomic<lUInt64> miss_count"
+  "glyph cache misses must be observable"
+)
+require_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "std::atomic<lUInt64> eviction_count"
+  "glyph cache evictions must be observable"
+)
+require_source_text(
+  "${GLYPH_CACHE_SOURCE}"
+  "if (head != item)"
+  "glyph cache hits must refresh least-recently-used order"
 )
 
 forbid_source_text(
