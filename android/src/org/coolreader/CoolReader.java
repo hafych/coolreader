@@ -1337,7 +1337,14 @@ public class CoolReader extends BaseActivity {
 					log.w("runInReader: mReaderView or mReaderView.getSurface() is null");
 				}
 			} else {
-				mReaderView = new ReaderView(CoolReader.this, mEngine, settings());
+				mReaderView = new ReaderView(
+						CoolReader.this,
+						mEngine,
+						Services.getScanner(),
+						Services.getHistory(),
+						Services.getDocumentCache(),
+						Services.getLifecycle(),
+						settings());
 				mReaderFrame = new ReaderViewLayout(CoolReader.this, mReaderView);
 				mReaderFrame.getToolBar().setOnActionHandler(item -> {
 					if (mReaderView != null)

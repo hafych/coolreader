@@ -46,6 +46,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   instead of retaining the Activity in a static field.
 - The native Engine retains only application context plus a detachable weak UI
   host, and stale Activity shutdown can no longer tear down a newer generation.
+- ReaderView receives scanner, history, document cache and a per-generation
+  lifecycle token explicitly instead of consulting the static service locator.
 - Stable, checksum-equivalent zlib release retrieval from the official GitHub
   release asset.
 - Storage Access Framework loading through file descriptors with a bounded

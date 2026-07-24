@@ -37,6 +37,7 @@ public class Services {
 	private static GenresCollection mGenresCollection;
 	private static DocumentFileCache mDocumentCache;
 	private static volatile long mGeneration;
+	private static ServiceLifecycle mLifecycle;
 
 	public static Engine getEngine() {
 		if (null != mEngine)
@@ -80,6 +81,13 @@ public class Services {
 		throw new RuntimeException("Services.getDocumentCache(): trying to get null object");
 	}
 
+	public static ServiceLifecycle getLifecycle() {
+		if (mLifecycle != null)
+			return mLifecycle;
+		throw new RuntimeException(
+				"Services.getLifecycle(): trying to get null object");
+	}
+
 	public static boolean isStopped() {
 		return null == mEngine || null == mScanner || null == mHistory || null == mCoverpageManager || null == mFSFolders || null == mGenresCollection || null == mDocumentCache;
 	}
@@ -87,6 +95,7 @@ public class Services {
 	public static void startServices(BaseActivity activity) {
 		log.i("First activity is created");
 		mGeneration++;
+		mLifecycle = new ServiceLifecycle(mGeneration);
 		// testing background thread
 		//mSettings = activity.settings();
 		BackgroundThread.instance().setGUIHandler(new Handler());
@@ -113,8 +122,12 @@ public class Services {
 		}
 		mCoverpageManager.clear();
 		Engine engine = mEngine;
+		ServiceLifecycle lifecycle = mLifecycle;
 		long stoppedGeneration = mGeneration;
 		mEngine = null;
+		mLifecycle = null;
+		if (lifecycle != null)
+			lifecycle.close();
 		if (engine != null)
 			engine.detachActivity(activity);
 		BackgroundThread.instance().postBackground(() -> {

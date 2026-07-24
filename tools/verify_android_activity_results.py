@@ -15,6 +15,7 @@ BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
 NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
 ENGINE = SOURCE / "crengine" / "Engine.java"
 SERVICES = SOURCE / "crengine" / "Services.java"
+READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 ACTIVE_RESULT_SOURCES = (COOL_READER, DICTIONARIES, BASE_ACTIVITY)
 FORBIDDEN_RESULT_PATTERNS = (
     r"\bstartActivityForResult\s*\(",
@@ -126,6 +127,19 @@ def main() -> None:
             r"\bEngine\.getInstance\s*\(",
             "uses the legacy Activity-owned Engine singleton",
             violations)
+
+    reader_view_text = READER_VIEW.read_text(encoding="utf-8")
+    if re.search(r"\bServices\.", reader_view_text):
+        violations.append(
+            f"{relative(READER_VIEW)} still uses the static service locator")
+    for marker in (
+        "private final Scanner mScanner",
+        "private final History mHistory",
+        "private final DocumentFileCache mDocumentCache",
+        "private final ServiceLifecycle mServiceLifecycle",
+    ):
+        if marker not in reader_view_text:
+            violations.append(f"{relative(READER_VIEW)} omits marker: {marker}")
 
     cool_reader_text = COOL_READER.read_text(encoding="utf-8")
     for marker in REQUIRED_COOL_READER_MARKERS:

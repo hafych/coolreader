@@ -372,6 +372,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private final CoolReader mActivity;
 	private final Engine mEngine;
+	private final Scanner mScanner;
+	private final History mHistory;
+	private final DocumentFileCache mDocumentCache;
+	private final ServiceLifecycle mServiceLifecycle;
 	private final EinkScreen mEinkScreen;
 
 	private BookInfo mBookInfo;
@@ -2860,7 +2864,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private String getManualFileName() {
-		Scanner s = Services.getScanner();
+		Scanner s = mScanner;
 		if (s != null) {
 			FileInfo fi = s.getDownloadDirectory();
 			if (fi != null) {
@@ -2874,10 +2878,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private File generateManual() {
 		HelpFileGenerator generator = new HelpFileGenerator(mActivity, mEngine, getSettings(), mActivity.getCurrentLanguage());
-		FileInfo downloadDir = Services.getScanner().getDownloadDirectory();
+		FileInfo downloadDir = mScanner.getDownloadDirectory();
 		File bookDir;
 		if (downloadDir != null)
-			bookDir = new File(Services.getScanner().getDownloadDirectory().getPathName());
+			bookDir = new File(mScanner.getDownloadDirectory().getPathName());
 		else {
 			log.e("cannot download directory file name!");
 			bookDir = new File("/tmp/");
@@ -3167,7 +3171,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			drawPage();
 			return false;
 		}
-		Services.getHistory().getOrCreateBookInfo(mActivity.getDB(), fileInfo, bookInfo -> {
+		mHistory.getOrCreateBookInfo(mActivity.getDB(), fileInfo, bookInfo -> {
 			log.v("posting LoadDocument task to background thread");
 			BackgroundThread.instance().postBackground(() -> {
 				log.v("posting LoadDocument task to GUI thread");
@@ -3295,7 +3299,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				? source.getSize() : pfd.getStatSize();
 		applySourceBookKeyIfMissing(sourceFileInfo, source);
 
-		Services.getHistory().getOrCreateBookInfo(
+		mHistory.getOrCreateBookInfo(
 				mActivity.getDB(), sourceFileInfo, bookInfo -> {
 					if (bookInfo == null || bookInfo.getFileInfo() == null) {
 						closeDescriptorQuietly(pfd);
@@ -3384,7 +3388,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			source = source.withLocalPath(normalized);
 		}
 		String identity = source.getIdentity();
-		BookInfo book = Services.getHistory().getBookInfo(identity);
+		BookInfo book = mHistory.getBookInfo(identity);
 		if (book != null)
 			log.v("loadDocument() : found book in history : " + book);
 		FileInfo fi = null;
@@ -3398,9 +3402,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			log.v("loadDocument() : book not found in history, looking for location directory");
 			FileInfo dir = null;
 			if (fi == null) {
-				dir = Services.getScanner().findParent(
+				dir = mScanner.findParent(
 						new FileInfo(fileName),
-						Services.getScanner().getRoot());
+						mScanner.getRoot());
 				if (dir != null) {
 					log.v("loadDocument() : document location found : " + dir);
 					fi = dir.findItemByPathName(fileName);
@@ -5531,10 +5535,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BackgroundThread.ensureGUI();
 			closeParcelFileDescriptor();
 			log.d("LoadDocumentTask, GUI thread is finished successfully");
-			if (!Services.isStopped()) {
+			if (mServiceLifecycle.isActive()) {
 				if (null == docBuffer) {
 					// Opened from existing file
-					Services.getHistory().updateBookAccess(mBookInfo, getTimeElapsed());
+					mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
 					final BookInfo finalBookInfo = new BookInfo(mBookInfo);
 					mActivity.waitForCRDBService(() -> mActivity.getDB().saveBookInfo(finalBookInfo));
 					if (coverPageBytes != null && mBookInfo.getFileInfo() != null) {
@@ -5585,10 +5589,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								// and cannot be reset to its original position.
 								// So, we create a new input stream from docBuffer.
 								ByteArrayInputStream inputStream = new ByteArrayInputStream(docBuffer);
-								BookInfo bi = Services.getDocumentCache().saveStream(mBookInfo.getFileInfo(), inputStream);
+								BookInfo bi = mDocumentCache.saveStream(
+										mBookInfo.getFileInfo(), inputStream);
 								if (null != bi) {
 									mBookInfo = new BookInfo(bi);
-									Services.getHistory().updateBookAccess(mBookInfo, getTimeElapsed());
+									mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
 									final BookInfo finalBookInfo = new BookInfo(mBookInfo);
 									mActivity.waitForCRDBService(() -> mActivity.getDB().saveBookInfo(finalBookInfo));
 									mActivity.setLastBook(finalBookInfo.getFileInfo().getPathName());
@@ -5621,7 +5626,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 												restorePositionBackground(finalPos);
 											});
 										}
-										Services.getHistory().updateBookAccess(mBookInfo, getTimeElapsed());
+										mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
 										final BookInfo finalBookInfo = new BookInfo(mBookInfo);
 										mActivity.waitForCRDBService(() -> mActivity.getDB().saveBookInfo(finalBookInfo));
 										mActivity.setLastBook(filename);
@@ -5658,8 +5663,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			log.v("LoadDocumentTask failed for " + mBookInfo, e);
 			final FileInfo finalFileInfo = new FileInfo(mBookInfo.getFileInfo());
 			mActivity.waitForCRDBService(() -> {
-				if (!Services.isStopped())
-					Services.getHistory().removeBookInfo(mActivity.getDB(), finalFileInfo, true, false);
+				if (mServiceLifecycle.isActive())
+					mHistory.removeBookInfo(
+							mActivity.getDB(), finalFileInfo, true, false);
 			});
 			mBookInfo = null;
 			log.d("LoadDocumentTask is finished with exception " + e.getMessage());
@@ -5917,18 +5923,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					if (bookInfo != null && mActivity.getDB() != null) {
 						log.v("saving last position immediately");
 						savePositionBookmark(bmk);
-						Services.getHistory().updateBookAccess(bookInfo, getTimeElapsed());
+						mHistory.updateBookAccess(bookInfo, getTimeElapsed());
 					}
 				} else {
 					BackgroundThread.instance().postGUI(() -> {
 						if (mylastSavePositionTaskId == lastSavePositionTaskId) {
 							if (bookInfo != null) {
 								log.v("saving last position");
-								if (!Services.isStopped()) {
+								if (mServiceLifecycle.isActive()) {
 									// this delayed task can be completed after calling CoolReader.onDestroy(),
-									// which in turn calls Services.stopServices().
+									// which closes this service-generation token.
 									savePositionBookmark(bmk);
-									Services.getHistory().updateBookAccess(bookInfo, getTimeElapsed());
+									mHistory.updateBookAccess(bookInfo, getTimeElapsed());
 								}
 							}
 						}
@@ -6025,8 +6031,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (bmk != null && mBookInfo != null && isBookLoaded()) {
 			//setBookPosition();
 			if (lastSavedBookmark == null || !lastSavedBookmark.getStartPos().equals(bmk.getStartPos())) {
-				if (!Services.isStopped()) {
-					Services.getHistory().updateRecentDir();
+				if (mServiceLifecycle.isActive()) {
+					mHistory.updateRecentDir();
 					mActivity.getDB().saveBookInfo(mBookInfo);
 					mActivity.getDB().flush();
 					lastSavedBookmark = bmk;
@@ -6052,7 +6058,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (mBookInfo != null)
 				mBookInfo.setLastPosition(bmk);
 			if (saveToDB) {
-				Services.getHistory().updateRecentDir();
+				mHistory.updateRecentDir();
 				mActivity.getDB().saveBookInfo(mBookInfo);
 				mActivity.getDB().flush();
 			}
@@ -6063,10 +6069,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void save() {
 		BackgroundThread.ensureGUI();
 		if (isBookLoaded() && mBookInfo != null) {
-			if (!Services.isStopped()) {
+			if (mServiceLifecycle.isActive()) {
 				log.v("saving last immediately");
 				log.d("bookmark count 1 = " + mBookInfo.getBookmarkCount());
-				Services.getHistory().updateBookAccess(mBookInfo, getTimeElapsed());
+				mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
 				log.d("bookmark count 2 = " + mBookInfo.getBookmarkCount());
 				mActivity.getDB().saveBookInfo(mBookInfo);
 				log.d("bookmark count 3 = " + mBookInfo.getBookmarkCount());
@@ -6906,7 +6912,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	public ReaderView(CoolReader activity, Engine engine, Properties props) {
+	public ReaderView(
+			CoolReader activity,
+			Engine engine,
+			Scanner scanner,
+			History history,
+			DocumentFileCache documentCache,
+			ServiceLifecycle serviceLifecycle,
+			Properties props) {
 		//super(activity);
 		log.i("Creating normal SurfaceView");
 		surface = new ReaderSurface(activity);
@@ -6923,6 +6936,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BackgroundThread.ensureGUI();
 		this.mActivity = activity;
 		this.mEngine = engine;
+		this.mScanner = scanner;
+		this.mHistory = history;
+		this.mDocumentCache = documentCache;
+		this.mServiceLifecycle = serviceLifecycle;
 		this.mEinkScreen = activity.getEinkScreen();
 		surface.setFocusable(true);
 		surface.setFocusableInTouchMode(true);
