@@ -82,7 +82,7 @@ bool LVSvgImageSource::Decode( LVImageDecoderCallback * callback )
     return res;
 }
 
-int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImageDecoderCallback * callback)
+int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int /*buf_size*/, LVImageDecoderCallback * callback)
 {
     NSVGimage *image = NULL;
     NSVGrasterizer *rast = NULL;
@@ -166,7 +166,7 @@ int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImage
 }
 
 // Convenience function to convert SVG image data to PNG
-unsigned char * convertSVGtoPNG(unsigned char *svg_data, int svg_data_size, float zoom_factor, int *png_data_len)
+unsigned char * convertSVGtoPNG(unsigned char *svg_data, int /*svg_data_size*/, float zoom_factor, int *png_data_len)
 {
     NSVGimage *image = NULL;
     NSVGrasterizer *rast = NULL;

@@ -478,6 +478,7 @@ lUInt32 calcGlobalSettingsHash(int documentId, bool already_rendered)
     return hash;
 }
 
+#if 0 // unused debug helper
 static void dumpRendMethods( ldomNode * node, lString32 prefix )
 {
     lString32 name = prefix;
@@ -490,6 +491,7 @@ static void dumpRendMethods( ldomNode * node, lString32 prefix )
         dumpRendMethods( node->getChildNode(i), prefix + "   ");
     }
 }
+#endif
 
 
 
@@ -5907,10 +5909,12 @@ static void resetRendMethodToInline( ldomNode * node )
         node->setRendMethod(erm_inline);
 }
 
+#if 0 // unused — all call sites are commented out
 static void resetRendMethodToInvisible( ldomNode * node )
 {
     node->setRendMethod(erm_invisible);
 }
+#endif
 #endif
 
 void ldomNode::removeChildren( int startIndex, int endIndex )

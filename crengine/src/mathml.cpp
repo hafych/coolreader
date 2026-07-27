@@ -775,6 +775,7 @@ static bool getOperatorProperties(const lChar32 * op, const mathml_operator_dict
         }
         middle = (left + right) / 2;
     }
+    (void)iters;
     int idx = left;
     if ( idx < 0 )
         idx = 0;
@@ -818,7 +819,7 @@ static bool getOperatorProperties(const lChar32 * op, const mathml_operator_dict
 // set at XML load/parsing time.
 //
 bool MathMLHelper::handleMathMLtag( ldomDocumentWriter * writer, int step, lUInt16 tag_id,
-                        const lChar32 * text, int len) {
+                        const lChar32 * /*text*/, int /*len*/) {
     ldomElementWriter * _currNode = writer->_currNode;
     // Gather some node and ancestor informations
     ldomNode * curNode = _currNode->_element;
@@ -1933,6 +1934,7 @@ static void fixupMathML( ldomNode * node, bool is_in_script ) {
     const mathml_operator_dict_entry *  prefix = NULL;
     const mathml_operator_dict_entry * postfix = NULL;
     bool found = getOperatorProperties((const lChar32 *)text.c_str(), infix, prefix, postfix);
+    (void)found;
         // printf("%s %d %d %d %d\n", UnicodeToLocal(text).c_str(), found, infix, prefix, postfix);
 
     // The "form" (prefix/infix/postfix) to be used depends on various things:
@@ -2333,7 +2335,7 @@ static void fixupMathML( ldomNode * node, bool is_in_script ) {
 // Stretchy operators RenderRectAccessor updating
 // ====================================================================
 
-void ensureMathMLVerticalStretch( ldomNode * node, lUInt32 line_y, lUInt16 line_baseline, lUInt16 line_height,
+void ensureMathMLVerticalStretch( ldomNode * node, lUInt32 /*line_y*/, lUInt16 line_baseline, lUInt16 line_height,
                                                                lUInt16 & needed_baseline, lUInt16 & needed_height ) {
     // We use the current frmline height as the stretch target. It might be wrong if
     // some larger elements in the same <mrow> are to be part of the next frmline.

@@ -67,7 +67,7 @@ private:
         tftDoubleEmptyLineBeforeHeaders = 128,
         tftPreFormatted = 256,
         tftPML = 512 // Palm Markup Language
-    } formatFlags_t;
+    };
 public:
     LVTextLineQueue( LVTextFileBase * f, int maxLineLen );
     // get index of first line of queue

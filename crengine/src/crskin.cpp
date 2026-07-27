@@ -1354,9 +1354,9 @@ void CRToolBarSkin::drawToolBar( LVDrawBuf & buf, const lvRect & rect, bool enab
 	}
 }
 
-void CRToolBarSkin::drawButton(LVDrawBuf & buf, const lvRect & rc, int index, int flags)
+void CRToolBarSkin::drawButton(LVDrawBuf & /*buf*/, const lvRect & /*rc*/, int /*index*/, int /*flags*/)
 {
-	
+
 }
 
 CRRectSkin::CRRectSkin()
@@ -2095,7 +2095,7 @@ CRSkinRef CRSkinListItem::getSkin()
     return LVOpenSkin( getDirName() + getFileName() );
 }
 
-bool CRLoadSkinList( lString32 baseDir, CRSkinList & list )
+bool CRLoadSkinList( lString32 /*baseDir*/, CRSkinList & /*list*/ )
 {
     return false;
 }

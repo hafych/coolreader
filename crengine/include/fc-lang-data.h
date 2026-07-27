@@ -25,13 +25,13 @@ struct fc_lang_rec
  * @brief Return pointer to FontConfig database of language orthographies
  * @return array of fc_lang_rec records.
  */
-const struct fc_lang_rec* get_fc_lang_data();
+const struct fc_lang_rec* get_fc_lang_data(void);
 
 /**
  * @brief Get count of records in the FontConfig database of language orthographies.
  * @return Count of records in array.
  */
-unsigned int get_fc_lang_data_size();
+unsigned int get_fc_lang_data_size(void);
 
 /**
  * @brief Find language in database by code

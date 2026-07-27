@@ -512,11 +512,11 @@ static const struct fc_lang_rec fc_lang_data[] = {
 	{ "zu", ZU_LANG_ORTH_SZ, zu_lang_orth_chars },
 };
 
-const struct fc_lang_rec* get_fc_lang_data() {
+const struct fc_lang_rec* get_fc_lang_data(void) {
 	return &fc_lang_data[0];
 }
 
-unsigned int get_fc_lang_data_size() {
+unsigned int get_fc_lang_data_size(void) {
 	return FC_LANG_DATA_SZ;
 }
 

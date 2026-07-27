@@ -450,7 +450,7 @@ private:
     bool zlibUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize  ) {
         lUInt8 tmp[UNPACK_BUF_SIZE]; // 256K buffer for uncompressed data
         int ret;
-        z_stream z = { 0 };
+        z_stream z = {};
         z.zalloc = Z_NULL;
         z.zfree = Z_NULL;
         z.opaque = Z_NULL;
@@ -749,8 +749,8 @@ public:
         _format = UNKNOWN;
         stream->SetPos(0);
         lUInt32 fsize = stream->GetSize();
-        PDBHdr hdr = { 0 };
-        PDBRecordEntry entry;
+        PDBHdr hdr = {};
+        PDBRecordEntry entry = {};
         if ( !hdr.read(stream) )
             return false;
         if ( hdr.recordCount==0 )
@@ -791,7 +791,7 @@ public:
         if ( _format==EREADER ) {
             if ( _records[0].size<sizeof(EReaderHeader) )
                 return false;
-            EReaderHeader preamble = { 0 };
+            EReaderHeader preamble = {};
             stream->SetPos(_records[0].offset);
             if ( !preamble.read(stream) )
                 return false; // invalid preamble
@@ -923,7 +923,7 @@ public:
         } else if (_format==PALMDOC ) {
             if ( _records[0].size<sizeof(PalmDocPreamble) )
                 return false;
-            PalmDocPreamble preamble = { 0 };
+            PalmDocPreamble preamble = {};
             stream->SetPos(_records[0].offset);
             if ( !preamble.read(stream) )
                 return false; // invalid preamble

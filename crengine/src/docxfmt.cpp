@@ -239,9 +239,11 @@ const struct item_def_t footnotes_elements[] = {
     DOCX_LAST_ITEM
 };
 
+#if 0
 const struct item_def_t no_elements[] = {
     DOCX_LAST_ITEM
 };
+#endif
 
 const struct item_def_t jc_attr_values[] = {
     { css_ta_left, U"left"},
@@ -360,7 +362,6 @@ typedef LVFastRef< docxNumLevel > docxNumLevelRef;
 class docxAbstractNum : public LVRefCounter
 {
 private:
-    docx_multilevel_type m_multilevel;
     css_length_t m_abstractNumId;
     LVHashTable<lUInt32, docxNumLevelRef> m_levels;
 public:
@@ -468,6 +469,7 @@ public:
     }
     ldomNode * handleTagOpen(int tagId);
     void handleAttribute(const lChar32 * attrname, const lChar32 * attrvalue);
+    using docx_ElementHandler::start;
     void start(odx_rPr *rPr);
     void reset();
 };
@@ -527,6 +529,7 @@ public:
     ldomNode * handleTagOpen(int tagId);
     void handleAttribute(const lChar32 * attrname, const lChar32 * attrvalue);
     void handleTagClose( const lChar32 * nsname, const lChar32 * tagname );
+    using docx_ElementHandler::start;
     void start(odx_pPr *pPr);
     void reset();
 };
@@ -651,6 +654,7 @@ public:
     {
     }
     ldomNode * handleTagOpen(int tagId);
+    using docx_ElementHandler::handleAttribute;
     void handleAttribute(const lChar32 * nsname, const lChar32 * attrname, const lChar32 * attrvalue);
     void handleTagClose( const lChar32 * nsname, const lChar32 * tagname );
 };
@@ -711,6 +715,7 @@ public:
         m_rPrHandler(reader, writer, context)
     {
     }
+    using docx_ElementHandler::start;
     void start(docxNumLevel* level) {
         m_lvl = level;
         docx_ElementHandler::start();
@@ -2263,7 +2268,7 @@ void docxAbstractNum::addLevel(docxNumLevelRef docxLevel)
     m_levels.set(docxLevel->getLevel().value, docxLevel);
 }
 
-docxAbstractNum::docxAbstractNum() : m_multilevel(docx_singlelevel),
+docxAbstractNum::docxAbstractNum() :
     m_abstractNumId(css_val_unspecified, 0), m_levels(10)
 {
 }

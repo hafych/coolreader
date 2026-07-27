@@ -35,10 +35,10 @@
 #define ARC_OUTBUF_SIZE 10000
 
 
-LVZipDecodeStream::LVZipDecodeStream(LVStreamRef stream, lvsize_t start,
+LVZipDecodeStream::LVZipDecodeStream(LVStreamRef stream, lvsize_t /*start*/,
                                      lvsize_t packsize, lvsize_t unpacksize,
                                      lUInt32 crc, unsigned containerDepth)
-    : m_stream(stream), m_start(start), m_packsize(packsize), m_unpacksize(unpacksize),
+    : m_stream(stream), m_packsize(packsize), m_unpacksize(unpacksize),
       m_inbytesleft(0), m_outbytesleft(0), m_zInitialized(false), m_decodedpos(0),
       m_inbuf(NULL), m_outbuf(NULL), m_CRC(0), m_originalCRC(crc), m_decodedCRC(0),
       m_containerDepth(containerDepth)

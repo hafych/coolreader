@@ -135,6 +135,7 @@ static inline void blendBitmap_monoTo1bpp(LVDrawBuf* d, int x, int y, const lUIn
         /* new dest line */
         bitmap += bmp_pitch;
     }
+    (void)ishift;
 }
 
 static inline void blendBitmap_monoTo2bpp(LVDrawBuf* d, int x, int y, const lUInt8 * bitmap, int width, int height, int bmp_pitch, lUInt8 color) {
@@ -391,7 +392,7 @@ void LVGrayDrawBuf::Rotate( cr_rotate_angle_t angle )
     _rowsize = newrowsize;
 }
 
-void LVGrayDrawBuf::Draw( LVImageSourceRef img, int x, int y, int width, int height, bool dither )
+void LVGrayDrawBuf::Draw( LVImageSourceRef img, int x, int y, int width, int height, bool /*dither*/ )
 {
     //fprintf( stderr, "LVGrayDrawBuf::Draw( img(%d, %d), %d, %d, %d, %d\n", img->GetWidth(), img->GetHeight(), x, y, width, height );
     if ( width<=0 || height<=0 )

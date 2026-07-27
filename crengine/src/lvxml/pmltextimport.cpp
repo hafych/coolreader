@@ -211,7 +211,7 @@ void PMLTextImport::startOfChapterTitle(bool startNewPage, int level) {
     callback->OnTagOpenNoAttr(NULL, U"title");
 }
 
-void PMLTextImport::addChapterTitle(int, lString32 title) {
+void PMLTextImport::addChapterTitle(int, lString32 /*title*/) {
     // add title, invisible, for TOC only
 }
 

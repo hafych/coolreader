@@ -91,7 +91,7 @@ LVFontBoldTransform::measureText(const lChar32 *text, int len, lUInt16 *widths, 
     return res;
 }
 
-lUInt32 LVFontBoldTransform::getTextWidth(const lChar32 *text, int len, TextLangCfg *lang_cfg) {
+lUInt32 LVFontBoldTransform::getTextWidth(const lChar32 *text, int len, TextLangCfg */*lang_cfg*/) {
     static lUInt16 widths[MAX_LINE_CHARS + 1];
     static lUInt8 flags[MAX_LINE_CHARS + 1];
     if (len > MAX_LINE_CHARS)
@@ -172,9 +172,9 @@ bool LVFontBoldTransform::hasOTMathSupport() const {
 }
 
 int LVFontBoldTransform::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *text, int len,
-                                         lChar32 def_char, lUInt32 *palette, bool addHyphen, TextLangCfg * lang_cfg,
+                                         lChar32 def_char, lUInt32 *palette, bool addHyphen, TextLangCfg * /*lang_cfg*/,
                                          lUInt32 flags, int letter_spacing, int width, int text_decoration_back_gap,
-                                         int target_w, int target_h, lUInt32 fallbackPassMask) {
+                                         int /*target_w*/, int /*target_h*/, lUInt32 /*fallbackPassMask*/) {
     if (len <= 0)
         return 0;
     if ( letter_spacing < 0 ) {

@@ -844,7 +844,7 @@ void CRGUIWindowBase::drawTitleBar()
 }
 
 /// called on system configuration change: screen size and orientation
-void CRGUIWindowBase::reconfigure( int flags )
+void CRGUIWindowBase::reconfigure( int /*flags*/ )
 {
     lvRect fs = _wm->getScreen()->getRect();
     if ( _fullscreen ) {
@@ -923,7 +923,7 @@ void CRDocViewWindow::setRect( const lvRect & rc )
 }
 
 
-void CRMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
+void CRMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool /*selected*/ )
 {
     _itemDirty = false;
     lvRect itemBorders = skin->getBorderWidths();
@@ -1000,7 +1000,7 @@ int CRMenu::getTopItem()
     return _topItem;
 }
 
-void CRMenu::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
+void CRMenu::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool /*selected*/ )
 {
     CRLog::trace("enter CRMenu::Draw()");
     CRMenuSkinRef menuSkin = _skin; //getSkin();

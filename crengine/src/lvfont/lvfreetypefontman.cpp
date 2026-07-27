@@ -130,11 +130,11 @@ LVHashTable<lString8, font_lang_compat>* getSupportedLangs(FT_Face face) {
                 if (inRange && codePoint < second) {
                     codePoint++;
                 } else {
-                    if (i >= rec->char_set_sz)
+                    if ((unsigned int)i >= rec->char_set_sz)
                         break;
                     tmp = rec->char_set[i];
                     if (FC_LANG_START_INTERVAL_CODE == tmp) {       // code of start interval
-                        if (i + 2 < rec->char_set_sz) {
+                        if ((unsigned int)i + 2 < rec->char_set_sz) {
                             i++;
                             first = rec->char_set[i];
                             i++;

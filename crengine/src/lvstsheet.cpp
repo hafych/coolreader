@@ -1770,6 +1770,7 @@ static const char * css_bg_repeat_names[]={
         NULL
 };
 //background attachment names
+#if 0 // currently unused
 static const char * css_bg_attachment_names[]={
         "scroll",
         "fixed",
@@ -1778,6 +1779,7 @@ static const char * css_bg_attachment_names[]={
         "inherit",
         NULL
 };
+#endif
 //background position names
 static const char * css_bg_position_names[]={
         "left top", // 0

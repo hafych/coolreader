@@ -48,7 +48,7 @@ static void SetFieldValue( char * dst, lString32 src )
 }
 
 /// returns current time representation string
-static lString32 getDateTimeString( time_t t, int langId )
+static lString32 getDateTimeString( time_t t, int /*langId*/ )
 {
     tm * bt = localtime(&t);
     char str[32];

@@ -43,7 +43,7 @@ public:
     virtual bool WantsHiddenContent() const { return measure_hidden_content; }
 
     /// fills buffer with specified color
-    virtual void Clear( lUInt32 color ) {
+    virtual void Clear( lUInt32 /*color*/ ) {
         has_ink = false;
     }
 
@@ -73,20 +73,20 @@ public:
     virtual ~LVInkMeasurementDrawBuf() {}
 
     // Unused methods in the context of lvrend that we need to have defined
-    virtual void Rotate( cr_rotate_angle_t angle ) {}
+    virtual void Rotate( cr_rotate_angle_t /*angle*/ ) {}
     virtual lUInt32 GetWhiteColor() const { return 0; }
     virtual lUInt32 GetBlackColor() const { return 0; }
-    virtual void DrawTo( LVDrawBuf * buf, int x, int y, int options, lUInt32 * palette ) {}
-    virtual void DrawOnTop( LVDrawBuf * __restrict buf, int x, int y) {}
-    virtual void DrawRescaled(LVDrawBuf * src, int x, int y, int dx, int dy, int options) {}
+    virtual void DrawTo( LVDrawBuf * /*buf*/, int /*x*/, int /*y*/, int /*options*/, lUInt32 * /*palette*/ ) {}
+    virtual void DrawOnTop( LVDrawBuf * __restrict /*buf*/, int /*x*/, int /*y*/) {}
+    virtual void DrawRescaled(LVDrawBuf * /*src*/, int /*x*/, int /*y*/, int /*dx*/, int /*dy*/, int /*options*/) {}
 #if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
     virtual void DrawTo( HDC dc, int x, int y, int options, lUInt32 * palette ) {}
 #endif
     virtual void Invert() {}
-    virtual lUInt32 GetPixel( int x, int y ) const { return 0; }
-    virtual void InvertRect( int x0, int y0, int x1, int y1 ) {}
-    virtual void Resize( int dx, int dy ) {}
-    virtual lUInt8 * GetScanLine( int y ) const { return 0; }
+    virtual lUInt32 GetPixel( int /*x*/, int /*y*/ ) const { return 0; }
+    virtual void InvertRect( int /*x0*/, int /*y0*/, int /*x1*/, int /*y1*/ ) {}
+    virtual void Resize( int /*dx*/, int /*dy*/ ) {}
+    virtual lUInt8 * GetScanLine( int /*y*/ ) const { return 0; }
 };
 
 #endif  // __LVINKMEASUREMENTDRAWBUF_H_INCLUDED__

@@ -55,8 +55,11 @@ extern "C" {
 #endif
 #endif	// _WIN32
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wvariadic-macro-arguments-omitted"
+#endif
 #ifdef _DEBUG
-#define TRACE(x, ...) CRLog::trace(x)
+#define TRACE(x, ...) CRLog::trace(x, ##__VA_ARGS__)
 #else
 #define TRACE(x, ...)
 #endif
@@ -151,7 +154,7 @@ static void setOptions() {
  * vPrologue1 - get options and call a specific initialization
  */
 static void
-vPrologue1(diagram_type *pDiag, const char *szTask, const char *szFilename)
+vPrologue1(diagram_type *pDiag, const char *szTask, const char * /*szFilename*/)
 {
     //options_type	tOptions;
 
@@ -192,7 +195,7 @@ vPrologue1(diagram_type *pDiag, const char *szTask, const char *szFilename)
  * vEpilogue - clean up after everything is done
  */
 static void
-vEpilogue(diagram_type *pDiag)
+vEpilogue(diagram_type * /*pDiag*/)
 {
     TRACE("antiword::vEpilogue()");
     //vEpilogueTXT(pDiag->pOutFile);
@@ -294,7 +297,7 @@ vPrologue2(diagram_type *pDiag, int iWordVersion)
  * vMove2NextLine - move to the next line
  */
 void
-vMove2NextLine(diagram_type *pDiag, drawfile_fontref tFontRef,
+vMove2NextLine(diagram_type *pDiag, drawfile_fontref /*tFontRef*/,
     USHORT usFontSize)
 {
     TRACE("antiword::vMove2NextLine()");
@@ -314,8 +317,8 @@ vMove2NextLine(diagram_type *pDiag, drawfile_fontref tFontRef,
 void
 vSubstring2Diagram(diagram_type *pDiag,
     char *szString, size_t tStringLength, long lStringWidth,
-    UCHAR ucFontColor, USHORT usFontstyle, drawfile_fontref tFontRef,
-    USHORT usFontSize, USHORT usMaxFontSize)
+    UCHAR /*ucFontColor*/, USHORT usFontstyle, drawfile_fontref /*tFontRef*/,
+    USHORT usFontSize, USHORT /*usMaxFontSize*/)
 {
     lString32 s( szString, (int)tStringLength);
 #ifdef _LINUX
@@ -392,7 +395,7 @@ vStoreStyle(diagram_type *pDiag, output_type *pOutput,
  * Before indentation, list numbering, bullets etc.
  */
 void
-vStartOfParagraph1(diagram_type *pDiag, long lBeforeIndentation)
+vStartOfParagraph1(diagram_type *pDiag, long /*lBeforeIndentation*/)
 {
     TRACE("antiword::vStartOfParagraph1()");
     LFAIL(pDiag == NULL);
@@ -443,7 +446,7 @@ vStartOfParagraph2(diagram_type *pDiag)
  */
 void
 vEndOfParagraph(diagram_type *pDiag,
-    drawfile_fontref tFontRef, USHORT usFontSize, long lAfterIndentation)
+    drawfile_fontref /*tFontRef*/, USHORT usFontSize, long lAfterIndentation)
 {
     TRACE("antiword::vEndOfParagraph()");
     LFAIL(pDiag == NULL);
@@ -461,7 +464,7 @@ vEndOfParagraph(diagram_type *pDiag,
  * Create an end of page
  */
 void
-vEndOfPage(diagram_type *pDiag, long lAfterIndentation, BOOL bNewSection)
+vEndOfPage(diagram_type * /*pDiag*/, long /*lAfterIndentation*/, BOOL /*bNewSection*/)
 {
     TRACE("antiword::vEndOfPage()");
     //vEndOfPageXML(pDiag);
@@ -471,7 +474,7 @@ vEndOfPage(diagram_type *pDiag, long lAfterIndentation, BOOL bNewSection)
  * vSetHeaders - set the headers
  */
 void
-vSetHeaders(diagram_type *pDiag, USHORT usIstd)
+vSetHeaders(diagram_type * /*pDiag*/, USHORT /*usIstd*/)
 {
     TRACE("antiword::vEndOfPage()");
     //vSetHeadersXML(pDiag, usIstd);
@@ -509,7 +512,7 @@ vStartOfList(diagram_type *pDiag, UCHAR ucNFC, BOOL bIsEndOfTable)
  * Create an end of list
  */
 void
-vEndOfList(diagram_type *pDiag)
+vEndOfList(diagram_type * /*pDiag*/)
 {
     TRACE("antiword::vEndOfList()");
 
@@ -529,7 +532,7 @@ vEndOfList(diagram_type *pDiag)
  * Create a start of a list item
  */
 void
-vStartOfListItem(diagram_type *pDiag, BOOL bNoMarks)
+vStartOfListItem(diagram_type * /*pDiag*/, BOOL /*bNoMarks*/)
 {
     TRACE("antiword::vStartOfListItem()");
     if ( inside_li ) {
@@ -544,7 +547,7 @@ vStartOfListItem(diagram_type *pDiag, BOOL bNoMarks)
  * Create an end of a table
  */
 void
-vEndOfTable(diagram_type *pDiag)
+vEndOfTable(diagram_type * /*pDiag*/)
 {
     TRACE("antiword::vEndOfTable()");
     if ( inside_table ) {
@@ -560,8 +563,8 @@ vEndOfTable(diagram_type *pDiag)
  * Returns TRUE when conversion type is XML
  */
 BOOL
-bAddTableRow(diagram_type *pDiag, char **aszColTxt,
-    int iNbrOfColumns, const short *asColumnWidth, UCHAR ucBorderInfo)
+bAddTableRow(diagram_type * /*pDiag*/, char **aszColTxt,
+    int iNbrOfColumns, const short *asColumnWidth, UCHAR /*ucBorderInfo*/)
 {
     TRACE("antiword::bAddTableRow()");
 //        vAddTableRowXML(pDiag, aszColTxt,
@@ -785,7 +788,7 @@ bool DetectWordFormat( LVStreamRef stream )
     return true;
 }
 
-bool ImportWordDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCallback * progressCallback, CacheLoadingCallback * formatCallback )
+bool ImportWordDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCallback * /*progressCallback*/, CacheLoadingCallback * /*formatCallback*/ )
 {
     AntiwordStreamGuard file(stream);
 

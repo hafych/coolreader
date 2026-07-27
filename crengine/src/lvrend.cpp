@@ -753,7 +753,6 @@ public:
         // place row cells horizontally
         for (i=0; i<rows.length(); i++) {
             int x=0;
-            int miny=-1;
             CCRTableRow * row = rows[i];
             row->index = i;
             for (j=0; j<rows[i]->cells.length(); j++) {
@@ -3029,7 +3028,6 @@ lString32 renderListItemMarker( ldomNode * enode, int & marker_width, LFormatted
 
 // (Common condition used at multiple occasions, made as as function for clarity)
 bool renderAsListStylePositionInside( const css_style_ref_t style, bool is_rtl=false ) {
-    bool render_as_lsp_inside = false;
     if ( style->list_style_position == css_lsp_inside ) {
         return true;
     }
@@ -6446,7 +6444,7 @@ public:
             in_y_max = y;
     }
 
-    BlockFloatFootprint getFloatFootprint(ldomNode * node, int d_left, int d_right, int d_top ) {
+    BlockFloatFootprint getFloatFootprint(ldomNode * /*node*/, int d_left, int d_right, int d_top ) {
         // Returns the footprint of current floats over a final block
         // to be laid out at current c_y (+d_top).
         // This footprint will be a set of floats to represent outer

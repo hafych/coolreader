@@ -266,7 +266,7 @@ bool isHBScriptCursive( hb_script_t script ) {
 }
 #endif
 
-static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lChar32 ch, FT_GlyphSlot slot, font_antialiasing_t aa_mode) // , bool drawMonochrome
+static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lChar32 ch, FT_GlyphSlot slot, font_antialiasing_t /*aa_mode*/) // , bool drawMonochrome
 {
     FONT_LOCAL_GLYPH_CACHE_GUARD
     FT_Bitmap *bitmap = &slot->bitmap;
@@ -318,7 +318,7 @@ static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lChar32
 
 #if USE_HARFBUZZ == 1
 
-static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lUInt32 index, FT_GlyphSlot slot, font_antialiasing_t aa_mode) {
+static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lUInt32 index, FT_GlyphSlot slot, font_antialiasing_t /*aa_mode*/) {
     FONT_LOCAL_GLYPH_CACHE_GUARD
     FT_Bitmap *bitmap = &slot->bitmap;
     unsigned int w = (FT_PIXEL_MODE_LCD == bitmap->pixel_mode) ? bitmap->width/3 : bitmap->width;
@@ -1389,8 +1389,8 @@ void LVFreeTypeFace::DrawStretchedGlyph(LVDrawBuf *buf, int glyph_index, int x, 
     FT_Bitmap * bitmap = &_slot->bitmap;
 
     // Position the resulting bitmap in the targeted area (and center the rounding errors)
-    int pad_x = pad_left + (target_w > bitmap->width ? (target_w - bitmap->width)/2 : 0);
-    int pad_y = pad_top_bottom + (target_h > bitmap->rows ? (target_h - bitmap->rows)/2 : 0);
+    int pad_x = pad_left + (target_w > (int)bitmap->width ? (target_w - (int)bitmap->width)/2 : 0);
+    int pad_y = pad_top_bottom + (target_h > (int)bitmap->rows ? (target_h - (int)bitmap->rows)/2 : 0);
 
     // This felt needed at some point to draw tall stretchy glyphs, but seems no longer needed
     // buf->setHidePartialGlyphs(false);
@@ -1786,6 +1786,7 @@ lUInt16 LVFreeTypeFace::measureText(const lChar32 *text,
             // ordered as our text indices, so we can map them back to our text.
             hb_buffer_reverse_clusters(_hb_buffer);
         }
+        (void)is_rtl;
 
         glyph_count = hb_buffer_get_length(_hb_buffer);
         glyph_info = hb_buffer_get_glyph_infos(_hb_buffer, 0);
@@ -2821,12 +2822,12 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
 
         // Fill HarfBuzz buffer
         if ( fallbackFont ) { // It has a fallback font, add chars as-is
-            for (i = 0; i < len; i++) {
+            for (i = 0; i < (unsigned int)len; i++) {
                 hb_buffer_add(_hb_buffer, (hb_codepoint_t)(text[i]), i);
             }
         }
         else { // No fallback font, check codepoint presence or get replacement char
-            for (i = 0; i < len; i++) {
+            for (i = 0; i < (unsigned int)len; i++) {
                 hb_buffer_add(_hb_buffer, (hb_codepoint_t)filterChar(text[i], def_char), i);
             }
         }
@@ -2876,7 +2877,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
         glyph_pos = hb_buffer_get_glyph_positions(_hb_buffer, 0);
 
         if (_scale_mul != 1 || _scale_div != 1) {
-            for (i = 0; i < (int)glyph_count; i++) {
+            for (i = 0; i < glyph_count; i++) {
                 glyph_pos[i].x_advance = _scale_mul*glyph_pos[i].x_advance/_scale_div;
                 glyph_pos[i].y_advance = _scale_mul*glyph_pos[i].y_advance/_scale_div;
                 glyph_pos[i].x_offset = _scale_mul*glyph_pos[i].x_offset/_scale_div;
@@ -2886,7 +2887,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
 
         #ifdef DEBUG_DRAW_TEXT
             printf("DTHB >>> drawTextString %x len %d is_rtl=%d [%s]\n", text, len, is_rtl, _faceName.c_str());
-            for (i = 0; i < (int)glyph_count; i++) {
+            for (i = 0; i < glyph_count; i++) {
                 char glyphname[32];
                 hb_font_get_glyph_name(_hb_font, glyph_info[i].codepoint, glyphname, sizeof(glyphname));
                 printf("DTHB g%d c%d(=t:%x) [%x %s]\tadvance=(%d,%d)", i, glyph_info[i].cluster,
@@ -2914,7 +2915,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
         int fb_t_start = 0;
         int fb_t_end = len;
         int hg = 0;  // index in glyph_info/glyph_pos
-        while (hg < glyph_count) { // hg is the start of a new cluster at this point
+        while (hg < (int)glyph_count) { // hg is the start of a new cluster at this point
             bool draw_with_fallback = false;
             int hcl = glyph_info[hg].cluster;
             fb_t_start = hcl; // if fb drawing needed from this glyph: t[hcl:..]
@@ -2925,7 +2926,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
                 printf("DTHB g%d c%d: ", hg, hcl);
             #endif
             int hg2 = hg;
-            while ( hg2 < glyph_count ) {
+            while ( hg2 < (int)glyph_count ) {
                 int hcl2 = glyph_info[hg2].cluster;
                 if ( hcl2 != hcl ) { // New cluster starts at hg2: we can draw hg > hg2-1
                     #ifdef DEBUG_DRAW_TEXT
@@ -2953,7 +2954,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
                 int hclbad = hcl2;
                 int hclgood = -1;
                 int hg3 = hg2+1;
-                while ( hg3 < glyph_count ) {
+                while ( hg3 < (int)glyph_count ) {
                     int hcl3 = glyph_info[hg3].cluster;
                     if ( hclgood >=0 && hcl3 != hclgood ) {
                         // Found a complete cluster
@@ -2987,13 +2988,13 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
                     hclgood = hcl3;
                     hg3++;
                 }
-                if ( hg3 == glyph_count && hclgood >=0 ) { // last glyph was a good cluster
+                if ( hg3 == (int)glyph_count && hclgood >=0 ) { // last glyph was a good cluster
                     if (!is_rtl)
                         fb_t_end = hclgood; // fb drawing t[..:hclgood]
                     hg2 += 1; // set hg2 to the first ok glyph (so, the single last one)
                     break;
                 }
-                if ( hg3 == glyph_count ) { // no good cluster met till end of text
+                if ( hg3 == (int)glyph_count ) { // no good cluster met till end of text
                     hg2 = glyph_count; // get out of hg2 loop
                     if (is_rtl)
                         fb_t_start = 0;
@@ -3041,7 +3042,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
                 #endif
                 // Draw glyphs of this same cluster
                 int prev_x = x;
-                for (i = hg; i < hg2; i++) {
+                for (i = (unsigned int)hg; i < (unsigned int)hg2; i++) {
                     LVFontGlyphCacheItem *item = getGlyphByIndex(glyph_info[i].codepoint);
                     if (item) {
                         if ( transform_stretch ) {
@@ -3115,9 +3116,9 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
         triplet.Char = 0;
         bool is_rtl = (flags & LFNT_HINT_DIRECTION_KNOWN) && (flags & LFNT_HINT_DIRECTION_IS_RTL);
         for ( i=0; i<=(unsigned int)len; i++) {
-            if ( i==len && !addHyphen )
+            if ( i==(unsigned int)len && !addHyphen )
                 break;
-            if ( i<len ) {
+            if ( i<(unsigned int)len ) {
                 // If RTL, draw glyphs starting from the of the node text
                 ch = is_rtl ? text[len-1-i] : text[i];
                 if ( ch=='\t' )
@@ -3132,7 +3133,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
             LVFontGlyphCacheItem * item = getGlyph(ch, def_char, fallbackPassMask);
             if ( !item )
                 continue;
-            if ( (item && !isHyphen) || i==len ) { // only draw soft hyphens at end of string
+            if ( (item && !isHyphen) || i==(unsigned int)len ) { // only draw soft hyphens at end of string
                 triplet.prevChar = triplet.Char;
                 triplet.Char = ch;
                 if (i < (unsigned int)(len - 1))
@@ -3181,14 +3182,14 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
 #if (ALLOW_KERNING==1)
     int use_kerning = _allowKerning && FT_HAS_KERNING( _face );
 #endif
-    for ( i=0; i<=len; i++) {
-        if ( i==len && (!addHyphen || isHyphen) )
+    for ( i=0; i<=(unsigned int)len; i++) {
+        if ( i==(unsigned int)len && (!addHyphen || isHyphen) )
             break;
-        if ( i<len ) {
+        if ( i<(unsigned int)len ) {
             ch = text[i];
             if ( ch=='\t' )
                 ch = ' ';
-            isHyphen = (ch==UNICODE_SOFT_HYPHEN_CODE) && (i<len-1);
+            isHyphen = (ch==UNICODE_SOFT_HYPHEN_CODE) && (i<(unsigned int)(len-1));
         } else {
             ch = UNICODE_SOFT_HYPHEN_CODE;
             isHyphen = 0;
@@ -3210,7 +3211,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
         LVFontGlyphCacheItem * item = getGlyph(ch, def_char, fallbackPassMask);
         if ( !item )
             continue;
-        if ( (item && !isHyphen) || i>=len-1 ) { // avoid soft hyphens inside text string
+        if ( (item && !isHyphen) || i>=(unsigned int)(len-1) ) { // avoid soft hyphens inside text string
             if ( transform_stretch ) {
                 // Stretched drawing of glyph to the x/y/w/h provided (used with MathML)
                 // Split the targeted width to each glyph in case we have more than one

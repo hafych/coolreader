@@ -73,7 +73,7 @@ ldomNode* FB2CoverpageParserCallback::OnTagOpen(const lChar32*, const lChar32* t
     return NULL;
 }
 
-void FB2CoverpageParserCallback::OnTagClose(const lChar32* nsname, const lChar32* tagname, bool self_closing_tag)
+void FB2CoverpageParserCallback::OnTagClose(const lChar32* nsname, const lChar32* tagname, bool /*self_closing_tag*/)
 {
     if ( lStr_cmp(nsname, "FictionBook")==0) {
         insideFictionBook = false;

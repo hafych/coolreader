@@ -353,8 +353,8 @@ public:
     virtual bool isWindowEvent() { return _type<CREV_WM_EVENTS_START; }
     virtual bool isWMEvent() { return _type>=CREV_WM_EVENTS_START; }
     int getType() { return _type; }
-    virtual bool handle( CRGUIWindow * window ) { return false; }
-    virtual bool handle( CRGUIWindowManager * wm ) { return false; }
+    virtual bool handle( CRGUIWindow * /*window*/ ) { return false; }
+    virtual bool handle( CRGUIWindowManager * /*wm*/ ) { return false; }
     CRGUIEvent & setParam1( int v ) { _param1=v; return *this; }
     CRGUIEvent & setParam2( int v ) { _param2=v; return *this; }
     CRGUIEvent & setTargetWindow( CRGUIWindow * targetWindow ) { _targetWindow = targetWindow; return *this; }
@@ -377,10 +377,10 @@ class CRGUIScreen
             NormalMode,
             PrepareMode
         };
-        virtual void setTurboUpdateEnabled( bool flg ) { }
+        virtual void setTurboUpdateEnabled( bool /*flg*/ ) { }
         virtual bool getTurboUpdateEnabled() {  return false; }
         virtual bool getTurboUpdateSupported() {  return false; }
-        virtual void setTurboUpdateMode( UpdateMode mode ) { }
+        virtual void setTurboUpdateMode( UpdateMode /*mode*/ ) { }
         /// fast update feature parameter setting
         virtual void setFullUpdateInterval( int pagesBeforeFullupdate=1 ) = 0;
         /// creates compatible canvas of specified size
@@ -400,7 +400,7 @@ class CRGUIScreen
         /// transfers contents of buffer to device, if full==true, redraws whole screen, otherwise only changed area
         virtual void flush( bool full ) = 0;
         /// invalidates rectangle: add it to bounding box of next partial update
-        virtual void invalidateRect( const lvRect & rc ) { }
+        virtual void invalidateRect( const lvRect & /*rc*/ ) { }
         virtual ~CRGUIScreen() { }
 };
 
@@ -490,7 +490,7 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         bool _stopFlag;
     public:
         /// forward events from system queue to application queue
-        virtual void forwardSystemEvents( bool waitForEvent ) { }
+        virtual void forwardSystemEvents( bool /*waitForEvent*/ ) { }
         /// post application event to message queue
         virtual void postEvent( CRGUIEvent * event );
         /// peeks head of application message queue, w/o removing from queue (returns NULL if no events in queue)
@@ -711,7 +711,7 @@ class CRGUIWindowBase : public CRGUIWindow
         /// returns skin name for window
         virtual lString32 getSkinName() { return _skinName; }
         /// returns true if command is processed
-        virtual bool onCommand( int command, int params = 0 ) { return !_passCommandsToParent; }
+        virtual bool onCommand( int /*command*/, int /*params*/ = 0 ) { return !_passCommandsToParent; }
         /// returns true if key is processed (by default, let's translate key to command using accelerator table)
         virtual bool onKeyPressed( int key, int flags = 0 );
         /// set accelerator table for window
@@ -1128,6 +1128,7 @@ class CRMenu : public CRGUIWindowBase, public CRMenuItem {
         virtual void toggleSubmenuValue();
         virtual int getItemHeight();
         virtual lvPoint getMaxItemSize();
+        using CRMenuItem::getItemSize;
         virtual lvPoint getItemSize();
         virtual lvPoint getSize();
         virtual ~CRMenu() { }
@@ -1154,7 +1155,7 @@ public:
     {
         _param1 = fullScreen ? 1 : 0;
     }
-    virtual bool handle( CRGUIWindow * window )
+    virtual bool handle( CRGUIWindow * /*window*/ )
     {
         return false;
     }
@@ -1176,7 +1177,7 @@ public:
         _param2 = dy;
         _angle = angle;
     }
-    virtual bool handle( CRGUIWindow * window )
+    virtual bool handle( CRGUIWindow * /*window*/ )
     {
         return false;
     }
@@ -1199,7 +1200,7 @@ public:
         _param2 = params;
     }
     virtual bool handle( CRGUIWindow * window );
-    virtual bool handle( CRGUIWindowManager * wm ) { return false; }
+    virtual bool handle( CRGUIWindowManager * /*wm*/ ) { return false; }
 };
 
 class CRGUICommandEvent : public CRGUIEvent
@@ -1212,7 +1213,7 @@ public:
         _param2 = params;
     }
     virtual bool handle( CRGUIWindow * window );
-    virtual bool handle( CRGUIWindowManager * wm ) { return false; }
+    virtual bool handle( CRGUIWindowManager * /*wm*/ ) { return false; }
     virtual bool isForModalOnly() { return false; }
     virtual bool isForVisibleOnly() { return true; }
 };

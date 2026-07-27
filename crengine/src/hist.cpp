@@ -140,7 +140,7 @@ public:
         return NULL;
     }
     /// called on closing
-    virtual void OnTagClose( const lChar32 * nsname, const lChar32 * tagname, bool self_closing_tag=false )
+    virtual void OnTagClose( const lChar32 * nsname, const lChar32 * tagname, bool /*self_closing_tag*/=false )
     {
         if ( lStr_cmp(nsname, "FictionBookMarks")==0 && state==in_fbm ) {
             state = in_xml;
@@ -320,7 +320,7 @@ static void putBookmark( LVStream * stream, CRBookmark * bmk )
     static const char * tnames[] = {"lastpos", "position", "comment", "correction"};
     const char * tname = bmk->getType()>=bmkt_lastpos && bmk->getType()<=bmkt_correction ? tnames[bmk->getType()] : "unknown";
     char bmktag[256];
-    sprintf(bmktag, "bookmark type=\"%s\" percent=\"%d.%02d%%\" timestamp=\"%d\" shortcut=\"%d\" page=\"%d\"", tname,
+    snprintf(bmktag, sizeof(bmktag), "bookmark type=\"%s\" percent=\"%d.%02d%%\" timestamp=\"%d\" shortcut=\"%d\" page=\"%d\"", tname,
             bmk->getPercent()/100, bmk->getPercent()%100,
             (int)bmk->getTimestamp(), (int)bmk->getShortcut(), (int)bmk->getBookmarkPage());
     putTag(stream, 3, bmktag);
@@ -649,9 +649,9 @@ lString32 CRFileHistRecord::getLastTimeString( bool longFormat )
     tm * bt = localtime(&t);
     char str[20];
     if ( !longFormat )
-        sprintf(str, "%02d.%02d.%04d", bt->tm_mday, 1+bt->tm_mon, 1900+bt->tm_year );
+        snprintf(str, sizeof(str), "%02d.%02d.%04d", bt->tm_mday, 1+bt->tm_mon, 1900+bt->tm_year );
     else
-        sprintf(str, "%02d.%02d.%04d %02d:%02d", bt->tm_mday, 1+bt->tm_mon, 1900+bt->tm_year, bt->tm_hour, bt->tm_min);
+        snprintf(str, sizeof(str), "%02d.%02d.%04d %02d:%02d", bt->tm_mday, 1+bt->tm_mon, 1900+bt->tm_year, bt->tm_hour, bt->tm_min);
     return Utf8ToUnicode( lString8( str ) );
 }
 

@@ -49,7 +49,6 @@ static lvByteOrderConv cnv;
 class LZSSUtil {
     lUInt16 textsize;   /* text size counter */
     lUInt16 codesize;   /* code size counter */
-    lUInt16 printcount; /* counter for reporting progress every 1K bytes */
     lUInt8  text_buf[N + F - 1];     /* ring buffer of size N,
               with extra F-1 bytes to facilitate string comparison */
     lUInt16 match_position, match_length;  /* of longest match.  These are

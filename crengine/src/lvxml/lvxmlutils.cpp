@@ -2167,7 +2167,7 @@ static const ent_def_t def_entity_table[] = {
 {U"zscr", 120015, 0},
 {U"zwj", 8205, 0},
 {U"zwnj", 8204, 0},
-{NULL, 0},
+{NULL, 0, 0},
 };
 
 // from lvxmlparser.cpp
@@ -2277,7 +2277,6 @@ int PreProcessXmlString(lChar32 * str, int len, lUInt32 flags, const lChar32 * e
                 if (32 == k)
                     k--;
                 entname[k] = 0;
-                int n;
                 lChar32 code = 0;
                 lChar32 code2 = 0;
                 if ( str[i+k]==';' || str[i+k]==' ' ) {
@@ -2312,6 +2311,7 @@ int PreProcessXmlString(lChar32 * str, int len, lUInt32 flags, const lChar32 * e
                                 left = middle + 1;
                             }
                         }
+                        (void)iters;
                     }
                 }
                 if ( code ) {
