@@ -19,8 +19,9 @@
  ***************************************************************************/
 
 #include "lvcacheableobject.h"
+#include <atomic>
 
-static lUInt32 NEXT_CACHEABLE_OBJECT_ID = 1;
+static std::atomic<lUInt32> NEXT_CACHEABLE_OBJECT_ID{1};
 
 CacheableObject::CacheableObject() : _callback(NULL), _cache(NULL) {
     _objectId = ++NEXT_CACHEABLE_OBJECT_ID;
