@@ -40,6 +40,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <time.h>
+#include <mutex>
 
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
 extern "C" {
@@ -86,9 +87,11 @@ lstring32_chunk_t * lString32::EMPTY_STR_32 = &empty_chunk_32;
 static const void * const_ptrs_8[CONST_STRING_BUFFER_SIZE] = {NULL};
 static lString8 values_8[CONST_STRING_BUFFER_SIZE];
 static int size_8 = 0;
+static std::mutex cs8_mutex;
 
 /// get reference to atomic constant string for string literal e.g. cs8("abc") -- fast and memory effective
 const lString8 & cs8(const char * str) {
+    std::lock_guard<std::mutex> guard(cs8_mutex);
     unsigned int index =  (unsigned int)(((ptrdiff_t)str * CONST_STRING_BUFFER_HASH_MULT) & CONST_STRING_BUFFER_MASK);
     for (;;) {
         const void * p = const_ptrs_8[index];
@@ -115,9 +118,11 @@ const lString8 & cs8(const char * str) {
 static const void * const_ptrs_32[CONST_STRING_BUFFER_SIZE] = {NULL};
 static lString32 values_32[CONST_STRING_BUFFER_SIZE];
 static int size_32 = 0;
+static std::mutex cs32_mutex;
 
 /// get reference to atomic constant wide string for string literal e.g. cs32("abc") -- fast and memory effective
 const lString32 & cs32(const char * str) {
+    std::lock_guard<std::mutex> guard(cs32_mutex);
     unsigned int index =  (unsigned int)(((ptrdiff_t)str * CONST_STRING_BUFFER_HASH_MULT) & CONST_STRING_BUFFER_MASK);
     for (;;) {
         const void * p = const_ptrs_32[index];
@@ -143,6 +148,7 @@ const lString32 & cs32(const char * str) {
 
 /// get reference to atomic constant wide string for string literal e.g. cs32(U"abc") -- fast and memory effective
 const lString32 & cs32(const lChar32 * str) {
+    std::lock_guard<std::mutex> guard(cs32_mutex);
     unsigned int index = (((unsigned int)((ptrdiff_t)str)) * CONST_STRING_BUFFER_HASH_MULT) & CONST_STRING_BUFFER_MASK;
     for (;;) {
         const void * p = const_ptrs_32[index];
@@ -268,7 +274,7 @@ struct lstring_chunk_slice_t {
 #if (LDOM_USE_OWN_MEM_MAN == 1)
 static lstring_chunk_slice_t * slices[MAX_SLICE_COUNT];
 static int slices_count = 0;
-static bool slices_initialized = false;
+static std::once_flag slices_init_once;
 #endif
 
 #if (LDOM_USE_OWN_MEM_MAN == 1)
@@ -276,25 +282,22 @@ static void init_ls_storage()
 {
     slices[0] = new lstring_chunk_slice_t( FIRST_SLICE_SIZE );
     slices_count = 1;
-    slices_initialized = true;
 }
 
 void free_ls_storage()
 {
-    if (!slices_initialized)
+    if (slices_count == 0)
         return;
     for (int i=0; i<slices_count; i++)
     {
         delete slices[i];
     }
     slices_count = 0;
-    slices_initialized = false;
 }
 
 lstring8_chunk_t * lstring8_chunk_t::alloc()
 {
-    if (!slices_initialized)
-        init_ls_storage();
+    std::call_once(slices_init_once, init_ls_storage);
     // search for existing slice
     for (int i=slices_count-1; i>=0; --i)
     {
@@ -321,8 +324,7 @@ void lstring8_chunk_t::free( lstring8_chunk_t * pChunk )
 
 lstring16_chunk_t * lstring16_chunk_t::alloc()
 {
-    if (!slices_initialized)
-        init_ls_storage();
+    std::call_once(slices_init_once, init_ls_storage);
     // search for existing slice
     for (int i=slices_count-1; i>=0; --i)
     {
@@ -349,8 +351,7 @@ void lstring16_chunk_t::free( lstring16_chunk_t * pChunk )
 
 lstring32_chunk_t * lstring32_chunk_t::alloc()
 {
-    if (!slices_initialized)
-        init_ls_storage();
+    std::call_once(slices_init_once, init_ls_storage);
     // search for existing slice
     for (int i=slices_count-1; i>=0; --i)
     {

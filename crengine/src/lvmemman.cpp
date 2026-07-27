@@ -26,6 +26,7 @@
  */
 
 #include <stdlib.h>
+#include <mutex>
 #include "../include/lvmemman.h"
 #include "../include/lvref.h"
 #include "../include/lvtinydom.h"
@@ -185,6 +186,7 @@ ref_count_rec_t ref_count_rec_t::protected_null_ref(NULL);
 
 #if (LDOM_USE_OWN_MEM_MAN==1)
 ldomMemManStorage * pmsREF = NULL;
+std::once_flag pmsREF_once;
 
 ldomMemManStorage * block_storages[LOCAL_STORAGE_COUNT] =
 {
@@ -193,6 +195,8 @@ ldomMemManStorage * block_storages[LOCAL_STORAGE_COUNT] =
     NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL,
 };
+
+static std::once_flag block_storage_once[LOCAL_STORAGE_COUNT];
 
 inline int blockSizeToStorageIndex( size_t n )
 {
@@ -204,10 +208,9 @@ void * ldomAlloc( size_t n )
     n = blockSizeToStorageIndex( n );
     if (n<LOCAL_STORAGE_COUNT)
     {
-        if ( block_storages[n] == NULL )
-        {
+        std::call_once(block_storage_once[n], [n]() {
             block_storages[n] = new ldomMemManStorage((n+1)*BLOCK_SIZE_GRANULARITY);
-        }
+        });
         return block_storages[n]->alloc();
     }
     else

@@ -2399,6 +2399,7 @@ private:
     int _page_height;
     int _page_width;
     bool _parsing;
+    bool _firstBodyPending;
     bool _rendered;
     bool _just_rendered_from_cache;
     bool _toc_from_cache_valid;
@@ -2549,6 +2550,8 @@ public:
 #if BUILD_LITE!=1
     bool isRendered() { return _rendered; }
     bool isBeingParsed() { return _parsing; }
+    bool isFirstBodyPending() const { return _firstBodyPending; }
+    void setFirstBodyPending(bool v) { _firstBodyPending = v; }
     /// renders (formats) document in memory: returns true if re-rendering needed, false if not
     virtual bool render( LVRendPageList * pages, LVDocViewCallback * callback, int width, int dy,
                          bool showCover, int y0, font_ref_t def_font, int def_interline_space,

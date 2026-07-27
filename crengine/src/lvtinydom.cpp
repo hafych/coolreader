@@ -4178,6 +4178,7 @@ ldomDocument::ldomDocument()
 , _page_height(0)
 , _page_width(0)
 , _parsing(false)
+, _firstBodyPending(false)
 , _rendered(false)
 , _just_rendered_from_cache(false)
 , _toc_from_cache_valid(false)
@@ -4226,6 +4227,7 @@ ldomDocument::ldomDocument( ldomDocument & doc )
 , _last_docflags(doc._last_docflags)
 , _page_height(doc._page_height)
 , _page_width(doc._page_width)
+, _firstBodyPending(false)
 #endif
 , _container(doc._container)
 , lists(100)
@@ -5620,8 +5622,6 @@ bool IsEmptySpace( const lChar32 * text, int len )
 /////////////////////////////////////////////////////////////////
 /// lxmlElementWriter
 
-static bool IS_FIRST_BODY = false;
-
 ldomElementWriter::ldomElementWriter(ldomDocument * document, lUInt16 nsid, lUInt16 id, ldomElementWriter * parent, bool insert_before_last_child)
     : _parent(parent), _document(document), _tocItem(NULL), _isBlock(true), _isSection(false),
       _stylesheetIsSet(false), _bodyEnterCalled(false), _pseudoElementAfterChildIndex(-1)
@@ -5664,10 +5664,10 @@ ldomElementWriter::ldomElementWriter(ldomDocument * document, lUInt16 nsid, lUIn
     else
         _element = _document->getRootNode(); //->insertChildElement( (lUInt32)-1, nsid, id );
     if ( id==el_body ) {
-        if ( IS_FIRST_BODY ) {
+        if ( _document->isFirstBodyPending() ) {
             _tocItem = _document->getToc();
             //_tocItem->clear();
-            IS_FIRST_BODY = false;
+            _document->setFirstBodyPending(false);
         }
         else {
             int fmt = _document->getProps()->getIntDef(DOC_PROP_FILE_FORMAT_ID, doc_format_none);
@@ -8397,7 +8397,7 @@ ldomDocumentWriter::ldomDocumentWriter(ldomDocument * document, bool headerOnly)
     _headStyleText.clear();
     _stylesheetLinks.clear();
     _stopTagId = 0xFFFE;
-    IS_FIRST_BODY = true;
+    _document->setFirstBodyPending(true);
     _document->_parsing = true;
 
 #if BUILD_LITE!=1
