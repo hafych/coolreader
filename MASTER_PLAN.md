@@ -115,6 +115,13 @@ DRM или ограничений доступа, подбор/получени�
   опасные raw pointers/ручные пары acquire-release на RAII.
 - [-] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
+  Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для
+  MathML-стилей, chunk storage, block_storages и pmsREF; mutex для
+  interning-таблиц cs8/cs32; IS_FIRST_BODY перенесён в документ;
+  ~15 read-only глобалов переведены в const. Все паттерны закреплены
+  в `native_state_policy.cmake`.
+  Осталось: crconcurrent mutex-указатели (MEDIUM, провайдер не подключён),
+  wordfmt.cpp static-переменные (LOW, однопоточный конвертер).
 - [x] Добавить differential/regression tests для pagination, bookmarks, selection,
   search и восстановления позиции.
 - [x] Ввести ограниченный cache manager с наблюдаемыми hit/miss/eviction counters
