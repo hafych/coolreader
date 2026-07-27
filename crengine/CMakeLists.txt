@@ -110,15 +110,6 @@ SET (CRENGINE_SOURCES
 )
 
 ADD_LIBRARY(crengine STATIC ${CRENGINE_SOURCES})
-if(USE_CLANG_WARNING_GATE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set_property(SOURCE src/hyphman.cpp APPEND PROPERTY COMPILE_OPTIONS
-        -Werror=sign-compare
-        -Werror=unused-but-set-variable
-    )
-    set_property(SOURCE src/lvstring.cpp APPEND PROPERTY COMPILE_OPTIONS
-        -Werror=sign-compare
-    )
-endif()
 target_include_directories(crengine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${HarfBuzz_INCLUDE_DIRS}

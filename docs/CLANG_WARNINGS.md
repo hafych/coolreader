@@ -4,13 +4,15 @@ The Linux Clang job compiles the native project with `-Wall`, `-Wextra` and
 `-Wpedantic`. The following high-confidence diagnostics are errors in
 CoolReader-owned targets:
 
-- C and C++: missing return values;
+- C and C++: missing return values, signed/unsigned comparisons, and
+  variables that are set but never read;
 - C: implicit function declarations and incompatible pointer types;
 - C++: uninitialized values and deleting through a base without a virtual
   destructor;
 - C++: incomplete enum switches and anonymous non-C-compatible types used for
   linkage;
-- C++: misleading indentation.
+- C++: misleading indentation;
+- C++: constructor member-initialization order mismatches.
 
 Enable the same gate locally with:
 
@@ -28,8 +30,7 @@ that class to `-Werror=<name>` in `USE_CLANG_WARNING_GATE`; do not silence it by
 adding a blanket suppression. Bundled third-party targets are outside this
 gate.
 
-Source-scoped promotion is allowed while a diagnostic still exists elsewhere.
-`hyphman.cpp` currently enforces `sign-compare` and
-`unused-but-set-variable`; `lvstring.cpp` also enforces `sign-compare`.
-Widening either diagnostic to the full `crengine` target requires first
-clearing the remaining first-party occurrences.
+Source-scoped promotion (`set_property(SOURCE ... COMPILE_OPTIONS -Werror=<name>)`)
+is allowed as a stepping stone while a diagnostic still exists in other files.
+Once the class is clean across all first-party code, widen it to the full
+`USE_CLANG_WARNING_GATE` target list and remove the per-file override.
