@@ -273,7 +273,7 @@ typedef struct quotes_spec {
 // lang_tag with the same starting chars, put the longest first.
 // Small issue: 3-letters lang tag not specified here might match
 // a 2-letter lang tag specified here ("ito" will get those from "it").
-static quotes_spec _quotes_spec_table[] = {
+static const quotes_spec _quotes_spec_table[] = {
     { "af",       U"\x201c", U"\x201d", U"\x2018", U"\x2019" }, /* “ ” ‘ ’ */
     { "agq",      U"\x201e", U"\x201d", U"\x201a", U"\x2019" }, /* „ ” ‚ ’ */
     { "ak",       U"\x201c", U"\x201d", U"\x2018", U"\x2019" }, /* “ ” ‘ ’ */
@@ -460,7 +460,7 @@ static quotes_spec _quotes_spec_table[] = {
     { NULL, NULL, NULL, NULL, NULL }
 };
 // Default to quotes for English
-static quotes_spec _quotes_spec_default = { "", U"\x201c", U"\x201d", U"\x2018", U"\x2019" };
+static const quotes_spec _quotes_spec_default = { "", U"\x201c", U"\x201d", U"\x2018", U"\x2019" };
 
 #if USE_LIBUNIBREAK==1
 #if KO_LIBUNIBREAK_PATCH==1
@@ -960,7 +960,7 @@ TextLangCfg::TextLangCfg( const lString32 &source_lang_tag ) {
     // Language default opening and closing quotes, for CSS
     //   "q::before { content: open-quote }" and
     //   "q::after  { content: close-quote }"
-    quotes_spec * quotes = &_quotes_spec_default;
+    const quotes_spec * quotes = &_quotes_spec_default;
     for (int i=0; _quotes_spec_table[i].lang_tag!=NULL; i++) {
         if ( langStartsWith(lang_tag, _quotes_spec_table[i].lang_tag ) ) {
             quotes = &_quotes_spec_table[i];
