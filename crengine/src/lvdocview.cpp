@@ -1443,10 +1443,10 @@ lString32 LVDocView::getTimeString() const {
 	tm * bt = localtime(&t);
 	char str[12];
 	if ( m_props->getBoolDef(PROP_SHOW_TIME_12HOURS, false) ) {
-		sprintf(str, "%d:%02d", bt->tm_hour > 12 ? bt->tm_hour % 12 : bt->tm_hour, bt->tm_min);
+		snprintf(str, sizeof(str), "%d:%02d", bt->tm_hour > 12 ? bt->tm_hour % 12 : bt->tm_hour, bt->tm_min);
 	}
 	else {
-		sprintf(str, "%02d:%02d", bt->tm_hour, bt->tm_min);
+		snprintf(str, sizeof(str), "%02d:%02d", bt->tm_hour, bt->tm_min);
 	}
 	return Utf8ToUnicode(lString8(str));
 }
@@ -4774,6 +4774,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
 					}
 				}
 			}
+			(void)htmCount; (void)fb2Count; (void)rtfCount;
+			(void)txtCount; (void)fbdCount; (void)pmlCount;
 			lString32 fn = !defHtml.empty() ? defHtml : firstGood;
 			if ( !fn.empty() ) {
 				m_stream = m_arc->OpenStream( fn.c_str(), LVOM_READ );
@@ -5536,7 +5538,7 @@ void LVDocView::updateScroll() {
 		m_scrollinfo.pagesize = npage;
 		m_scrollinfo.scale = shift;
 		char str[32];
-		sprintf(str, "%d%%", (int) (fh > 0 ? (100 * npos / fh) : 0));
+		snprintf(str, sizeof(str), "%d%%", (int) (fh > 0 ? (100 * npos / fh) : 0));
 		m_scrollinfo.posText = lString32(str);
 	} else {
 		int page = getCurPage();
@@ -5548,9 +5550,9 @@ void LVDocView::updateScroll() {
 		char str[32] = { 0 };
 		if (m_pages.length() > 1) {
 			if (page <= 0) {
-				sprintf(str, "cover");
+				snprintf(str, sizeof(str), "cover");
 			} else
-				sprintf(str, "%d / %d", page, m_pages.length() - 1);
+				snprintf(str, sizeof(str), "%d / %d", page, m_pages.length() - 1);
 		}
 		m_scrollinfo.posText = lString32(str);
 	}
@@ -5932,7 +5934,7 @@ bool LVDocView::exportBookmarks(lString32 filename) {
 		char pos[16];
 		int percent = bmk->getPercent();
 		lString32 title = bmk->getTitleText();
-		sprintf(pos, "%d.%02d%%", percent / 100, percent % 100);
+		snprintf(pos, sizeof(pos), "%d.%02d%%", percent / 100, percent % 100);
 		newContent << "## " << pos << " - "
 				<< (bmk->getType() == bmkt_comment ? "comment" : "correction")
 				<< "\r\n";
@@ -6527,7 +6529,7 @@ bool LVDocView::nextSentence(){
 }
 
 //static int cr_font_sizes[] = { 24, 29, 33, 39, 44 };
-static int cr_interline_spaces[] = {
+static const int cr_interline_spaces[] = {
 		 80,  81,  82,  83,  84,  85, 86,   87,  88,  89,
 		 90,  91,  92,  93,  94,  95, 96,   97,  98,  99,
 		100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
@@ -6609,7 +6611,7 @@ static const char * def_style_macros[] = {
 void LVDocView::propsUpdateDefaults(CRPropRef props) {
     lString32Collection list;
     fontMan->getFaceList(list);
-    static int aa_props[] = { font_aa_none, font_aa_big, font_aa_all, font_aa_gray, font_aa_lcd_rgb, font_aa_lcd_bgr, font_aa_lcd_pentile, font_aa_lcd_pentile_m, font_aa_lcd_v_rgb, font_aa_lcd_v_bgr, font_aa_lcd_v_pentile, font_aa_lcd_v_pentile_m };
+    static const int aa_props[] = { font_aa_none, font_aa_big, font_aa_all, font_aa_gray, font_aa_lcd_rgb, font_aa_lcd_bgr, font_aa_lcd_pentile, font_aa_lcd_pentile_m, font_aa_lcd_v_rgb, font_aa_lcd_v_bgr, font_aa_lcd_v_pentile, font_aa_lcd_v_pentile_m };
 
     props->setIntDef(PROP_MIN_FILE_SIZE_TO_CACHE,
                      300000); // ~6M
@@ -6657,7 +6659,7 @@ void LVDocView::propsUpdateDefaults(CRPropRef props) {
 #if CR_INTERNAL_PAGE_ORIENTATION==1
     props->limitValueMinMax( PROP_ROTATE_ANGLE, 0, 3, 0 );
 #endif
-    static int int_option_weight[] = { 100, 200, 300, 400, 425, 450, 475, 500, 525, 550, 600, 650, 700, 800, 900, 950 };
+    static const int int_option_weight[] = { 100, 200, 300, 400, 425, 450, 475, 500, 525, 550, 600, 650, 700, 800, 900, 950 };
     props->limitValueList(PROP_FONT_BASE_WEIGHT, int_option_weight, sizeof(int_option_weight) / sizeof(int), 3);
 #ifndef ANDROID
     props->setBoolDef(PROP_EMBEDDED_STYLES, true);
@@ -6689,15 +6691,15 @@ void LVDocView::propsUpdateDefaults(CRPropRef props) {
     props->setBoolDef(PROP_SHOW_POS_PERCENT, false);
     props->setBoolDef(PROP_STATUS_CHAPTER_MARKS, true);
 
-    static int margin_options[] = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 25, 30, 40, 50, 60, 80, 100, 130, 150, 200, 300};
+    static const int margin_options[] = {0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 25, 30, 40, 50, 60, 80, 100, 130, 150, 200, 300};
     props->limitValueList(PROP_PAGE_MARGIN_TOP, margin_options, sizeof(margin_options)/sizeof(int), 6);
     props->limitValueList(PROP_PAGE_MARGIN_BOTTOM, margin_options, sizeof(margin_options)/sizeof(int), 6);
     props->limitValueList(PROP_PAGE_MARGIN_LEFT, margin_options, sizeof(margin_options)/sizeof(int), 6);
     props->limitValueList(PROP_PAGE_MARGIN_RIGHT, margin_options, sizeof(margin_options)/sizeof(int), 6);
-    static int rounded_corners_margin_options[] = {0, 5, 10, 15, 20, 30, 40, 50, 60, 70,80, 90, 100, 120, 140, 160};
+    static const int rounded_corners_margin_options[] = {0, 5, 10, 15, 20, 30, 40, 50, 60, 70,80, 90, 100, 120, 140, 160};
     props->limitValueList(PROP_ROUNDED_CORNERS_MARGIN, rounded_corners_margin_options, sizeof(rounded_corners_margin_options)/sizeof(int), 0);
 
-    static int screen_updates_options[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 14 };
+    static const int screen_updates_options[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 14 };
     props->limitValueList(PROP_DISPLAY_FULL_UPDATE_INTERVAL, screen_updates_options, sizeof(screen_updates_options)/sizeof(int), 1);
     props->setBoolDef(PROP_DISPLAY_TURBO_UPDATE_MODE, false);
     props->limitValueMinMax(PROP_STATUS_FONT_SIZE, MIN_STATUS_FONT_SIZE, MAX_STATUS_FONT_SIZE, INFO_FONT_SIZE);

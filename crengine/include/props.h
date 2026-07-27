@@ -81,7 +81,7 @@ public:
     /// do validation and corrections
     virtual void limitValueList( const char * propName, const char * values[] );
     /// do validation and corrections
-    virtual void limitValueList( const char * propName, int values[], int valuesCount, int defValueIndex );
+    virtual void limitValueList( const char * propName, const int values[], int valuesCount, int defValueIndex );
     /// do validation and corrections
     virtual void limitValueMinMax( const char * propName, int minValue, int maxValue, int defValue );
 

@@ -271,7 +271,7 @@ void CRPropAccessor::limitValueList( const char * propName, const char * values[
     setString( propName, defValue );
 }
 
-void CRPropAccessor::limitValueList(const char * propName, int values[], int valuesCount, int defValueIndex )
+void CRPropAccessor::limitValueList(const char * propName, const int values[], int valuesCount, int defValueIndex )
 {
     lString32 value;
     if ( getString( propName, value ) ) {
