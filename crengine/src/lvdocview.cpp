@@ -61,6 +61,7 @@
 #include "../include/fb3fmt.h"
 #include "../include/docxfmt.h"
 #include "../include/odtfmt.h"
+#include <memory>
 
 /// to show page bounds rectangles
 //#define SHOW_PAGE_RECT
@@ -5048,80 +5049,74 @@ bool LVDocView::ParseDocument() {
         // that this causes no issue.
         // We might want to refactor this section to avoid any issue.
 
-        LVFileFormatParser * parser = NULL;
+        std::unique_ptr<LVFileFormatParser> parser_owner;
         if (m_stream->GetSize() >= 5) {
             // Only check the following formats when the document is
             // at least 5 bytes: if not, go directly with plain text.
 
             /// FB2 format
             setDocFormat( doc_format_fb2);
-            parser = new LVXMLParser(m_stream, &writer, false, true);
-            if (!parser->CheckFormat()) {
-                delete parser;
-                parser = NULL;
+            parser_owner.reset(new LVXMLParser(m_stream, &writer, false, true));
+            if (!parser_owner->CheckFormat()) {
+                parser_owner.reset();
             }
 
             /// RTF format
-            if (parser == NULL) {
+            if (!parser_owner) {
                 setDocFormat( doc_format_rtf);
-                parser = new LVRtfParser(m_stream, &writer);
-                if (!parser->CheckFormat()) {
-                    delete parser;
-                    parser = NULL;
+                parser_owner.reset(new LVRtfParser(m_stream, &writer));
+                if (!parser_owner->CheckFormat()) {
+                    parser_owner.reset();
                 }
             }
 
             /// HTML format
-            if (parser == NULL) {
+            if (!parser_owner) {
                 setDocFormat( doc_format_html);
-                parser = new LVHTMLParser(m_stream, &writerFilter);
-                if (!parser->CheckFormat()) {
-                    delete parser;
-                    parser = NULL;
+                parser_owner.reset(new LVHTMLParser(m_stream, &writerFilter));
+                if (!parser_owner->CheckFormat()) {
+                    parser_owner.reset();
                 }
             }
 
             ///cool reader bookmark in txt format
-            if (parser == NULL) {
+            if (!parser_owner) {
                 //m_text_format = txt_format_pre; // DEBUG!!!
                 setDocFormat( doc_format_txt_bookmark);
-                parser = new LVTextBookmarkParser(m_stream, &writer);
-                if (!parser->CheckFormat()) {
-                    delete parser;
-                    parser = NULL;
+                parser_owner.reset(new LVTextBookmarkParser(m_stream, &writer));
+                if (!parser_owner->CheckFormat()) {
+                    parser_owner.reset();
                 }
             }
         }
 
         /// plain text format
-        if (parser == NULL) {
+        if (!parser_owner) {
             //m_text_format = txt_format_pre; // DEBUG!!!
             setDocFormat( doc_format_txt);
-            parser = new LVTextParser(m_stream, &writer,
-                            getTextFormatOptions() == txt_format_pre);
-            if (!parser->CheckFormat()) {
-                delete parser;
-                parser = NULL;
+            parser_owner.reset(new LVTextParser(m_stream, &writer,
+                            getTextFormatOptions() == txt_format_pre));
+            if (!parser_owner->CheckFormat()) {
+                parser_owner.reset();
             } else {
-                txt_autodet_lang = ((LVTextParser*)parser)->GetLangName();
+                txt_autodet_lang = static_cast<LVTextParser*>(parser_owner.get())->GetLangName();
             }
 
         }
 
         /// plain text format (robust, never fail)
-        if (parser == NULL) {
+        if (!parser_owner) {
             setDocFormat( doc_format_txt);
-            parser = new LVTextRobustParser(m_stream, &writer,
-                             getTextFormatOptions() == txt_format_pre);
-            if (!parser->CheckFormat()) {
+            parser_owner.reset(new LVTextRobustParser(m_stream, &writer,
+                             getTextFormatOptions() == txt_format_pre));
+            if (!parser_owner->CheckFormat()) {
                 // Never reached
-                delete parser;
-                parser = NULL;
+                parser_owner.reset();
             }
         }
 
         // unknown format (never reached)
-        if (!parser) {
+        if (!parser_owner) {
             setDocFormat( doc_format_none);
             createDefaultDocument(cs32("ERROR: Unknown document format"),
                     cs32("Cannot open document"));
@@ -5144,9 +5139,8 @@ bool LVDocView::ParseDocument() {
 		//m_doc->setStyleSheet( m_stylesheet.c_str(), true );
 
 		// parse
-		parser->setProgressCallback(m_callback);
-		if (!parser->Parse()) {
-			delete parser;
+		parser_owner->setProgressCallback(m_callback);
+		if (!parser_owner->Parse()) {
 			if (m_callback) {
                 m_callback->OnLoadFileError(cs32("Bad document format"));
 			}
@@ -5154,7 +5148,7 @@ bool LVDocView::ParseDocument() {
                     cs32("Cannot open document"));
 			return false;
 		}
-		delete parser;
+		parser_owner.reset();
 		_pos = 0;
 		_page = 0;
 
