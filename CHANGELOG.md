@@ -198,6 +198,20 @@ The historical Debian changelog remains in [`changelog`](changelog).
   engine's thread and recursive-mutex primitives.
 - Weekly read-only compatibility check against `buggins/coolreader`.
 
+### Fixed
+
+- All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
+  `sign-compare` and `unused-but-set-variable` promoted to the full
+  `-Werror` gate alongside the existing high-confidence classes.
+- Cacheable-object ID counter and MathML stylesheet lazy init now use
+  `std::atomic` and `std::call_once` instead of unsynchronized statics.
+- String-literal interning tables (`cs8`/`cs32`) are mutex-guarded; chunk
+  storage and block-size allocator initialization uses `std::call_once`.
+- The FB2/FB3 first-body flag is now per-document instead of a file-scope
+  static shared across all parser instances.
+- Approximately 15 read-only globals in `lvdocview`, `textlang` and `props`
+  moved to `const` (rodata).
+
 ### Changed
 
 - Android baseline is API 21+, compile/target API 35, JDK 17 and the pinned NDK
