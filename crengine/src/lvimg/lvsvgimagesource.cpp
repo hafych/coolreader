@@ -28,6 +28,7 @@
 // Support for SVG
 #include <math.h>
 #include <stdio.h>
+#include <vector>
 #define NANOSVG_ALL_COLOR_KEYWORDS
 #define NANOSVG_IMPLEMENTATION
 #define NANOSVGRAST_IMPLEMENTATION
@@ -67,18 +68,17 @@ bool LVSvgImageSource::Decode( LVImageDecoderCallback * callback )
         return false;
     lvsize_t sz = _stream->GetSize();
     // if ( sz<32 || sz>0x80000 ) return false; // do not impose (yet) a max size for svg
-    lUInt8 * buf = new lUInt8[ sz+1 ];
+    std::vector<lUInt8> buf(sz + 1);
     lvsize_t bytesRead = 0;
     bool res = true;
     _stream->SetPos(0);
-    if ( _stream->Read( buf, sz, &bytesRead )!=LVERR_OK || bytesRead!=sz ) {
+    if ( _stream->Read( buf.data(), sz, &bytesRead )!=LVERR_OK || bytesRead!=sz ) {
         res = false;
     }
     else {
         buf[sz] = 0;
-        res = DecodeFromBuffer( buf, sz, callback );
+        res = DecodeFromBuffer( buf.data(), sz, callback );
     }
-    delete[] buf;
     return res;
 }
 
@@ -142,18 +142,17 @@ int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int /*buf_size*/, LVI
                 // stbi_write_png("/tmp/svg.png", w, h, 4, img, w*4); // for debug
                 callback->OnStartDecode(this);
                 lUInt32 * src = (lUInt32 *)img;
-                lUInt32 * row = new lUInt32 [ _width ];
+                std::vector<lUInt32> row(_width);
                 for (int y=0; y<_height; y++) {
                     size_t px_count = _width;
-                    lUInt32 * dst = row;
+                    lUInt32 * dst = row.data();
                     while (px_count--) {
                         // nanosvg outputs straight RGBA; lvimg expects BGRA, with inverted alpha,
                         const lUInt32 cl = *src++ ^ 0xFF000000;
                         *dst++ = ((cl<<16)&0x00FF0000) | ((cl>>16)&0x000000FF) | (cl&0xFF00FF00);
                     }
-                    callback->OnLineDecoded( this, y, row );
+                    callback->OnLineDecoded( this, y, row.data() );
                 }
-                delete[] row;
                 callback->OnEndDecode(this, false);
                 res = true;
                 free(img);
