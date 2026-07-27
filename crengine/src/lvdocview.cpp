@@ -123,10 +123,10 @@ const char
 					"body[name=\"notes\"]  section[id] empty-line { display: inline }\n"
 					"code, pre { display: block; white-space: pre; font-family: \"Courier New\", monospace }\n";
 
-static const char * DEFAULT_FONT_NAME = "Arial, DejaVu Sans"; //Times New Roman";
-static const char * DEFAULT_STATUS_FONT_NAME =
+static const char * const DEFAULT_FONT_NAME = "Arial, DejaVu Sans"; //Times New Roman";
+static const char * const DEFAULT_STATUS_FONT_NAME =
 		"Arial Narrow, Arial, DejaVu Sans"; //Times New Roman";
-static css_font_family_t DEFAULT_FONT_FAMILY = css_ff_sans_serif;
+static const css_font_family_t DEFAULT_FONT_FAMILY = css_ff_sans_serif;
 //    css_ff_serif,
 //    css_ff_sans_serif,
 //    css_ff_cursive,
@@ -176,7 +176,7 @@ static css_font_family_t DEFAULT_FONT_FAMILY = css_ff_sans_serif;
 /// minimum EM width of page (prevents show two pages for windows that not enougn wide)
 #define MIN_EM_PER_PAGE     20
 
-static int def_font_sizes[] = { 18, 20, 22, 24, 29, 33, 39, 44 };
+static const int def_font_sizes[] = { 18, 20, 22, 24, 29, 33, 39, 44 };
 
 LVDocView::LVDocView(int bitsPerPixel, bool noDefaultDocument) :
 	m_bitsPerPixel(bitsPerPixel), m_dx(400), m_dy(200), _pos(0), _page(0),
@@ -7333,12 +7333,12 @@ struct cover_palette_t {
     lUInt32 titleframe;
 };
 
-static cover_palette_t gray_palette[1] = {
+static const cover_palette_t gray_palette[1] = {
     // frame,    bg,         hline,      vline,      title,      authors,    series      titleframe
     {0x00C0C0C0, 0x00FFFFFF, 0xC0FFC040, 0xC0F0D060, 0x00000000, 0x00000000, 0x00000000, 0x40FFFFFF},
 };
 
-static cover_palette_t normal_palette[8] = {
+static const cover_palette_t normal_palette[8] = {
     // frame,    bg,         hline,      vline,      title,      authors,    series
     {0x00D0D0D0, 0x00E8E0E0, 0xC0CFC040, 0xC0F0E060, 0x00600000, 0x00000040, 0x00404040, 0x80FFFFFF},
     {0x00D0D0D0, 0x00E0E8E0, 0xC0FFC040, 0xD0F0D080, 0x00800000, 0x00000080, 0x00406040, 0x80FFFFFF},
@@ -7350,7 +7350,7 @@ static cover_palette_t normal_palette[8] = {
     {0x00D0D0D0, 0x00E0F0E0, 0xC0FFC040, 0xC0F0D080, 0x00400000, 0x00000080, 0x00402020, 0x80FFFFFF},
 };
 
-static cover_palette_t series_palette[8] = {
+static const cover_palette_t series_palette[8] = {
     // frame,    bg,         hline,      vline,      title,      authors,    series
     {0x00C0D0C0, 0x20DFD0E0, 0xD0FFC040, 0xD0F0D080, 0x00800000, 0x00000080, 0x00406040, 0x80FFFFFF},
     {0x00C0C0D0, 0x00D0FFD0, 0xD0EFC040, 0xD0D0F060, 0x00400000, 0x00400040, 0x00404040, 0xA0FFFFFF},
@@ -7365,7 +7365,7 @@ static cover_palette_t series_palette[8] = {
 void LVDrawBookCover(LVDrawBuf & buf, LVImageSourceRef image, bool respectAspectRatio, lString8 fontFace, lString32 title, lString32 authors, lString32 seriesName, int seriesNumber) {
     CR_UNUSED(seriesNumber);
     bool isGray = buf.GetBitsPerPixel() <= 8;
-    cover_palette_t * palette = NULL;
+    const cover_palette_t * palette = NULL;
     if (isGray)
         palette = &gray_palette[0];
     else if (!seriesName.empty())
