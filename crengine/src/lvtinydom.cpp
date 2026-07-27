@@ -2771,7 +2771,7 @@ bool tinyNodeCollection::openCacheFile()
 {
     if ( _cacheFile )
         return true;
-    CacheFile * f = new CacheFile(_DOMVersionRequested, _cacheCompressionType);
+    std::unique_ptr<CacheFile> f(new CacheFile(_DOMVersionRequested, _cacheCompressionType));
     //lString32 cacheFileName("/tmp/cr3swap.tmp");
 
     lString32 fname = getProps()->getStringDef( DOC_PROP_FILE_NAME, "noname" );
@@ -2780,7 +2780,6 @@ bool tinyNodeCollection::openCacheFile()
 
     if ( !ldomDocCache::enabled() ) {
         CRLog::error("Cannot open cached document: cache dir is not initialized");
-        delete f;
         return false;
     }
 
@@ -2789,23 +2788,21 @@ bool tinyNodeCollection::openCacheFile()
     lString32 cache_path;
     LVStreamRef map = ldomDocCache::openExisting( fname, crc, getPersistenceFlags(), cache_path );
     if ( map.isNull() ) {
-        delete f;
         return false;
     }
     CRLog::info("ldomDocument::openCacheFile() - cache file found, trying to read index %s", UnicodeToUtf8(fname).c_str() );
 
     if ( !f->open( map ) ) {
-        delete f;
         return false;
     }
     CRLog::info("ldomDocument::openCacheFile() - index read successfully %s", UnicodeToUtf8(fname).c_str() );
     f->setCachePath(cache_path);
-    _cacheFile = f;
-    _textStorage.setCache( f );
-    _elemStorage.setCache( f );
-    _rectStorage.setCache( f );
-    _styleStorage.setCache( f );
-    _blobCache.setCacheFile( f );
+    _cacheFile = f.release();
+    _textStorage.setCache( _cacheFile );
+    _elemStorage.setCache( _cacheFile );
+    _rectStorage.setCache( _cacheFile );
+    _styleStorage.setCache( _cacheFile );
+    _blobCache.setCacheFile( _cacheFile );
     return true;
 }
 
@@ -2821,7 +2818,7 @@ bool tinyNodeCollection::createCacheFile()
 {
     if ( _cacheFile )
         return true;
-    CacheFile * f = new CacheFile(_DOMVersionRequested, _cacheCompressionType);
+    std::unique_ptr<CacheFile> f(new CacheFile(_DOMVersionRequested, _cacheCompressionType));
     //lString32 cacheFileName("/tmp/cr3swap.tmp");
 
     lString32 fname = getProps()->getStringDef( DOC_PROP_FILE_NAME, "noname" );
@@ -2830,7 +2827,6 @@ bool tinyNodeCollection::createCacheFile()
 
     if ( !ldomDocCache::enabled() ) {
         CRLog::error("Cannot swap: cache dir is not initialized");
-        delete f;
         return false;
     }
 
@@ -2840,23 +2836,21 @@ bool tinyNodeCollection::createCacheFile()
     LVStreamRef map = ldomDocCache::createNew( fname, crc, getPersistenceFlags(), sz, cache_path );
     if ( map.isNull() ) {
         CRLog::error("Cannot swap: failed to allocate cache map");
-        delete f;
         return false;
     }
 
     if ( !f->create( map ) ) {
         CRLog::error("Cannot swap: failed to create map file");
-        delete f;
         return false;
     }
     f->setCachePath(cache_path);
-    _cacheFile = f;
+    _cacheFile = f.release();
     _mapped = true;
-    _textStorage.setCache( f );
-    _elemStorage.setCache( f );
-    _rectStorage.setCache( f );
-    _styleStorage.setCache( f );
-    _blobCache.setCacheFile( f );
+    _textStorage.setCache( _cacheFile );
+    _elemStorage.setCache( _cacheFile );
+    _rectStorage.setCache( _cacheFile );
+    _styleStorage.setCache( _cacheFile );
+    _blobCache.setCacheFile( _cacheFile );
     setCacheFileStale(true);
     return true;
 }

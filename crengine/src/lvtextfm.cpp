@@ -4806,7 +4806,8 @@ void LFormattedText::Draw( LVDrawBuf * buf, int x, int y, ldomMarkedRangeList * 
     // We might need to translate "marks" (native highlights) from relative
     // coordinates to absolute coordinates if we have to draw floats or
     // inlineBoxes: we'll do that when dealing with the first of these if any.
-    ldomMarkedRangeList * absmarks = new ldomMarkedRangeList();
+    ldomMarkedRangeList absmarks_storage;
+    ldomMarkedRangeList * absmarks = &absmarks_storage;
     bool absmarks_update_needed = marks!=NULL && marks->length()>0;
 
     // printf("x/y: %d/%d clip.top/bottom: %d %d\n", x, y, clip.top, clip.bottom);
@@ -5136,7 +5137,6 @@ void LFormattedText::Draw( LVDrawBuf * buf, int x, int y, ldomMarkedRangeList * 
             DrawDocument( *buf, node, x0, y0, dx, dy, doc_x, doc_y, page_height, absmarks, bookmarks );
         }
     }
-    delete absmarks;
 }
 
 #endif
