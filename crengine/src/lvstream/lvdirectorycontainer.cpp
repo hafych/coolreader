@@ -198,6 +198,7 @@ LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, 
     FindClose( hFind );
 #else
     // POSIX
+    (void)mask;
     lString32 p( fn );
     p.erase( p.length()-1, 1 );
     lString8 p8 = UnicodeToLocal( p );

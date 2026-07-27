@@ -5014,9 +5014,8 @@ private:
 };
 
 /// renders (formats) document in memory
-bool ldomDocument::setRenderProps( int width, int dy, bool /*showCover*/, int /*y0*/, font_ref_t def_font, int def_interline_space, CRPropRef props )
+bool ldomDocument::setRenderProps( int width, int dy, bool /*showCover*/, int /*y0*/, font_ref_t def_font, int /*def_interline_space*/, CRPropRef props )
 {
-    // Note: def_interline_space is no more used here
     bool changed = false;
     // Don't clear this cache of LFormattedText if
     // render props don't change.
@@ -8246,7 +8245,7 @@ ldomDocumentWriter::~ldomDocumentWriter()
 #endif
 }
 
-void ldomDocumentWriter::OnTagClose( const lChar32 *, const lChar32 * tagname, bool self_closing_tag )
+void ldomDocumentWriter::OnTagClose( const lChar32 *, const lChar32 * tagname, bool /*self_closing_tag*/ )
 {
     //logfile << "ldomDocumentWriter::OnTagClose() [" << nsname << ":" << tagname << "]";
     if (!_currNode || !_currNode->getElement())
@@ -12668,7 +12667,6 @@ bool ldomXPointerEx::isSentenceStart()
 
     ldomNode * node = getNode();
     lString32 text = node->getText();
-    int textLen = text.length();
     int i = _data->getOffset();
 
     lChar32 currCh = getChar(text, i);
@@ -12721,7 +12719,6 @@ bool ldomXPointerEx::isSentenceEnd()
 
     ldomNode * node = getNode();
     lString32 text = node->getText();
-    int textLen = text.length();
     int i = _data->getOffset();
 
     lChar32 currCh = getChar(text, i);
@@ -13245,11 +13242,10 @@ private:
     bool lastText;
     bool newBlock;
     lChar32  delimiter;
-    int  maxLen;
     lString32 text;
 public:
-    ldomTextCollector( lChar32 blockDelimiter, int maxTextLen )
-        : lastText(false), newBlock(true), delimiter( blockDelimiter), maxLen( maxTextLen )
+    ldomTextCollector( lChar32 blockDelimiter, int /*maxTextLen*/ )
+        : lastText(false), newBlock(true), delimiter( blockDelimiter )
     {
     }
     /// destructor
@@ -19811,7 +19807,7 @@ bool LVPageMapItem::serialize( SerialBuf & buf )
 }
 
 /// deserialize from byte array (pointer will be incremented by number of bytes read)
-bool LVPageMapItem::deserialize( ldomDocument * doc, SerialBuf & buf )
+bool LVPageMapItem::deserialize( ldomDocument * /*doc*/, SerialBuf & buf )
 {
     if ( buf.error() )
         return false;
@@ -19844,7 +19840,7 @@ bool LVPageMap::deserialize( ldomDocument * doc, SerialBuf & buf )
     if ( buf.error() )
         return false;
     _page_info_valid = (bool)pageInfoValid;
-    for ( int i=0; i<childCount; i++ ) {
+    for ( lUInt32 i=0; i<childCount; i++ ) {
         LVPageMapItem * item = new LVPageMapItem(doc);
         if ( !item->deserialize( doc, buf ) ) {
             delete item;

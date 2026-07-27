@@ -386,13 +386,13 @@ public:
     virtual font_antialiasing_t GetAntialiasMode() { return font_aa_gray; }
 
     /// set antialiasing mode
-    virtual void SetAntialiasMode(font_antialiasing_t mode) {}
+    virtual void SetAntialiasMode(font_antialiasing_t /*mode*/) {}
 
     /// get OpenType features (bitmap)
     virtual int getFeatures() const { return 0; }
 
     /// set OpenType features (bitmap)
-    virtual void setFeatures( int features ) { }
+    virtual void setFeatures( int /*features*/ ) { }
 
     /// get kerning mode: true==ON, false=OFF
     virtual bool getKerning() const { return false; }

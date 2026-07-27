@@ -54,7 +54,7 @@ static bool langStartsWith(const lString32 lang_tag, const char * prefix) {
     const lChar32 * s1 = lang_tag.c_str();
     const lChar8 * s2 = prefix;
     for ( int i=0; i<prefix_len; i++ )
-        if (s1[i] != s2[i])
+        if (s1[i] != (lChar32)s2[i])
             return false;
     if ( lang_len == prefix_len ) // "en" starts with "en"
         return true;
@@ -549,7 +549,7 @@ lChar32 lb_char_sub_func_english(struct LineBreakContext *lbpCtx, const lChar32 
 }
 #endif      // KO_LIBUNIBREAK_PATCH==1
 
-lChar32 lb_char_sub_func_polish(struct LineBreakContext *lbpCtx, const lChar32 * text, int pos, int next_usable) {
+lChar32 lb_char_sub_func_polish(struct LineBreakContext * /*lbpCtx*/, const lChar32 * text, int pos, int /*next_usable*/) {
     // https://github.com/koreader/koreader/issues/5645#issuecomment-559193057
     // Letters aiouwzAIOUWS are prepositions that should not be left at the
     // end of a line.
@@ -579,7 +579,7 @@ lChar32 lb_char_sub_func_polish(struct LineBreakContext *lbpCtx, const lChar32 *
     return text[pos];
 }
 
-lChar32 lb_char_sub_func_czech_slovak(struct LineBreakContext *lbpCtx, const lChar32 * text, int pos, int next_usable) {
+lChar32 lb_char_sub_func_czech_slovak(struct LineBreakContext * /*lbpCtx*/, const lChar32 * text, int pos, int /*next_usable*/) {
     // Same for Czech and Slovak : AIiVvOoUuSsZzKk
     // https://tex.stackexchange.com/questions/27780/one-letter-word-at-the-end-of-line
     // https://github.com/michal-h21/luavlna
@@ -643,6 +643,11 @@ lChar32 lb_char_sub_func_czech_slovak(struct LineBreakContext *lbpCtx, const lCh
 //
 lChar32 TextLangCfg::getCssLbCharSub(css_line_break_t css_linebreak, css_word_break_t css_wordbreak,
                 struct LineBreakContext *lbpCtx, const lChar32 * text, int pos, int next_usable, lChar32 tweaked_ch) {
+#if KO_LIBUNIBREAK_PATCH!=1
+    (void)css_wordbreak;
+    (void)lbpCtx;
+    (void)next_usable;
+#endif
     // "line-break: anywhere" has precedence over everything
     if ( css_linebreak == css_lb_anywhere ) {
         return 0x5000; // Random CJK ideographic character LBP_ID

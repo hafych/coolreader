@@ -2124,7 +2124,7 @@ void MakeStatsForFile( const char * fname, const char * cp_name, const char * la
       fprintf(f, "// %d..%d\n", i*16, i*16+15 );
    }
    char str[100];
-   sprintf(str, "{ch_stat_%s_%s%d,dbl_ch_stat_%s_%s%d,\"%s\",\"%s\"}, \n", cp_name, lang_name, index, cp_name, lang_name, index, cp_name, lang_name );
+   snprintf(str, sizeof(str), "{ch_stat_%s_%s%d,dbl_ch_stat_%s_%s%d,\"%s\",\"%s\"}, \n", cp_name, lang_name, index, cp_name, lang_name, index, cp_name, lang_name );
    list += str;
    fprintf(f, "};\n\n" );
    delete [] buf;

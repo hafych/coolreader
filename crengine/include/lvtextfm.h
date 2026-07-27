@@ -31,6 +31,14 @@
 #ifndef __LVTEXTFM_H_INCLUDED__
 #define __LVTEXTFM_H_INCLUDED__
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnested-anon-types"
+#endif
+
 #include "lvfont.h"
 #include "lvstring32collection.h"
 #include "lvbmpbuf.h"
@@ -508,6 +516,12 @@ public:
     ~LFormattedText() { lvtextFreeFormatter( m_pbuffer ); }
 };
 
+#endif
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
 #endif
 
 #endif

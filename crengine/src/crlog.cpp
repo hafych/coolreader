@@ -169,13 +169,8 @@ static void CRReinitTimer() {
 }
 #endif
 
-static lUInt64 GetCurrentTimeMillis() {
-#if defined(LINUX) || defined(ANDROID) || defined(_LINUX)
-    timeval ts;
-    gettimeofday(&ts, NULL);
-    return ts.tv_sec * (lUInt64)1000 + ts.tv_usec / 1000;
-#else
 #ifdef _WIN32
+static lUInt64 GetCurrentTimeMillis() {
     if (!__timerInitialized) {
         CRReinitTimer();
         return __startTimeMillis;
@@ -185,11 +180,8 @@ static lUInt64 GetCurrentTimeMillis() {
         __timeAbsolute = (lUInt64)(queryTime.QuadPart / __timeTicksPerMillis);
         return __startTimeMillis + (lUInt64)(__timeAbsolute - __timeStart);
     }
-#else
-#error * You should define GetCurrentTimeMillis() *
-#endif
-#endif
 }
+#endif
 
 class CRFileLogger : public CRLog
 {

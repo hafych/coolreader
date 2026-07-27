@@ -45,7 +45,7 @@ public:
         return NULL;
     }
     /// sets stream/container name, may be not implemented for some objects
-    virtual void SetName(const lChar32 * name)
+    virtual void SetName(const lChar32 * /*name*/)
     {
     }
     /// returns parent container, if opened from container

@@ -165,7 +165,7 @@ public:
     /// returns available font files
     virtual void getFontFileNameList( lString32Collection & ) { }
     /// check font language compatibility
-    virtual font_lang_compat checkFontLangCompat(const lString8 &typeface, const lString8 &langTag) { return font_lang_compat_invalid_tag; }
+    virtual font_lang_compat checkFontLangCompat(const lString8 & /*typeface*/, const lString8 & /*langTag*/) { return font_lang_compat_invalid_tag; }
     /// returns first found face from passed list, or return face for font found by family only
     virtual lString8 findFontFace(lString8 commaSeparatedFaceList, css_font_family_t fallbackByFamily);
     /// fills array with list of available gamma levels
@@ -189,7 +189,7 @@ public:
     }
     /// set as preferred font with the given bias to add in CalcMatch algorithm
     virtual bool SetAsPreferredFontWithBias( lString8 face, int bias, bool clearOthersBias=true ) {
-        CR_UNUSED(face);
+        CR_UNUSED3(face, bias, clearOthersBias);
         return false;
     }
 };
