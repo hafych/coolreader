@@ -76,3 +76,29 @@ to live font instances.
 
 Known follow-up groups include the font manager's internal caches. Each group
 must be migrated separately with an impact check and focused regression tests.
+
+The string-literal interning tables (`cs8`, `cs32`) are append-only,
+process-lifetime hash tables. Each table is guarded by its own `std::mutex`;
+the lock is held for both lookup and insert because open-addressing reads can
+race with concurrent inserts. The tables are cold after startup — subsequent
+calls with the same literal hit the existing entry under the lock.
+
+The string chunk storage (used when `LDOM_USE_OWN_MEM_MAN` is active) replaces
+its former `slices_initialized` flag with `std::once_flag` and
+`std::call_once`. The per-slice allocators themselves are not internally
+synchronized; callers must ensure chunk alloc/free is externally serialized
+when the engine runs multi-threaded.
+
+The block-size memory allocator (`ldomAlloc`/`ldomFree`, also
+`LDOM_USE_OWN_MEM_MAN`) replaces its check-then-act lazy initialization with
+one `std::call_once` per storage slot. The `ref_count_rec_t` pool (`pmsREF`)
+uses the same pattern.
+
+The FB2/FB3 first-body flag (`IS_FIRST_BODY`) was a file-scope static shared
+across all document instances. It is now a per-document boolean
+(`ldomDocument::_firstBodyPending`) with public accessors, eliminating
+cross-document state leakage during concurrent or re-entrant parsing.
+
+The cacheable-object ID counter uses `std::atomic<lUInt32>` with pre-increment,
+replacing an unsynchronized `static lUInt32`. MathML stylesheet lazy loading
+uses `std::call_once` instead of a check-then-act boolean.
