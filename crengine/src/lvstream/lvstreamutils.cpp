@@ -292,8 +292,9 @@ LVContainerRef LVOpenDirectory( const char32_t * path, const char32_t * mask )
     	lString32 assetPath = LVExtractAssetPath(pathname);
     	return _assetContainerFactory->openAssetContainer(assetPath);
     }
-    LVContainerRef dir(LVDirectoryContainer::OpenDirectory(path, mask));
-    return dir;
+    std::unique_ptr<LVDirectoryContainer> dir =
+            LVDirectoryContainer::OpenDirectory(path, mask);
+    return LVContainerRef(dir.release());
 }
 
 /// creates TCR decoder stream for stream

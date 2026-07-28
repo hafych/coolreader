@@ -65,6 +65,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilemappedstream.cpp" FILE_MAP
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilemappedstream.h" FILE_MAPPED_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilestream.cpp" FILE_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilestream.h" FILE_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdirectorycontainer.cpp" DIRECTORY_CONTAINER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdirectorycontainer.h" DIRECTORY_CONTAINER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.cpp" MEMORY_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.h" MEMORY_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvstreamutils.cpp" STREAM_UTILS_SOURCE)
@@ -1617,6 +1619,93 @@ forbid_source_text(
   "${STREAM_UTILS_SOURCE}"
   "LVFileStream * stream = LVFileStream::CreateFileStream"
   "file-stream utilities must not reintroduce implicit raw ownership"
+)
+
+# --- directory-container scan and item ownership ---
+require_source_text(
+  "${DIRECTORY_CONTAINER_HEADER}"
+  "static std::unique_ptr<LVDirectoryContainer> OpenDirectory"
+  "directory factories must return scoped ownership"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "class ScopedFindHandle"
+  "Windows directory enumeration must scope its search handle"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "FindClose(_handle)"
+  "Windows directory search handles must close automatically"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "using ScopedDirectory = std::unique_ptr<DIR, DirectoryCloser>"
+  "POSIX directory enumeration must scope DIR ownership"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "closedir(directory)"
+  "POSIX directory handles must close automatically"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "std::unique_ptr<LVDirectoryContainerItemInfo> item"
+  "directory items must stay scoped until container adoption"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "directory.Add(item.release())"
+  "directory item ownership must transfer only at the owning list boundary"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "if (stat(fpath.c_str(), &st) != 0)"
+  "failed directory metadata reads must not publish uninitialized items"
+)
+require_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "if (errno != 0)"
+  "directory enumeration errors must roll back the candidate container"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "std::unique_ptr<LVDirectoryContainer> dir"
+  "directory utilities must scope candidates until LVContainerRef adoption"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "return LVContainerRef(dir.release())"
+  "directory ownership must transfer only at the reference boundary"
+)
+forbid_source_text(
+  "${DIRECTORY_CONTAINER_HEADER}"
+  "static LVDirectoryContainer * OpenDirectory"
+  "directory factories must not return implicit raw ownership"
+)
+forbid_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "LVDirectoryContainer * dir = new"
+  "directory factory rollback must remain scope-bound"
+)
+forbid_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "LVDirectoryContainerItemInfo * item = new"
+  "directory item construction must not use implicit raw ownership"
+)
+forbid_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "DIR * d = opendir"
+  "directory scans must not regress to raw DIR ownership"
+)
+forbid_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "FindClose( hFind )"
+  "Windows directory cleanup must remain guard-owned"
+)
+forbid_source_text(
+  "${DIRECTORY_CONTAINER_SOURCE}"
+  "delete dir"
+  "directory factory failure must not require manual deletion"
 )
 
 # --- lvstring: string literal interning tables ---

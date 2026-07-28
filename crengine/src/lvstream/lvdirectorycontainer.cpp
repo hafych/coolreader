@@ -26,6 +26,60 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
+#include <cerrno>
+#include <memory>
+
+namespace {
+
+void addDirectoryItem(
+        LVDirectoryContainer &directory,
+        const lString32 &name,
+        lvsize_t size,
+        lUInt32 flags,
+        bool isContainer)
+{
+    std::unique_ptr<LVDirectoryContainerItemInfo> item(
+            new LVDirectoryContainerItemInfo());
+    item->SetItemInfo(name, size, flags, isContainer);
+    directory.Add(item.release());
+}
+
+#if !defined(__SYMBIAN32__) && defined(_WIN32)
+class ScopedFindHandle
+{
+    HANDLE _handle;
+public:
+    explicit ScopedFindHandle(HANDLE handle)
+        : _handle(handle)
+    {
+    }
+
+    ~ScopedFindHandle()
+    {
+        if (_handle != NULL && _handle != INVALID_HANDLE_VALUE)
+            FindClose(_handle);
+    }
+
+    ScopedFindHandle(const ScopedFindHandle &) = delete;
+    ScopedFindHandle &operator=(const ScopedFindHandle &) = delete;
+
+    HANDLE get() const { return _handle; }
+};
+#else
+struct DirectoryCloser
+{
+    void operator()(DIR *directory) const
+    {
+        if (directory)
+            closedir(directory);
+    }
+};
+
+using ScopedDirectory = std::unique_ptr<DIR, DirectoryCloser>;
+#endif
+
+} // namespace
+
 LVStreamRef LVDirectoryContainer::OpenStream(const char32_t *fname, lvopen_mode_t mode)
 {
     int found_index = -1;
@@ -50,11 +104,9 @@ LVStreamRef LVDirectoryContainer::OpenStream(const char32_t *fname, lvopen_mode_
     }
     //stream->m_parent = this;
     if (found_index<0) {
-        // add new info
-        LVDirectoryContainerItemInfo * item = new LVDirectoryContainerItemInfo;
-        item->m_name = fname;
-        stream->GetSize(&item->m_size);
-        Add(item);
+        lvsize_t size = 0;
+        stream->GetSize(&size);
+        addDirectoryItem(*this, lString32(fname), size, 0, false);
     }
     return stream;
 }
@@ -77,14 +129,15 @@ LVDirectoryContainer::~LVDirectoryContainer()
     Clear();
 }
 
-LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, const char32_t *mask)
+std::unique_ptr<LVDirectoryContainer> LVDirectoryContainer::OpenDirectory(
+        const char32_t *path, const char32_t *mask)
 {
     if (!path || !path[0])
-        return NULL;
+        return std::unique_ptr<LVDirectoryContainer>();
     
     
     // container object
-    LVDirectoryContainer * dir = new LVDirectoryContainer;
+    std::unique_ptr<LVDirectoryContainer> dir(new LVDirectoryContainer());
     
     // make filename
     lString32 fn( path );
@@ -98,7 +151,7 @@ LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, 
     
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
     // WIN32 API
-    fn << mask;
+    fn << (mask ? mask : U"*.*");
     WIN32_FIND_DATAW data = { 0 };
     WIN32_FIND_DATAA dataa = { 0 };
     //lString8 bs = DOMString(path).ToAnsiString();
@@ -111,15 +164,12 @@ LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, 
             hFind = FindFirstFileA(UnicodeToLocal(fn).c_str(), &dataa);
             unicode=false;
             if (hFind == INVALID_HANDLE_VALUE || !hFind)
-            {
-                delete dir;
-                return NULL;
-            }
+                return std::unique_ptr<LVDirectoryContainer>();
         } else {
-            delete dir;
-            return NULL;
+            return std::unique_ptr<LVDirectoryContainer>();
         }
     }
+    ScopedFindHandle findHandle(hFind);
     
     if (unicode) {
         // unicode
@@ -137,22 +187,24 @@ LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, 
                     // .. or .
                 } else {
                     // normal directory
-                    LVDirectoryContainerItemInfo * item = new LVDirectoryContainerItemInfo;
-                    item->m_name = Utf16ToUnicode(pfn);
-                    item->m_is_container = true;
-                    dir->Add(item);
+                    addDirectoryItem(
+                            *dir, Utf16ToUnicode(pfn), 0,
+                            data.dwFileAttributes, true);
                 }
             } else {
                 // file
-                LVDirectoryContainerItemInfo * item = new LVDirectoryContainerItemInfo;
-                item->m_name = Utf16ToUnicode(pfn);
-                item->m_size = data.nFileSizeLow;
-                item->m_flags = data.dwFileAttributes;
-                dir->Add(item);
+                lvsize_t size = data.nFileSizeLow;
+#if LVLONG_FILE_SUPPORT
+                size |= static_cast<lvsize_t>(data.nFileSizeHigh) << 32;
+#endif
+                addDirectoryItem(
+                        *dir, Utf16ToUnicode(pfn), size,
+                        data.dwFileAttributes, false);
             }
             
-            if (!FindNextFileW(hFind, &data)) {
-                // end of list
+            if (!FindNextFileW(findHandle.get(), &data)) {
+                if (GetLastError() != ERROR_NO_MORE_FILES)
+                    return std::unique_ptr<LVDirectoryContainer>();
                 break;
             }
             
@@ -173,70 +225,72 @@ LVDirectoryContainer *LVDirectoryContainer::OpenDirectory(const char32_t *path, 
                     // .. or .
                 } else {
                     // normal directory
-                    LVDirectoryContainerItemInfo * item = new LVDirectoryContainerItemInfo;
-                    item->m_name = LocalToUnicode( lString8( pfn ) );
-                    item->m_is_container = true;
-                    dir->Add(item);
+                    addDirectoryItem(
+                            *dir, LocalToUnicode(lString8(pfn)), 0,
+                            dataa.dwFileAttributes, true);
                 }
             } else {
                 // file
-                LVDirectoryContainerItemInfo * item = new LVDirectoryContainerItemInfo;
-                item->m_name = LocalToUnicode( lString8( pfn ) );
-                item->m_size = data.nFileSizeLow;
-                item->m_flags = data.dwFileAttributes;
-                dir->Add(item);
+                lvsize_t size = dataa.nFileSizeLow;
+#if LVLONG_FILE_SUPPORT
+                size |= static_cast<lvsize_t>(dataa.nFileSizeHigh) << 32;
+#endif
+                addDirectoryItem(
+                        *dir, LocalToUnicode(lString8(pfn)), size,
+                        dataa.dwFileAttributes, false);
             }
             
-            if (!FindNextFileA(hFind, &dataa)) {
-                // end of list
+            if (!FindNextFileA(findHandle.get(), &dataa)) {
+                if (GetLastError() != ERROR_NO_MORE_FILES)
+                    return std::unique_ptr<LVDirectoryContainer>();
                 break;
             }
             
         }
     }
-    
-    FindClose( hFind );
 #else
     // POSIX
-    (void)mask;
+    CR_UNUSED(mask);
     lString32 p( fn );
     p.erase( p.length()-1, 1 );
     lString8 p8 = UnicodeToLocal( p );
     if ( p8.empty() )
         p8 = ".";
     const char * p8s = p8.c_str();
-    DIR * d = opendir(p8s);
-    if ( d ) {
-        struct dirent * pde;
-        while ( (pde = readdir(d))!=NULL ) {
-            lString8 fpath = p8 + "/" + pde->d_name;
-            struct stat st;
-            stat( fpath.c_str(), &st );
-            if ( S_ISDIR(st.st_mode) ) {
-                // dir
-                if ( strcmp(pde->d_name, ".") && strcmp(pde->d_name, "..") ) {
-                    // normal directory
-                    LVDirectoryContainerItemInfo * item = new LVDirectoryContainerItemInfo;
-                    item->m_name = LocalToUnicode(lString8(pde->d_name));
-                    item->m_is_container = true;
-                    dir->Add(item);
-                }
-            } else if ( S_ISREG(st.st_mode) ) {
-                // file
-                LVDirectoryContainerItemInfo * item = new LVDirectoryContainerItemInfo;
-                item->m_name = LocalToUnicode(lString8(pde->d_name));
-                item->m_size = st.st_size;
-                item->m_flags = st.st_mode;
-                dir->Add(item);
-            }
+    ScopedDirectory directory(opendir(p8s));
+    if (!directory)
+        return std::unique_ptr<LVDirectoryContainer>();
+    for (;;) {
+        errno = 0;
+        struct dirent *pde = readdir(directory.get());
+        if (!pde) {
+            if (errno != 0)
+                return std::unique_ptr<LVDirectoryContainer>();
+            break;
         }
-        closedir(d);
-    } else {
-        delete dir;
-        return NULL;
+        lString8 fpath = p8 + "/" + pde->d_name;
+        struct stat st;
+        if (stat(fpath.c_str(), &st) != 0)
+            continue;
+        if (S_ISDIR(st.st_mode)) {
+            if (strcmp(pde->d_name, ".")
+                    && strcmp(pde->d_name, "..")) {
+                addDirectoryItem(
+                        *dir,
+                        LocalToUnicode(lString8(pde->d_name)),
+                        0,
+                        static_cast<lUInt32>(st.st_mode),
+                        true);
+            }
+        } else if (S_ISREG(st.st_mode)) {
+            addDirectoryItem(
+                    *dir,
+                    LocalToUnicode(lString8(pde->d_name)),
+                    static_cast<lvsize_t>(st.st_size),
+                    static_cast<lUInt32>(st.st_mode),
+                    false);
+        }
     }
-    
-    
 #endif
     return dir;
 }

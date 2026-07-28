@@ -184,3 +184,13 @@ until ownership crosses into `LVStreamRef`; open candidates are published only
 after metadata and seek validation. Close is idempotent, failed reopen clears
 stale state, append preserves sync flags and starts at EOF, and POSIX resize
 uses `ftruncate` before restoring a position clamped to the new length.
+
+`LVDirectoryContainer` keeps each factory candidate in `unique_ptr` until it
+crosses into `LVContainerRef`. Windows enumeration uses `ScopedFindHandle` and
+POSIX enumeration uses a `unique_ptr<DIR>` with the matching `closedir`
+deleter, so all success and rollback paths close the scan resource before the
+container is returned. New item metadata also stays in `unique_ptr` until the
+legacy owning `LVPtrVector` adopts it through `Add()`. Enumeration errors roll
+back the complete candidate, while failed `stat()` calls skip the affected
+entry instead of publishing uninitialized metadata. The parent pointer remains
+an explicitly non-owning compatibility view.

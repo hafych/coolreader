@@ -24,6 +24,8 @@
 
 #include "lvnamedcontainer.h"
 
+#include <memory>
+
 class LVDirectoryContainerItemInfo : public LVCommonContainerItemInfo
 {
     friend class LVDirectoryContainer;
@@ -32,27 +34,32 @@ class LVDirectoryContainerItemInfo : public LVCommonContainerItemInfo
 class LVDirectoryContainer : public LVNamedContainer
 {
 protected:
+    // Explicitly non-owning compatibility view; directory containers
+    // currently have no parent container.
     LVDirectoryContainer * m_parent;
 public:
-    virtual LVStreamRef OpenStream( const char32_t * fname, lvopen_mode_t mode );
-    virtual LVContainer * GetParentContainer()
+    LVStreamRef OpenStream( const char32_t * fname, lvopen_mode_t mode ) override;
+    LVContainer * GetParentContainer() override
     {
         return (LVContainer*)m_parent;
     }
-    virtual const LVContainerItemInfo * GetObjectInfo(int index)
+    const LVContainerItemInfo * GetObjectInfo(int index) override
     {
         if (index>=0 && index<m_list.length())
             return m_list[index];
         return NULL;
     }
-    virtual int GetObjectCount() const
+    int GetObjectCount() const override
     {
         return m_list.length();
     }
-    virtual lverror_t GetSize( lvsize_t * pSize );
+    lverror_t GetSize( lvsize_t * pSize ) override;
     LVDirectoryContainer();
-    virtual ~LVDirectoryContainer();
-    static LVDirectoryContainer * OpenDirectory( const char32_t * path, const char32_t * mask = U"*.*" );
+    ~LVDirectoryContainer() override;
+    LVDirectoryContainer(const LVDirectoryContainer &) = delete;
+    LVDirectoryContainer &operator=(const LVDirectoryContainer &) = delete;
+    static std::unique_ptr<LVDirectoryContainer> OpenDirectory(
+            const char32_t * path, const char32_t * mask = U"*.*" );
 };
 
 #endif  // __LVDIRECTORYCONTAINER_H_INCLUDED__

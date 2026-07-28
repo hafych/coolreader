@@ -1,5 +1,6 @@
 #include "lvstreamutils.h"
 #include "lvthread.h"
+#include "lvcontaineriteminfo.h"
 #include "hyphman.h"
 #include "lvcolordrawbuf.h"
 #include "lvfntman.h"
@@ -45,6 +46,7 @@
 #include <fcntl.h>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -994,6 +996,134 @@ static int testFileStreamOwnership() {
     }
     close(pipeFds[0]);
     close(pipeFds[1]);
+    return 0;
+}
+
+static int testDirectoryContainerOwnership() {
+    char rootTemplate[] = "/tmp/coolreader-directory-test-XXXXXX";
+    char *root = mkdtemp(rootTemplate);
+    if (!root)
+        return fail("directory-container fixture could not create its root");
+
+    const std::string rootPath(root);
+    const std::string filePath = rootPath + "/book.bin";
+    const std::string createdPath = rootPath + "/created.bin";
+    const std::string subdirectoryPath = rootPath + "/shelf";
+    const std::string danglingPath = rootPath + "/dangling";
+    auto cleanup = [&]() {
+        unlink(danglingPath.c_str());
+        unlink(createdPath.c_str());
+        unlink(filePath.c_str());
+        rmdir(subdirectoryPath.c_str());
+        rmdir(rootPath.c_str());
+    };
+
+    static const char payload[] = "directory";
+    int fixtureFd =
+            open(filePath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fixtureFd < 0
+            || write(fixtureFd, payload, sizeof(payload))
+                    != static_cast<ssize_t>(sizeof(payload))) {
+        if (fixtureFd >= 0)
+            close(fixtureFd);
+        cleanup();
+        return fail("directory-container fixture file setup failed");
+    }
+    close(fixtureFd);
+    if (mkdir(subdirectoryPath.c_str(), 0700) != 0
+            || symlink("missing-target", danglingPath.c_str()) != 0) {
+        cleanup();
+        return fail("directory-container fixture entries setup failed");
+    }
+
+    int scanSlot = open(rootPath.c_str(), O_RDONLY);
+    if (scanSlot < 0) {
+        cleanup();
+        return fail("directory-container fixture could not reserve scan fd");
+    }
+    close(scanSlot);
+
+    LVContainerRef directory =
+            LVOpenDirectory(Utf8ToUnicode(lString8(rootPath.c_str())));
+    if (directory.isNull()
+            || fcntl(scanSlot, F_GETFD) != -1
+            || errno != EBADF
+            || directory->GetObjectCount() != 2) {
+        directory.Clear();
+        cleanup();
+        return fail("directory scan leaked its descriptor or partial entries");
+    }
+
+    const LVContainerItemInfo *fileInfo = NULL;
+    const LVContainerItemInfo *subdirectoryInfo = NULL;
+    for (int index = 0; index < directory->GetObjectCount(); ++index) {
+        const LVContainerItemInfo *info = directory->GetObjectInfo(index);
+        if (!info || !info->GetName()) {
+            directory.Clear();
+            cleanup();
+            return fail("directory container published an invalid item");
+        }
+        const lString32 name(info->GetName());
+        if (name == lString32(U"book.bin"))
+            fileInfo = info;
+        else if (name == lString32(U"shelf"))
+            subdirectoryInfo = info;
+    }
+    if (!fileInfo || fileInfo->IsContainer()
+            || fileInfo->GetSize() != sizeof(payload)
+            || !subdirectoryInfo || !subdirectoryInfo->IsContainer()) {
+        directory.Clear();
+        cleanup();
+        return fail("directory container item metadata is inconsistent");
+    }
+
+    LVStreamRef opened = directory->OpenStream(U"book.bin", LVOM_READ);
+    char readback[sizeof(payload)] = {};
+    lvsize_t bytesRead = 0;
+    if (opened.isNull()
+            || opened->Read(readback, sizeof(readback), &bytesRead)
+                    != LVERR_OK
+            || bytesRead != sizeof(readback)
+            || std::memcmp(readback, payload, sizeof(payload)) != 0
+            || !directory->OpenStream(U"shelf", LVOM_READ).isNull()
+            || !directory->OpenStream(U"missing.bin", LVOM_READ).isNull()
+            || directory->GetObjectCount() != 2) {
+        opened.Clear();
+        directory.Clear();
+        cleanup();
+        return fail("directory stream lookup accepted invalid entries");
+    }
+    opened.Clear();
+
+    LVStreamRef created =
+            directory->OpenStream(U"created.bin", LVOM_WRITE);
+    static const char createdPayload[] = {'o', 'k'};
+    lvsize_t bytesWritten = 0;
+    if (created.isNull()
+            || created->Write(
+                    createdPayload, sizeof(createdPayload), &bytesWritten)
+                    != LVERR_OK
+            || bytesWritten != sizeof(createdPayload)
+            || directory->GetObjectCount() != 3) {
+        created.Clear();
+        directory.Clear();
+        cleanup();
+        return fail("directory container did not adopt a new stream item");
+    }
+    created.Clear();
+    directory.Clear();
+
+    const lString32 missingPath =
+            Utf8ToUnicode(lString8((rootPath + ".missing").c_str()));
+    if (!LVOpenDirectory(missingPath).isNull()
+            || !LVOpenDirectory(U"").isNull()
+            || !LVOpenDirectory(
+                    Utf8ToUnicode(lString8(filePath.c_str()))).isNull()) {
+        cleanup();
+        return fail("directory factory published an invalid candidate");
+    }
+
+    cleanup();
     return 0;
 }
 
@@ -2908,6 +3038,8 @@ int main() {
     if (testBorrowedDescriptor() != 0)
         return 1;
     if (testFileStreamOwnership() != 0)
+        return 1;
+    if (testDirectoryContainerOwnership() != 0)
         return 1;
     if (testIniTranslatorOwnership() != 0)
         return 1;
