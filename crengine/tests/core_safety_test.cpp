@@ -564,6 +564,12 @@ static int testHyphenationRegistryOwnership() {
     return 0;
 }
 
+static int testHyphenationPatternOwnership() {
+    if (!LVRunHyphenationPatternOwnershipRegression())
+        return fail("hyphenation pattern-chain ownership regression failed");
+    return 0;
+}
+
 static int testConcurrentHyphenationMethodCache() {
     if (!HyphMan::initDictionaries(lString32::empty_str, true))
         return fail("hyphenation cache fixture registry did not initialize");
@@ -6883,6 +6889,8 @@ int main() {
     if (testConcurrentHyphenationSettings() != 0)
         return 1;
     if (testHyphenationRegistryOwnership() != 0)
+        return 1;
+    if (testHyphenationPatternOwnership() != 0)
         return 1;
     if (testConcurrentHyphenationMethodCache() != 0)
         return 1;

@@ -555,6 +555,66 @@ require_source_text(
   "loaded hyphenation method cache must be synchronized"
 )
 require_source_text(
+  "${HYPH_SOURCE}"
+  "std::unique_ptr<TexPattern>,"
+  "hyphenation pattern buckets must use bounded exclusive ownership"
+)
+require_source_text(
+  "${HYPH_SOURCE}"
+  "std::unique_ptr<TexPattern> next"
+  "hyphenation pattern collision links must use exclusive ownership"
+)
+require_source_text(
+  "${HYPH_SOURCE}"
+  "void TexHyph::addPattern( std::unique_ptr<TexPattern> pattern )"
+  "hyphenation pattern publication must transfer ownership"
+)
+require_source_text(
+  "${HYPH_SOURCE}"
+  "*link = std::move(pattern)"
+  "hyphenation pattern insertion must publish the scoped candidate"
+)
+require_source_text(
+  "${HYPH_SOURCE}"
+  "std::unique_ptr<TexPattern> pattern = std::move(bucket)"
+  "hyphenation pattern chains must retain iterative teardown"
+)
+require_source_text(
+  "${HYPH_SOURCE}"
+  "bool LVRunHyphenationPatternOwnershipRegression()"
+  "hyphenation pattern ownership must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "hyphenation pattern-chain ownership regression failed"
+  "hyphenation pattern ownership must retain collision and rollback coverage"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "TexPattern * table[PATTERN_HASH_SIZE]"
+  "hyphenation pattern buckets must not use raw owners"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "TexPattern * next"
+  "hyphenation pattern chains must not use raw owner links"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "new TexPattern"
+  "hyphenation pattern candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "delete pattern"
+  "rejected hyphenation patterns must remain scope-managed"
+)
+forbid_source_text(
+  "${HYPH_SOURCE}"
+  "delete tmp"
+  "hyphenation pattern chain teardown must remain owner-managed"
+)
+require_source_text(
   "${TEXTLANG_HEADER}"
   "static std::atomic<lUInt32> _runtime_options"
   "text-language runtime options must be synchronized"

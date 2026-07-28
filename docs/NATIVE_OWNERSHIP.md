@@ -54,7 +54,13 @@ The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
 transfer boundary, while `getDictList()` returns a non-owning pointer valid only
 between initialization and process-shutdown teardown. Loaded dictionary methods
 are owned by a private vector of `std::unique_ptr`; the legacy hash table is now
-only a non-owning lookup index.
+only a non-owning lookup index. Each TeX dictionary owns its fixed hash buckets
+and sorted collision links with nested `unique_ptr`; parser candidates remain
+scoped until insertion and oversized patterns disappear without manual
+deletion. Dictionary destruction unlinks long chains iteratively before the
+bounded bucket array is released. Native coverage forces 128 patterns into one
+bucket, rejects an oversized candidate, validates a tail match and repeats the
+whole lifecycle under sanitizers.
 
 `TextLangMan` owns cached language configurations with
 `std::vector<std::unique_ptr<TextLangCfg>>`. Lookup returns a non-owning pointer

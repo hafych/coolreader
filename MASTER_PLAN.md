@@ -113,8 +113,9 @@ DRM или ограничений доступа, подбор/получени�
 
 - [-] Зафиксировать политику владения нативными объектами и постепенно заменить
   опасные raw pointers/ручные пары acquire-release на RAII.
-  Выполнено: ownership для hyphenation/text-language/font-manager; временные
-  буферы INI, cache-file, SVG/GIF/XPM/image rows, encoding autodetect/offline
+  Выполнено: ownership для hyphenation registry/method и TeX pattern
+  bucket/chain graphs, text-language/font-manager; временные буферы INI,
+  cache-file, SVG/GIF/XPM/image rows, encoding autodetect/offline
   statistic input и parser format detection; parser selection, draw-buffer
   source и owned/borrowed
   color/gray pixel backing, ZIP decoder/entry

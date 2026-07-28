@@ -38,9 +38,11 @@
 #define DUMP_PATTERNS 0
 #endif
 
+#include <array>
+#include <memory>
+#include <mutex>
 #include <stdlib.h>
 #include <string.h>
-#include <mutex>
 #include <utility>
 #include <vector>
 #include "../include/lvxmlparsercallback.h"
@@ -145,14 +147,16 @@ std::unique_ptr<HyphDictionaryList> HyphMan::_dictList;
 class TexPattern;
 class TexHyph : public HyphMethod
 {
-    TexPattern * table[PATTERN_HASH_SIZE];
+    std::array<
+            std::unique_ptr<TexPattern>,
+            PATTERN_HASH_SIZE> table;
     lUInt32 _hash;
     lUInt32 _pattern_count;
 public:
     int largest_overflowed_word;
     bool match( const lChar32 * str, char * mask );
     virtual bool hyphenate( const lChar32 * str, int len, lUInt16 * widths, lUInt8 * flags, lUInt16 hyphCharWidth, lUInt16 maxWidth, size_t flagSize );
-    void addPattern( TexPattern * pattern );
+    void addPattern( std::unique_ptr<TexPattern> pattern );
     TexHyph(lString32 id = HYPH_DICT_ID_DICTIONARY);
     virtual ~TexHyph();
     bool load( LVStreamRef stream );
@@ -774,7 +778,7 @@ public:
     lChar32 word[MAX_PATTERN_SIZE+1];
     char attr[MAX_PATTERN_SIZE+2];
     int overflowed; // 0, or size of complete word if larger than MAX_PATTERN_SIZE
-    TexPattern * next;
+    std::unique_ptr<TexPattern> next;
 
     int cmp( TexPattern * v )
     {
@@ -826,7 +830,7 @@ public:
                     found = true;
                 }
             }
-            p = p->next;
+            p = p->next.get();
         }
         return found;
     }
@@ -840,7 +844,7 @@ public:
         }
     }
 
-    TexPattern( const lString32 &s ) : next( NULL )
+    TexPattern( const lString32 &s ) : next()
     {
         overflowed = 0;
         memset( word, 0, sizeof(word) );
@@ -880,7 +884,11 @@ public:
             overflowed = overflowed + 1; // convert counter to number of things counted
     }
 
-    TexPattern( const unsigned char * s, int sz, const lChar32 * charMap )
+    TexPattern(
+            const unsigned char *s,
+            int sz,
+            const lChar32 *charMap)
+        : next()
     {
         overflowed = 0;
         if ( sz > MAX_PATTERN_SIZE ) {
@@ -896,8 +904,7 @@ public:
 };
 
 TexHyph::TexHyph(lString32 id)
-    : HyphMethod(id) {
-    memset(table, 0, sizeof(table));
+    : HyphMethod(id), table() {
     _hash = 123456;
     _pattern_count = 0;
     largest_overflowed_word = 0;
@@ -905,24 +912,22 @@ TexHyph::TexHyph(lString32 id)
 
 TexHyph::~TexHyph()
 {
-    for ( int i=0; i<PATTERN_HASH_SIZE; i++ ) {
-        TexPattern * p = table[i];
-        while (p) {
-            TexPattern * tmp = p;
-            p = p->next;
-            delete tmp;
+    for (std::unique_ptr<TexPattern> &bucket : table) {
+        while (bucket) {
+            std::unique_ptr<TexPattern> pattern = std::move(bucket);
+            bucket = std::move(pattern->next);
         }
     }
 }
 
-void TexHyph::addPattern( TexPattern * pattern )
+void TexHyph::addPattern( std::unique_ptr<TexPattern> pattern )
 {
     int h = pattern->hash();
-    TexPattern * * p = &table[h];
-    while ( *p && pattern->cmp(*p)<0 )
-        p = &((*p)->next);
-    pattern->next = *p;
-    *p = pattern;
+    std::unique_ptr<TexPattern> *link = &table[h];
+    while (*link && pattern->cmp(link->get()) < 0)
+        link = &((*link)->next);
+    pattern->next = std::move(*link);
+    *link = std::move(pattern);
     _pattern_count++;
 }
 
@@ -968,7 +973,9 @@ bool TexHyph::load( LVStreamRef stream )
                 pat[1] = hyph.mask0[0];
                 pat[2] = hyph.mask0[1];
                 pat[3] = 0;
-                TexPattern * pattern = new TexPattern(pat, 1, charMap);
+                std::unique_ptr<TexPattern> pattern =
+                        std::make_unique<TexPattern>(
+                                pat, 1, charMap);
 #if DUMP_PATTERNS==1
                 CRLog::debug("Pattern: '%s' - %s", LCSTR(lString32(pattern->word)), pattern->attr );
 #endif
@@ -977,10 +984,9 @@ bool TexHyph::load( LVStreamRef stream )
                     CRLog::warn("Pattern overflowed (%d > %d) and ignored: '%s'", pattern->overflowed, MAX_PATTERN_SIZE, LCSTR(lString32(pattern->word)));
                     if (pattern->overflowed > largest_overflowed_word)
                         largest_overflowed_word = pattern->overflowed;
-                    delete pattern;
                 }
                 else {
-                    addPattern( pattern );
+                    addPattern(std::move(pattern));
                     patternCount++;
                 }
             }
@@ -1006,7 +1012,9 @@ bool TexHyph::load( LVStreamRef stream )
                 lUInt8 sz = *p++;
                 if ( p + sz > end_p )
                     break;
-                TexPattern * pattern = new TexPattern( p, sz, charMap );
+                std::unique_ptr<TexPattern> pattern =
+                        std::make_unique<TexPattern>(
+                                p, sz, charMap);
 #if DUMP_PATTERNS==1
                 CRLog::debug("Pattern: '%s' - %s", LCSTR(lString32(pattern->word)), pattern->attr);
 #endif
@@ -1015,10 +1023,9 @@ bool TexHyph::load( LVStreamRef stream )
                     CRLog::warn("Pattern overflowed (%d > %d) and ignored: '%s'", pattern->overflowed, MAX_PATTERN_SIZE, LCSTR(lString32(pattern->word)));
                     if (pattern->overflowed > largest_overflowed_word)
                         largest_overflowed_word = pattern->overflowed;
-                    delete pattern;
                 }
                 else {
-                    addPattern( pattern );
+                    addPattern(std::move(pattern));
                     patternCount++;
                 }
                 p += sz + sz + 1;
@@ -1046,7 +1053,8 @@ bool TexHyph::load( LVStreamRef stream )
         _right_hyphen_min = reader.GetRightHyphenMin();
         for (int i = 0; i < (int)data.length(); i++) {
             data[i].lowercase();
-            TexPattern * pattern = new TexPattern( data[i] );
+            std::unique_ptr<TexPattern> pattern =
+                    std::make_unique<TexPattern>(data[i]);
 #if DUMP_PATTERNS==1
             CRLog::debug("Pattern: (%s) '%s' - %s", LCSTR(data[i]), LCSTR(lString32(pattern->word)), pattern->attr);
 #endif
@@ -1055,10 +1063,9 @@ bool TexHyph::load( LVStreamRef stream )
                 CRLog::warn("Pattern overflowed (%d > %d) and ignored: (%s) '%s'", pattern->overflowed, MAX_PATTERN_SIZE, LCSTR(data[i]), LCSTR(lString32(pattern->word)));
                 if (pattern->overflowed > largest_overflowed_word)
                     largest_overflowed_word = pattern->overflowed;
-                delete pattern;
             }
             else {
-                addPattern( pattern );
+                addPattern(std::move(pattern));
                 patternCount++;
             }
         }
@@ -1077,23 +1084,59 @@ bool TexHyph::load(lString32 fileName) {
     return load(stream);
 }
 
+bool LVRunHyphenationPatternOwnershipRegression()
+{
+    lString8 xml(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<HyphenationDescription title=\"Ownership\" lang=\"zz\" "
+            "lefthyphenmin=\"2\" righthyphenmin=\"2\">");
+    static const int collisionPatternCount = 128;
+    for (int index = 0; index < collisionPatternCount; ++index) {
+        xml << "<pattern>abcd";
+        xml << static_cast<lChar8>('a' + index / 26);
+        xml << static_cast<lChar8>('a' + index % 26);
+        xml << "1z</pattern>";
+    }
+    xml << "<pattern>";
+    for (int index = 0; index < MAX_PATTERN_SIZE + 5; ++index)
+        xml << 'q';
+    xml << "</pattern></HyphenationDescription>";
+
+    for (int cycle = 0; cycle < 2; ++cycle) {
+        TexHyph method(U"ownership.pattern");
+        if (!method.load(LVCreateStringStream(xml))
+                || method.getPatternsCount() != collisionPatternCount
+                || method.largest_overflowed_word
+                        != MAX_PATTERN_SIZE + 5)
+            return false;
+
+        const lChar32 probe[] = U"abcdaaz";
+        char mask[16];
+        memset(mask, '0', sizeof(mask));
+        mask[sizeof(mask) - 1] = 0;
+        if (!method.match(probe, mask) || mask[6] != '1')
+            return false;
+    }
+    return true;
+}
+
 
 bool TexHyph::match( const lChar32 * str, char * mask )
 {
     bool found = false;
-    TexPattern * res = table[ TexPattern::hash( str ) ];
+    TexPattern * res = table[TexPattern::hash(str)].get();
     if ( res ) {
         found = res->match( str, mask ) || found;
     }
-    res = table[ TexPattern::hash3( str ) ];
+    res = table[TexPattern::hash3(str)].get();
     if ( res ) {
         found = res->match( str, mask ) || found;
     }
-    res = table[ TexPattern::hash2( str ) ];
+    res = table[TexPattern::hash2(str)].get();
     if ( res ) {
         found = res->match( str, mask ) || found;
     }
-    res = table[ TexPattern::hash1( str ) ];
+    res = table[TexPattern::hash1(str)].get();
     if ( res ) {
         found = res->match( str, mask ) || found;
     }
