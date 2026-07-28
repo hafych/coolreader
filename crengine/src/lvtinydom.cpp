@@ -20085,23 +20085,21 @@ LVStreamRef ldomNode::createBase64Stream()
     LVStreamRef ostream = LVOpenFileStream( fname.empty() ? U"image.png" : fname.c_str(), LVOM_WRITE );
     printf("createBase64Stream(%s)\n", fname8.c_str());
 #endif
-    LVStream * stream = new LVBase64NodeStream( this );
+    LVStreamRef stream( new LVBase64NodeStream( this ) );
     if ( stream->GetSize()==0 )
     {
 #if DEBUG_BASE64_IMAGE==1
         printf("    cannot create base64 decoder stream!!!\n");
 #endif
-        delete stream;
         return LVStreamRef();
     }
-    LVStreamRef istream( stream );
 
 #if DEBUG_BASE64_IMAGE==1
-    LVPumpStream( ostream, istream );
-    istream->SetPos(0);
+    LVPumpStream( ostream, stream );
+    stream->SetPos(0);
 #endif
 
-    return istream;
+    return stream;
 }
 
 #if BUILD_LITE!=1

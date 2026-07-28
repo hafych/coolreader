@@ -716,3 +716,10 @@ current chain by HTML foster parenting; filter shutdown then clears its foster
 and last-paragraph borrows. A modern malformed-HTML regression leaves both
 branches open at EOF and verifies finalization, foster order and repeatable
 teardown under sanitizers.
+
+DOM-backed base64 streams enter `LVStreamRef` ownership at construction.
+The stream borrows its source element only for the document-bounded read
+lifecycle; a zero-length decode returns an empty reference and releases the
+candidate automatically, while a successful candidate is returned through the
+same intrusive owner. Document coverage reads the decoded payload and repeats
+both successful publication and empty-candidate rollback across two documents.

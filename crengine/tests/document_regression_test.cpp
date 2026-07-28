@@ -38,6 +38,8 @@ static std::unique_ptr<ldomDocument> parseFixture() {
             " data-owner-8=\"eight\">"
             "Alpha Needle middle needle omega.</p>"
             "</section></body>"
+            "<binary id=\"base64-owner\">T3duZWQ=</binary>"
+            "<binary id=\"base64-empty\"/>"
             "</FictionBook>";
     LVStreamRef stream = LVCreateMemoryStream(
             const_cast<char *>(fixture),
@@ -46,6 +48,32 @@ static std::unique_ptr<ldomDocument> parseFixture() {
             LVOM_READ);
     return std::unique_ptr<ldomDocument>(LVParseXMLStream(
             stream, fb2_elem_table, fb2_attr_table, fb2_ns_table));
+}
+
+static int testBase64StreamOwnership(ldomDocument *document) {
+    ldomNode *encoded = document->getElementById(U"base64-owner");
+    ldomNode *empty = document->getElementById(U"base64-empty");
+    if (encoded == NULL || empty == NULL)
+        return fail("base64 stream owner fixtures did not parse");
+
+    for (int lifecycle = 0; lifecycle < 2; lifecycle++) {
+        LVStreamRef stream = encoded->createBase64Stream();
+        if (stream.isNull() || stream->GetSize() != 5)
+            return fail("base64 stream owner candidate was not published");
+
+        char decoded[6] = {};
+        lvsize_t bytesRead = 0;
+        if (stream->Read(decoded, 5, &bytesRead) != LVERR_OK
+                || bytesRead != 5
+                || std::string(decoded, decoded + bytesRead) != "Owned") {
+            return fail("base64 stream owner changed decoded content");
+        }
+        stream.Clear();
+
+        if (!empty->createBase64Stream().isNull())
+            return fail("empty base64 stream candidate was published");
+    }
+    return 0;
 }
 
 struct DocumentSnapshot {
@@ -1123,6 +1151,10 @@ int main() {
     DocumentSnapshot secondSnapshot;
     if (snapshotDocument(second.get(), secondSnapshot) != 0)
         return 1;
+    if (testBase64StreamOwnership(first.get()) != 0
+            || testBase64StreamOwnership(second.get()) != 0) {
+        return 1;
+    }
 
     if (firstSnapshot.firstPosition != secondSnapshot.firstPosition
             || firstSnapshot.secondPosition

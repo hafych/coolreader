@@ -169,7 +169,7 @@ DRM или ограничений доступа, подбор/получени�
   autoclose-rule tables, lazy FreeType glyph-metric page ownership и shared
   XPointer state ownership, scoped CSS pseudo-element style owners и
   vector-backed mutable DOM attributes, а также central RAII ownership для
-  parser element-writer/foster graphs.
+  parser element-writer/foster graphs и DOM-backed base64 stream candidates.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

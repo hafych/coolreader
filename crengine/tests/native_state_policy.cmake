@@ -6367,3 +6367,35 @@ forbid_source_text(
   "delete ldomElementWriter"
   "DOM parser documentation must not describe manual frame teardown"
 )
+
+# --- DOM base64 stream candidate ownership ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "LVStreamRef stream( new LVBase64NodeStream( this ) )"
+  "DOM base64 stream candidates must enter scoped ownership immediately"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "return stream"
+  "DOM base64 stream publication must retain the intrusive owner"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "base64 stream owner candidate was not published"
+  "DOM base64 stream ownership must retain successful publication coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "empty base64 stream candidate was published"
+  "DOM base64 stream ownership must retain empty-candidate rollback coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LVStream * stream = new LVBase64NodeStream"
+  "DOM base64 stream candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete stream"
+  "DOM base64 stream candidate teardown must remain automatic"
+)
