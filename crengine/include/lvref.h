@@ -33,6 +33,11 @@
 #include "crlocks.h"
 #include "lvautoptr.h"
 
+#include <climits>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+
 /// Memory manager pool for ref counting
 /**
     For fast and efficient allocation of ref counter structures
@@ -519,44 +524,56 @@ public:
 template <typename T >
 class LVRefVec
 {
-    LVRef<T> * _array;
+    std::unique_ptr<LVRef<T>[]> _array;
     int _size;
     int _count;
+
+    void swap(LVRefVec &vector)
+    {
+        _array.swap(vector._array);
+        std::swap(_size, vector._size);
+        std::swap(_count, vector._count);
+    }
+
 public:
     /// default constructor
-    LVRefVec() : _array(NULL), _size(0), _count(0) {}
+    LVRefVec() : _array(), _size(0), _count(0) {}
+
     /// creates array of given size
     LVRefVec( int len, LVRef<T> value )
+        : _array(), _size(0), _count(0)
     {
+        if (len <= 0)
+            return;
+        std::unique_ptr<LVRef<T>[]> storage(new LVRef<T>[len]);
+        for (int i = 0; i < len; ++i)
+            storage[i] = value;
+        _array = std::move(storage);
         _size = _count = len;
-        _array = new LVRef<T>[_size];
-        for (int i=0; i<_count; i++)
-            _array[i] = value;
     }
+
     LVRefVec( const LVRefVec & v )
+        : _array(), _size(0), _count(0)
     {
+        if (v._count <= 0)
+            return;
+        std::unique_ptr<LVRef<T>[]> storage(
+                new LVRef<T>[v._count]);
+        for (int i = 0; i < v._count; ++i)
+            storage[i] = v._array[i];
+        _array = std::move(storage);
         _size = _count = v._count;
-        if ( _size ) {
-            _array = new LVRef<T>[_size];
-            for (int i=0; i<_count; i++)
-                _array[i] = v._array[i];
-        } else {
-            _array = NULL;
-        }
     }
+
     LVRefVec & operator = ( const LVRefVec & v )
     {
-        clear();
-        _size = _count = v._count;
-        if ( _size ) {
-            _array = new LVRef<T>[_size];
-            for (int i=0; i<_count; i++)
-                _array[i] = v._array[i];
-        } else {
-            _array = NULL;
+        if (this != &v) {
+            LVRefVec copy(v);
+            swap(copy);
         }
         return *this;
     }
+
     /// retrieves item from specified position
     LVRef<T> operator [] ( int pos ) const { return _array[pos]; }
     /// retrieves item reference from specified position
@@ -564,23 +581,28 @@ public:
     /// ensures that size of vector is not less than specified value
     void reserve( int size )
     {
-        if ( size > _size )
-        {
-            LVRef<T> * newarray = new LVRef<T>[ size ];
-            for ( int i=0; i<_size; i++ )
-                newarray[ i ] = _array[ i ];
-            if ( _array )
-                delete [] _array;
-            _array = newarray;
-            _size = size;
-        }
+        if (size <= _size)
+            return;
+        std::unique_ptr<LVRef<T>[]> storage(new LVRef<T>[size]);
+        for (int i = 0; i < _count; ++i)
+            storage[i] = _array[i];
+        _array = std::move(storage);
+        _size = size;
     }
+
     /// sets item by index (extends vector if necessary)
     void set( int index, LVRef<T> item )
     {
-        reserve( index );
+        if (index < 0)
+            return;
+        if (index == INT_MAX)
+            throw std::length_error("LVRefVec index overflow");
+        reserve(index + 1);
         _array[index] = item;
+        if (index >= _count)
+            _count = index + 1;
     }
+
     /// returns size of buffer
     int size() const { return _size; }
     /// returns number of items in vector
@@ -590,47 +612,43 @@ public:
     /// clears all items
     void clear()
     {
-        if (_array)
-        {
-            delete [] _array;
-            _array = NULL;
-        }
+        _array.reset();
         _size = 0;
         _count = 0;
     }
+
     /// copies range to beginning of array
     void trim( int pos, int count, int reserved )
     {
-        if ( pos<0 || count<=0 || pos+count > _count )
-            throw;
-        int i;
+        if (pos < 0 || count < 0 || reserved < 0
+                || pos > _count || count > _count - pos)
+            return;
         int new_sz = count;
         if (new_sz < reserved)
             new_sz = reserved;
-        T* new_array = (T*)malloc( new_sz * sizeof( T ) );
-        if (_array)
-        {
-            for ( i=0; i<count; i++ )
-            {
-                new_array[i] = _array[ pos + i ];
-            }
-            free( _array );
+        std::unique_ptr<LVRef<T>[]> storage;
+        if (new_sz > 0) {
+            storage.reset(new LVRef<T>[new_sz]);
+            for (int i = 0; i < count; ++i)
+                storage[i] = _array[pos + i];
         }
-        _array = new_array;
+        _array = std::move(storage);
         _count = count;
         _size = new_sz;
     }
+
     /// removes several items from vector
     void erase( int pos, int count )
     {
-        if ( pos<0 || count<=0 || pos+count > _count )
-            throw;
-        int i;
-        for (i=pos+count; i<_count; i++)
-        {
-            _array[i-count] = _array[i];
-        }
+        if (pos < 0 || count <= 0
+                || pos > _count || count > _count - pos)
+            return;
+        const int oldCount = _count;
+        for (int i = pos + count; i < oldCount; ++i)
+            _array[i - count] = _array[i];
         _count -= count;
+        for (int i = _count; i < oldCount; ++i)
+            _array[i] = LVRef<T>();
     }
 
     /// adds new item to end of vector
@@ -641,23 +659,33 @@ public:
 
     void add( LVRefVec<T> & list )
     {
-        for ( int i=0; i<list.length(); i++ )
-            add( list[i] );
+        append(list.ptr(), list.length());
     }
 
     /// adds new item to end of vector
     void append( const LVRef<T> * items, int count )
     {
-        reserve( _count + count );
-        for (int i=0; i<count; i++)
-            _array[ _count+i ] = items[i];
+        if (!items || count <= 0)
+            return;
+        if (_count > INT_MAX - count)
+            throw std::length_error("LVRefVec append overflow");
+        std::unique_ptr<LVRef<T>[]> snapshot(new LVRef<T>[count]);
+        for (int i = 0; i < count; ++i)
+            snapshot[i] = items[i];
+        reserve(_count + count);
+        for (int i = 0; i < count; ++i)
+            _array[_count + i] = snapshot[i];
         _count += count;
     }
     
     LVRef<T> * addSpace( int count )
     {
-        reserve( _count + count );
-        LVRef<T> * ptr = _array + _count;
+        if (count <= 0)
+            return _array ? _array.get() + _count : NULL;
+        if (_count > INT_MAX - count)
+            throw std::length_error("LVRefVec growth overflow");
+        reserve(_count + count);
+        LVRef<T> * ptr = _array.get() + _count;
         _count += count;
         return ptr;
     }
@@ -667,17 +695,27 @@ public:
     {
         if (pos<0 || pos>_count)
             pos = _count;
-        if ( _count >= _size )
-            reserve( _count * 3 / 2  + 8 );
+        if (_count == INT_MAX)
+            throw std::length_error("LVRefVec insertion overflow");
+        if (_count >= _size) {
+            const long long desiredSize =
+                    static_cast<long long>(_count) * 3 / 2 + 8;
+            int grownSize = desiredSize > INT_MAX
+                    ? INT_MAX
+                    : static_cast<int>(desiredSize);
+            if (grownSize < _count + 1)
+                grownSize = _count + 1;
+            reserve(grownSize);
+        }
         for (int i=_count; i>pos; --i)
             _array[i] = _array[i-1];
         _array[pos] = item;
         _count++;
     }
     /// returns array pointer
-    LVRef<T> * ptr() { return _array; }
+    LVRef<T> * ptr() { return _array.get(); }
     /// destructor
-    ~LVRefVec() { clear(); }
+    ~LVRefVec() = default;
 };
 
 #if 0

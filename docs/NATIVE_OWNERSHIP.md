@@ -173,6 +173,13 @@ growth, sparse `set()` value-initializes gaps, and erase/reset clear inactive
 slots so reference-counted values are released while retained capacity remains
 reusable.
 
+`LVRefVec` owns its contiguous slots through `unique_ptr<LVRef<T>[]>`.
+Copy/assignment and reserve publish only complete candidate arrays, while
+append snapshots aliased ranges so self-add remains finite across growth.
+Sparse `set()` allocates the addressed slot, trim constructs real reference
+objects instead of writing into `malloc` bytes, and erase clears inactive slots
+immediately. Its public icon/battery-facing API remains unchanged.
+
 `LVRefCache` and `LVIndexedRefCache` own bucket roots and collision links
 through vectors of `unique_ptr`. Collision teardown unlinks iteratively, while
 the indexed cache keeps only non-owning node views in vector-backed index

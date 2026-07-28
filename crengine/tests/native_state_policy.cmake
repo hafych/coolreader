@@ -30,6 +30,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lstridmap.h" NAME_ID_MAP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lstridmap.cpp" NAME_ID_MAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvhashtable.h" HASH_TABLE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvarray.h" VALUE_ARRAY_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvref.h" REF_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrefcache.h" REF_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
@@ -1434,6 +1435,58 @@ forbid_source_text(
   "${VALUE_ARRAY_HEADER}"
   "delete [] _array"
   "value-array teardown must not use manual delete[]"
+)
+
+# --- reference-vector backing storage and alias safety ---
+require_source_text(
+  "${REF_HEADER}"
+  "std::unique_ptr<LVRef<T>[]> _array"
+  "reference vectors must use RAII backing storage"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "std::unique_ptr<LVRef<T>[]> storage(new LVRef<T>[size])"
+  "reference-vector growth must build scoped candidate storage"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "std::unique_ptr<LVRef<T>[]> snapshot(new LVRef<T>[count])"
+  "reference-vector aliased appends must snapshot their source"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "reserve(index + 1)"
+  "reference-vector set must reserve the indexed slot"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "_array[i] = LVRef<T>();"
+  "reference-vector erase must release inactive values"
+)
+forbid_source_text(
+  "${REF_HEADER}"
+  "LVRef<T> * _array"
+  "reference vectors must not own a raw backing array"
+)
+forbid_source_text(
+  "${REF_HEADER}"
+  "LVRef<T> * newarray"
+  "reference-vector growth must not use raw candidate storage"
+)
+forbid_source_text(
+  "${REF_HEADER}"
+  "T* new_array = (T*)malloc"
+  "reference-vector trim must not allocate unconstructed objects"
+)
+forbid_source_text(
+  "${REF_HEADER}"
+  "delete [] _array"
+  "reference-vector teardown must not use manual delete[]"
+)
+forbid_source_text(
+  "${REF_HEADER}"
+  "free( _array )"
+  "reference-vector teardown must not mix allocation families"
 )
 
 # --- reference-cache bucket, index and export ownership ---

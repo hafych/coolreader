@@ -226,6 +226,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   `unique_ptr<T[]>`; reserve/copy failures preserve committed contents,
   self-appends remain valid across growth, sparse slots are initialized and
   erased reference values are released without discarding reserved capacity.
+- Native reference vectors now own constructed `LVRef` slots through
+  `unique_ptr<LVRef<T>[]>`. Copy, growth, self-append, sparse set, trim and
+  erase no longer depend on raw arrays, mixed allocation families or stale
+  inactive references.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is

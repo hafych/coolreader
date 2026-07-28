@@ -1951,6 +1951,97 @@ static int testValueArrayOwnership() {
     return 0;
 }
 
+static int testReferenceVectorOwnership() {
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("reference vector fixture started with live values");
+    {
+        LVRefVec<RefCacheTestValue> values;
+        values.add(RefCacheTestRef(new RefCacheTestValue(11)));
+        values.add(RefCacheTestRef(new RefCacheTestValue(22)));
+        values.append(values.ptr(), values.length());
+        values.add(values);
+        if (values.length() != 8
+                || values[0].isNull() || values[0]->value() != 11
+                || values[1].isNull() || values[1]->value() != 22
+                || values[4].get() != values[0].get()
+                || values[5].get() != values[1].get()
+                || RefCacheTestValue::liveCount() != 2)
+            return fail("reference vector aliased append lost values");
+
+        LVRefVec<RefCacheTestValue> copied(values);
+        LVRefVec<RefCacheTestValue> assigned;
+        assigned = values;
+        LVRefVec<RefCacheTestValue> *assignedAlias = &assigned;
+        assigned = *assignedAlias;
+        if (copied.ptr() == values.ptr()
+                || assigned.ptr() == values.ptr()
+                || copied[0].get() != values[0].get()
+                || assigned[1].get() != values[1].get())
+            return fail("reference vector copy shared backing storage");
+        values.clear();
+        if (RefCacheTestValue::liveCount() != 2
+                || copied.length() != 8 || assigned.length() != 8)
+            return fail("reference vector clear invalidated independent copies");
+    }
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("reference vector copies leaked referenced values");
+
+    {
+        LVRefVec<RefCacheTestValue> values;
+        values.add(RefCacheTestRef(new RefCacheTestValue(31)));
+        values.add(RefCacheTestRef(new RefCacheTestValue(32)));
+        const int retainedSize = values.size();
+        values.erase(0, 1);
+        if (values.length() != 1 || values.size() != retainedSize
+                || values[0].isNull() || values[0]->value() != 32
+                || RefCacheTestValue::liveCount() != 1)
+            return fail("reference vector erase retained an inactive value");
+
+        values.set(3, RefCacheTestRef(new RefCacheTestValue(33)));
+        if (values.length() != 4
+                || !values[1].isNull() || !values[2].isNull()
+                || values[3].isNull() || values[3]->value() != 33)
+            return fail("reference vector sparse set did not initialize gaps");
+        values.trim(3, 1, retainedSize);
+        if (values.length() != 1 || values.size() != retainedSize
+                || values[0].isNull() || values[0]->value() != 33
+                || RefCacheTestValue::liveCount() != 1)
+            return fail("reference vector trim corrupted reference storage");
+        values.erase(-1, 1);
+        values.trim(-1, 1, 0);
+        if (values.length() != 1
+                || values[0].isNull() || values[0]->value() != 33)
+            return fail("reference vector invalid range changed state");
+        values.clear();
+        if (RefCacheTestValue::liveCount() != 0)
+            return fail("reference vector clear retained a value");
+    }
+
+    {
+        LVRefVec<RefCacheTestValue> values;
+        RefCacheTestRef *slots = values.addSpace(2);
+        slots[1] = RefCacheTestRef(new RefCacheTestValue(41));
+        if (values.length() != 2 || !values[0].isNull()
+                || values[1].isNull() || values[1]->value() != 41)
+            return fail("reference vector addSpace did not publish null slots");
+    }
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("reference vector addSpace leaked a value");
+
+    {
+        RefCacheTestRef shared(new RefCacheTestValue(51));
+        LVRefVec<RefCacheTestValue> filled(3, shared);
+        shared.Clear();
+        if (filled.length() != 3
+                || filled[0].get() != filled[2].get()
+                || RefCacheTestValue::liveCount() != 1)
+            return fail("reference vector fill construction lost references");
+    }
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("reference vector fill storage leaked a value");
+    return 0;
+}
+
 static int testReferenceCacheOwnership() {
     if (RefCacheTestValue::liveCount() != 0)
         return fail("reference cache fixture started with live values");
@@ -3921,6 +4012,8 @@ int main() {
     if (testHashTableOwnership() != 0)
         return 1;
     if (testValueArrayOwnership() != 0)
+        return 1;
+    if (testReferenceVectorOwnership() != 0)
         return 1;
     if (testReferenceCacheOwnership() != 0)
         return 1;
