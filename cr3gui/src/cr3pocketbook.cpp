@@ -25,6 +25,7 @@
 
 #include <crengine.h>
 #include <crgui.h>
+#include <memory>
 #include "viewdlg.h"
 #include "cr3main.h"
 #include "numedit.h"
@@ -2373,13 +2374,13 @@ int InitDoc(const char *exename, char *fileName)
             CRLog::info("Current language is %s, looking for translation file", lang);
             lString16 mofilename = USERDATA"/share/cr3/i18n/" + lString16(lang) + ".mo";
             lString16 mofilename2 = USERDATA2"/share/cr3/i18n/" + lString16(lang) + ".mo";
-            CRMoFileTranslator * t = new CRMoFileTranslator();
+            std::unique_ptr<CRMoFileTranslator> t(
+                    new CRMoFileTranslator());
             if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
                 CRLog::info("translation file %s.mo found", lang);
-                CRI18NTranslator::setTranslator( t );
+                CRI18NTranslator::setTranslator( t.release() );
             } else {
                 CRLog::info("translation file %s.mo not found", lang);
-                delete t;
             }
             sprintf( manual_file, USERDATA"/share/cr3/manual/cr3-manual-%s.fb2", lang );
             if ( !LVFileExists( lString16(manual_file).c_str() ) )

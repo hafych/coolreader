@@ -15,6 +15,12 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/wolutil.cpp" WOL_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/wolutil.h" WOL_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/cri18n.h" I18N_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/cri18n.cpp" I18N_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3jinke.cpp" JINKE_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3nanox.cpp" NANOX_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3pocketbook.cpp" POCKETBOOK_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3win.cpp" WIN_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrend.h" RENDER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hyphman.cpp" HYPH_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
@@ -3459,4 +3465,121 @@ forbid_source_text(
   "${HISTORY_SOURCE}"
   "ChangeInfo * ci = new"
   "change record factory rollback must remain automatic"
+)
+
+# --- global i18n translator ownership and publication ---
+require_source_text(
+  "${I18N_HEADER}"
+  "static std::unique_ptr<CRI18NTranslator> _translator"
+  "the active translator slot must own its object explicitly"
+)
+require_source_text(
+  "${I18N_HEADER}"
+  "static std::unique_ptr<CRI18NTranslator> _defTranslator"
+  "the fallback translator slot must own its object explicitly"
+)
+require_source_text(
+  "${I18N_SOURCE}"
+  "_translator.reset(translator)"
+  "active translator replacement must release the previous owner automatically"
+)
+require_source_text(
+  "${I18N_SOURCE}"
+  "_defTranslator.reset(translator)"
+  "fallback translator replacement must release the previous owner automatically"
+)
+require_source_text(
+  "${I18N_SOURCE}"
+  "_translator = std::move(_defTranslator)"
+  "moving a fallback translator active must preserve exclusive ownership"
+)
+require_source_text(
+  "${I18N_SOURCE}"
+  "_defTranslator = std::move(_translator)"
+  "moving an active translator to fallback must preserve exclusive ownership"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "std::unique_ptr<CRMoFileTranslator> t"
+  "Jinke translator candidates must remain scope-owned until publication"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "setTranslator( t.release() )"
+  "Jinke translation ownership must transfer only at the global slot boundary"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "std::unique_ptr<CRMoFileTranslator> t"
+  "NanoX translator candidates must remain scope-owned until publication"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "setTranslator( t.release() )"
+  "NanoX translation ownership must transfer only at the global slot boundary"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<CRMoFileTranslator> t"
+  "PocketBook translator candidates must remain scope-owned until publication"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "setTranslator( t.release() )"
+  "PocketBook translation ownership must transfer only at the global slot boundary"
+)
+require_source_text(
+  "${WIN_GUI_SOURCE}"
+  "std::unique_ptr<CRMoFileTranslator> translator"
+  "Windows translator candidates must remain scope-owned until publication"
+)
+require_source_text(
+  "${WIN_GUI_SOURCE}"
+  "setTranslator( translator.release() )"
+  "Windows translation ownership must transfer only at the global slot boundary"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testTranslatorOwnerLifecycle()"
+  "translator slot ownership must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "translator slot transfer duplicated exclusive ownership"
+  "translator regression must retain cross-slot ownership coverage"
+)
+forbid_source_text(
+  "${I18N_HEADER}"
+  "static CRI18NTranslator * _translator"
+  "the active translator slot must not own a raw pointer"
+)
+forbid_source_text(
+  "${I18N_HEADER}"
+  "static CRI18NTranslator * _defTranslator"
+  "the fallback translator slot must not own a raw pointer"
+)
+forbid_source_text(
+  "${I18N_SOURCE}"
+  "delete _translator"
+  "active translator teardown must remain automatic"
+)
+forbid_source_text(
+  "${I18N_SOURCE}"
+  "delete _defTranslator"
+  "fallback translator teardown must remain automatic"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "delete t"
+  "Jinke translator failure cleanup must remain automatic"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "delete t"
+  "NanoX translator failure cleanup must remain automatic"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "delete t"
+  "PocketBook translator failure cleanup must remain automatic"
 )

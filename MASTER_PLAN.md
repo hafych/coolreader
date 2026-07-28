@@ -140,8 +140,8 @@ DRM или ограничений доступа, подбор/получени�
   buckets/index exports and bounded map slots, longjmp-safe PNG rows/pixels,
   JPEG pool/error lifecycle, draw mark list, history XML/file/bookmark parse
   candidates, transactional snapshot publication и synchronization-record
-  bookmark ownership. Остальные участки мигрируются отдельными
-  bounded-пакетами.
+  bookmark ownership, global i18n translator slots и GUI-side translation
+  candidates. Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

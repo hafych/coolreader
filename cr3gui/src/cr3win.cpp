@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <memory>
 //#include <Ewl.h>
 #include <crengine.h>
 #include <crgui.h>
@@ -401,9 +402,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	lString8 exedir8 = UnicodeToUtf8( exedir );
 	CRLog::debug("exedir=%s", exedir8.c_str());
 
-	CRMoFileTranslator * translator = new CRMoFileTranslator();
+	std::unique_ptr<CRMoFileTranslator> translator(
+			new CRMoFileTranslator());
     translator->openMoFile(exedir + "/po/ru.mo");
-	CRI18NTranslator::setTranslator( translator );
+	CRI18NTranslator::setTranslator( translator.release() );
 
 
 	lChar16 sysdir[MAX_PATH+1];

@@ -33,6 +33,13 @@ The first migrated path is `CRIniFileTranslator`: its temporary file buffer is
 owned by `std::vector`, and its factory uses `std::unique_ptr` until the legacy
 raw-pointer return transfers ownership to the caller.
 
+The active and fallback `CRI18NTranslator` slots are exclusive `unique_ptr`
+owners. Their raw setters remain explicit adoption boundaries, accept `NULL`
+as teardown, and move an already published translator between slots rather
+than duplicating ownership. Every GUI producer keeps a `.mo` translator in a
+scoped candidate until loading succeeds and publication releases it to the
+selected slot; failed candidates now clean up without a manual `delete`.
+
 `HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
 transfer boundary, while `getDictList()` returns a non-owning pointer valid only

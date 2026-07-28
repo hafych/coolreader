@@ -35,16 +35,20 @@
 #include "lvptrvec.h"
 #include "lvhashtable.h"
 
+#include <memory>
+
 /// i18n interface
 class CRI18NTranslator
 {
 protected:
-	static CRI18NTranslator * _translator;
-	static CRI18NTranslator * _defTranslator;
+	static std::unique_ptr<CRI18NTranslator> _translator;
+	static std::unique_ptr<CRI18NTranslator> _defTranslator;
 	virtual const char * getText( const char * src ) = 0;
 public:
 	virtual ~CRI18NTranslator() { }
+	/// Transfers exclusive ownership; NULL clears the active translator.
 	static void setTranslator( CRI18NTranslator * translator );
+	/// Transfers exclusive ownership; NULL clears the fallback translator.
 	static void setDefTranslator( CRI18NTranslator * translator );
     static const char * translate( const char * src );
     static const lString8 translate8( const char * src );

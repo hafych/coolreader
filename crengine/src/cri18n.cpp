@@ -31,23 +31,32 @@
 #include "../include/lvstring8collection.h"
 
 #include <memory>
+#include <utility>
 #include <vector>
 
-CRI18NTranslator * CRI18NTranslator::_translator = NULL;
-CRI18NTranslator * CRI18NTranslator::_defTranslator = NULL;
+std::unique_ptr<CRI18NTranslator> CRI18NTranslator::_translator;
+std::unique_ptr<CRI18NTranslator> CRI18NTranslator::_defTranslator;
 
 void CRI18NTranslator::setDefTranslator( CRI18NTranslator * translator )
 {
-	if ( _defTranslator != NULL )
-		delete _defTranslator;
-	_defTranslator = translator;
+	if ( _defTranslator.get() == translator )
+		return;
+	if ( _translator.get() == translator ) {
+		_defTranslator = std::move(_translator);
+		return;
+	}
+	_defTranslator.reset(translator);
 }
 
 void CRI18NTranslator::setTranslator( CRI18NTranslator * translator )
 {
-	if ( _translator != NULL )
-		delete _translator;
-	_translator = translator;
+	if ( _translator.get() == translator )
+		return;
+	if ( _defTranslator.get() == translator ) {
+		_translator = std::move(_defTranslator);
+		return;
+	}
+	_translator.reset(translator);
 }
 
 const char * CRI18NTranslator::translate( const char * src )

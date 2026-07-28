@@ -1438,6 +1438,101 @@ static int testIniTranslatorOwnership() {
     return 0;
 }
 
+class CountingI18NTranslator : public CRI18NTranslator {
+private:
+    lString8 _source;
+    lString8 _translation;
+    static int _destroyed;
+
+protected:
+    const char *getText(const char *source) override {
+        if (_source == source)
+            return _translation.c_str();
+        return "";
+    }
+
+public:
+    CountingI18NTranslator(const char *source, const char *translation)
+        : _source(source), _translation(translation)
+    {
+    }
+
+    ~CountingI18NTranslator() override {
+        ++_destroyed;
+    }
+
+    static int destroyed() {
+        return _destroyed;
+    }
+
+    static void reset() {
+        _destroyed = 0;
+    }
+};
+
+int CountingI18NTranslator::_destroyed = 0;
+
+static int testTranslatorOwnerLifecycle() {
+    CRI18NTranslator::setTranslator(NULL);
+    CRI18NTranslator::setDefTranslator(NULL);
+    CountingI18NTranslator::reset();
+
+    std::unique_ptr<CountingI18NTranslator> fallback(
+            new CountingI18NTranslator("fallback", "from-default"));
+    CountingI18NTranslator *fallbackView = fallback.get();
+    CRI18NTranslator::setDefTranslator(fallback.release());
+
+    std::unique_ptr<CountingI18NTranslator> active(
+            new CountingI18NTranslator("active", "from-active"));
+    CountingI18NTranslator *activeView = active.get();
+    CRI18NTranslator::setTranslator(active.release());
+    if (std::strcmp(CRI18NTranslator::translate("active"), "from-active")
+                    != 0
+            || std::strcmp(
+                    CRI18NTranslator::translate("fallback"),
+                    "from-default") != 0
+            || std::strcmp(CRI18NTranslator::translate("missing"), "missing")
+                    != 0)
+        return fail("translation owner graph did not preserve fallback order");
+
+    CRI18NTranslator::setTranslator(activeView);
+    if (CountingI18NTranslator::destroyed() != 0
+            || std::strcmp(
+                    CRI18NTranslator::translate("active"),
+                    "from-active") != 0)
+        return fail("idempotent translator publication destroyed its owner");
+
+    CRI18NTranslator::setTranslator(
+            new CountingI18NTranslator("replacement", "replaced"));
+    if (CountingI18NTranslator::destroyed() != 1
+            || std::strcmp(
+                    CRI18NTranslator::translate("replacement"),
+                    "replaced") != 0)
+        return fail("translator replacement did not release the old owner");
+
+    CRI18NTranslator::setTranslator(fallbackView);
+    if (CountingI18NTranslator::destroyed() != 2
+            || std::strcmp(
+                    CRI18NTranslator::translate("fallback"),
+                    "from-default") != 0
+            || std::strcmp(CRI18NTranslator::translate("active"), "active")
+                    != 0)
+        return fail("translator slot transfer duplicated exclusive ownership");
+
+    CRI18NTranslator::setTranslator(NULL);
+    std::unique_ptr<CountingI18NTranslator> secondFallback(
+            new CountingI18NTranslator("second", "second-default"));
+    CountingI18NTranslator *secondFallbackView = secondFallback.get();
+    CRI18NTranslator::setDefTranslator(secondFallback.release());
+    CRI18NTranslator::setDefTranslator(secondFallbackView);
+    if (CountingI18NTranslator::destroyed() != 3)
+        return fail("idempotent fallback publication destroyed its owner");
+    CRI18NTranslator::setDefTranslator(NULL);
+    if (CountingI18NTranslator::destroyed() != 4)
+        return fail("translator clear did not release both owner slots");
+    return 0;
+}
+
 struct ZipEntrySpec {
     std::string name;
     std::uint32_t unpackedSize;
@@ -5171,6 +5266,8 @@ int main() {
     if (testDirectoryContainerOwnership() != 0)
         return 1;
     if (testIniTranslatorOwnership() != 0)
+        return 1;
+    if (testTranslatorOwnerLifecycle() != 0)
         return 1;
     if (testParserOwnedBuffers() != 0)
         return 1;
