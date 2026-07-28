@@ -8948,6 +8948,46 @@ void ldomElementWriter::addAttribute( lUInt16 nsid, lUInt16 id, const lChar32 * 
 #endif
 }
 
+ldomElementWriter *ldomDocumentWriter::pushElementWriter(
+        lUInt16 nsid, lUInt16 id, ldomElementWriter *parent,
+        bool insertBeforeLastChild)
+{
+    std::unique_ptr<ldomElementWriter> candidate(
+            new ldomElementWriter(
+                    _document, nsid, id, parent,
+                    insertBeforeLastChild));
+    ldomElementWriter *writer = candidate.get();
+    _elementWriters.push_back(std::move(candidate));
+    return writer;
+}
+
+void ldomDocumentWriter::releaseElementWriter(
+        ldomElementWriter *writer)
+{
+    for (std::vector<std::unique_ptr<ldomElementWriter> >::iterator
+            item = _elementWriters.begin();
+            item != _elementWriters.end(); ++item) {
+        if (item->get() == writer) {
+            _elementWriters.erase(item);
+            return;
+        }
+    }
+    crFatalError(
+            128, "ldomDocumentWriter: releasing an unowned writer");
+}
+
+void ldomDocumentWriter::closeElementWriters()
+{
+    while (_currNode)
+        _currNode = pop(
+                _currNode, _currNode->getElement()->getNodeId());
+    while (!_elementWriters.empty()) {
+        ldomElementWriter *writer = _elementWriters.back().get();
+        ElementCloseHandler(writer->getElement());
+        releaseElementWriter(writer);
+    }
+}
+
 ldomElementWriter * ldomDocumentWriter::pop( ldomElementWriter * obj, lUInt16 id )
 {
     // First check if there's an element with provided id in the stack
@@ -8974,7 +9014,7 @@ ldomElementWriter * ldomDocumentWriter::pop( ldomElementWriter * obj, lUInt16 id
         tmp2 = tmp->_parent;
         bool stop = (tmp->getElement()->getNodeId() == id);
         ElementCloseHandler( tmp->getElement() );
-        delete tmp;
+        releaseElementWriter(tmp);
         if ( stop )
             return tmp2;
     }
@@ -9022,14 +9062,14 @@ void ldomDocumentWriter::OnStart(LVFileFormatParser * parser)
         //CRLog::trace( "ldomDocumentWriter() : header only, tag id=%d", _stopTagId );
     }
     LVXMLParserCallback::OnStart( parser );
-    _currNode = new ldomElementWriter(_document, 0, 0, NULL);
+    closeElementWriters();
+    _currNode = pushElementWriter(0, 0, NULL);
 }
 
 void ldomDocumentWriter::OnStop()
 {
     //logfile << "ldomDocumentWriter::OnStop()\n";
-    while (_currNode)
-        _currNode = pop( _currNode, _currNode->getElement()->getNodeId() );
+    closeElementWriters();
 }
 
 int ldomDocumentWriter::GetCurrentElementDepth() const
@@ -9162,7 +9202,7 @@ ldomNode * ldomDocumentWriter::OnTagOpen( const lChar32 * nsname, const lChar32 
         //CRLog::trace("stop tag found, stopping...");
     //    _parser->Stop();
     //}
-    _currNode = new ldomElementWriter( _document, nsid, id, _currNode );
+    _currNode = pushElementWriter(nsid, id, _currNode);
     _flags = _currNode->getFlags();
     //logfile << " !o!\n";
     //return _currNode->getElement();
@@ -9171,8 +9211,7 @@ ldomNode * ldomDocumentWriter::OnTagOpen( const lChar32 * nsname, const lChar32 
 
 ldomDocumentWriter::~ldomDocumentWriter()
 {
-    while (_currNode)
-        _currNode = pop( _currNode, _currNode->getElement()->getNodeId() );
+    closeElementWriters();
 #if BUILD_LITE!=1
     if ( _document->isDefStyleSet() ) {
         if ( _popStyleOnFinish )
@@ -14907,7 +14946,7 @@ HTML_SCOPE_TABLE_OPENING_TD_TH, // = SCOPE_TABLE: close any TD/TH
 
 // Boxing elements (id < el_DocFragment) (and DocFragment itself,
 // not used with the HTMLParser) are normally added by crengine
-// after "delete ldomElementWriter" (which calls onBodyExit()
+// after releasing ldomElementWriter ownership (which calls onBodyExit()
 // which calls initNodeRendMethod()), so after we have closed
 // and pass by the element.
 // So, we shouldn't meet any in popUpTo() and don't have to wonder
@@ -15080,7 +15119,7 @@ lUInt16 ldomDocumentWriterFilter::popUpTo( ldomElementWriter * target, lUInt16 t
                 _currNode = _currNode->_parent;
             }
             ElementCloseHandler( tmp->getElement() );
-            delete tmp;
+            releaseElementWriter(tmp);
             if ( done )
                 break;
         }
@@ -15348,7 +15387,7 @@ bool ldomDocumentWriterFilter::AutoOpenClosePop( int step, lUInt16 tag_id )
         }
         else {
             // Boxing elements are normally added by crengine after
-            // "delete ldomElementWriter" (which calls onBodyExit()
+            // releasing ldomElementWriter ownership (which calls onBodyExit()
             // which calls initNodeRendMethod()), so after we have
             // closed and pass by the element.
             // So, we shouldn't meet any.
@@ -15573,7 +15612,8 @@ ldomNode * ldomDocumentWriterFilter::OnTagOpen( const lChar32 * nsname, const lC
         _inHeadStyle = true;
     }
 
-    _currNode = new ldomElementWriter( _document, nsid, id, _currNode, insert_before_last_child );
+    _currNode = pushElementWriter(
+            nsid, id, _currNode, insert_before_last_child);
     _flags = _currNode->getFlags();
 
     if ( insert_before_last_child ) {
@@ -16020,6 +16060,14 @@ void ldomDocumentWriterFilter::OnText( const lChar32 * text, int len, lUInt32 fl
         }
     }
     //logfile << " !t!\n";
+}
+
+void ldomDocumentWriterFilter::OnStop()
+{
+    ldomDocumentWriter::OnStop();
+    _curNodeBeforeFostering = NULL;
+    _curFosteredNode = NULL;
+    _lastP = NULL;
 }
 
 ldomDocumentWriterFilter::ldomDocumentWriterFilter(ldomDocument * document, bool headerOnly, const char *** rules )

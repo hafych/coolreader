@@ -459,6 +459,50 @@ static int testLegacyAutoCloseRuleOwnership() {
     return 0;
 }
 
+static int testModernWriterStackOwnership() {
+    static const char fixture[] =
+            "<html><body>"
+            "<table id=\"writer-owner-table\"><tr>"
+            "<div id=\"writer-owner-foster\"><p>fostered tail</p>";
+    for (int iteration = 0; iteration < 2; ++iteration) {
+        LVStreamRef stream = LVCreateMemoryStream(
+                const_cast<char *>(fixture),
+                static_cast<int>(sizeof(fixture) - 1),
+                true, LVOM_READ);
+        std::unique_ptr<ldomDocument> document =
+                std::make_unique<ldomDocument>();
+        document->setDOMVersionRequested(gDOMVersionCurrent);
+        document->setDocFlags(0);
+        document->setNodeTypes(fb2_elem_table);
+        document->setAttributeTypes(fb2_attr_table);
+        document->setNameSpaceTypes(fb2_ns_table);
+        ldomDocumentWriterFilter writer(
+                document.get(), false, HTML_AUTOCLOSE_TABLE);
+        LVHTMLParser parser(stream, &writer);
+        if (!parser.CheckFormat() || !parser.Parse())
+            return fail("modern writer owner fixture did not parse");
+        if (writer.GetCurrentElementDepth() != -1)
+            return fail("modern writer owner stack did not drain at EOF");
+
+        ldomNode *table =
+                document->getElementById(U"writer-owner-table");
+        ldomNode *foster =
+                document->getElementById(U"writer-owner-foster");
+        if (!table || !foster)
+            return fail("modern writer owner drain lost generated nodes");
+        if (!table->isPersistent() || !foster->isPersistent())
+            return fail("modern writer owner drain left mutable nodes");
+        if (table->getParentNode() != foster->getParentNode())
+            return fail("modern writer owner drain changed foster parent");
+        if (foster->getNodeIndex() >= table->getNodeIndex())
+            return fail(
+                    "modern writer owner drain changed foster order");
+        if (foster->getText() != U"fostered tail")
+            return fail("modern writer owner drain changed foster text");
+    }
+    return 0;
+}
+
 static std::string createRenderedFixture() {
     std::string fixture =
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -1094,6 +1138,8 @@ int main() {
     if (testDomAttributeCollectionOwnership(first.get()) != 0)
         return 1;
     if (testLegacyAutoCloseRuleOwnership() != 0)
+        return 1;
+    if (testModernWriterStackOwnership() != 0)
         return 1;
     first.reset();
     second.reset();

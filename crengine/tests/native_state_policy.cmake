@@ -6285,3 +6285,85 @@ forbid_source_text(
   "free(_list)"
   "DOM mutable attribute teardown must remain automatic"
 )
+
+# --- DOM parser element-writer graph ownership ---
+require_source_text(
+  "${DOM_HEADER}"
+  "std::vector<std::unique_ptr<ldomElementWriter> > _elementWriters"
+  "DOM parser writer frames must use central RAII ownership"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "ldomElementWriter * _currNode; // borrowed from _elementWriters"
+  "DOM parser current frame must remain an explicit borrow"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "_parent; // borrowed from ldomDocumentWriter owner set"
+  "DOM parser parent links must remain explicit borrows"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<ldomElementWriter> candidate"
+  "DOM parser writer construction must remain scoped"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_elementWriters.push_back(std::move(candidate))"
+  "DOM parser writer publication must transfer ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "while (!_elementWriters.empty())"
+  "DOM parser teardown must drain detached foster frames"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "releaseElementWriter(tmp)"
+  "DOM parser pop paths must release through the owner set"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "ldomDocumentWriterFilter::OnStop()"
+  "DOM parser filter must clear foster borrows after owner teardown"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_curFosteredNode = NULL"
+  "DOM parser filter must not retain a released foster-frame borrow"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "ldomDocumentWriter::~ldomDocumentWriter()"
+  "DOM parser writer must retain a lifecycle destructor"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "modern writer owner stack did not drain at EOF"
+  "DOM parser ownership must retain unbalanced-EOF coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "modern writer owner drain changed foster order"
+  "DOM parser ownership must retain foster-order coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "modern writer owner drain left mutable nodes"
+  "DOM parser ownership must retain detached-frame finalization coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_currNode = new ldomElementWriter"
+  "DOM parser current frame must not receive a raw owner"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete tmp"
+  "DOM parser frame teardown must remain owner-managed"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete ldomElementWriter"
+  "DOM parser documentation must not describe manual frame teardown"
+)

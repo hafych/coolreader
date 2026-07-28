@@ -2634,8 +2634,8 @@ class ldomDocumentWriter;
 
 class ldomElementWriter
 {
-    ldomElementWriter * _parent;
-    ldomDocument * _document;
+    ldomElementWriter * _parent; // borrowed from ldomDocumentWriter owner set
+    ldomDocument * _document; // borrowed
 
     ldomNode * _element;
     LVTocItem * _tocItem;
@@ -2665,8 +2665,10 @@ class ldomElementWriter
     //lxmlElementWriter * pop( lUInt16 id );
 
     ldomElementWriter(ldomDocument * document, lUInt16 nsid, lUInt16 id, ldomElementWriter * parent, bool insert_before_last_child=false);
+public:
     ~ldomElementWriter();
 
+private:
     friend class ldomDocumentWriter;
     friend class ldomDocumentWriterFilter;
 #if MATHML_SUPPORT==1
@@ -2689,8 +2691,8 @@ class ldomDocumentWriter : public LVXMLParserCallback
 protected:
     //============================
     ldomDocument * _document;
-    //ldomElement * _currNode;
-    ldomElementWriter * _currNode;
+    std::vector<std::unique_ptr<ldomElementWriter> > _elementWriters;
+    ldomElementWriter * _currNode; // borrowed from _elementWriters
     bool _errFlag;
     bool _headerOnly;
     bool _popStyleOnFinish;
@@ -2703,6 +2705,11 @@ protected:
 #if MATHML_SUPPORT==1
     MathMLHelper _mathMLHelper;
 #endif
+    ldomElementWriter * pushElementWriter(
+            lUInt16 nsid, lUInt16 id, ldomElementWriter *parent,
+            bool insertBeforeLastChild=false);
+    void releaseElementWriter(ldomElementWriter *writer);
+    void closeElementWriters();
     virtual void ElementCloseHandler( ldomNode * node ) { node->persist(); }
 public:
     /// returns flags
@@ -2783,6 +2790,8 @@ protected:
     virtual void appendStyle( const lChar32 * style );
     virtual void setClass( const lChar32 * className, bool overrideExisting=false );
 public:
+    /// called on parsing end
+    virtual void OnStop();
     /// called on attribute
     virtual void OnAttribute( const lChar32 * nsname, const lChar32 * attrname, const lChar32 * attrvalue );
     /// called on opening tag

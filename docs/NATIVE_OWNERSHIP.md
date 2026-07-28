@@ -707,3 +707,12 @@ replacement borrow entries from that owner, while append stages a complete
 attribute before vector publication; collection teardown no longer pairs
 `realloc` with `free`. Document coverage verifies parsed values, replacement
 without duplication, append, and a mutable-to-persistent-to-mutable round trip.
+
+`ldomDocumentWriter` centrally owns every live `ldomElementWriter` frame in a
+`vector<unique_ptr<...>>`; current, parent, last-paragraph and foster-parent
+links are non-owning views. Normal pop paths erase through that owner set, and
+EOF/destruction additionally drains frames temporarily detached from the
+current chain by HTML foster parenting; filter shutdown then clears its foster
+and last-paragraph borrows. A modern malformed-HTML regression leaves both
+branches open at EOF and verifies finalization, foster order and repeatable
+teardown under sanitizers.
