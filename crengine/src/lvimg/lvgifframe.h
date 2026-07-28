@@ -26,6 +26,7 @@
 #if (USE_GIF==1)
 
 #include "lvtypes.h"
+#include <vector>
 
 class LVGifImageSource;
 class LVImageDecoderCallback;
@@ -42,9 +43,8 @@ protected:
     unsigned char m_flg_interlaced; // interlace flag
 
     LVGifImageSource * m_pImage;
-    lUInt32 *    m_local_color_table;
-
-    unsigned char * m_buffer;
+    std::vector<lUInt32> m_local_color_table;
+    std::vector<unsigned char> m_buffer;
 public:
     int DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_read );
     LVGifFrame(LVGifImageSource * pImage);

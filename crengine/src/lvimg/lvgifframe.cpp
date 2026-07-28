@@ -36,7 +36,7 @@ inline lUInt32 lRGB(lUInt32 r, lUInt32 g, lUInt32 b )
 
 lUInt32 *LVGifFrame::GetColorTable() {
     if (m_flg_ltc)
-        return m_local_color_table;
+        return m_local_color_table.data();
     else
         return m_pImage->GetColorTable();
 }
@@ -48,7 +48,7 @@ void LVGifFrame::Draw(LVImageDecoderCallback *callback)
     if ( w<=0 || w>4096 || h<=0 || h>4096 )
         return; // wrong image width
     callback->OnStartDecode( m_pImage );
-    lUInt32 * line = new lUInt32[w];
+    std::vector<lUInt32> line(w);
     int background_color = m_pImage->m_background_color;
     int transparent_color = m_pImage->m_transparent_color;
     bool defined_transparent = m_pImage->defined_transparent_color;
@@ -62,7 +62,7 @@ void LVGifFrame::Draw(LVImageDecoderCallback *callback)
             line[j] = pColorTable[background_color];
         }
         if ( i >= m_top  && i < m_top+m_cy ) {
-            unsigned char * p_line = m_buffer + (i-m_top)*m_cx;
+            unsigned char * p_line = m_buffer.data() + (i-m_top)*m_cx;
             for ( int x=0; x<m_cx; x++ ) {
                 unsigned char b = p_line[x];
                 if (b!=background_color) {
@@ -75,7 +75,7 @@ void LVGifFrame::Draw(LVImageDecoderCallback *callback)
                 }
             }
         }
-        callback->OnLineDecoded( m_pImage, y, line );
+        callback->OnLineDecoded( m_pImage, y, line.data() );
         if ( m_flg_interlaced ) {
             y += dy;
             if ( y>=m_cy ) {
@@ -87,7 +87,6 @@ void LVGifFrame::Draw(LVImageDecoderCallback *callback)
             y++;
         }
     }
-    delete[] line;
     callback->OnEndDecode( m_pImage, false );
 }
 
@@ -130,7 +129,7 @@ int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_
         if (m_color_count*3 + (p-buf) >= buf_size)
             return 0; // error
 
-        m_local_color_table = new lUInt32[m_color_count];
+        m_local_color_table.resize(m_color_count);
         for (int i=0; i<m_color_count; i++) {
             m_local_color_table[i] = lRGB(p[i*3],p[i*3+1],p[i*3+2]);
             //m_local_color_table[i] = lRGB(p[i*3+2],p[i*3+1],p[i*3+0]);
@@ -140,7 +139,6 @@ int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_
     }
 
     // unpack image
-    unsigned char * stream_buffer = NULL;
     int stream_buffer_size = 0;
 
     int size_code = *p++;
@@ -162,7 +160,7 @@ int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_
     bytes_read = (int)((p-buf) + i);
 
     // create stream buffer
-    stream_buffer = new unsigned char[stream_buffer_size+3];
+    std::vector<unsigned char> stream_buffer(stream_buffer_size + 3);
     // copy data to stream buffer
     int sb_index = 0;
     for (i=0; p[i]; ) {
@@ -176,12 +174,12 @@ int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_
 
 
     // create image buffer
-    m_buffer = new unsigned char [m_cx*m_cy];
+    m_buffer.resize(m_cx * m_cy);
 
     // decode image to buffer
     CLZWDecoder decoder;
-    decoder.SetInputStream( stream_buffer, stream_buffer_size );
-    decoder.SetOutputStream( m_buffer, m_cx*m_cy );
+    decoder.SetInputStream( stream_buffer.data(), stream_buffer_size );
+    decoder.SetOutputStream( m_buffer.data(), m_cx*m_cy );
 
     int res=0;
 
@@ -192,12 +190,8 @@ int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_
         res = 1;
     } else {
         // error
-        delete[] m_buffer;
-        m_buffer = NULL;
+        m_buffer.clear();
     }
-
-    // cleanup
-    delete[] stream_buffer;
 
     return res; // OK
 }
@@ -210,8 +204,6 @@ LVGifFrame::LVGifFrame(LVGifImageSource * pImage)
     m_cx = 0;
     m_cy = 0;
     m_flg_ltc = 0; // GTC (gobal table of colors) flag
-    m_local_color_table = NULL;
-    m_buffer = NULL;
 }
 
 LVGifFrame::~LVGifFrame()
@@ -221,14 +213,8 @@ LVGifFrame::~LVGifFrame()
 
 void LVGifFrame::Clear()
 {
-    if (m_buffer) {
-        delete[] m_buffer;
-        m_buffer = NULL;
-    }
-    if (m_local_color_table) {
-        delete[] m_local_color_table;
-        m_local_color_table = NULL;
-    }
+    m_buffer.clear();
+    m_local_color_table.clear();
 }
 
 #endif  // (USE_GIF==1)

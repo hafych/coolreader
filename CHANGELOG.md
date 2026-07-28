@@ -151,9 +151,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - The process-wide font manager now has RAII ownership, serialized lifecycle
   operations and rollback-safe initialization.
 - Parser selection, encoding and format detection, cache-file serialization,
-  draw mark collection and SVG decoding now use scoped RAII ownership instead
-  of manual temporary-buffer cleanup; encoding probes also restore stream
-  position on every exit.
+  draw mark collection and SVG/GIF decoding now use scoped RAII ownership
+  instead of manual temporary-buffer cleanup; encoding probes also restore
+  stream position on every exit.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

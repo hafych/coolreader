@@ -114,9 +114,9 @@ DRM или ограничений доступа, подбор/получени�
 - [-] Зафиксировать политику владения нативными объектами и постепенно заменить
   опасные raw pointers/ручные пары acquire-release на RAII.
   Выполнено: ownership для hyphenation/text-language/font-manager; временные
-  буферы INI, cache-file, SVG, encoding autodetect и parser format detection;
-  parser selection и draw mark list. Остальные участки мигрируются отдельными
-  bounded-пакетами.
+  буферы INI, cache-file, SVG/GIF, encoding autodetect и parser format
+  detection; parser selection и draw mark list. Остальные участки мигрируются
+  отдельными bounded-пакетами.
 - [-] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

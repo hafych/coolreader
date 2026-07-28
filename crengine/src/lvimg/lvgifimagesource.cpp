@@ -64,9 +64,6 @@ bool LVGifImageSource::CheckPattern(const lUInt8 *buf, int)
 LVGifImageSource::LVGifImageSource(ldomNode *node, LVStreamRef stream)
     : LVNodeImageSource(node, stream)
 {
-    m_global_color_table = NULL;
-    m_frames = NULL;
-    m_frame_count = 0;
     Clear();
 }
 
@@ -77,7 +74,7 @@ LVGifImageSource::~LVGifImageSource()
 
 lUInt32 *LVGifImageSource::GetColorTable() {
     if (m_flg_gtc)
-        return m_global_color_table;
+        return m_global_color_table.data();
     else
         return NULL;
 }
@@ -129,7 +126,7 @@ int LVGifImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImage
         if (m_color_count*3 + (p-buf) >= buf_size)
             return 0; // error
 
-        m_global_color_table = new lUInt32[m_color_count];
+        m_global_color_table.resize(m_color_count);
         for (int i=0; i<m_color_count; i++) {
             m_global_color_table[i] = lRGB(p[i*3],p[i*3+1],p[i*3+2]);
             //m_global_color_table[i] = lRGB(p[i*3+2],p[i*3+1],p[i*3+0]);
@@ -151,13 +148,12 @@ int LVGifImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImage
         case ',': // image descriptor, ','
             // found image descriptor!
             {
-                LVGifFrame * pFrame = new LVGifFrame(this);
+                LVGifFrame frame(this);
                 int cbRead = 0;
-                if (pFrame->DecodeFromBuffer(p, (int)(buf_size - (p - buf)), cbRead) ) {
+                if (frame.DecodeFromBuffer(p, (int)(buf_size - (p - buf)), cbRead) ) {
                     found = true;
-                    pFrame->Draw( callback );
+                    frame.Draw( callback );
                 }
-                delete pFrame;
                 res = false; // first frame found, stop!
             }
             break;
@@ -189,18 +185,8 @@ void LVGifImageSource::Clear()
     _height = 0;
     m_version = 0;
     m_bpp = 0;
-    if (m_global_color_table) {
-        delete[] m_global_color_table;
-        m_global_color_table = NULL;
-    }
-    if (m_frame_count) {
-        for (int i=0; i<m_frame_count; i++) {
-            delete m_frames[i];
-        }
-        delete m_frames;//Looks like the delete[] operator should be used
-        m_frames = NULL;
-        m_frame_count = 0;
-    }
+    m_flg_gtc = 0;
+    m_global_color_table.clear();
 }
 
 bool LVGifImageSource::Decode( LVImageDecoderCallback * callback )
@@ -210,11 +196,11 @@ bool LVGifImageSource::Decode( LVImageDecoderCallback * callback )
     lvsize_t sz = _stream->GetSize();
     if ( sz<32 )
         return false; // wrong size
-    lUInt8 * buf = new lUInt8[ sz ];
+    std::vector<lUInt8> buf(sz);
     lvsize_t bytesRead = 0;
     bool res = true;
     _stream->SetPos(0);
-    if ( _stream->Read( buf, sz, &bytesRead )!=LVERR_OK || bytesRead!=sz )
+    if ( _stream->Read( buf.data(), sz, &bytesRead )!=LVERR_OK || bytesRead!=sz )
         res = false;
 
 //    // for DEBUG
@@ -223,8 +209,7 @@ bool LVGifImageSource::Decode( LVImageDecoderCallback * callback )
 //        out->Write(buf, sz, NULL);
 //    }
 
-    res = res && DecodeFromBuffer( buf, sz, callback );
-    delete[] buf;
+    res = res && DecodeFromBuffer( buf.data(), sz, callback );
     return res;
 }
 

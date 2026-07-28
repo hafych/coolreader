@@ -3,6 +3,8 @@
 #include "hyphman.h"
 #include "lvfntman.h"
 #include "lvgraydrawbuf.h"
+#include "lvimg.h"
+#include "lvimagedecodercallback.h"
 #include "lvrend.h"
 #include "crskin.h"
 #include "lvhtmlparser.h"
@@ -15,6 +17,9 @@
 #include "parsebudget.h"
 #include "textlang.h"
 #include "../src/lvfont/lvfontglyphcache.h"
+#if (USE_GIF==1)
+#include "../src/lvimg/lvgifimagesource.h"
+#endif
 
 #include <atomic>
 #include <cerrno>
@@ -1025,6 +1030,71 @@ static int testParserFormatDetectionBuffers() {
     return 0;
 }
 
+#if (USE_GIF==1)
+class CountingImageDecodeCallback : public LVImageDecoderCallback {
+public:
+    int starts = 0;
+    int lines = 0;
+    int ends = 0;
+
+    void OnStartDecode(LVImageSource *) override
+    {
+        ++starts;
+    }
+
+    bool OnLineDecoded(LVImageSource *, int, lUInt32 *data) override
+    {
+        if (data)
+            ++lines;
+        return data != NULL;
+    }
+
+    void OnEndDecode(LVImageSource *, bool errors) override
+    {
+        if (!errors)
+            ++ends;
+    }
+};
+
+static int testGifDecoderOwnership() {
+    static const unsigned char validGif[] = {
+        'G', 'I', 'F', '8', '9', 'a',
+        0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+        0x2c, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x00,
+        0x02, 0x02, 0x4c, 0x01, 0x00, 0x3b
+    };
+    LVStreamRef validStream = LVCreateMemoryStream(
+            const_cast<unsigned char *>(validGif),
+            static_cast<int>(sizeof(validGif)), true, LVOM_READ);
+    LVImageSourceRef image = LVCreateStreamImageSource(validStream);
+    if (image.isNull() || image->GetWidth() != 1 || image->GetHeight() != 1)
+        return fail("GIF decoder rejected a valid 1x1 image");
+
+    CountingImageDecodeCallback callback;
+    if (!image->Decode(&callback) || !image->Decode(&callback))
+        return fail("GIF decoder could not reuse its owned buffers");
+    if (callback.starts != 2 || callback.lines != 2 || callback.ends != 2)
+        return fail("GIF decoder callback lifecycle is incomplete");
+
+    unsigned char invalidGif[32] = {
+        'G', 'I', 'F', '8', '9', 'a'
+    };
+    LVStreamRef invalidStream = LVCreateMemoryStream(
+            invalidGif, static_cast<int>(sizeof(invalidGif)),
+            true, LVOM_READ);
+    LVGifImageSource invalidImage(NULL, invalidStream);
+    CountingImageDecodeCallback invalidCallback;
+    if (invalidImage.Decode(&invalidCallback))
+        return fail("GIF decoder accepted zero dimensions");
+    if (invalidCallback.starts != 0 || invalidCallback.lines != 0
+            || invalidCallback.ends != 0)
+        return fail("invalid GIF entered the decode callback lifecycle");
+    return 0;
+}
+#endif
+
 static void appendLe16(std::vector<unsigned char> &bytes, std::uint16_t value) {
     bytes.push_back(static_cast<unsigned char>(value));
     bytes.push_back(static_cast<unsigned char>(value >> 8));
@@ -1413,6 +1483,10 @@ int main() {
         return 1;
     if (testParserFormatDetectionBuffers() != 0)
         return 1;
+#if (USE_GIF==1)
+    if (testGifDecoderOwnership() != 0)
+        return 1;
+#endif
     if (testZipArchiveBudgets() != 0)
         return 1;
     if (testParseBudgetCodes() != 0)

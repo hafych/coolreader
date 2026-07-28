@@ -25,6 +25,10 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvhtmlparser.cpp" HTML_PARSER_SOURC
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvxmlparser.cpp" XML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextbookmarkparser.cpp" BOOKMARK_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextfilebase.cpp" TEXT_FILE_BASE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.h" GIF_FRAME_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -423,6 +427,58 @@ forbid_source_text(
   "${TEXT_FILE_BASE_SOURCE}"
   "new unsigned char[ sz ]"
   "encoding detection buffer must not regress to owning new[]"
+)
+
+# --- GIF decoder: image/frame buffers and color tables ---
+require_source_text(
+  "${GIF_IMAGE_HEADER}"
+  "std::vector<lUInt32> m_global_color_table"
+  "GIF global color table must use RAII ownership"
+)
+require_source_text(
+  "${GIF_IMAGE_SOURCE}"
+  "std::vector<lUInt8> buf"
+  "GIF input buffer must use RAII ownership"
+)
+require_source_text(
+  "${GIF_FRAME_HEADER}"
+  "std::vector<lUInt32> m_local_color_table"
+  "GIF local color table must use RAII ownership"
+)
+require_source_text(
+  "${GIF_FRAME_HEADER}"
+  "std::vector<unsigned char> m_buffer"
+  "GIF decoded frame buffer must use RAII ownership"
+)
+require_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "std::vector<unsigned char> stream_buffer"
+  "GIF compressed stream buffer must use RAII ownership"
+)
+require_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "std::vector<lUInt32> line"
+  "GIF output row must use RAII ownership"
+)
+forbid_source_text(
+  "${GIF_IMAGE_HEADER}"
+  "LVGifFrame ** m_frames"
+  "unused owning GIF frame array must not return"
+)
+forbid_source_text(
+  "${GIF_IMAGE_SOURCE}"
+  "new lUInt"
+  "GIF image decoder must not use owning new[] buffers"
+)
+forbid_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "new lUInt"
+  "GIF frame decoder must not use owning color/row arrays"
+)
+forbid_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "new unsigned char"
+  "GIF frame decoder must not use owning byte arrays"
 )
 
 # --- lvstring: string literal interning tables ---

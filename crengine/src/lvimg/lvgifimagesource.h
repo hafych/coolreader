@@ -26,6 +26,7 @@
 #if (USE_GIF==1)
 
 #include "lvnodeimagesource.h"
+#include <vector>
 
 class LVGifFrame;
 
@@ -33,14 +34,12 @@ class LVGifImageSource : public LVNodeImageSource
 {
     friend class LVGifFrame;
 protected:
-    LVGifFrame ** m_frames;
-    int m_frame_count;
     unsigned char m_version;
     unsigned char m_bpp;     //
     unsigned char m_flg_gtc; // GTC (gobal table of colors) flag
     unsigned char m_transparent_color; // index
     unsigned char m_background_color;
-    lUInt32 * m_global_color_table;
+    std::vector<lUInt32> m_global_color_table;
     bool defined_transparent_color;
 public:
     LVGifImageSource( ldomNode * node, LVStreamRef stream );

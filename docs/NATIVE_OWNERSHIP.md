@@ -61,3 +61,9 @@ Cache-file serialization buffers, temporary draw mark lists and SVG decoder
 input/output buffers also use standard RAII containers. These operation-scoped
 resources cannot outlive their call and no longer rely on matching cleanup at
 each return.
+
+The GIF decoder owns input, color-table, compressed-stream, decoded-frame and
+output-row storage through `std::vector`. A decoded frame has automatic
+operation scope; the unused raw frame array and its mismatched scalar deletion
+were removed. Repeated decode and invalid-dimension paths are covered by the
+native ownership regression.
