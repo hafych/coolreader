@@ -52,6 +52,8 @@
 #include "lvdocviewprops.h"
 #include "lvcache.h"
 
+#include <memory>
+
 
 const lChar32 * getDocFormatName( doc_format_t fmt );
 
@@ -383,7 +385,7 @@ private:
     LVContainerRef m_container;
     LVStreamRef    m_stream;
     LVContainerRef m_arc;
-    ldomDocument * m_doc;
+    std::unique_ptr<ldomDocument> m_doc;
     lString8 m_stylesheet;
     LVRendPageList m_pages;
     LVScrollInfo m_scrollinfo;
@@ -851,9 +853,9 @@ public:
 
     /// returns document
     ldomDocument * getDocument() const {
-    	if (NULL == m_doc)
-    	    CRLog::error("attempt to return NULL pointer as document!");
-    	return m_doc;
+        if (!m_doc)
+            CRLog::error("attempt to return NULL pointer as document!");
+        return m_doc.get();
     }
     /// return document properties
     CRPropRef getDocProps() { return m_doc_props; }
@@ -1053,6 +1055,8 @@ public:
     LVDocView( int bitsPerPixel=-1, bool noDefaultDocument=false );
     /// Destructor
     virtual ~LVDocView();
+    LVDocView(const LVDocView &) = delete;
+    LVDocView &operator=(const LVDocView &) = delete;
 };
 
 class SimpleTitleFormatter {

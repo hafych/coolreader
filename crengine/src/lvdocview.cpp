@@ -209,7 +209,7 @@ LVDocView::LVDocView(int bitsPerPixel, bool noDefaultDocument) :
 			 #endif
 			 )
 			 */
-			, m_stream(NULL), m_doc(NULL), m_stylesheet(def_stylesheet),
+			, m_stream(NULL), m_doc(), m_stylesheet(def_stylesheet),
             m_backgroundTiled(true),
             m_stylesheetNeedsUpdate(true),
             m_highlightBookmarks(1),
@@ -607,9 +607,7 @@ void LVDocView::updateDocStyleSheet() {
 void LVDocView::Clear() {
 	{
 		LVLock lock(getMutex());
-		if (m_doc)
-			delete m_doc;
-		m_doc = NULL;
+		m_doc.reset();
 		m_doc_props->clear();
 		if (!m_stream.isNull())
 			m_stream.Clear();
@@ -2967,7 +2965,7 @@ void LVDocView::Render(int dx, int dy, LVRendPageList * pages) {
 
         CRLog::debug("Render(width=%d, height=%d, fontSize=%d, currentFontSize=%d, 0 char width=%d)", dx, dy,
                      m_font_size, m_font->getSize(), m_font->getCharWidth('0'));
-		//CRLog::trace("calling render() for document %08X font=%08X", (unsigned int)m_doc, (unsigned int)m_font.get() );
+		//CRLog::trace("calling render() for document %08X font=%08X", (unsigned int)m_doc.get(), (unsigned int)m_font.get() );
 		bool did_rerender = m_doc->render(pages, isDocumentOpened() ? m_callback : NULL, dx, dy,
 					m_showCover, m_showCover ? dy + m_pageMargins.bottom * 4 : 0,
 					m_font, m_def_interline_space, m_props,
@@ -4033,7 +4031,8 @@ void LVDocView::restorePosition() {
 #endif
 //    CRLog::debug("m_hist.restorePosition(%s, %d)", LCSTR(fn),
 //			m_filesize);
-    ldomXPointer pos = m_hist.restorePosition(m_doc, fn, m_filesize);
+    ldomXPointer pos = m_hist.restorePosition(
+            m_doc.get(), fn, m_filesize);
 	if (!pos.isNull()) {
 		//goToBookmark( pos );
 		CRLog::info("LVDocView::restorePosition() - last position is found");
@@ -4178,7 +4177,7 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 			m_filename = lString32(fname);
 			m_stream.Clear();
 			if(convertBookmarks) {
-				record->convertBookmarks(m_doc, newDOMVersion);
+				record->convertBookmarks(m_doc.get(), newDOMVersion);
 				m_props->setInt(PROP_REQUESTED_DOM_VERSION, newDOMVersion);
 				m_props->setInt(PROP_RENDER_BLOCK_RENDERING_FLAGS, savedRenderFlags);
 				//FIXME: need to reload file after this
@@ -4240,7 +4239,7 @@ bool LVDocView::LoadDocument(const lChar32 * fname, bool metadataOnly) {
 		m_filename = lString32(fname);
 		m_stream.Clear();
 		if(convertBookmarks) {
-			record->convertBookmarks(m_doc, newDOMVersion);
+			record->convertBookmarks(m_doc.get(), newDOMVersion);
 			m_props->setInt(PROP_REQUESTED_DOM_VERSION, newDOMVersion);
 			m_props->setInt(PROP_RENDER_BLOCK_RENDERING_FLAGS, savedRenderFlags);
 			//FIXME: need to reload file after this
@@ -4331,7 +4330,7 @@ bool LVDocView::LoadDocument( LVStreamRef stream, const lChar32 * contentPath, b
 	if (loadDocumentInt(stream, metadataOnly)) {
 		m_filename = lString32(contentPath);
 		if(convertBookmarks) {
-			record->convertBookmarks(m_doc, newDOMVersion);
+			record->convertBookmarks(m_doc.get(), newDOMVersion);
 			m_props->setInt(PROP_REQUESTED_DOM_VERSION, newDOMVersion);
 			m_props->setInt(PROP_RENDER_BLOCK_RENDERING_FLAGS, savedRenderFlags);
 			//FIXME: need to reload file after this
@@ -4355,8 +4354,8 @@ void LVDocView::createHtmlDocument(lString32 code) {
     m_showCover = false;
     createEmptyDocument();
 
-    //ldomDocumentWriter writer(m_doc);
-    ldomDocumentWriterFilter writerFilter(m_doc, false,
+    //ldomDocumentWriter writer(m_doc.get());
+    ldomDocumentWriterFilter writerFilter(m_doc.get(), false,
             HTML_AUTOCLOSE_TABLE);
 
     _pos = 0;
@@ -4382,7 +4381,7 @@ void LVDocView::createDefaultDocument(lString32 title, lString32 message) {
     m_showCover = false;
     createEmptyDocument();
 
-    ldomDocumentWriter writer(m_doc);
+    ldomDocumentWriter writer(m_doc.get());
     lString32Collection lines;
     lines.split(message, lString32("\n"));
 
@@ -4485,7 +4484,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
                 m_callback->OnLoadFileFormatDetected(pdbFormat);
             updateDocStyleSheet();
             doc_format_t contentFormat = doc_format_none;
-            bool res = ImportPDBDocument( m_stream, m_doc, m_callback, this, contentFormat );
+            bool res = ImportPDBDocument(
+                    m_stream, m_doc.get(), m_callback, this, contentFormat);
             if ( !res ) {
                 setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading PDB format"), cs32("Cannot open document") );
@@ -4516,7 +4516,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
 			if ( m_callback )
                 m_callback->OnLoadFileFormatDetected(doc_format_epub);
             updateDocStyleSheet();
-            bool res = ImportEpubDocument( m_stream, m_doc, m_callback, this, metadataOnly );
+            bool res = ImportEpubDocument(
+                    m_stream, m_doc.get(), m_callback, this, metadataOnly);
 			if ( !res ) {
 				setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading EPUB format"), cs32("Cannot open document") );
@@ -4554,7 +4555,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
             if ( m_callback )
                 m_callback->OnLoadFileFormatDetected(doc_format_fb3);
             updateDocStyleSheet();
-            bool res = ImportFb3Document( m_stream, m_doc, m_callback, this );
+            bool res = ImportFb3Document(
+                    m_stream, m_doc.get(), m_callback, this);
             if ( !res ) {
                 setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading FB3 format"), cs32("Cannot open document") );
@@ -4586,7 +4588,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
             if ( m_callback )
                 m_callback->OnLoadFileFormatDetected(doc_format_docx);
             updateDocStyleSheet();
-            bool res = ImportDocXDocument( m_stream, m_doc, m_callback, this );
+            bool res = ImportDocXDocument(
+                    m_stream, m_doc.get(), m_callback, this);
             if ( !res ) {
                 setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading DOCX format"), cs32("Cannot open document") );
@@ -4618,7 +4621,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
             if ( m_callback )
                 m_callback->OnLoadFileFormatDetected(doc_format_odt);
             updateDocStyleSheet();
-            bool res = ImportOpenDocument(m_stream, m_doc, m_callback, this );
+            bool res = ImportOpenDocument(
+                    m_stream, m_doc.get(), m_callback, this);
             if ( !res ) {
                 setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading DOCX format"), cs32("Cannot open document") );
@@ -4652,7 +4656,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
 			if ( m_callback )
 			m_callback->OnLoadFileFormatDetected(doc_format_chm);
             updateDocStyleSheet();
-            bool res = ImportCHMDocument( m_stream, m_doc, m_callback, this );
+            bool res = ImportCHMDocument(
+                    m_stream, m_doc.get(), m_callback, this);
 			if ( !res ) {
 				setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading CHM format"), cs32("Cannot open document") );
@@ -4685,7 +4690,8 @@ bool LVDocView::loadDocumentInt(LVStreamRef stream, bool metadataOnly) {
             if ( m_callback )
                 m_callback->OnLoadFileFormatDetected(doc_format_doc);
             updateDocStyleSheet();
-            bool res = ImportWordDocument( m_stream, m_doc, m_callback, this );
+            bool res = ImportWordDocument(
+                    m_stream, m_doc.get(), m_callback, this);
             if ( !res ) {
                 setDocFormat( doc_format_none );
                 createDefaultDocument( cs32("ERROR: Error reading DOC format"), cs32("Cannot open document") );
@@ -4907,9 +4913,7 @@ void LVDocView::createEmptyDocument() {
 
 	//m_doc ? m_doc->getDocFlags() : DOC_FLAG_DEFAULTS;
 	m_is_rendered = false;
-	if (m_doc)
-		delete m_doc;
-	m_doc = new ldomDocument();
+	m_doc.reset(new ldomDocument());
 	m_cursorPos.clear();
 	m_markRanges.clear();
         m_bmkRanges.clear();
@@ -5038,8 +5042,9 @@ bool LVDocView::ParseDocument() {
 	}
 
 	{
-        ldomDocumentWriter writer(m_doc);
-        ldomDocumentWriterFilter writerFilter(m_doc, false, HTML_AUTOCLOSE_TABLE);
+        ldomDocumentWriter writer(m_doc.get());
+        ldomDocumentWriterFilter writerFilter(
+                m_doc.get(), false, HTML_AUTOCLOSE_TABLE);
         lString32 txt_autodet_lang;
         // Note: creating these 2 writers here, and using only one,
         // will still have both their destructors called when
@@ -5189,16 +5194,22 @@ bool LVDocView::ParseDocument() {
 
 		//m_doc->getProps()->clear();
 		if (m_doc_props->getStringDef(DOC_PROP_TITLE, "").empty()) {
-			m_doc_props->setString(DOC_PROP_AUTHORS, extractDocAuthors(m_doc));
-			m_doc_props->setString(DOC_PROP_TITLE, extractDocTitle(m_doc));
+			m_doc_props->setString(
+                    DOC_PROP_AUTHORS, extractDocAuthors(m_doc.get()));
+			m_doc_props->setString(
+                    DOC_PROP_TITLE, extractDocTitle(m_doc.get()));
 			if (txt_autodet_lang.length() > 0)      // true only for doc_format_txt
 				m_doc_props->setString(DOC_PROP_LANGUAGE, txt_autodet_lang);
 			else
-				m_doc_props->setString(DOC_PROP_LANGUAGE, extractDocLanguage(m_doc));
-			m_doc_props->setString(DOC_PROP_KEYWORDS, extractDocKeywords(m_doc));
-			m_doc_props->setString(DOC_PROP_DESCRIPTION, extractDocDescription(m_doc));
+				m_doc_props->setString(
+                        DOC_PROP_LANGUAGE, extractDocLanguage(m_doc.get()));
+			m_doc_props->setString(
+                    DOC_PROP_KEYWORDS, extractDocKeywords(m_doc.get()));
+			m_doc_props->setString(
+                    DOC_PROP_DESCRIPTION, extractDocDescription(m_doc.get()));
             int seriesNumber = -1;
-            lString32 seriesName = extractDocSeries(m_doc, &seriesNumber);
+            lString32 seriesName =
+                    extractDocSeries(m_doc.get(), &seriesNumber);
             m_doc_props->setString(DOC_PROP_SERIES_NAME, seriesName);
             m_doc_props->setString(DOC_PROP_SERIES_NUMBER, seriesNumber>0 ? lString32::itoa(seriesNumber) :lString32::empty_str);
         }
@@ -5218,10 +5229,8 @@ bool LVDocView::ParseDocument() {
 	if ( !buf.error() ) {
 		int sz = buf.pos();
 		SerialBuf buf2( buf.buf(), buf.pos() );
-		ldomDocument * newdoc = new ldomDocument();
-		if ( newdoc->deserializeMaps( buf2 ) ) {
-			delete newdoc;
-		}
+		std::unique_ptr<ldomDocument> newdoc(new ldomDocument());
+		newdoc->deserializeMaps( buf2 );
 	}
 #endif
 #if 0// test swap to disk
@@ -5233,8 +5242,7 @@ bool LVDocView::ParseDocument() {
 	}
 #endif
 #if 0 // test restore from swap
-	delete m_doc;
-	m_doc = new ldomDocument();
+	m_doc.reset(new ldomDocument());
 	res = m_doc->openFromCacheFile( cacheFile );
 	m_doc->setDocFlags( saveFlags );
 	m_doc->setContainer( m_container );
@@ -6105,7 +6113,7 @@ CRBookmark * LVDocView::findBookmarkByPoint(lvPoint pt) {
 // execute command
 int LVDocView::doCommand(LVDocCmd cmd, int param) {
 	CRLog::trace("doCommand(%d, %d)", (int)cmd, param);
-	if (NULL == m_doc) {
+	if (!m_doc) {
 		CRLog::warn("doCommand(): m_doc is NULL!");
 		return 0;
 	}

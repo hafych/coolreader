@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #define XS_IMPLEMENT_SCHEME 1
@@ -273,6 +274,44 @@ static bool equalRenderedSnapshots(
     return true;
 }
 
+static int testDocViewDocumentOwnership() {
+    static_assert(
+            !std::is_copy_constructible<LVDocView>::value,
+            "LVDocView must not duplicate document ownership");
+    static_assert(
+            !std::is_copy_assignable<LVDocView>::value,
+            "LVDocView must not assign document ownership");
+
+    LVDocView view(16, true);
+    view.createHtmlDocument(
+            U"<p id=\"first-owner\">first document</p>");
+    ldomDocument *document = view.getDocument();
+    if (!document
+            || !document->getElementById(U"first-owner"))
+        return fail("LVDocView did not publish its first owned document");
+
+    view.createHtmlDocument(
+            U"<p id=\"replacement-owner\">replacement document</p>");
+    document = view.getDocument();
+    if (!document
+            || document->getElementById(U"first-owner")
+            || !document->getElementById(U"replacement-owner"))
+        return fail(
+                "LVDocView replacement retained nodes from its released document");
+
+    view.Clear();
+    view.Clear();
+    view.createDefaultDocument(
+            U"Recreated owner", U"document after repeated Clear");
+    document = view.getDocument();
+    if (!document
+            || view.getTitle() != U"Recreated owner"
+            || document->getRootNode() == NULL)
+        return fail(
+                "LVDocView repeated Clear lost document-owner idempotence");
+    return 0;
+}
+
 static int testRenderedDocumentBehavior() {
     if (!InitFontManager(lString8::empty_str) || !fontMan)
         return fail("rendered fixture font manager did not initialize");
@@ -289,7 +328,9 @@ static int testRenderedDocumentBehavior() {
     {
         RenderedDocumentSnapshot first;
         RenderedDocumentSnapshot second;
-        if (snapshotRenderedDocument(first) != 0
+        if (testDocViewDocumentOwnership() != 0)
+            result = 1;
+        else if (snapshotRenderedDocument(first) != 0
                 || snapshotRenderedDocument(second) != 0)
             result = 1;
         else if (!equalRenderedSnapshots(first, second))

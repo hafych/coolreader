@@ -469,3 +469,12 @@ manifest-item and OPF/nav/NCX/page-map document candidates remain in
 factory boundary accepts them. The in-memory EPUB regression covers a valid
 obfuscated font, malformed encryption rollback and cover/font streams that
 outlive their source container.
+
+`LVDocView` is the sole owner of its primary `ldomDocument`, held in a
+`unique_ptr`; the public `getDocument()` API remains a borrowed compatibility
+view. Importers, writers, bookmark conversion and metadata extractors receive
+that view explicitly through `get()`. `Clear()` releases the owner
+idempotently, document recreation enters the owner immediately, and copying or
+assigning a view is disabled so ownership cannot be duplicated. The document
+regression replaces a populated document, verifies that no nodes from the old
+DOM survive, repeats `Clear()`, and recreates a usable document afterward.

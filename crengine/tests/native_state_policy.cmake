@@ -40,6 +40,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvdocview.cpp" DOC_VIEW_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/tests/document_regression_test.cpp" DOCUMENT_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/hist.h" HISTORY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hist.cpp" HISTORY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/props.cpp" PROPERTIES_SOURCE)
@@ -4119,4 +4121,81 @@ forbid_source_text(
   "${EPUB_SOURCE}"
   "delete pagemapdoc"
   "EPUB page-map document teardown must remain automatic"
+)
+
+# --- LVDocView primary document ownership and lifecycle ---
+require_source_text(
+  "${DOC_VIEW_HEADER}"
+  "std::unique_ptr<ldomDocument> m_doc"
+  "LVDocView must own its primary document explicitly"
+)
+require_source_text(
+  "${DOC_VIEW_HEADER}"
+  "return m_doc.get()"
+  "LVDocView must expose only a borrowed document view"
+)
+require_source_text(
+  "${DOC_VIEW_HEADER}"
+  "LVDocView(const LVDocView &) = delete"
+  "LVDocView must not duplicate primary document ownership"
+)
+require_source_text(
+  "${DOC_VIEW_HEADER}"
+  "LVDocView &operator=(const LVDocView &) = delete"
+  "LVDocView must not assign primary document ownership"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "m_doc.reset();"
+  "LVDocView clear must release its document idempotently"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "m_doc.reset(new ldomDocument())"
+  "LVDocView replacement documents must enter their owner immediately"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "m_stream, m_doc.get(), m_callback, this"
+  "LVDocView importers must receive an explicitly borrowed document view"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "ldomDocumentWriter writer(m_doc.get())"
+  "LVDocView writers must receive an explicitly borrowed document view"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "static int testDocViewDocumentOwnership()"
+  "LVDocView document ownership must retain lifecycle regression coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "LVDocView replacement retained nodes from its released document"
+  "LVDocView regression must retain clean replacement coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "LVDocView repeated Clear lost document-owner idempotence"
+  "LVDocView regression must retain repeated teardown coverage"
+)
+forbid_source_text(
+  "${DOC_VIEW_HEADER}"
+  "ldomDocument * m_doc"
+  "LVDocView must not own its primary document through a raw pointer"
+)
+forbid_source_text(
+  "${DOC_VIEW_HEADER}"
+  "return m_doc;"
+  "LVDocView must not expose its owner without an explicit borrowed boundary"
+)
+forbid_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "delete m_doc"
+  "LVDocView document teardown must remain automatic"
+)
+forbid_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "m_doc = new ldomDocument()"
+  "LVDocView document replacement must remain scope-bound"
 )
