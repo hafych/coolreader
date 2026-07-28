@@ -29,11 +29,23 @@
 #include <string.h>
 #include "../include/wolutil.h"
 #include "private/dumpfile.h"
+#include "wolutil_internal.h"
+
+#include <limits>
+#include <memory>
+#include <vector>
 
 #define N 4096
 #define F 18
 #define THRESHOLD 2
 #define NIL N
+
+static const size_t WOL_MAX_IMAGE_BYTES =
+        static_cast<size_t>(64) * 1024 * 1024;
+static const size_t WOL_MAX_ENCODED_BYTES =
+        WOL_MAX_IMAGE_BYTES + WOL_MAX_IMAGE_BYTES / 8 + F + 1;
+static const size_t WOL_MAX_COVER_BYTES =
+        WOL_MAX_ENCODED_BYTES + 16;
 
 //#define _DEBUG_LOG
 
@@ -120,6 +132,10 @@ public:
 
 LZSSUtil::LZSSUtil()
 {
+    textsize = 0;
+    codesize = 0;
+    match_position = 0;
+    match_length = 0;
     /* initialize trees */
     int  i;
     /* For i = 0 to N - 1, rson[i] and lson[i] will be the right and
@@ -281,7 +297,7 @@ bool LZSSUtil::Encode(
          codesize += code_buf_ptr;
     }
     out_length=out.getPos();
-    return true;
+    return !out.getOverflow();
 }
 
 /* Just the reverse of Encode(). */
@@ -386,8 +402,64 @@ bool LZSSUtil::Decode(
     return !out.getOverflow();
 }
 
+static bool getWolImageByteSize(
+        int width, int height, int bitsPerPixel,
+        size_t &rowSize, size_t &imageSize)
+{
+    rowSize = 0;
+    imageSize = 0;
+    if (width <= 0 || height <= 0
+            || (bitsPerPixel != 1 && bitsPerPixel != 2))
+        return false;
+    const size_t widthValue = static_cast<size_t>(width);
+    const size_t heightValue = static_cast<size_t>(height);
+    const size_t bitsValue = static_cast<size_t>(bitsPerPixel);
+    if (widthValue
+            > (std::numeric_limits<size_t>::max() - 7)
+                    / bitsValue)
+        return false;
+    rowSize = (widthValue * bitsValue + 7) / 8;
+    if (rowSize == 0
+            || heightValue
+                    > WOL_MAX_IMAGE_BYTES / rowSize)
+        return false;
+    imageSize = rowSize * heightValue;
+    return imageSize <= static_cast<size_t>(
+            std::numeric_limits<int>::max());
+}
 
-
+static bool encodeLzssWithTerminator(
+        const lUInt8 *input, size_t inputSize,
+        std::vector<lUInt8> &encoded)
+{
+    if (!input || inputSize == 0
+            || inputSize > WOL_MAX_IMAGE_BYTES
+            || inputSize > static_cast<size_t>(
+                    std::numeric_limits<int>::max())) {
+        return false;
+    }
+    const size_t flagBytes = (inputSize + 7) / 8;
+    if (inputSize
+            > static_cast<size_t>(
+                    std::numeric_limits<int>::max())
+                    - flagBytes - F - 1)
+        return false;
+    const size_t capacity =
+            inputSize + flagBytes + F;
+    std::vector<lUInt8> candidate(capacity + 1);
+    int encodedSize = static_cast<int>(capacity);
+    LZSSUtil packer;
+    if (!packer.Encode(
+                input, static_cast<int>(inputSize),
+                candidate.data(), encodedSize)
+            || encodedSize < 0
+            || static_cast<size_t>(encodedSize) > capacity)
+        return false;
+    candidate[static_cast<size_t>(encodedSize)] = 0;
+    candidate.resize(static_cast<size_t>(encodedSize) + 1);
+    encoded.swap(candidate);
+    return true;
+}
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -433,8 +505,12 @@ static void readMem( const lUInt8 * buf, int offset, lUInt32 & dest )
 bool WOLReader::readHeader()
 {
     lUInt8 header[0x80];
-    if (_stream->Read( header, 0x80, NULL )!=LVERR_OK)
-        return false;;
+    lvsize_t bytesRead = 0;
+    if (!_stream
+            || _stream->Read(
+                    header, sizeof(header), &bytesRead) != LVERR_OK
+            || bytesRead != sizeof(header))
+        return false;
     if (memcmp(header, "WolfEbook1.11", 13))
         return false;
     readMem(header, 0x17, _book_title_size);
@@ -445,8 +521,18 @@ bool WOLReader::readHeader()
     readMem(header, 0x1E, _catalog_subcatalog_size);  // 0x1E
     readMem(header, 0x26, _page_data_size);   // 0x26
     readMem(header, 0x3C, _catalog_size);     // 0x3C
+    if (_cover_image_size > WOL_MAX_COVER_BYTES)
+        return false;
+    const lvsize_t streamSize = _stream->GetSize();
+    const lvsize_t contentOffset =
+            static_cast<lvsize_t>(0x80)
+            + static_cast<lvsize_t>(_cover_image_size)
+            + static_cast<lvsize_t>(_book_title_size);
+    if (contentOffset > streamSize)
+        return false;
     _book_title = readString(0x80, _book_title_size);
-    _stream->SetPos( 0x80 + _cover_image_size + _book_title_size );
+    if (_stream->SetPos(contentOffset) != contentOffset)
+        return false;
     lString8 str = readTag();
     if (str!="wolf")
         return false;
@@ -467,8 +553,30 @@ bool WOLReader::readHeader()
             &params.width, &params.height,
             &params.length)!=5)
             return false;
-        params.offset = (lUInt32)_stream->GetPos();
-        _stream->SetPos(params.offset+params.length);
+        size_t rowSize = 0;
+        size_t imageSize = 0;
+        if (!getWolImageByteSize(
+                    params.width, params.height,
+                    params.bitcount, rowSize, imageSize)
+                || params.compact != 1
+                || params.length <= 0
+                || static_cast<size_t>(params.length)
+                        > WOL_MAX_ENCODED_BYTES)
+            return false;
+        const lvpos_t imageOffset = _stream->GetPos();
+        if (imageOffset == LV_INVALID_SIZE
+                || imageOffset > streamSize
+                || static_cast<lvsize_t>(params.length)
+                        > streamSize - imageOffset
+                || imageOffset
+                        > std::numeric_limits<lUInt32>::max())
+            return false;
+        params.offset = static_cast<lUInt32>(imageOffset);
+        const lvpos_t imageEnd =
+                imageOffset
+                + static_cast<lvsize_t>(params.length);
+        if (_stream->SetPos(imageEnd) != imageEnd)
+            return false;
         str = readTag();
         const char * s = str.c_str();
         lString8 tst(s);
@@ -481,42 +589,62 @@ bool WOLReader::readHeader()
     return true;
 }
 
-LVGrayDrawBuf * WOLReader::getImage( int index )
+std::unique_ptr<LVGrayDrawBuf> WOLReader::getImage( int index )
 {
-    if (index<0 || index>=_images.length())
-        return NULL;
+    if (!_stream || index<0 || index>=_images.length())
+        return std::unique_ptr<LVGrayDrawBuf>();
     const wolf_img_params * img = &_images[index];
-    LVArray<lUInt8> buf(img->length, 0);
-    _stream->SetPos( img->offset );
-    _stream->Read(buf.ptr(), img->length, NULL);
-    int img_size = img->height*((img->width*img->bitcount+7)/8);
-    int uncomp_len = img_size + 18;
-    LVArray<lUInt8> uncomp(uncomp_len, 0);
+    size_t rowSize = 0;
+    size_t imageSize = 0;
+    const lvsize_t streamSize = _stream->GetSize();
+    if (!getWolImageByteSize(
+                img->width, img->height, img->bitcount,
+                rowSize, imageSize)
+            || img->length <= 0
+            || static_cast<size_t>(img->length)
+                    > WOL_MAX_ENCODED_BYTES
+            || static_cast<lvsize_t>(img->offset) > streamSize
+            || static_cast<lvsize_t>(img->length)
+                    > streamSize - static_cast<lvsize_t>(img->offset)
+            || _stream->SetPos(img->offset) != img->offset)
+        return std::unique_ptr<LVGrayDrawBuf>();
+    std::vector<lUInt8> compressed(
+            static_cast<size_t>(img->length));
+    lvsize_t bytesRead = 0;
+    if (_stream->Read(
+                compressed.data(), compressed.size(),
+                &bytesRead) != LVERR_OK
+            || bytesRead != compressed.size())
+        return std::unique_ptr<LVGrayDrawBuf>();
+    std::vector<lUInt8> decoded(imageSize);
+    int decodedSize = static_cast<int>(decoded.size());
 
     LZSSUtil unpacker;
-    if (unpacker.Decode(buf.ptr(), buf.length(), uncomp.ptr(), uncomp_len))
-    {
-        LVStreamRef dump = LVOpenFileStream( "test.dat", LVOM_WRITE );
-        if (!dump.isNull()) {
-            dump->Write(uncomp.ptr(), uncomp_len, NULL);
-        }
-
+    if (unpacker.Decode(
+                compressed.data(),
+                static_cast<int>(compressed.size()),
+                decoded.data(), decodedSize)
+            && decodedSize == static_cast<int>(imageSize)) {
         // inverse 1-bit images
         if (img->bitcount==1)
         {
-            for (int i=0; i<img_size; i++)
+            for (size_t i=0; i<imageSize; i++)
             {
-               uncomp[i]= ~uncomp[i];
+               decoded[i]= ~decoded[i];
             }
         }
 
-        LVGrayDrawBuf * image = new LVGrayDrawBuf(img->width, img->height, img->bitcount);
-        memcpy(image->GetScanLine(0), uncomp.ptr(), img_size);
+        std::unique_ptr<LVGrayDrawBuf> image(
+                new LVGrayDrawBuf(
+                        img->width, img->height,
+                        img->bitcount));
+        memcpy(
+                image->GetScanLine(0),
+                decoded.data(), imageSize);
         return image;
     }
 
-    //delete image;
-    return NULL;
+    return std::unique_ptr<LVGrayDrawBuf>();
 }
 
 lString8 WOLReader::readString(int offset, int size)
@@ -554,11 +682,30 @@ lString8 WOLReader::readTag()
     }
 }
 
-LVArray<lUInt8> * WOLReader::getBookCover()
+std::unique_ptr<LVArray<lUInt8> > WOLReader::getBookCover()
 {
-    LVArray<lUInt8> * cover = new LVArray<lUInt8>(_cover_image_size, 0);
-    _stream->SetPos( 0x80 + _book_title_size );
-    _stream->Read( cover->ptr(), _cover_image_size, NULL);
+    if (!_stream)
+        return std::unique_ptr<LVArray<lUInt8> >();
+    const lvsize_t offset =
+            static_cast<lvsize_t>(0x80)
+            + static_cast<lvsize_t>(_book_title_size);
+    const lvsize_t streamSize = _stream->GetSize();
+    if (_cover_image_size == 0
+            || _cover_image_size > WOL_MAX_COVER_BYTES
+            || offset > streamSize
+            || static_cast<lvsize_t>(_cover_image_size)
+                    > streamSize - offset
+            || _stream->SetPos(offset) != offset)
+        return std::unique_ptr<LVArray<lUInt8> >();
+    std::unique_ptr<LVArray<lUInt8> > cover(
+            new LVArray<lUInt8>(
+                    static_cast<int>(_cover_image_size), 0));
+    lvsize_t bytesRead = 0;
+    if (_stream->Read(
+                cover->ptr(), _cover_image_size,
+                &bytesRead) != LVERR_OK
+            || bytesRead != _cover_image_size)
+        return std::unique_ptr<LVArray<lUInt8> >();
     return cover;
 }
 
@@ -647,8 +794,18 @@ void WOLWriter::writeToc()
 
         // allocate TOC
         _subcatalog_offset = (lUInt32) _stream->GetPos();
-        wol_toc_subcatalog_item * toc = new wol_toc_subcatalog_item[len]();
-        int catsize = sizeof(wol_toc_subcatalog_item) * len;
+        const size_t catalogBytes =
+                sizeof(wol_toc_subcatalog_item)
+                * static_cast<size_t>(len);
+        if (catalogBytes
+                > static_cast<size_t>(
+                        std::numeric_limits<int>::max())) {
+            CRLog::error("WOL TOC exceeds the supported size");
+            return;
+        }
+        std::vector<wol_toc_subcatalog_item> toc(
+                static_cast<size_t>(len));
+        const int catsize = static_cast<int>(catalogBytes);
         lString8 names;
         for ( int lvl=1; lvl<=3; lvl++ ) {
             for ( int i=0; i<_tocItems.length(); i++ ) {
@@ -664,7 +821,8 @@ void WOLWriter::writeToc()
         for ( i=0; i<len; i++ ) {
             TocItemInfo * src = _tocItems[i];
             int n = src->catindex;
-            wol_toc_subcatalog_item * item = &toc[n];
+            wol_toc_subcatalog_item * item =
+                    &toc[static_cast<size_t>(n)];
             item->Level1Idx = src->l1index;
             item->Level2Idx = src->l2index;
             item->Level3Idx = src->l3index;
@@ -682,18 +840,19 @@ void WOLWriter::writeToc()
         }
 #ifdef _DEBUG_LOG
         for ( i=0; i<len; i++ ) {
-            wol_toc_subcatalog_item * item = &toc[i];
+            wol_toc_subcatalog_item * item =
+                    &toc[static_cast<size_t>(i)];
             lUInt32 currOffset = i * 80 + _subcatalog_offset + 12;
             fprintf( log, "%2d   %07d : (%d,%d,%d) \t parent=%07d  child=%07d  prev=%07d  next=%07d\t %s\n",
                 i, currOffset, item->Level1Idx, item->Level2Idx, item->Level3Idx, item->ParentOffs, item->ChildOffs, item->PrevPeerOffs, item->NextPeerOffs, item->ItemName );
         }
 #endif
         *_stream << "<subcatalog>";
-        _stream->Write( toc, sizeof(wol_toc_subcatalog_item) * len, NULL );
+        _stream->Write(
+                toc.data(), catalogBytes, NULL );
         *_stream << names;
         // SubcatalogSize = 26 + CountOfAllTOCItems * 80 + Length(NamesInAllTOCLevels)
         *_stream << "\x08</subcatalog>";
-        delete[] ( toc );
     }
     // finalize
     lUInt32 cat_end = (lUInt32) _stream->GetPos();
@@ -760,11 +919,16 @@ void WOLWriter::addTitle(
 
 void WOLWriter::addCoverImage( const lUInt8 * buf, int size )
 {
+    if (!buf || size <= 0
+            || static_cast<size_t>(size)
+                    > WOL_MAX_ENCODED_BYTES)
+        return;
     static const lUInt8 cover_hdr[10] = {
     0xFF, 0xFF, 0x58, 0x02, 0x01, 0x00, 0x4B, 0x00, 0x20, 0x03
     };
     _stream->Write(cover_hdr, 10, NULL);
-    _cover_image_size = size + 10;
+    _cover_image_size =
+            static_cast<lUInt32>(size) + 10;
     _stream->Write(buf, size, NULL);
     _wolf_start_pos = (lUInt32) _stream->GetPos();
     *_stream << "<wolf>\r\n";
@@ -777,63 +941,19 @@ void WOLWriter::addImage(
   int num_bits
 )
 {
-    int bmp_sz = (width * height * num_bits)>>3;
+    size_t rowSize = 0;
+    size_t imageSize = 0;
+    std::vector<lUInt8> compressed;
+    if (!bitmap
+            || !getWolImageByteSize(
+                    width, height, num_bits,
+                    rowSize, imageSize)
+            || !encodeLzssWithTerminator(
+                    bitmap, imageSize, compressed)) {
+        CRLog::error("Invalid or oversized WOL page image");
+        return;
+    }
     startCatalog();
-#if 0
-    lUInt8 * inversed = NULL;
-    if (num_bits==1)
-    {
-        inversed = new lUInt8 [bmp_sz];
-        for (int i=0; i<bmp_sz; i++)
-        {
-           inversed[i]= ~bitmap[i];
-        }
-        bitmap = inversed;
-    }
-#endif
-/*
-#if 0
-  compressed.reserve(bitmap.size()*9/8);
-  for(int i=0; i<bitmap.size(); ) {
-    compressed.push_back((unsigned char)0xff);
-    for(int j=0; j<8 && i<bitmap.size(); j++) {
-      compressed.push_back(bitmap[i++]);
-    }
-  }
-  compressed.push_back((unsigned char)0x0); // extra last dummy char
-#else
-  compressed.resize(bitmap.size()*2);
-  int compressed_len;
-#if 1
-  Encode((const unsigned char*)&(bitmap[0]), bitmap.size(),
-    (unsigned char*)&(compressed[0]), &compressed_len);
-#else
-  EncodeLZSS(&(bitmap[0]), bitmap.size(), &(compressed[0]),
-    compressed_len);
-#endif
-#endif
-*/
-
-
-    int compressed_len = bmp_sz * 9/8 + 18;
-    lUInt8 * compressed = new lUInt8 [compressed_len];
-
-    LZSSUtil packer;
-    packer.Encode(bitmap, bmp_sz, compressed, compressed_len);
-
-    compressed[ compressed_len++ ] = 0; // extra last dummy char
-
-#if 0 //def _DEBUG_LOG
-    LZSSUtil unpacker;
-    lUInt8 * decomp = new lUInt8 [bmp_sz*2];
-    int decomp_len = 0;
-    unpacker.Decode(compressed, compressed_len-1, decomp, decomp_len);
-    assert(compressed_len==decomp_len);
-    for(int i=0; i<decomp_len; i++) {
-        assert(bitmap[i]==decomp[i]);
-    }
-    delete[] decomp;
-#endif
 
     _page_starts.add( (lUInt32)_stream->GetPos() );
 
@@ -846,20 +966,17 @@ void WOLWriter::addImage(
         << " height="
         << fmt::decimal(height)
         << " length="
-        << fmt::decimal((int)compressed_len)
+        << fmt::decimal(
+                static_cast<int>(compressed.size()))
         << ">";
     *_stream << buf;
 
     //_page_starts.add( (lUInt32)_stream->GetPos() );
 
-    _stream->Write( compressed, compressed_len, NULL );
+    _stream->Write(
+            compressed.data(), compressed.size(), NULL );
     endPage();
     *_stream << cs8("</img>");
-
-    // cleanup
-    delete[] compressed;
-    //if (inversed)
-    //     delete inversed;
 }
 
 void WOLWriter::endPage()
@@ -874,8 +991,14 @@ void WOLWriter::addTocItem( int level1index, int level2index, int level3index, i
 #ifdef _DEBUG_LOG
     fprintf(log, "addTocItem(lvl=%d,%d,%d, page=%d, text=%s\n", level1index, level2index, level3index, pageNumber, title.c_str());
 #endif
-    TocItemInfo * item = new TocItemInfo( _tocItems.length(), level1index, level2index, level3index, pageNumber, title );
-    _tocItems.add( item );
+    std::unique_ptr<TocItemInfo> candidate(
+            new TocItemInfo(
+                    _tocItems.length(), level1index,
+                    level2index, level3index,
+                    pageNumber, title));
+    TocItemInfo *item = candidate.get();
+    _tocItems.add(item);
+    candidate.release();
     for ( int k=_tocItems.length()-2; k>=0; k-- ) {
         TocItemInfo * last = item;
         TocItemInfo * ki = _tocItems[k];
@@ -986,54 +1109,151 @@ typedef struct {
 
 void WOLWriter::addCoverImage( LVGrayDrawBuf & image )
 {
-    // convert 2bpp to 1bpp
-#if 1
+    const int width = image.GetWidth();
+    const int height = image.GetHeight();
+    const int bitsPerPixel = image.GetBitsPerPixel();
+    size_t rowSize = 0;
+    size_t imageSize = 0;
+    if (width > std::numeric_limits<lUInt16>::max()
+            || height > std::numeric_limits<lUInt16>::max()
+            || !getWolImageByteSize(
+                    width, height, bitsPerPixel,
+                    rowSize, imageSize)
+            || rowSize
+                    > std::numeric_limits<lUInt16>::max()
+            || !image.GetScanLine(0)) {
+        CRLog::error("Invalid or oversized WOL cover image");
+        return;
+    }
+    std::vector<lUInt8> data(
+            image.GetScanLine(0),
+            image.GetScanLine(0) + imageSize);
+    if (bitsPerPixel == 2) {
+        for (size_t i = 0; i < data.size(); ++i)
+            data[i] = ~data[i];
+    }
+    std::vector<lUInt8> compressed;
+    if (!encodeLzssWithTerminator(
+                data.data(), data.size(), compressed)) {
+        CRLog::error("Cannot encode WOL cover image");
+        return;
+    }
 
-
-    CoverPageHeader_t hdr;
+    CoverPageHeader_t hdr = {};
     hdr.compression = cnv.lsf( (lUInt16)1 );
-    lUInt16 width = image.GetWidth();
-    lUInt16 height = image.GetHeight();
-    lUInt16 bpp = image.GetBitsPerPixel();
-    lUInt16 bpl = (lUInt16)((width * bpp + 7)>>3);
-    hdr.width = cnv.lsf( width );
-    hdr.height = cnv.lsf( height );
-    hdr.bpp = cnv.lsf( bpp );
-    hdr.bytesPerLine = cnv.lsf( bpl );
+    hdr.width = cnv.lsf( static_cast<lUInt16>(width) );
+    hdr.height = cnv.lsf( static_cast<lUInt16>(height) );
+    hdr.bpp = cnv.lsf(
+            static_cast<lUInt16>(bitsPerPixel) );
+    hdr.bytesPerLine = cnv.lsf(
+            static_cast<lUInt16>(rowSize) );
 
     lUInt32 cover_start_pos = (lUInt32) _stream->GetPos();
     _stream->Write(&hdr, sizeof(hdr), NULL);
-
-    int bmp_sz = bpl * height;
-
-    lUInt8 * data = new lUInt8[ bmp_sz ];
-    memcpy( data, image.GetScanLine(0), bmp_sz );
-    if ( hdr.bpp == 2 )
-    {
-        for (int i=0; i<bmp_sz; i++)
-            data[i] = ~data[i];
-    }
-
-    int compressed_len = bmp_sz * 9/8 + 18;
-    lUInt8 * compressed = new lUInt8 [compressed_len];
-
-    LZSSUtil packer;
-    packer.Encode(data, bmp_sz, compressed, compressed_len);
-
-    compressed[ compressed_len++ ] = 0; // extra last dummy char
-
-    delete[] data;
-
-    _stream->Write( compressed, compressed_len, NULL );
+    _stream->Write(
+            compressed.data(), compressed.size(), NULL );
 
     _wolf_start_pos = (lUInt32) _stream->GetPos();
     _cover_image_size = _wolf_start_pos - cover_start_pos;
     *_stream << "<wolf>\r\n";
-
-#else
-    image.ConvertToBitmap(true);
-    int sz = (image.GetWidth()+7)/8 * image.GetHeight();
-    addCoverImage( image.GetScanLine(0), sz );
-#endif
 }
 
+bool LVRunWolBufferOwnershipRegression()
+{
+    std::vector<lUInt8> input(4097);
+    for (size_t i = 0; i < input.size(); ++i)
+        input[i] = static_cast<lUInt8>(
+                (i * 37 + i / 11) & 0xFF);
+    std::vector<lUInt8> encoded;
+    if (!encodeLzssWithTerminator(
+                input.data(), input.size(), encoded)
+            || encoded.size() < 2)
+        return false;
+    std::vector<lUInt8> decoded(input.size());
+    int decodedSize = static_cast<int>(decoded.size());
+    LZSSUtil unpacker;
+    if (!unpacker.Decode(
+                encoded.data(),
+                static_cast<int>(encoded.size() - 1),
+                decoded.data(), decodedSize)
+            || decodedSize != static_cast<int>(input.size())
+            || decoded != input)
+        return false;
+
+    lUInt8 tinyOutput = 0;
+    int tinyOutputSize = 1;
+    LZSSUtil boundedPacker;
+    if (boundedPacker.Encode(
+                input.data(), static_cast<int>(input.size()),
+                &tinyOutput, tinyOutputSize))
+        return false;
+    std::vector<lUInt8> unchanged(3, 0x5A);
+    lUInt8 oneByte = 0;
+    if (encodeLzssWithTerminator(
+                &oneByte, WOL_MAX_IMAGE_BYTES + 1,
+                unchanged)
+            || unchanged != std::vector<lUInt8>(3, 0x5A))
+        return false;
+
+    std::vector<lUInt8> oversizedHeader(0x80, 0);
+    memcpy(
+            oversizedHeader.data(),
+            "WolfEbook1.11", 13);
+    memset(
+            oversizedHeader.data() + 0x19,
+            0xFF, sizeof(lUInt32));
+    LVStreamRef oversizedStream = LVCreateMemoryStream(
+            oversizedHeader.data(),
+            static_cast<int>(oversizedHeader.size()),
+            true, LVOM_READ);
+    WOLReader oversizedReader(oversizedStream.get());
+    if (oversizedStream.isNull()
+            || oversizedReader.readHeader())
+        return false;
+
+    LVStreamRef stream = LVCreateMemoryStream();
+    if (stream.isNull())
+        return false;
+    LVGrayDrawBuf cover(16, 16, 2);
+    LVGrayDrawBuf page(16, 16, 2);
+    const size_t imageBytes = 16 * 16 * 2 / 8;
+    for (size_t i = 0; i < imageBytes; ++i) {
+        cover.GetScanLine(0)[i] =
+                static_cast<lUInt8>(i * 3);
+        page.GetScanLine(0)[i] =
+                static_cast<lUInt8>(i * 5 + 1);
+    }
+    std::vector<lUInt8> expectedPage(
+            page.GetScanLine(0),
+            page.GetScanLine(0) + imageBytes);
+    {
+        WOLWriter writer(stream.get());
+        writer.addTitle(
+                cs8("Ownership regression"), cs8("-"),
+                cs8("CoolReader"), cs8("-"), cs8("-"),
+                cs8("-"), cs8("-"), cs8("-"), cs8(""));
+        writer.addCoverImage(cover);
+        writer.addImage(page);
+        writer.addTocItem(
+                1, 0, 0, 0, cs8("Chapter"));
+    }
+    if (stream->SetPos(0) != 0)
+        return false;
+    WOLReader reader(stream.get());
+    if (!reader.readHeader()
+            || reader.getImageCount() != 1)
+        return false;
+    std::unique_ptr<LVArray<lUInt8> > coverData =
+            reader.getBookCover();
+    std::unique_ptr<LVGrayDrawBuf> decodedPage =
+            reader.getImage(0);
+    return coverData && coverData->length() > 0
+            && decodedPage
+            && decodedPage->GetWidth() == 16
+            && decodedPage->GetHeight() == 16
+            && decodedPage->GetBitsPerPixel() == 2
+            && memcmp(
+                    decodedPage->GetScanLine(0),
+                    expectedPage.data(),
+                    expectedPage.size()) == 0;
+}

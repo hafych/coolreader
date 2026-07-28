@@ -177,6 +177,15 @@ allocator-specific result returned by `qSmoothScaleImage()` is held by a
 scoped `std::unique_ptr` with the matching platform deleter. A failed decode
 does not run the smooth post-processing pass over a partial snapshot.
 
+WOL writing stages TOC records, page pixels, cover pixels and LZSS output in
+scoped vectors. Image-size arithmetic is checked against a 64 MiB decoded
+limit, the compressor reports output overflow, and its required trailing byte
+has reserved capacity before publication. Reader-side compressed/decoded
+buffers are equally bounded, require exact reads and return cover/image
+objects through `unique_ptr`; decoding no longer creates an implicit
+`test.dat` file. The native round trip verifies byte-identical page recovery,
+undersized-output failure and oversized-input rollback.
+
 `LVDefStreamBuffer` owns copied stream regions through `std::vector`; its
 factory keeps a candidate in `std::unique_ptr` and marks it ready only after
 the requested position and optional read preload succeed. Rollback therefore

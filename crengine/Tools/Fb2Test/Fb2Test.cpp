@@ -235,18 +235,20 @@ void TestWol()
 			return;
 		LVStreamRef cover = LVOpenFileStream("cover2.bin", LVOM_WRITE);
 		LVStreamRef log = LVOpenFileStream("woltest.log", LVOM_WRITE);
-		LVArray<lUInt8> * rdcover = rd.getBookCover();
-		LVGrayDrawBuf * rdimg1 = rd.getImage(0);
-		*cover << *rdcover;
+		std::unique_ptr<LVArray<lUInt8> > rdcover =
+				rd.getBookCover();
+		std::unique_ptr<LVGrayDrawBuf> rdimg1 =
+				rd.getImage(0);
+		if (rdcover)
+			*cover << *rdcover;
 		//int imgsz = (rdimg1->GetWidth()*2+7)/8*rdimg1->GetHeight();
 		//LVArray<lUInt8> imgbuf(imgsz, 0);
 		//memcpy(imgbuf.ptr(), rdimg1->GetScanLine(0), imgsz );
 		if (rdimg1)
-			SaveBitmapToFile( "test.bmp", rdimg1 );
+			SaveBitmapToFile( "test.bmp", rdimg1.get() );
 		//*img << imgbuf;
 		*log << rd.getBookTitle();
 		*log << "\r\nimages found: " << lString8::itoa(rd.getImageCount());
-		delete rdimg1;
 	}
 }
 

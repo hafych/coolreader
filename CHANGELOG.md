@@ -246,6 +246,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   buffers in scoped vectors. PDB inflate publishes only complete output, zlib
   teardown is guarded, and PDB stream/container candidates transfer from
   `unique_ptr` only at their reference-counted ownership boundaries.
+- WOL export now scopes TOC, page, cover and LZSS buffers in containers,
+  rejects oversized images and reports output overflow before publishing.
+  WOL reader image/cover results return explicit `unique_ptr` ownership,
+  validate exact stream ranges and no longer write an implicit `test.dat`;
+  round-trip regression covers overflow rollback and decoded page bytes.
 - Cache-file ZSTD/zlib contexts and reusable codec chunks now have explicit
   RAII ownership. Pack, unpack, validation and block I/O use bounded
   transactional vectors; corrupt frames preserve prior results, codec errors

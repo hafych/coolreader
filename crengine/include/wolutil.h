@@ -30,6 +30,7 @@
 
 #include "../include/crengine.h"
 
+#include <memory>
 
 
 class WOLBase {
@@ -180,8 +181,8 @@ private:
 public:
     int getImageCount() { return _images.length(); }
     const wolf_img_params * getImageInfo( int index ) { return &_images[index]; }
-    LVArray<lUInt8> * getBookCover();
-    LVGrayDrawBuf * getImage( int index );
+    std::unique_ptr<LVArray<lUInt8> > getBookCover();
+    std::unique_ptr<LVGrayDrawBuf> getImage( int index );
     WOLReader( LVStream * stream );
     bool readHeader();
     lString8 getBookTitle() { return _book_title; }

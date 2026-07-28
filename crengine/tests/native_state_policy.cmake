@@ -8,6 +8,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/wolutil.cpp" WOL_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/wolutil.h" WOL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrend.h" RENDER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hyphman.cpp" HYPH_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
@@ -1198,6 +1200,83 @@ forbid_source_text(
   "${SCALED_IMAGE_SOURCE}"
   "free(sdata)"
   "smooth-scale result cleanup must remain scope-bound"
+)
+
+# --- WOL image/TOC buffers and reader result ownership ---
+require_source_text(
+  "${WOL_SOURCE}"
+  "static const size_t WOL_MAX_IMAGE_BYTES"
+  "WOL image buffers must have an explicit allocation bound"
+)
+require_source_text(
+  "${WOL_SOURCE}"
+  "static bool encodeLzssWithTerminator"
+  "WOL LZSS output must be prepared transactionally"
+)
+require_source_text(
+  "${WOL_SOURCE}"
+  "return !out.getOverflow();"
+  "WOL LZSS encoding must report a bounded-output overflow"
+)
+require_source_text(
+  "${WOL_SOURCE}"
+  "std::vector<wol_toc_subcatalog_item> toc"
+  "WOL TOC serialization must use scoped storage"
+)
+require_source_text(
+  "${WOL_HEADER}"
+  "std::unique_ptr<LVArray<lUInt8> > getBookCover()"
+  "WOL cover reads must return explicit ownership"
+)
+require_source_text(
+  "${WOL_HEADER}"
+  "std::unique_ptr<LVGrayDrawBuf> getImage( int index )"
+  "WOL image reads must return explicit ownership"
+)
+require_source_text(
+  "${WOL_SOURCE}"
+  "bool LVRunWolBufferOwnershipRegression()"
+  "WOL buffer ownership must retain native regression coverage"
+)
+forbid_source_text(
+  "${WOL_SOURCE}"
+  "new lUInt8"
+  "WOL transient byte buffers must remain container-managed"
+)
+forbid_source_text(
+  "${WOL_SOURCE}"
+  "new wol_toc_subcatalog_item"
+  "WOL TOC records must remain container-managed"
+)
+forbid_source_text(
+  "${WOL_SOURCE}"
+  "malloc"
+  "WOL transient buffers must not regress to manual allocation"
+)
+forbid_source_text(
+  "${WOL_SOURCE}"
+  "free("
+  "WOL transient buffer teardown must remain automatic"
+)
+forbid_source_text(
+  "${WOL_SOURCE}"
+  "delete[]"
+  "WOL transient buffer teardown must remain automatic"
+)
+forbid_source_text(
+  "${WOL_HEADER}"
+  "LVArray<lUInt8> * getBookCover()"
+  "WOL cover reads must not return implicit raw ownership"
+)
+forbid_source_text(
+  "${WOL_HEADER}"
+  "LVGrayDrawBuf * getImage( int index )"
+  "WOL image reads must not return implicit raw ownership"
+)
+forbid_source_text(
+  "${WOL_SOURCE}"
+  "LVOpenFileStream( \"test.dat\""
+  "WOL decoding must not write an implicit debug artifact"
 )
 
 # --- default stream region buffer ownership and rollback ---

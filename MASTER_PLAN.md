@@ -119,7 +119,8 @@ DRM или ограничений доступа, подбор/получени�
   factories and bounded stream fragments, cached-stream slots, parser
   read/charset buffers, RTF text/destination
   ownership, TCR dictionary/index/decoded buffers, unpacked 8/16/32-bit pixel
-  storage, scaled-image maps/RGBA snapshots, default stream-region buffers,
+  storage, scaled-image maps/RGBA snapshots, WOL TOC/image/LZSS buffers and
+  reader result ownership, default stream-region buffers,
   owned/borrowed memory streams, block write-cache buffers/LRU, mapped-file
   regions/OS handles, file-stream FILE/HANDLE/owned/borrowed descriptor
   lifecycle, directory scan handles/item candidates, archive factory/item

@@ -39,6 +39,7 @@
 #include "../src/lvstream/lvmemorystream.h"
 #include "../src/lvtinydom_internal.h"
 #include "../src/pdbfmt_internal.h"
+#include "../src/wolutil_internal.h"
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
 #endif
@@ -1752,6 +1753,12 @@ static int testDomChunkStorageOwnership() {
 static int testDomNodePartOwnership() {
     if (!LVRunDomNodePartOwnershipRegression())
         return fail("DOM node-part ownership regression failed");
+    return 0;
+}
+
+static int testWolBufferOwnership() {
+    if (!LVRunWolBufferOwnershipRegression())
+        return fail("WOL buffer ownership regression failed");
     return 0;
 }
 
@@ -4648,6 +4655,8 @@ int main() {
     if (testDomChunkStorageOwnership() != 0)
         return 1;
     if (testDomNodePartOwnership() != 0)
+        return 1;
+    if (testWolBufferOwnership() != 0)
         return 1;
     if (testRtfTextBufferOwnership() != 0)
         return 1;
