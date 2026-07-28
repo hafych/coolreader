@@ -2426,6 +2426,58 @@ forbid_source_text(
   "DOM blob payload allocation must remain container-managed"
 )
 
+# --- DOM text-storage chunk ownership and cache transitions ---
+require_source_text(
+  "${DOM_HEADER}"
+  "std::vector<lUInt8> _storage"
+  "DOM text-storage chunks must own resident bytes through RAII"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "_nextRecent; /// non-owning LRU link"
+  "DOM text-storage LRU links must remain explicitly non-owning"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "// reads a block into caller-owned storage\nbool CacheFile::read("
+  "cache-file reads must support direct caller-owned vector storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "candidate.size() != _bufpos"
+  "DOM chunk restoration must validate its indexed size"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_storage.swap(candidate)"
+  "DOM chunk storage must publish transactionally"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "void ldomTextStorageChunk::clearUnpacked()"
+  "DOM chunk resident accounting must have one teardown path"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "bool ldomTextStorageChunk::validRange("
+  "DOM chunk raw views must enforce bounds in every build"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "lUInt8 * _buf;"
+  "DOM text-storage chunks must not regress to owning raw buffers"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "calloc(preAllocSize"
+  "DOM text-storage preallocation must remain container-managed"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "setunpacked("
+  "DOM text-storage teardown must not regress to manual buffer transfer"
+)
+
 # --- file-stream owned and borrowed OS resources ---
 require_source_text(
   "${FILE_STREAM_HEADER}"

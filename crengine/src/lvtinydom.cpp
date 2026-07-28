@@ -849,6 +849,8 @@ public:
     bool write( lUInt16 type, lUInt16 dataIndex, const lUInt8 * buf, int size, bool compress );
     /// reads and allocates block in memory
     bool read( lUInt16 type, lUInt16 dataIndex, lUInt8 * &buf, int &size );
+    /// reads a block into caller-owned storage
+    bool read( lUInt16 type, lUInt16 dataIndex, std::vector<lUInt8> &data );
     /// reads and validates block
     bool validate( CacheFileItem * block );
     /// writes content of serial buffer
@@ -1350,6 +1352,14 @@ bool CacheFile::read(
     return true;
 }
 
+// reads a block into caller-owned storage
+bool CacheFile::read(
+        lUInt16 type, lUInt16 dataIndex,
+        std::vector<lUInt8> &data)
+{
+    return readBlock(type, dataIndex, data);
+}
+
 // writes block to file
 bool CacheFile::write( lUInt16 type, lUInt16 dataIndex, const lUInt8 * buf, int size, bool compress )
 {
@@ -1463,7 +1473,7 @@ bool CacheFile::write( lUInt16 type, lUInt16 index, SerialBuf & buf, bool compre
 bool CacheFile::read( lUInt16 type, lUInt16 index, SerialBuf & buf )
 {
     std::vector<lUInt8> storage;
-    bool res = readBlock(type, index, storage);
+    bool res = read(type, index, storage);
     if (res)
         buf.set(std::move(storage));
     buf.setPos(0);
@@ -2382,6 +2392,97 @@ bool LVRunBlobCacheRegression()
     ldomBlobCache malformed;
     malformed.setCacheFile(&malformedFile);
     return malformed.getBlob(U"partial-entry").isNull();
+}
+
+bool LVRunDomChunkStorageRegression()
+{
+#if BUILD_LITE!=1
+    LVStreamRef cacheStream = LVCreateMemoryStream();
+    CacheFile cacheFile(1, CacheCompressionNone);
+    if (cacheStream.isNull() || !cacheFile.create(cacheStream))
+        return false;
+
+    ldomDataStorageManager manager(
+            NULL, 't', 1024 * 1024, 64);
+    manager.setCache(&cacheFile);
+
+    std::vector<lUInt8> expected(64);
+    for (size_t index = 0; index < expected.size(); ++index)
+        expected[index] =
+                static_cast<lUInt8>((index * 37 + 11) & 0xFF);
+
+    {
+        ldomTextStorageChunk rawChunk(
+                static_cast<lUInt32>(expected.size()),
+                &manager, 3);
+        for (size_t index = 0;
+                index < rawChunk._storage.size(); ++index) {
+            if (rawChunk._storage[index] != 0)
+                return false;
+        }
+        if (manager.getUncompressedSize() != expected.size())
+            return false;
+        rawChunk.setRaw(
+                0, static_cast<int>(expected.size()),
+                expected.data());
+        if (rawChunk._saved
+                || !rawChunk.swapToCache(true)
+                || !rawChunk._storage.empty()
+                || rawChunk._bufpos != expected.size()
+                || manager.getUncompressedSize() != 0
+                || !rawChunk.restoreFromCache()
+                || rawChunk._storage != expected
+                || manager.getUncompressedSize() != expected.size())
+            return false;
+        rawChunk.clearUnpacked();
+        rawChunk.clearUnpacked();
+        if (!rawChunk._storage.empty()
+                || rawChunk._bufpos != expected.size()
+                || manager.getUncompressedSize() != 0)
+            return false;
+    }
+
+    {
+        ldomTextStorageChunk textChunk(&manager, 4);
+        if (textChunk.addText(17, 9, lString8("owned chunk")) != 0
+                || textChunk._storage.size() != 64
+                || manager.getUncompressedSize() != 64)
+            return false;
+        const lUInt32 serializedSize = textChunk._bufpos;
+        if (!textChunk.swapToCache(true)
+                || manager.getUncompressedSize() != 0
+                || !textChunk.restoreFromCache()
+                || textChunk._storage.size() != serializedSize
+                || manager.getUncompressedSize() != serializedSize
+                || textChunk.getText(0) != lString8("owned chunk"))
+            return false;
+        textChunk.clearUnpacked();
+        if (manager.getUncompressedSize() != 0)
+            return false;
+    }
+
+    if (!cacheFile.write(
+                manager.cacheType(), 5, expected.data(),
+                static_cast<int>(expected.size()), false))
+        return false;
+    ldomTextStorageChunk mismatched(
+            &manager, 5, 0,
+            static_cast<lUInt32>(expected.size() - 1));
+    if (mismatched.restoreFromCache()
+            || !mismatched._storage.empty()
+            || mismatched._bufpos != expected.size() - 1
+            || manager.getUncompressedSize() != 0)
+        return false;
+
+    ldomDataStorageManager parentManager(
+            NULL, 't', 1024 * 1024, 64);
+    const lUInt32 textAddress =
+            parentManager.allocText(
+                    31, 27, lString8("shared header"));
+    return parentManager.getParent(textAddress) == 27;
+#else
+    return true;
+#endif
 }
 
 #if BUILD_LITE!=1
@@ -3918,14 +4019,20 @@ ElementDataStorageItem * ldomDataStorageManager::getElem( lUInt32 addr )
 lUInt32 ldomDataStorageManager::getParent( lUInt32 addr )
 {
     ldomTextStorageChunk * chunk = getChunk(addr);
-    return chunk->getElem(addr&0xFFFF)->parentIndex;
+    return chunk->getParent(addr&0xFFFF);
 }
 #endif
 
 void ldomDataStorageManager::compact( int reservedSpace, const ldomTextStorageChunk* excludedChunk )
 {
 #if BUILD_LITE!=1
-    if ( _uncompressedSize + reservedSpace > _maxUncompressedSize + _maxUncompressedSize/10 ) { // allow +10% overflow
+    const lUInt64 requestedSize =
+            static_cast<lUInt64>(_uncompressedSize)
+            + static_cast<lUInt64>(reservedSpace);
+    const lUInt64 allowedSize =
+            static_cast<lUInt64>(_maxUncompressedSize)
+            + _maxUncompressedSize / 10;
+    if ( requestedSize > allowedSize ) { // allow +10% overflow
         if (!_maxSizeReachedWarned) {
             // Log once to stdout that we reached maxUncompressedSize, so we can know
             // of this fact and consider it as a possible cause for crengine bugs
@@ -3937,13 +4044,14 @@ void ldomDataStorageManager::compact( int reservedSpace, const ldomTextStorageCh
         }
         _owner->setCacheFileStale(true); // we may write: consider cache file stale
         // do compacting
-        lUInt32 sumsize = reservedSpace;
+        lUInt64 sumsize = static_cast<lUInt64>(reservedSpace);
         for ( ldomTextStorageChunk * p = _recentChunk; p; p = p->_nextRecent ) {
-            if ( p->_bufsize + sumsize < _maxUncompressedSize ||
+            const lUInt64 residentSize = p->_storage.size();
+            if ( residentSize + sumsize < _maxUncompressedSize ||
                  (p==_activeChunk && reservedSpace<0xFFFFFFF) || 
                  p == excludedChunk) {
 				// fits
-				sumsize += p->_bufsize;
+				sumsize += residentSize;
 			} else {
 				if ( !_cache )
 					_owner->createCacheFile();
@@ -3983,9 +4091,8 @@ ldomTextStorageChunk::ldomTextStorageChunk(ldomDataStorageManager * manager, lUI
 	: _manager(manager)
 	, _nextRecent(NULL)
 	, _prevRecent(NULL)
-	, _buf(NULL)   /// buffer for uncompressed data
-	, _bufsize(0)    /// _buf (uncompressed) area size, bytes
-	, _bufpos(uncompsize)     /// _buf (uncompressed) data write position (for appending of new data)
+	, _storage()
+	, _bufpos(uncompsize)
 	, _index(index)      /// ? index of chunk in storage
 	, _type( manager->_type )
 	, _saved(true)
@@ -3997,24 +4104,25 @@ ldomTextStorageChunk::ldomTextStorageChunk(lUInt32 preAllocSize, ldomDataStorage
 	: _manager(manager)
 	, _nextRecent(NULL)
 	, _prevRecent(NULL)
-	, _buf(NULL)   /// buffer for uncompressed data
-	, _bufsize(preAllocSize)    /// _buf (uncompressed) area size, bytes
-	, _bufpos(preAllocSize)     /// _buf (uncompressed) data write position (for appending of new data)
+	, _storage(preAllocSize)
+	, _bufpos(preAllocSize)
 	, _index(index)      /// ? index of chunk in storage
 	, _type( manager->_type )
 	, _saved(false)
 {
-    _buf = (lUInt8*)calloc(preAllocSize, sizeof(*_buf));
-    _manager->_uncompressedSize += _bufsize;
+    if (preAllocSize
+            > std::numeric_limits<lUInt32>::max()
+                    - _manager->_uncompressedSize)
+        crFatalError(123, "ldomTextStorageChunk: Resident size overflow");
+    _manager->_uncompressedSize += preAllocSize;
 }
 
 ldomTextStorageChunk::ldomTextStorageChunk(ldomDataStorageManager * manager, lUInt16 index)
 	: _manager(manager)
 	, _nextRecent(NULL)
 	, _prevRecent(NULL)
-	, _buf(NULL)   /// buffer for uncompressed data
-	, _bufsize(0)    /// _buf (uncompressed) area size, bytes
-	, _bufpos(0)     /// _buf (uncompressed) data write position (for appending of new data)
+	, _storage()
+	, _bufpos(0)
 	, _index(index)      /// ? index of chunk in storage
 	, _type( manager->_type )
 	, _saved(false)
@@ -4033,7 +4141,7 @@ bool ldomTextStorageChunk::save()
 
 ldomTextStorageChunk::~ldomTextStorageChunk()
 {
-    setunpacked(NULL, 0);
+    clearUnpacked();
 }
 
 
@@ -4043,12 +4151,22 @@ bool ldomTextStorageChunk::swapToCache( bool removeFromMemory )
 {
     if ( !_manager->_cache )
         return true;
-    if ( _buf ) {
+    if ( !_storage.empty() ) {
+        if (_bufpos > _storage.size()
+                || _bufpos
+                        > static_cast<lUInt32>(
+                                std::numeric_limits<int>::max())) {
+            CRLog::error("Invalid resident size while swapping chunk %c%d", _type, _index);
+            return false;
+        }
         if ( !_saved && _manager->_cache) {
 #if DEBUG_DOM_STORAGE==1
             CRLog::debug("Writing %d bytes of chunk %c%d to cache", _bufpos, _type, _index);
 #endif
-            if ( !_manager->_cache->write( _manager->cacheType(), _index, _buf, _bufpos, COMPRESS_NODE_STORAGE_DATA) ) {
+            if ( !_manager->_cache->write(
+                        _manager->cacheType(), _index,
+                        _storage.data(), static_cast<int>(_bufpos),
+                        COMPRESS_NODE_STORAGE_DATA) ) {
                 CRLog::error("Error while swapping of chunk %c%d to cache file", _type, _index);
                 crFatalError(-1, "Error while swapping of chunk to cache file");
                 return false;
@@ -4057,7 +4175,7 @@ bool ldomTextStorageChunk::swapToCache( bool removeFromMemory )
         }
     }
     if ( removeFromMemory ) {
-        setunpacked(NULL, 0);
+        clearUnpacked();
     }
     return true;
 }
@@ -4065,41 +4183,64 @@ bool ldomTextStorageChunk::swapToCache( bool removeFromMemory )
 /// read packed data from cache
 bool ldomTextStorageChunk::restoreFromCache()
 {
-    if ( _buf )
+    if ( !_storage.empty() )
         return true;
-    if ( !_saved )
+    if ( !_saved || !_manager->_cache )
         return false;
-    int size;
-    if ( !_manager->_cache->read( _manager->cacheType(), _index, _buf, size ) )
+    std::vector<lUInt8> candidate;
+    if ( !_manager->_cache->read(
+                _manager->cacheType(), _index, candidate) )
         return false;
-    _bufsize = size;
-    _manager->_uncompressedSize += _bufsize;
+    if (candidate.size() != _bufpos
+            || candidate.size()
+                    > std::numeric_limits<lUInt32>::max()
+            || candidate.size()
+                    > std::numeric_limits<lUInt32>::max()
+                            - _manager->_uncompressedSize)
+        return false;
+    _manager->_uncompressedSize +=
+            static_cast<lUInt32>(candidate.size());
+    _storage.swap(candidate);
 #if DEBUG_DOM_STORAGE==1
-    CRLog::debug("Read %d bytes of chunk %c%d from cache", _bufsize, _type, _index);
+    CRLog::debug("Read %d bytes of chunk %c%d from cache", (int)_storage.size(), _type, _index);
 #endif
     return true;
 }
 #endif
 
+bool ldomTextStorageChunk::validRange( int offset, int size ) const
+{
+    if (offset < 0 || size < 0)
+        return false;
+    const size_t start = static_cast<size_t>(offset);
+    const size_t length = static_cast<size_t>(size);
+    return start <= _bufpos
+            && length <= static_cast<size_t>(_bufpos) - start
+            && start <= _storage.size()
+            && length <= _storage.size() - start;
+}
+
 /// get raw data bytes
 void ldomTextStorageChunk::getRaw( int offset, int size, lUInt8 * buf )
 {
-#ifdef _DEBUG
-    if ( !_buf || offset+size>(int)_bufpos || offset+size>(int)_bufsize )
+    if (!validRange(offset, size) || (size > 0 && !buf)) {
         crFatalError(123, "ldomTextStorageChunk: Invalid raw data buffer position");
-#endif
-    memcpy( buf, _buf+offset, size );
+        return;
+    }
+    if (size > 0)
+        memcpy( buf, _storage.data() + offset, size );
 }
 
 /// set raw data bytes
 void ldomTextStorageChunk::setRaw( int offset, int size, const lUInt8 * buf )
 {
-#ifdef _DEBUG
-    if ( !_buf || offset+size>(int)_bufpos || offset+size>(int)_bufsize )
+    if (!validRange(offset, size) || (size > 0 && !buf)) {
         crFatalError(123, "ldomTextStorageChunk: Invalid raw data buffer position");
-#endif
-    if (memcmp(_buf+offset, buf, size) != 0) {
-        memcpy(_buf+offset, buf, size);
+        return;
+    }
+    if (size > 0
+            && memcmp(_storage.data() + offset, buf, size) != 0) {
+        memcpy(_storage.data() + offset, buf, size);
         modified();
     }
 }
@@ -4108,29 +4249,55 @@ void ldomTextStorageChunk::setRaw( int offset, int size, const lUInt8 * buf )
 /// returns free space in buffer
 int ldomTextStorageChunk::space()
 {
-    return _bufsize - _bufpos;
+    if (_storage.size() < _bufpos)
+        return 0;
+    const size_t available = _storage.size() - _bufpos;
+    return available
+                    > static_cast<size_t>(
+                            std::numeric_limits<int>::max())
+            ? std::numeric_limits<int>::max()
+            : static_cast<int>(available);
 }
 
 #if BUILD_LITE!=1
 /// returns free space in buffer
 int ldomTextStorageChunk::addText( lUInt32 dataIndex, lUInt32 parentIndex, const lString8 & text )
 {
-    lUInt32 itemsize = (sizeof(TextDataStorageItem)+text.length()-2 + 15) & 0xFFFFFFF0;
-    if ( !_buf ) {
-        // create new buffer, if necessary
-        _bufsize = _manager->_chunkSize > itemsize ? _manager->_chunkSize : itemsize;
-        _buf = (lUInt8*)calloc(_bufsize, sizeof(*_buf));
-        _bufpos = 0;
-        _manager->_uncompressedSize += _bufsize;
-    }
-    if ( _bufsize - _bufpos < itemsize )
+    const int textLength = text.length();
+    if (textLength < 0
+            || textLength > std::numeric_limits<lUInt16>::max())
         return -1;
-    TextDataStorageItem * p = (TextDataStorageItem*)(_buf + _bufpos);
+    const size_t rawSize =
+            sizeof(TextDataStorageItem) - 2
+            + static_cast<size_t>(textLength);
+    if (rawSize
+            > static_cast<size_t>(
+                    std::numeric_limits<lUInt16>::max()) * 16 - 15)
+        return -1;
+    const lUInt32 itemsize =
+            static_cast<lUInt32>((rawSize + 15) & ~size_t(15));
+    if ( _storage.empty() ) {
+        // create new buffer, if necessary
+        const lUInt32 allocationSize =
+                _manager->_chunkSize > itemsize
+                        ? _manager->_chunkSize : itemsize;
+        if (!allocateUnpacked(allocationSize))
+            return -1;
+        _bufpos = 0;
+    }
+    if (_bufpos > _storage.size()
+            || itemsize > _storage.size() - _bufpos
+            || (_bufpos >> 4)
+                    > std::numeric_limits<lUInt16>::max())
+        return -1;
+    TextDataStorageItem * p =
+            reinterpret_cast<TextDataStorageItem *>(
+                    _storage.data() + _bufpos);
     p->sizeDiv16 = (lUInt16)(itemsize >> 4);
     p->dataIndex = dataIndex;
     p->parentIndex = parentIndex;
     p->type = LXML_TEXT_NODE;
-    p->length = (lUInt16)text.length();
+    p->length = (lUInt16)textLength;
     memcpy(p->text, text.c_str(), p->length);
     int res = _bufpos >> 4;
     _bufpos += itemsize;
@@ -4140,17 +4307,43 @@ int ldomTextStorageChunk::addText( lUInt32 dataIndex, lUInt32 parentIndex, const
 /// adds new element item to buffer, returns offset inside chunk of stored data
 int ldomTextStorageChunk::addElem(lUInt32 dataIndex, lUInt32 parentIndex, int childCount, int attrCount)
 {
-    lUInt32 itemsize = (sizeof(ElementDataStorageItem) + attrCount*(sizeof(lUInt16)*2 + sizeof(lUInt32)) + childCount*sizeof(lUInt32) - sizeof(lUInt32) + 15) & 0xFFFFFFF0;
-    if ( !_buf ) {
-        // create new buffer, if necessary
-        _bufsize = _manager->_chunkSize > itemsize ? _manager->_chunkSize : itemsize;
-        _buf = (lUInt8*)calloc(_bufsize, sizeof(*_buf));
-        _bufpos = 0;
-        _manager->_uncompressedSize += _bufsize;
-    }
-    if ( _bufsize - _bufpos < (unsigned)itemsize )
+    if (childCount < 0 || attrCount < 0
+            || attrCount > std::numeric_limits<lInt16>::max())
         return -1;
-    ElementDataStorageItem *item = (ElementDataStorageItem *)(_buf + _bufpos);
+    const size_t maximumRawSize =
+            static_cast<size_t>(
+                    std::numeric_limits<lUInt16>::max()) * 16 - 15;
+    const size_t attributeSize =
+            sizeof(lUInt16) * 2 + sizeof(lUInt32);
+    size_t rawSize =
+            sizeof(ElementDataStorageItem) - sizeof(lUInt32);
+    if (static_cast<size_t>(attrCount)
+            > (maximumRawSize - rawSize) / attributeSize)
+        return -1;
+    rawSize += static_cast<size_t>(attrCount) * attributeSize;
+    if (static_cast<size_t>(childCount)
+            > (maximumRawSize - rawSize) / sizeof(lUInt32))
+        return -1;
+    rawSize += static_cast<size_t>(childCount) * sizeof(lUInt32);
+    const lUInt32 itemsize =
+            static_cast<lUInt32>((rawSize + 15) & ~size_t(15));
+    if ( _storage.empty() ) {
+        // create new buffer, if necessary
+        const lUInt32 allocationSize =
+                _manager->_chunkSize > itemsize
+                        ? _manager->_chunkSize : itemsize;
+        if (!allocateUnpacked(allocationSize))
+            return -1;
+        _bufpos = 0;
+    }
+    if (_bufpos > _storage.size()
+            || itemsize > _storage.size() - _bufpos
+            || (_bufpos >> 4)
+                    > std::numeric_limits<lUInt16>::max())
+        return -1;
+    ElementDataStorageItem *item =
+            reinterpret_cast<ElementDataStorageItem *>(
+                    _storage.data() + _bufpos);
     if ( item ) {
         item->sizeDiv16 = (lUInt16)(itemsize >> 4);
         item->dataIndex = dataIndex;
@@ -4168,9 +4361,16 @@ int ldomTextStorageChunk::addElem(lUInt32 dataIndex, lUInt32 parentIndex, int ch
 /// set node parent by offset
 bool ldomTextStorageChunk::setParent( int offset, lUInt32 parentIndex )
 {
-    offset <<= 4;
-    if ( offset>=0 && offset<(int)_bufpos ) {
-        TextDataStorageItem * item = (TextDataStorageItem *)(_buf+offset);
+    if (offset >= 0
+            && offset <= std::numeric_limits<int>::max() / 16) {
+        offset *= 16;
+    } else {
+        offset = -1;
+    }
+    if (validRange(offset, sizeof(DataStorageItemHeader))) {
+        TextDataStorageItem * item =
+                reinterpret_cast<TextDataStorageItem *>(
+                        _storage.data() + offset);
         if ( (int)parentIndex!=item->parentIndex ) {
             item->parentIndex = parentIndex;
             modified();
@@ -4186,9 +4386,16 @@ bool ldomTextStorageChunk::setParent( int offset, lUInt32 parentIndex )
 /// get text node parent by offset
 lUInt32 ldomTextStorageChunk::getParent( int offset )
 {
-    offset <<= 4;
-    if ( offset>=0 && offset<(int)_bufpos ) {
-        TextDataStorageItem * item = (TextDataStorageItem *)(_buf+offset);
+    if (offset >= 0
+            && offset <= std::numeric_limits<int>::max() / 16) {
+        offset *= 16;
+    } else {
+        offset = -1;
+    }
+    if (validRange(offset, sizeof(DataStorageItemHeader))) {
+        TextDataStorageItem * item =
+                reinterpret_cast<TextDataStorageItem *>(
+                        _storage.data() + offset);
         return item->parentIndex;
     }
     CRLog::error("Offset %d is out of bounds (%d) for storage chunk %c%d, chunkCount=%d", offset, this->_bufpos, this->_type, this->_index, _manager->_chunks.length() );
@@ -4198,9 +4405,16 @@ lUInt32 ldomTextStorageChunk::getParent( int offset )
 /// get pointer to element data
 ElementDataStorageItem * ldomTextStorageChunk::getElem( int offset  )
 {
-    offset <<= 4;
-    if ( offset>=0 && offset<(int)_bufpos ) {
-        ElementDataStorageItem * item = (ElementDataStorageItem *)(_buf+offset);
+    if (offset >= 0
+            && offset <= std::numeric_limits<int>::max() / 16) {
+        offset *= 16;
+    } else {
+        offset = -1;
+    }
+    if (validRange(offset, sizeof(ElementDataStorageItem))) {
+        ElementDataStorageItem * item =
+                reinterpret_cast<ElementDataStorageItem *>(
+                        _storage.data() + offset);
         return item;
     }
     CRLog::error("Offset %d is out of bounds (%d) for storage chunk %c%d, chunkCount=%d", offset, this->_bufpos, this->_type, this->_index, _manager->_chunks.length() );
@@ -4212,7 +4426,7 @@ ElementDataStorageItem * ldomTextStorageChunk::getElem( int offset  )
 /// call to invalidate chunk if content is modified
 void ldomTextStorageChunk::modified()
 {
-    if ( !_buf ) {
+    if ( _storage.empty() ) {
         CRLog::error("Modified is called for node which is not in memory");
     }
     _saved = false;
@@ -4222,9 +4436,16 @@ void ldomTextStorageChunk::modified()
 /// free data item
 void ldomTextStorageChunk::freeNode( int offset )
 {
-    offset <<= 4;
-    if ( _buf && offset>=0 && offset<(int)_bufpos ) {
-        TextDataStorageItem * item = (TextDataStorageItem *)(_buf+offset);
+    if (offset >= 0
+            && offset <= std::numeric_limits<int>::max() / 16) {
+        offset *= 16;
+    } else {
+        offset = -1;
+    }
+    if (validRange(offset, sizeof(DataStorageItemHeader))) {
+        TextDataStorageItem * item =
+                reinterpret_cast<TextDataStorageItem *>(
+                        _storage.data() + offset);
         if ( (item->type==LXML_TEXT_NODE || item->type==LXML_ELEMENT_NODE) && item->dataIndex ) {
             item->type = LXML_NO_DATA;
             item->dataIndex = 0;
@@ -4236,37 +4457,55 @@ void ldomTextStorageChunk::freeNode( int offset )
 /// get text item from buffer by offset
 lString8 ldomTextStorageChunk::getText( int offset )
 {
-    offset <<= 4;
-    if ( _buf && offset>=0 && offset<(int)_bufpos ) {
-        TextDataStorageItem * item = (TextDataStorageItem *)(_buf+offset);
+    if (offset < 0
+            || offset > std::numeric_limits<int>::max() / 16)
+        return lString8::empty_str;
+    offset *= 16;
+    const int headerSize = sizeof(TextDataStorageItem) - 2;
+    if (!validRange(offset, headerSize))
+        return lString8::empty_str;
+    TextDataStorageItem * item =
+            reinterpret_cast<TextDataStorageItem *>(
+                    _storage.data() + offset);
+    if (validRange(offset + headerSize, item->length))
         return item->getText8();
-    }
     return lString8::empty_str;
 }
 #endif
 
-void ldomTextStorageChunk::setunpacked( const lUInt8 * buf, int bufsize )
+bool ldomTextStorageChunk::allocateUnpacked( lUInt32 size )
 {
-    if ( _buf ) {
-        _manager->_uncompressedSize -= _bufsize;
-        free(_buf);
-        _buf = NULL;
-        _bufsize = 0;
-    }
-    if ( buf && bufsize ) {
-        _bufsize = bufsize;
-        _bufpos = bufsize;
-        _buf = (lUInt8 *)malloc( sizeof(lUInt8) * bufsize );
-        _manager->_uncompressedSize += _bufsize;
-        memcpy( _buf, buf, bufsize );
-    }
+    if (!_storage.empty() || size == 0)
+        return size == 0;
+    if (size
+            > std::numeric_limits<lUInt32>::max()
+                    - _manager->_uncompressedSize)
+        return false;
+    std::vector<lUInt8> candidate;
+    if (!resizeCacheBuffer(candidate, size))
+        return false;
+    _manager->_uncompressedSize += size;
+    _storage.swap(candidate);
+    return true;
+}
+
+void ldomTextStorageChunk::clearUnpacked()
+{
+    if (_storage.empty())
+        return;
+    const lUInt32 residentSize =
+            static_cast<lUInt32>(_storage.size());
+    if (_manager->_uncompressedSize < residentSize)
+        crFatalError(123, "ldomTextStorageChunk: Resident size underflow");
+    _manager->_uncompressedSize -= residentSize;
+    std::vector<lUInt8>().swap(_storage);
 }
 
 /// unpacks chunk, if packed; checks storage space, compact if necessary
 void ldomTextStorageChunk::ensureUnpacked()
 {
 #if BUILD_LITE!=1
-    if ( !_buf ) {
+    if ( _storage.empty() ) {
         if ( _saved ) {
             if ( !restoreFromCache() ) {
                 CRTimerUtil timer;

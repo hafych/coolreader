@@ -257,6 +257,12 @@ The historical Debian changelog remains in [`changelog`](changelog).
   writes do not create phantom items, and short blobs no longer feed an
   unchecked four-byte diagnostic preview. Native regressions cover RAM/cache
   transfer, index reopen and truncated-index rollback.
+- DOM text-storage chunks now own resident bytes through vectors while their
+  manager and LRU links remain non-owning. Cache restore validates the indexed
+  size before publishing, eviction preserves the serialized position, and
+  resident-byte accounting changes exactly once per transition. Raw data views
+  are bounds-checked in every build; native regressions cover fixed and dynamic
+  chunks plus mismatched-index rollback.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is

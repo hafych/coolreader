@@ -85,11 +85,12 @@ their vector-backed output chunks. Pack, unpack, validation and block I/O build
 operation-scoped vectors and publish results only after a complete codec frame,
 size check and CRC check succeed. A corrupt frame leaves the caller's previous
 result intact, and a later reset can safely reuse the same context because
-error paths no longer call `deflateEnd()` or `inflateEnd()`. `SerialBuf` accepts
-completed cache blocks by moving their vector storage; the two persistent DOM
-storage consumers retain an explicit malloc-compatible ownership boundary.
-Regression coverage exercises multi-chunk ZSTD/zlib round trips, reuse,
-corruption recovery, cleanup/recreation and both cache read boundaries.
+error paths no longer call `deflateEnd()` or `inflateEnd()`. `SerialBuf` and
+DOM text-storage chunks accept completed cache blocks through vector storage;
+the remaining persistent DOM node-array consumer retains an explicit
+malloc-compatible ownership boundary. Regression coverage exercises
+multi-chunk ZSTD/zlib round trips, reuse, corruption recovery,
+cleanup/recreation and the vector, serialization and legacy read boundaries.
 
 DOM blob payloads live in `vector` storage, while the blob cache owns items as
 `vector<unique_ptr>`. Index loading builds a bounded candidate list and swaps
@@ -100,6 +101,17 @@ cache block succeeds. Small diagnostic blobs no longer trigger a four-byte
 out-of-bounds preview. Regression coverage follows RAM blobs into CacheFile,
 reopens them through the persisted index and rejects a deliberately truncated
 index without publishing its valid prefix.
+
+DOM text-storage chunks own resident uncompressed bytes in `vector` storage.
+Their manager pointer and doubly linked LRU neighbors are non-owning views, and
+copying is disabled because it would duplicate both those links and resident
+byte accounting. Eviction releases vector capacity but deliberately preserves
+the serialized write position; restoration reads into a scoped candidate,
+checks that size against the chunk index and publishes it only after accounting
+can be updated. Fixed raw-data access and node-item views enforce their byte
+ranges in every build. Regression coverage follows both fixed and dynamically
+allocated chunks through eviction and restore, verifies exact accounting and
+rejects a mismatched indexed size without publishing bytes.
 
 Temporary draw mark lists and SVG decoder input/output buffers also use
 standard RAII containers. These operation-scoped resources cannot outlive

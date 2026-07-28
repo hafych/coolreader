@@ -13,4 +13,7 @@ bool LVRunCacheFileCodecRegression(
 /// Native regression seam for DOM blob ownership and cache restoration.
 bool LVRunBlobCacheRegression();
 
+/// Native regression seam for DOM chunk ownership and cache transitions.
+bool LVRunDomChunkStorageRegression();
+
 #endif

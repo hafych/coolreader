@@ -341,17 +341,19 @@ public:
 class ldomTextStorageChunk
 {
     friend class ldomDataStorageManager;
-    ldomDataStorageManager * _manager;
-    ldomTextStorageChunk * _nextRecent;
-    ldomTextStorageChunk * _prevRecent;
-    lUInt8 * _buf;     /// buffer for uncompressed data
-    lUInt32 _bufsize;  /// _buf (uncompressed) area size, bytes
-    lUInt32 _bufpos;  /// _buf (uncompressed) data write position (for appending of new data)
+    friend bool LVRunDomChunkStorageRegression();
+    ldomDataStorageManager * _manager;  /// non-owning manager
+    ldomTextStorageChunk * _nextRecent; /// non-owning LRU link
+    ldomTextStorageChunk * _prevRecent; /// non-owning LRU link
+    std::vector<lUInt8> _storage; /// owned uncompressed data
+    lUInt32 _bufpos;  /// uncompressed data write position (for appending of new data)
     lUInt16 _index;  /// ? index of chunk in storage
     char _type;       /// type, to show in log
     bool _saved;
 
-    void setunpacked( const lUInt8 * buf, int bufsize );
+    bool allocateUnpacked( lUInt32 size );
+    void clearUnpacked();
+    bool validRange( int offset, int size ) const;
     /// pack data, and remove unpacked
     void compact();
 #if BUILD_LITE!=1
@@ -398,6 +400,8 @@ public:
     /// create with preallocated buffer, for raw access
     ldomTextStorageChunk(lUInt32 preAllocSize, ldomDataStorageManager * manager, lUInt16 index);
     ~ldomTextStorageChunk();
+    ldomTextStorageChunk(const ldomTextStorageChunk &) = delete;
+    ldomTextStorageChunk &operator=(const ldomTextStorageChunk &) = delete;
 };
 
 // forward declaration
