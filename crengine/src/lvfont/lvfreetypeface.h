@@ -132,6 +132,8 @@ public:
     }
 };
 
+bool LVRunFreeTypeColorGlyphScaleOwnershipRegression();
+
 class LVFreeTypeFace : public LVFont {
 protected:
     LVMutex &_mutex;

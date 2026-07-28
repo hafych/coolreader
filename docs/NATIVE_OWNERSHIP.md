@@ -693,6 +693,13 @@ without manual array teardown. Direct unsigned and signed cache coverage checks
 page boundaries, repeated clear, the last supported codepoint, and verifies
 that unsupported high codepoints cannot alias a lower page.
 
+Fixed-size FreeType color glyphs keep the temporary output from smooth scaling
+in an exclusive owner with the scaler's platform-specific deleter:
+`_aligned_free` for MinGW and `free` elsewhere. The glyph slot borrows that
+buffer only while copying the smaller BGRA image back into its existing
+storage. Native coverage repeats a synthetic 4-by-4 to 2-by-2 scale and checks
+both the copied solid-color pixels and every adjusted metric under sanitizers.
+
 `ldomXPointer` stores its shared mutable state in `shared_ptr<XPointerData>`.
 Ordinary copies intentionally retain alias semantics, while `clear()` publishes
 a fresh null state and leaves aliases alive. The protected clone boundary,

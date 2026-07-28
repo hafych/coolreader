@@ -161,8 +161,9 @@ DRM или ограничений доступа, подбор/получени�
   publication, render-flow float/shift publication и teardown, table-cell
   page-context ownership, draw-time bookmark-range filters и full CCRTable
   row-group/row/column/cell graph publication, включая MathML table expansion,
-  FreeType face load-candidates и language-compatibility cache owners, а также
-  bounded NanoSVG image/rasterizer/RGBA workspace ownership и transactional
+  FreeType face load-candidates, color-glyph scaling workspace и
+  language-compatibility cache owners, а также bounded NanoSVG
+  image/rasterizer/RGBA workspace ownership и transactional
   selection-range split/draw/text owner publication, включая batched
   word/filter/crop/extended-word owner-list factories, а также bounded
   transactional TOC/page-map graph deserialization и whole-snapshot DOM

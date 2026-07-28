@@ -1054,6 +1054,12 @@ static int testFreeTypeMetricCacheOwnership() {
         return fail("FreeType signed metric cache changed its encoding");
     return 0;
 }
+
+static int testFreeTypeColorGlyphScaleOwnership() {
+    if (!LVRunFreeTypeColorGlyphScaleOwnershipRegression())
+        return fail("FreeType color glyph scale ownership regression failed");
+    return 0;
+}
 #endif
 
 static int testBoundedObservableDecodedImageCache() {
@@ -6757,6 +6763,8 @@ int main() {
         return 1;
 #if (USE_FREETYPE==1)
     if (testFreeTypeMetricCacheOwnership() != 0)
+        return 1;
+    if (testFreeTypeColorGlyphScaleOwnership() != 0)
         return 1;
 #endif
     if (testBoundedObservableDecodedImageCache() != 0)

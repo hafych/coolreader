@@ -6112,6 +6112,53 @@ forbid_source_text(
   "FreeType metric page lookup must not alias high codepoints"
 )
 
+# --- FreeType color-glyph scaling workspace ownership ---
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "SmoothScaledGlyphBufferDeleter"
+  "FreeType color glyph scaling must use an allocator-aware deleter"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "_aligned_free(buffer)"
+  "FreeType color glyph scaling must match the MinGW allocator"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "std::free(buffer)"
+  "FreeType color glyph scaling must match the standard allocator"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "SmoothScaledGlyphBufferDeleter> scaled_bmp("
+  "FreeType color glyph scaling output must enter scoped ownership"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "slot->bitmap.buffer, scaled_bmp.get()"
+  "FreeType color glyph scaling must borrow its scoped output"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "LVRunFreeTypeColorGlyphScaleOwnershipRegression()"
+  "FreeType color glyph ownership must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "FreeType color glyph scale ownership regression failed"
+  "FreeType color glyph ownership must retain native lifecycle coverage"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "lUInt8* scaled_bmp"
+  "FreeType color glyph scaling output must not remain a raw owner"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "free(scaled_bmp)"
+  "FreeType color glyph scaling teardown must remain automatic"
+)
+
 # --- XPointer shared-state ownership ---
 require_source_text(
   "${DOM_HEADER}"

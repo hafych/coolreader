@@ -63,6 +63,13 @@
 #include FT_GLYPH_H     // for FT_Matrix_Multiply()
 #include FT_TRUETYPE_TABLES_H   // for FT_Get_Sfnt_Table()
 
+#include <cstdlib>
+#include <memory>
+
+#if defined(__MINGW32__)
+#include <malloc.h>
+#endif
+
 #if (USE_HARFBUZZ == 1)
 #include <hb-ot.h>
 #endif
@@ -369,6 +376,21 @@ static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lUInt32
 
 #endif
 
+namespace {
+
+struct SmoothScaledGlyphBufferDeleter {
+    void operator()(lUInt8 *buffer) const
+    {
+#if defined(__MINGW32__)
+        _aligned_free(buffer);
+#else
+        std::free(buffer);
+#endif
+    }
+};
+
+}
+
 static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scale_div, bool onlyMetrics) {
     // Downscale glyph's bitmap & hack glyph slot to update metadata...
     if (scale_mul == scale_div)
@@ -381,7 +403,6 @@ static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scal
     if (FT_PIXEL_MODE_BGRA == slot->bitmap.pixel_mode ||
         FT_PIXEL_MODE_MONO == slot->bitmap.pixel_mode) {    // invisible glyph, only update metrics
         // Scale glyph bitmap
-        lUInt8* scaled_bmp = NULL;
         unsigned int new_h = scale_mul;     // new size
         unsigned int new_w = scale_mul*slot->bitmap.width/scale_div;
         int new_bmp_pitch = new_w*4;
@@ -390,12 +411,20 @@ static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scal
             if (!onlyMetrics) {
                 if (slot->bitmap.width > 0 && slot->bitmap.rows > 0 && slot->bitmap.buffer != NULL) {
                     if (FT_PIXEL_MODE_BGRA == slot->bitmap.pixel_mode) {
-                        scaled_bmp = CRe::qSmoothScaleImage(slot->bitmap.buffer, slot->bitmap.width, slot->bitmap.rows, false, new_w, new_h);
+                        std::unique_ptr<
+                                lUInt8,
+                                SmoothScaledGlyphBufferDeleter> scaled_bmp(
+                                        CRe::qSmoothScaleImage(
+                                                slot->bitmap.buffer,
+                                                slot->bitmap.width,
+                                                slot->bitmap.rows,
+                                                false, new_w, new_h));
                         // update bitmap
-                        if (scaled_bmp != NULL) {
+                        if (scaled_bmp) {
                             // We can safely overwrite bitmap since new bitmap is always is less than original
-                            memcpy(slot->bitmap.buffer, scaled_bmp, new_bmp_pitch*new_h);
-                            free(scaled_bmp);
+                            memcpy(
+                                    slot->bitmap.buffer, scaled_bmp.get(),
+                                    new_bmp_pitch * new_h);
                         } else {
                             // downscale failed
                             res = false;
@@ -423,6 +452,67 @@ static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scal
         slot->advance.y = scale_mul*slot->advance.y/scale_div;
     }
     return res;
+}
+
+bool LVRunFreeTypeColorGlyphScaleOwnershipRegression()
+{
+    for (int lifecycle = 0; lifecycle < 2; lifecycle++) {
+        std::array<lUInt8, 64> pixels;
+        for (std::size_t offset = 0;
+                offset < pixels.size(); offset += 4) {
+            pixels[offset] = 10;
+            pixels[offset + 1] = 20;
+            pixels[offset + 2] = 30;
+            pixels[offset + 3] = 255;
+        }
+
+        FT_GlyphSlotRec slot = {};
+        slot.bitmap.pixel_mode = FT_PIXEL_MODE_BGRA;
+        slot.bitmap.width = 4;
+        slot.bitmap.rows = 4;
+        slot.bitmap.pitch = 16;
+        slot.bitmap.buffer = pixels.data();
+        slot.bitmap_left = 4;
+        slot.bitmap_top = 6;
+        slot.metrics.width = 640;
+        slot.metrics.height = 768;
+        slot.metrics.horiAdvance = 896;
+        slot.metrics.vertAdvance = 1024;
+        slot.metrics.horiBearingX = 128;
+        slot.metrics.horiBearingY = 256;
+        slot.metrics.vertBearingX = 384;
+        slot.metrics.vertBearingY = 512;
+        slot.advance.x = 1024;
+        slot.advance.y = 1280;
+
+        if (!downScaleColorGlyphBitmap(&slot, 2, 4, false)
+                || slot.bitmap.width != 2
+                || slot.bitmap.rows != 2
+                || slot.bitmap.pitch != 8
+                || slot.bitmap_left != 2
+                || slot.bitmap_top != 3
+                || slot.metrics.width != 320
+                || slot.metrics.height != 384
+                || slot.metrics.horiAdvance != 448
+                || slot.metrics.vertAdvance != 512
+                || slot.metrics.horiBearingX != 64
+                || slot.metrics.horiBearingY != 128
+                || slot.metrics.vertBearingX != 192
+                || slot.metrics.vertBearingY != 256
+                || slot.advance.x != 512
+                || slot.advance.y != 640) {
+            return false;
+        }
+        for (std::size_t offset = 0; offset < 16; offset += 4) {
+            if (pixels[offset] != 10
+                    || pixels[offset + 1] != 20
+                    || pixels[offset + 2] != 30
+                    || pixels[offset + 3] != 255) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 // The 2 slots with "LCHAR_IS_SPACE | LCHAR_ALLOW_WRAP_AFTER" on the 2nd line previously
