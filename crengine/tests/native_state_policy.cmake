@@ -32,6 +32,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvhashtable.h" HASH_TABLE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvarray.h" VALUE_ARRAY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvref.h" REF_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvptrvec.h" PTR_VECTOR_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvpagesplitter.h" PAGE_SPLITTER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrefcache.h" REF_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
@@ -1607,6 +1608,78 @@ forbid_source_text(
   "${PTR_VECTOR_HEADER}"
   "malloc( sizeof(_Ty*)"
   "matrix rows must not allocate pointer-sized cell storage"
+)
+
+# --- pagination compact-array and line-link ownership ---
+require_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "std::vector<T> _list"
+  "pagination compact arrays must use container-backed storage"
+)
+require_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "std::unique_ptr<Array> _data"
+  "pagination compact-array storage must be lazily RAII-owned"
+)
+require_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "std::vector<T> snapshot(items, items + count)"
+  "pagination compact-array appends must snapshot aliased input"
+)
+require_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "std::make_unique<Array>(*array._data)"
+  "pagination compact-array copies must deep-copy storage"
+)
+require_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "std::unique_ptr<LVFootNoteList> links"
+  "rendered lines must explicitly own their footnote-link list"
+)
+require_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "std::make_unique<LVFootNoteList>(*line.links)"
+  "rendered-line copies must deep-copy link-list storage"
+)
+require_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "links.reset()"
+  "rendered-line clear must release link-list ownership"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "T * _list"
+  "pagination compact arrays must not own raw backing arrays"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "Array * _data"
+  "pagination compact arrays must not own raw lazy storage"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "cr_realloc( _list"
+  "pagination compact-array growth must not use realloc"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "free( _list"
+  "pagination compact-array teardown must not use free"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "delete _data"
+  "pagination compact-array teardown must remain automatic"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "LVFootNoteList * links"
+  "rendered lines must not own raw link-list pointers"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_HEADER}"
+  "delete links"
+  "rendered-line link teardown must remain automatic"
 )
 
 # --- reference-cache bucket, index and export ownership ---

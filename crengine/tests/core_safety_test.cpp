@@ -2,6 +2,7 @@
 #include "lvstreamfragment.h"
 #include "lvarray.h"
 #include "lvhashtable.h"
+#include "lvpagesplitter.h"
 #include "lvptrvec.h"
 #include "lvrefcache.h"
 #include "lvstring8collection.h"
@@ -2405,6 +2406,122 @@ static int testMatrixOwnership() {
     return 0;
 }
 
+static int testPaginationAuxiliaryOwnership() {
+    {
+        CompactArray<int, 1, 2> values;
+        values.reserve(-1);
+        values.add(static_cast<int *>(NULL), 0);
+        values.add(static_cast<int *>(NULL), 1);
+        values.add(1);
+        values.add(2);
+        int tail[] = { 3, 4 };
+        values.add(tail, 2);
+        values.reserve(5);
+        values.add(&values[1], 3);
+        if (values.length() != 7
+                || values[0] != 1 || values[1] != 2
+                || values[2] != 3 || values[3] != 4
+                || values[4] != 2 || values[5] != 3
+                || values[6] != 4)
+            return fail("compact array aliased append lost values");
+
+        LVArray<int> extra(2, 8);
+        values.add(extra);
+        const CompactArray<int, 1, 2> &constValues = values;
+        if (values.length() != 9
+                || constValues.get(7) != 8 || constValues[8] != 8)
+            return fail("compact array LVArray append lost values");
+
+        CompactArray<int, 1, 2> copied(values);
+        CompactArray<int, 1, 2> assigned;
+        assigned = values;
+        CompactArray<int, 1, 2> *assignedAlias = &assigned;
+        assigned = *assignedAlias;
+        values[0] = 99;
+        copied[1] = 77;
+        assigned[2] = 66;
+        if (copied[0] != 1 || assigned[0] != 1
+                || values[1] != 2 || values[2] != 3
+                || copied[1] != 77 || assigned[2] != 66)
+            return fail("compact array copy shared backing storage");
+
+        CompactArray<int, 1, 2> moved(std::move(copied));
+        CompactArray<int, 1, 2> moveAssigned;
+        moveAssigned = std::move(assigned);
+        if (!copied.empty() || !assigned.empty()
+                || moved.length() != 9 || moved[1] != 77
+                || moveAssigned.length() != 9
+                || moveAssigned[2] != 66)
+            return fail("compact array move retained shared storage");
+        values.clear();
+        if (!values.empty() || values.length() != 0
+                || moved.length() != 9 || moveAssigned.length() != 9)
+            return fail("compact array clear invalidated independent copies");
+    }
+
+    {
+        LVRendPageInfo page(100, 200, 3);
+        page.footnotes.add(LVPageFootNoteInfo(10, 20));
+        page.footnotes.add(LVPageFootNoteInfo(30, 40));
+        LVRendPageInfo copiedPage(page);
+        page.footnotes[0].start = 99;
+        if (copiedPage.footnotes.length() != 2
+                || copiedPage.footnotes[0].start != 10
+                || copiedPage.footnotes[1].height != 40)
+            return fail("rendered page copy shared compact footnotes");
+    }
+
+    {
+        LVFootNoteRef first(
+                new LVFootNote(lString32(U"first")));
+        LVFootNoteRef second(
+                new LVFootNote(lString32(U"second")));
+        LVRendLineInfo line(10, 20, RN_SPLIT_ALWAYS, 3);
+        line.addLink(first.get());
+        line.addLink(second.get(), 0);
+        if (line.getLinksCount() != 2
+                || !line.getLinks()
+                || line.getLinks()->get(0) != second.get()
+                || line.getLinks()->get(1) != first.get()
+                || !(line.getFlags() & RN_SPLIT_FOOT_LINK))
+            return fail("rendered line link insertion lost a footnote");
+
+        LVRendLineInfo copied(line);
+        LVRendLineInfo assigned;
+        assigned = line;
+        LVRendLineInfo *assignedAlias = &assigned;
+        assigned = *assignedAlias;
+        if (!copied.getLinks() || !assigned.getLinks()
+                || copied.getLinks() == line.getLinks()
+                || assigned.getLinks() == line.getLinks()
+                || copied.getLinksCount() != 2
+                || assigned.getLinksCount() != 2
+                || copied.getStart() != 10 || copied.getEnd() != 20
+                || copied.flow != 3)
+            return fail("rendered line copy shared its link-list owner");
+
+        copied.getLinks()->erase(0, 1);
+        if (copied.getLinksCount() != 1
+                || line.getLinksCount() != 2
+                || assigned.getLinksCount() != 2)
+            return fail("rendered line link-list copy was not independent");
+
+        LVRendLineInfo moved(std::move(copied));
+        LVRendLineInfo moveAssigned;
+        moveAssigned = std::move(assigned);
+        if (copied.getLinks() || assigned.getLinks()
+                || moved.getLinksCount() != 1
+                || moveAssigned.getLinksCount() != 2)
+            return fail("rendered line move retained a link-list alias");
+        line.clear();
+        if (!line.empty() || line.getLinks()
+                || moved.getLinksCount() != 1
+                || moveAssigned.getLinksCount() != 2)
+            return fail("rendered line clear invalidated moved link lists");
+    }
+    return 0;
+}
+
 static int testReferenceCacheOwnership() {
     if (RefCacheTestValue::liveCount() != 0)
         return fail("reference cache fixture started with live values");
@@ -4381,6 +4498,8 @@ int main() {
     if (testPointerVectorOwnership() != 0)
         return 1;
     if (testMatrixOwnership() != 0)
+        return 1;
+    if (testPaginationAuxiliaryOwnership() != 0)
         return 1;
     if (testReferenceCacheOwnership() != 0)
         return 1;

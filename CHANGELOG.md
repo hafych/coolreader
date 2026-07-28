@@ -238,6 +238,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   Bounded transactional resize preserves the old/new overlap across growth and
   shrink, deep copy and reset-source moves replace shallow raw-row aliases, and
   constructed cells are released automatically.
+- Pagination compact arrays now combine lazy `unique_ptr` allocation with
+  bounded vector payloads, alias-safe batch append and deep copy semantics.
+  Rendered lines also scope optional footnote-link lists with `unique_ptr`
+  while preserving the lists' non-owning note references and ordering.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is

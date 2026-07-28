@@ -30,8 +30,13 @@
 #ifndef __LV_PAGESPLITTER_H_INCLUDED__
 #define __LV_PAGESPLITTER_H_INCLUDED__
 
-#include <stdlib.h>
+#include <algorithm>
+#include <climits>
+#include <memory>
+#include <stdexcept>
 #include <time.h>
+#include <utility>
+#include <vector>
 #include "lvtypes.h"
 #include "lvarray.h"
 #include "lvptrvec.h"
@@ -98,138 +103,197 @@ public:
 
 template <typename T, int RESIZE_MULT, int RESIZE_ADD> class CompactArray
 {
+    static_assert(RESIZE_MULT >= 1,
+            "CompactArray growth multiplier must be positive");
+    static_assert(RESIZE_ADD > 0,
+            "CompactArray growth increment must be positive");
+
     struct Array {
-        T * _list;
-        int _size;
-        int _length;
-        Array()
-        : _list(NULL), _size(0), _length(0)
+        std::vector<T> _list;
+
+        size_t requiredSize(int count) const
         {
+            const size_t maxCount = std::min(
+                    _list.max_size(), static_cast<size_t>(INT_MAX));
+            const size_t added = static_cast<size_t>(count);
+            if (added > maxCount
+                    || _list.size() > maxCount - added)
+                throw std::length_error("CompactArray size overflow");
+            return _list.size() + added;
         }
-        ~Array()
+
+        void ensureCapacity(size_t required, bool grow)
         {
-            clear();
+            if (required <= _list.capacity())
+                return;
+            size_t capacity = required;
+            if (grow) {
+                const size_t maxCount = std::min(
+                        _list.max_size(), static_cast<size_t>(INT_MAX));
+                const size_t multiplier =
+                        static_cast<size_t>(RESIZE_MULT);
+                const size_t increment =
+                        static_cast<size_t>(RESIZE_ADD);
+                if (increment > maxCount
+                        || _list.capacity()
+                        > (maxCount - increment) / multiplier) {
+                    capacity = maxCount;
+                } else {
+                    capacity = _list.capacity() * multiplier
+                            + increment;
+                }
+                if (capacity < required)
+                    capacity = required;
+            }
+            _list.reserve(capacity);
         }
+
         void add( T item )
         {
-            if ( _size<=_length ) {
-                _size = _size*RESIZE_MULT + RESIZE_ADD;
-                _list = cr_realloc( _list, _size );
-            }
-            _list[_length++] = item;
+            ensureCapacity(requiredSize(1), true);
+            _list.push_back(std::move(item));
         }
+
         void add( T * items, int count )
         {
-            if ( count<=0 )
+            if (!items || count <= 0)
                 return;
-            if ( _size<_length+count ) {
-                _size = _length+count;
-                _list = cr_realloc( _list, _size );
-            }
-            for ( int i=0; i<count; i++ )
-                _list[_length+i] = items[i];
-            _length += count;
+            const size_t required = requiredSize(count);
+            std::vector<T> snapshot(items, items + count);
+            ensureCapacity(required, false);
+            _list.insert(_list.end(),
+                    snapshot.begin(), snapshot.end());
         }
+
         void reserve( int count )
         {
-            if ( count<=0 )
+            if (count <= 0)
                 return;
-            if ( _size<_length+count ) {
-                _size = _length+count;
-                _list = cr_realloc( _list, _size );
-            }
+            ensureCapacity(requiredSize(count), false);
         }
-        void clear()
-        {
-            if ( _list ) {
-                free( _list );
-                _list = NULL;
-                _size = 0;
-                _length = 0;
-            }
-        }
+
         int length() const
         {
-            return _length;
+            return static_cast<int>(_list.size());
         }
+
         T get( int index ) const
         {
             return _list[index];
         }
+
         const T & operator [] (int index) const
         {
             return _list[index];
         }
+
         T & operator [] (int index)
         {
             return _list[index];
         }
     };
 
-    Array * _data;
+    std::unique_ptr<Array> _data;
 public:
-    CompactArray()
-    : _data(NULL)
+    CompactArray() : _data()
     {
     }
-    ~CompactArray()
+
+    CompactArray(const CompactArray &array)
+        : _data(array._data
+                ? std::make_unique<Array>(*array._data)
+                : nullptr)
     {
-        if ( _data )
-            delete _data;
     }
+
+    CompactArray &operator=(const CompactArray &array)
+    {
+        if (this == &array)
+            return *this;
+        std::unique_ptr<Array> replacement = array._data
+                ? std::make_unique<Array>(*array._data)
+                : nullptr;
+        _data = std::move(replacement);
+        return *this;
+    }
+
+    CompactArray(CompactArray &&) noexcept = default;
+    CompactArray &operator=(CompactArray &&) noexcept = default;
+    ~CompactArray() = default;
+
     void add( T item )
     {
-        if ( !_data )
-            _data = new Array();
-        _data->add(item);
+        if (_data) {
+            _data->add(std::move(item));
+            return;
+        }
+        std::unique_ptr<Array> replacement =
+                std::make_unique<Array>();
+        replacement->add(std::move(item));
+        _data = std::move(replacement);
     }
+
     void add( T * items, int count )
     {
-        if ( !_data )
-            _data = new Array();
-        _data->add(items, count);
+        if (!items || count <= 0)
+            return;
+        if (_data) {
+            _data->add(items, count);
+            return;
+        }
+        std::unique_ptr<Array> replacement =
+                std::make_unique<Array>();
+        replacement->add(items, count);
+        _data = std::move(replacement);
     }
+
     void add( LVArray<T> & items )
     {
-        if ( items.length()<=0 )
+        if (items.length() <= 0)
             return;
-        if ( !_data )
-            _data = new Array();
-        _data->add( &(items[0]), items.length() );
+        add(&(items[0]), items.length());
     }
+
     void reserve( int count )
     {
-        if ( count<=0 )
+        if (count <= 0)
             return;
-        if ( !_data )
-            _data = new Array();
-        _data->reserve( count );
+        if (_data) {
+            _data->reserve(count);
+            return;
+        }
+        std::unique_ptr<Array> replacement =
+                std::make_unique<Array>();
+        replacement->reserve(count);
+        _data = std::move(replacement);
     }
+
     void clear()
     {
-        if ( _data ) {
-            delete _data;
-            _data = NULL;
-        }
+        _data.reset();
     }
+
     int length() const
     {
         return _data ? _data->length() : 0;
     }
+
     T get( int index ) const
     {
         return _data->get(index);
     }
+
     const T & operator [] (int index) const
     {
         return _data->operator [](index);
     }
+
     T & operator [] (int index)
     {
         return _data->operator [](index);
     }
-    bool empty() { return !_data || _data->length()==0; }
 
+    bool empty() const { return !_data || _data->length() == 0; }
 };
 
 /// rendered page splitting info
@@ -275,7 +339,7 @@ public:
 
 class LVRendLineInfo {
     friend struct PageSplitState;
-    LVFootNoteList * links; // 4 bytes
+    std::unique_ptr<LVFootNoteList> links;
     int start;              // 4 bytes
     int height;             // 4 bytes (we may get extra tall lines with tables TR)
 public:
@@ -298,10 +362,7 @@ public:
 
     void clear() { 
         start = -1; height = 0; flags = 0;
-        if ( links!=NULL ) {
-            delete links; 
-            links=NULL;
-        } 
+        links.reset();
     }
 
     inline int getEnd() const { return start + height; }
@@ -309,30 +370,60 @@ public:
     inline int getHeight() const { return height; }
     inline lUInt16 getFlags() const { return flags; }
 
-    LVRendLineInfo() : links(NULL), start(-1), height(0), flags(0), flow(0) { }
+    LVRendLineInfo()
+    : links(), start(-1), height(0), flags(0), flow(0) { }
     LVRendLineInfo( int line_start, int line_end, lUInt16 line_flags )
-    : links(NULL), start(line_start), height(line_end-line_start), flags(line_flags), flow(0)
+    : links(), start(line_start), height(line_end-line_start), flags(line_flags), flow(0)
     {
     }
     LVRendLineInfo( int line_start, int line_end, lUInt16 line_flags, int flow )
-    : links(NULL), start(line_start), height(line_end-line_start), flags(line_flags), flow(flow)
+    : links(), start(line_start), height(line_end-line_start), flags(line_flags), flow(flow)
     {
     }
-    LVFootNoteList * getLinks() { return links; }
-    ~LVRendLineInfo()
+
+    LVRendLineInfo(const LVRendLineInfo &line)
+    : links(line.links
+            ? std::make_unique<LVFootNoteList>(*line.links)
+            : nullptr),
+      start(line.start),
+      height(line.height),
+      flags(line.flags),
+      flow(line.flow)
     {
-        clear();
     }
-    int getLinksCount()
+
+    LVRendLineInfo &operator=(const LVRendLineInfo &line)
     {
-        if ( links==NULL )
+        if (this == &line)
+            return *this;
+        std::unique_ptr<LVFootNoteList> replacement = line.links
+                ? std::make_unique<LVFootNoteList>(*line.links)
+                : nullptr;
+        links = std::move(replacement);
+        start = line.start;
+        height = line.height;
+        flags = line.flags;
+        flow = line.flow;
+        return *this;
+    }
+
+    LVRendLineInfo(LVRendLineInfo &&) noexcept = default;
+    LVRendLineInfo &operator=(LVRendLineInfo &&) noexcept = default;
+    ~LVRendLineInfo() = default;
+
+    LVFootNoteList * getLinks() { return links.get(); }
+    const LVFootNoteList * getLinks() const { return links.get(); }
+
+    int getLinksCount() const
+    {
+        if (!links)
             return 0;
         return links->length();
     }
     void addLink( LVFootNote * note, int pos=-1 )
     {
-        if ( links==NULL )
-            links = new LVFootNoteList();
+        if (!links)
+            links = std::make_unique<LVFootNoteList>();
         if ( pos >= 0 ) // insert at pos
             links->insert( pos, note );
         else // append
@@ -467,4 +558,3 @@ public:
 };
 
 #endif
-

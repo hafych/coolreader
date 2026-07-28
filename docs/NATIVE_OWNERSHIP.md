@@ -197,6 +197,15 @@ move resets the source dimensions, `Clear()` releases constructed cells, and
 the legacy row-indexing interface remains available for mutable and const
 matrices.
 
+Pagination `CompactArray` keeps its small-object lazy allocation through a
+`unique_ptr`, while the allocated payload is a bounded `vector<T>`. Batch
+append snapshots its input before growth so self-appends are safe, and
+copy/assignment duplicate storage instead of sharing a raw owner.
+`LVRendLineInfo` likewise owns its optional footnote-link list with
+`unique_ptr`; copies duplicate the non-owning pointer list, moves transfer it,
+and `clear()` releases the list without manual deletion. The page splitter's
+existing indexing, serialization and link-order contracts remain unchanged.
+
 `LVRefCache` and `LVIndexedRefCache` own bucket roots and collision links
 through vectors of `unique_ptr`. Collision teardown unlinks iteratively, while
 the indexed cache keeps only non-owning node views in vector-backed index
