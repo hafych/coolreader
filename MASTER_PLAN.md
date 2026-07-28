@@ -120,7 +120,8 @@ DRM или ограничений доступа, подбор/получени�
   ownership, TCR dictionary/index/decoded buffers, unpacked 8/16/32-bit pixel
   storage, scaled-image maps/RGBA snapshots, default stream-region buffers,
   owned/borrowed memory streams, block write-cache buffers/LRU, mapped-file
-  regions/OS handles и serialization-buffer storage, longjmp-safe PNG
+  regions/OS handles, file-stream FILE/HANDLE/owned/borrowed descriptor
+  lifecycle и serialization-buffer storage, longjmp-safe PNG
   rows/pixels, JPEG pool/error lifecycle, а также draw mark list. Остальные
   участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо

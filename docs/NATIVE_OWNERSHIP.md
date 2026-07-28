@@ -175,3 +175,12 @@ until open and mapping succeed, while reopen failure clears the previous
 mapping and publishes `LVOM_ERROR`. Regression coverage exercises anchored
 readonly views, writable shared mappings, grow/remap, shrink rejection,
 persisted writes, failed reopen and empty-file mapping rollback.
+
+`LVFileStream` scopes ANSI `FILE`, Windows `HANDLE` and owned POSIX descriptor
+resources. A borrowed POSIX descriptor is stored separately and is never
+passed through the closing wrapper, so `autoClose=false` remains an explicit
+non-owning contract. Filename and descriptor factories return `unique_ptr`
+until ownership crosses into `LVStreamRef`; open candidates are published only
+after metadata and seek validation. Close is idempotent, failed reopen clears
+stale state, append preserves sync flags and starts at EOF, and POSIX resize
+uses `ftruncate` before restoring a position clamped to the new length.

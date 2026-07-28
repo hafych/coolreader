@@ -22,6 +22,7 @@
 #include "textlang.h"
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontglyphcache.h"
+#include "../src/lvstream/lvfilestream.h"
 #include "../src/lvstream/lvfilemappedstream.h"
 #include "../src/lvstream/lvmemorystream.h"
 #if (USE_GIF==1)
@@ -863,6 +864,136 @@ static int testBorrowedDescriptor() {
     }
     close(fd);
     unlink(path);
+    return 0;
+}
+
+static int testFileStreamOwnership() {
+    char path[] = "/tmp/coolreader-file-stream-test-XXXXXX";
+    int fd = mkstemp(path);
+    if (fd < 0)
+        return fail("file-stream fixture could not create a file");
+
+    int duplicateSlot = dup(fd);
+    if (duplicateSlot < 0) {
+        close(fd);
+        unlink(path);
+        return fail("file-stream fixture could not reserve a duplicate slot");
+    }
+    close(duplicateSlot);
+
+    LVFileStream owned;
+    if (owned.OpenFile(fd, LVOM_READWRITE, true) != LVERR_OK
+            || fcntl(duplicateSlot, F_GETFD) == -1) {
+        close(fd);
+        unlink(path);
+        return fail("owned file stream did not retain its descriptor duplicate");
+    }
+    if (owned.Close() != LVERR_OK
+            || owned.Close() != LVERR_OK
+            || fcntl(duplicateSlot, F_GETFD) != -1
+            || errno != EBADF
+            || fcntl(fd, F_GETFD) == -1
+            || owned.GetMode() != LVOM_CLOSED
+            || owned.GetSize() != 0) {
+        close(fd);
+        unlink(path);
+        return fail("owned file-stream close was not scoped and idempotent");
+    }
+
+    LVFileStream borrowed;
+    if (borrowed.OpenFile(fd, LVOM_READWRITE, false) != LVERR_OK
+            || borrowed.Close() != LVERR_OK
+            || fcntl(fd, F_GETFD) == -1) {
+        close(fd);
+        unlink(path);
+        return fail("borrowed file-stream close released the caller descriptor");
+    }
+    close(fd);
+
+    const lString32 path32 = Utf8ToUnicode(lString8(path));
+    const lString32 missing =
+            Utf8ToUnicode(lString8((std::string(path) + ".missing").c_str()));
+    LVFileStream reusable;
+    static const char payload[] = "ownership";
+    lvsize_t bytesWritten = 0;
+    if (reusable.OpenFile(path32, LVOM_WRITE) != LVERR_OK
+            || reusable.Write(payload, sizeof(payload), &bytesWritten)
+                    != LVERR_OK
+            || bytesWritten != sizeof(payload)
+            || reusable.SetSize(32) != LVERR_OK
+            || reusable.GetSize() != 32
+            || reusable.GetPos() != sizeof(payload)
+            || reusable.SetSize(4) != LVERR_OK
+            || reusable.GetSize() != 4
+            || reusable.GetPos() != 4
+            || reusable.Close() != LVERR_OK) {
+        unlink(path);
+        return fail("file-stream resize lifecycle is inconsistent");
+    }
+
+    static const char suffix[] = {'+', '+'};
+    bytesWritten = 0;
+    if (reusable.OpenFile(
+                path32, LVOM_APPEND | LVOM_FLAG_SYNC) != LVERR_OK
+            || reusable.GetPos() != 4
+            || reusable.Write(suffix, sizeof(suffix), &bytesWritten)
+                    != LVERR_OK
+            || bytesWritten != sizeof(suffix)
+            || reusable.GetSize() != 6
+            || reusable.Flush(true) != LVERR_OK) {
+        unlink(path);
+        return fail("file-stream append or sync mode lost its flags/state");
+    }
+    if (reusable.OpenFile(missing, LVOM_READ) != LVERR_FAIL
+            || reusable.GetMode() != LVOM_ERROR
+            || reusable.GetSize() != 0
+            || reusable.OpenFile(path32, LVOM_READ) != LVERR_OK) {
+        unlink(path);
+        return fail("failed file-stream reopen retained stale resources");
+    }
+    char resized[6] = {};
+    lvsize_t bytesRead = 0;
+    if (reusable.Read(resized, sizeof(resized), &bytesRead) != LVERR_OK
+            || bytesRead != sizeof(resized)
+            || std::memcmp(resized, "owne++", sizeof(resized)) != 0) {
+        unlink(path);
+        return fail("file-stream resize/append bytes were not persisted");
+    }
+    reusable.Close();
+    unlink(path);
+
+    int pipeFds[2] = {-1, -1};
+    if (pipe(pipeFds) != 0)
+        return fail("file-stream rollback fixture could not create a pipe");
+    int rollbackSlot = dup(pipeFds[0]);
+    if (rollbackSlot < 0) {
+        close(pipeFds[0]);
+        close(pipeFds[1]);
+        return fail("file-stream rollback could not reserve a duplicate slot");
+    }
+    close(rollbackSlot);
+    LVFileStream rejectedOwned;
+    if (rejectedOwned.OpenFile(pipeFds[0], LVOM_READ, true)
+                != LVERR_FAIL
+            || rejectedOwned.GetMode() != LVOM_ERROR
+            || fcntl(rollbackSlot, F_GETFD) != -1
+            || errno != EBADF
+            || fcntl(pipeFds[0], F_GETFD) == -1) {
+        close(pipeFds[0]);
+        close(pipeFds[1]);
+        return fail("owned descriptor rollback leaked or damaged caller state");
+    }
+    LVFileStream rejectedBorrowed;
+    if (rejectedBorrowed.OpenFile(pipeFds[0], LVOM_READ, false)
+                != LVERR_FAIL
+            || rejectedBorrowed.GetMode() != LVOM_ERROR
+            || fcntl(pipeFds[0], F_GETFD) == -1) {
+        close(pipeFds[0]);
+        close(pipeFds[1]);
+        return fail("borrowed descriptor rollback damaged caller state");
+    }
+    close(pipeFds[0]);
+    close(pipeFds[1]);
     return 0;
 }
 
@@ -2775,6 +2906,8 @@ int main() {
     if (testOwnedDescriptor() != 0)
         return 1;
     if (testBorrowedDescriptor() != 0)
+        return 1;
+    if (testFileStreamOwnership() != 0)
         return 1;
     if (testIniTranslatorOwnership() != 0)
         return 1;

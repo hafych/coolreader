@@ -26,6 +26,8 @@
 #include "lvnamedstream.h"
 #include "lvstream_types.h"
 
+#include <memory>
+
 //#ifdef _LINUX
 #undef USE_ANSI_FILES
 //#endif
@@ -37,19 +39,27 @@
 class LVFileStream : public LVNamedStream
 {
 private:
-    FILE * m_file;
+    struct FileCloser
+    {
+        void operator()(FILE *file) const;
+    };
+
+    std::unique_ptr<FILE, FileCloser> m_file;
 public:
-    virtual lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin, lvpos_t * pNewPos );
-    virtual lverror_t SetSize( lvsize_t );
-    virtual lverror_t Read( void * buf, lvsize_t count, lvsize_t * nBytesRead );
-    virtual lverror_t Write( const void * buf, lvsize_t count, lvsize_t * nBytesWritten );
+    lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin, lvpos_t * pNewPos ) override;
+    lverror_t SetSize( lvsize_t ) override;
+    lverror_t Read( void * buf, lvsize_t count, lvsize_t * nBytesRead ) override;
+    lverror_t Write( const void * buf, lvsize_t count, lvsize_t * nBytesWritten ) override;
     /// flushes unsaved data from buffers to file, with optional flush of OS buffers
-    virtual lverror_t Flush( bool sync );
-    virtual bool Eof();
-    static LVFileStream * CreateFileStream( lString32 fname, lvopen_mode_t mode );
+    lverror_t Flush( bool sync ) override;
+    bool Eof() override;
+    static std::unique_ptr<LVFileStream> CreateFileStream(
+            lString32 fname, lvopen_mode_t mode );
     lverror_t OpenFile( lString32 fname, lvopen_mode_t mode );
     LVFileStream();
-    virtual ~LVFileStream();
+    ~LVFileStream() override = default;
+    LVFileStream(const LVFileStream &) = delete;
+    LVFileStream &operator=(const LVFileStream &) = delete;
 };
 
 #else   // (USE_ANSI_FILES==1)
@@ -63,37 +73,72 @@ extern "C" {
 class LVFileStream : public LVNamedStream
 {
     friend class LVDirectoryContainer;
-protected:
+private:
 #if defined(_WIN32)
-    HANDLE m_hFile;
+    class ScopedHandle
+    {
+        HANDLE _handle;
+    public:
+        ScopedHandle();
+        ~ScopedHandle();
+        ScopedHandle(const ScopedHandle &) = delete;
+        ScopedHandle &operator=(const ScopedHandle &) = delete;
+
+        HANDLE get() const { return _handle; }
+        bool valid() const {
+            return _handle != NULL && _handle != INVALID_HANDLE_VALUE;
+        }
+        HANDLE release();
+        bool reset(HANDLE handle = NULL);
+    };
+
+    ScopedHandle m_hFile;
 #else
-    int m_fd;
+    class ScopedDescriptor
+    {
+        int _fd;
+    public:
+        ScopedDescriptor();
+        explicit ScopedDescriptor(int fd);
+        ~ScopedDescriptor();
+        ScopedDescriptor(const ScopedDescriptor &) = delete;
+        ScopedDescriptor &operator=(const ScopedDescriptor &) = delete;
+
+        int get() const { return _fd; }
+        bool valid() const { return _fd >= 0; }
+        int release();
+        bool reset(int fd = -1);
+    };
+
+    ScopedDescriptor m_ownedFd;
+    int m_borrowedFd;
+    int descriptor() const {
+        return m_ownedFd.valid() ? m_ownedFd.get() : m_borrowedFd;
+    }
 #endif
-    //LVDirectoryContainer * m_parent;
-    lvsize_t               m_size;
-    lvpos_t                m_pos;
-    bool                   m_autoClose;
+    lvsize_t m_size;
+    lvpos_t m_pos;
 public:
     /// flushes unsaved data from buffers to file, with optional flush of OS buffers
-    virtual lverror_t Flush( bool sync );
-    virtual bool Eof();
-//    virtual LVContainer * GetParentContainer()
-//    {
-//        return (LVContainer*)m_parent;
-//    }
-    virtual lverror_t Read( void * buf, lvsize_t count, lvsize_t * nBytesRead );
-    virtual lverror_t GetSize( lvsize_t * pSize );
-    virtual lvsize_t GetSize();
-    virtual lverror_t SetSize( lvsize_t size );
-    virtual lverror_t Write( const void * buf, lvsize_t count, lvsize_t * nBytesWritten );
-    virtual lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin, lvpos_t * pNewPos );
+    lverror_t Flush( bool sync ) override;
+    bool Eof() override;
+    lverror_t Read( void * buf, lvsize_t count, lvsize_t * nBytesRead ) override;
+    lverror_t GetSize( lvsize_t * pSize ) override;
+    lvsize_t GetSize() override;
+    lverror_t SetSize( lvsize_t size ) override;
+    lverror_t Write( const void * buf, lvsize_t count, lvsize_t * nBytesWritten ) override;
+    lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin, lvpos_t * pNewPos ) override;
     lverror_t Close();
-    static LVFileStream * CreateFileStream( lString32 fname, lvopen_mode_t mode );
-    static LVFileStream * CreateFileStream( int fd, lvopen_mode_t mode = LVOM_READ, bool autoClose = true );
+    static std::unique_ptr<LVFileStream> CreateFileStream(
+            lString32 fname, lvopen_mode_t mode );
+    static std::unique_ptr<LVFileStream> CreateFileStream(
+            int fd, lvopen_mode_t mode = LVOM_READ, bool autoClose = true );
     lverror_t OpenFile( lString32 fname, int mode );
     lverror_t OpenFile( int fd, int mode, bool autoClose = true );
     LVFileStream();
-    virtual ~LVFileStream();
+    ~LVFileStream() override;
+    LVFileStream(const LVFileStream &) = delete;
+    LVFileStream &operator=(const LVFileStream &) = delete;
 };
 #endif  // (USE_ANSI_FILES==1)
 

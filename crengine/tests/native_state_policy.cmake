@@ -63,6 +63,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvblockwritestream.cpp" BLOCK_WR
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvblockwritestream.h" BLOCK_WRITE_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilemappedstream.cpp" FILE_MAPPED_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilemappedstream.h" FILE_MAPPED_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilestream.cpp" FILE_STREAM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilestream.h" FILE_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.cpp" MEMORY_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.h" MEMORY_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvstreamutils.cpp" STREAM_UTILS_SOURCE)
@@ -1528,6 +1530,93 @@ forbid_source_text(
   "${SERIAL_BUFFER_SOURCE}"
   "free( _buf"
   "serialization-buffer teardown must remain automatic"
+)
+
+# --- file-stream owned and borrowed OS resources ---
+require_source_text(
+  "${FILE_STREAM_HEADER}"
+  "std::unique_ptr<FILE, FileCloser> m_file"
+  "ANSI file streams must scope FILE ownership"
+)
+require_source_text(
+  "${FILE_STREAM_HEADER}"
+  "class ScopedHandle"
+  "Windows file streams must scope HANDLE ownership"
+)
+require_source_text(
+  "${FILE_STREAM_HEADER}"
+  "class ScopedDescriptor"
+  "POSIX file streams must scope descriptor ownership"
+)
+require_source_text(
+  "${FILE_STREAM_HEADER}"
+  "ScopedDescriptor m_ownedFd"
+  "owned file-stream descriptors must have an explicit owner"
+)
+require_source_text(
+  "${FILE_STREAM_HEADER}"
+  "int m_borrowedFd"
+  "borrowed file-stream descriptors must remain explicit non-owning views"
+)
+require_source_text(
+  "${FILE_STREAM_HEADER}"
+  "static std::unique_ptr<LVFileStream> CreateFileStream"
+  "file-stream factories must return scoped ownership"
+)
+require_source_text(
+  "${FILE_STREAM_SOURCE}"
+  "m_ownedFd.reset(candidate.release())"
+  "validated descriptor candidates must transfer ownership explicitly"
+)
+require_source_text(
+  "${FILE_STREAM_SOURCE}"
+  "m_borrowedFd = candidateFd"
+  "borrowed descriptor publication must not enter the owning wrapper"
+)
+require_source_text(
+  "${FILE_STREAM_SOURCE}"
+  "ftruncate(fd, nativeSize)"
+  "POSIX file-stream resize must update the underlying file"
+)
+require_source_text(
+  "${FILE_STREAM_SOURCE}"
+  "(useSync ? O_SYNC : 0)"
+  "file-stream sync flags must be read before open-mode masking"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "LVFileStream::CreateFileStream(fd, mode, autoClose)"
+  "descriptor factories must stay scoped until the LVStreamRef boundary"
+)
+forbid_source_text(
+  "${FILE_STREAM_HEADER}"
+  "bool                   m_autoClose"
+  "file-stream ownership must not depend on a descriptor flag"
+)
+forbid_source_text(
+  "${FILE_STREAM_HEADER}"
+  "FILE * m_file"
+  "ANSI file streams must not regress to raw FILE ownership"
+)
+forbid_source_text(
+  "${FILE_STREAM_HEADER}"
+  "HANDLE m_hFile"
+  "Windows file streams must not regress to raw HANDLE ownership"
+)
+forbid_source_text(
+  "${FILE_STREAM_HEADER}"
+  "int m_fd;"
+  "POSIX file streams must not regress to a raw owning descriptor"
+)
+forbid_source_text(
+  "${FILE_STREAM_SOURCE}"
+  "LVFileStream * f = new LVFileStream"
+  "file-stream factory rollback must remain scope-bound"
+)
+forbid_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "LVFileStream * stream = LVFileStream::CreateFileStream"
+  "file-stream utilities must not reintroduce implicit raw ownership"
 )
 
 # --- lvstring: string literal interning tables ---

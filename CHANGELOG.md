@@ -182,6 +182,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   handles with RAII wrappers. Open/remap failure cannot publish stale stream
   state, mapped buffer views retain their stream owner, and size/buffer
   arithmetic rejects overflow and shrinking safely.
+- File streams now scope `FILE`, Windows handles and owned POSIX descriptors
+  while keeping borrowed descriptors explicitly non-owning. Factory/reopen
+  rollback is automatic, close is idempotent, append honors sync flags and
+  POSIX resize now changes the underlying file before restoring position.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.

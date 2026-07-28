@@ -126,12 +126,9 @@ LVStreamRef LVOpenFileStream( const lChar32 * pathname, int mode )
     }
 #endif
 
-    LVFileStream * stream = LVFileStream::CreateFileStream( fn, (lvopen_mode_t)mode );
-    if ( stream!=NULL )
-    {
-        return LVStreamRef( stream );
-    }
-    return LVStreamRef();
+    std::unique_ptr<LVFileStream> stream =
+            LVFileStream::CreateFileStream(fn, (lvopen_mode_t)mode);
+    return LVStreamRef(stream.release());
 }
 
 LVStreamRef LVOpenFileStream( const lChar8 * pathname, int mode )
@@ -143,11 +140,11 @@ LVStreamRef LVOpenFileStream( const lChar8 * pathname, int mode )
 LVStreamRef LVOpenFileDescriptorStream( int fd, const lString32 & name,
         lvopen_mode_t mode, bool autoClose )
 {
-    LVFileStream * stream = LVFileStream::CreateFileStream( fd, mode, autoClose );
-    if ( stream != NULL )
-    {
+    std::unique_ptr<LVFileStream> stream =
+            LVFileStream::CreateFileStream(fd, mode, autoClose);
+    if (stream) {
         stream->SetName(name.c_str());
-        return LVStreamRef( stream );
+        return LVStreamRef(stream.release());
     }
     return LVStreamRef();
 }
@@ -720,12 +717,9 @@ LVStreamRef LVMapFileStream( const lChar32 * pathname, lvopen_mode_t mode, lvsiz
 {
 #if !defined(_WIN32) && !defined(_LINUX)
         // STUB for systems w/o mmap
-    LVFileStream * stream = LVFileStream::CreateFileStream( pathname, mode );
-    if ( stream!=NULL )
-    {
-        return LVStreamRef( stream );
-    }
-    return LVStreamRef();
+    std::unique_ptr<LVFileStream> stream =
+            LVFileStream::CreateFileStream(pathname, mode);
+    return LVStreamRef(stream.release());
 #else
         std::unique_ptr<LVFileMappedStream> stream =
                 LVFileMappedStream::CreateFileStream(

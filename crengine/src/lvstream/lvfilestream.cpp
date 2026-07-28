@@ -24,28 +24,38 @@
 #include "lvfilestream.h"
 #include "crlog.h"
 
+#include <utility>
+
 #if (USE_ANSI_FILES==1)
+
+void LVFileStream::FileCloser::operator()(FILE *file) const
+{
+    if (file)
+        fclose(file);
+}
 
 lverror_t LVFileStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t *pNewPos)
 {
+    if (!m_file)
+        return LVERR_FAIL;
     //
     int res = -1;
     switch ( origin )
     {
         case LVSEEK_SET:
-            res = fseek( m_file, offset, SEEK_SET );
+            res = fseek( m_file.get(), offset, SEEK_SET );
             break;
         case LVSEEK_CUR:
-            res = fseek( m_file, offset, SEEK_CUR );
+            res = fseek( m_file.get(), offset, SEEK_CUR );
             break;
         case LVSEEK_END:
-            res = fseek( m_file, offset, SEEK_END );
+            res = fseek( m_file.get(), offset, SEEK_END );
             break;
     }
     if (res==0)
     {
         if ( pNewPos )
-            * pNewPos = ftell(m_file);
+            * pNewPos = ftell(m_file.get());
         return LVERR_OK;
     }
     CRLog::error("error setting file position to %d (%d)", (int)offset, (int)origin );
@@ -66,7 +76,11 @@ lverror_t LVFileStream::SetSize(lvsize_t)
 
 lverror_t LVFileStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRead)
 {
-    lvsize_t sz = fread( buf, 1, count, m_file );
+    if (nBytesRead)
+        *nBytesRead = 0;
+    if (!m_file)
+        return LVERR_FAIL;
+    lvsize_t sz = fread( buf, 1, count, m_file.get() );
     if (nBytesRead)
         *nBytesRead = sz;
     if ( sz==0 )
@@ -78,7 +92,11 @@ lverror_t LVFileStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRead)
 
 lverror_t LVFileStream::Write(const void *buf, lvsize_t count, lvsize_t *nBytesWritten)
 {
-    lvsize_t sz = fwrite( buf, 1, count, m_file );
+    if (nBytesWritten)
+        *nBytesWritten = 0;
+    if (!m_file)
+        return LVERR_FAIL;
+    lvsize_t sz = fwrite( buf, 1, count, m_file.get() );
     if (nBytesWritten)
         *nBytesWritten = sz;
     handleAutoSync(sz);
@@ -91,35 +109,35 @@ lverror_t LVFileStream::Write(const void *buf, lvsize_t count, lvsize_t *nBytesW
 
 lverror_t LVFileStream::Flush(bool sync)
 {
+    CR_UNUSED(sync);
     if ( !m_file )
         return LVERR_FAIL;
-    fflush( m_file );
-    return LVERR_OK;
+    return fflush( m_file.get() ) == 0 ? LVERR_OK : LVERR_FAIL;
 }
 
 bool LVFileStream::Eof()
 {
-    return feof(m_file)!=0;
+    return m_file && feof(m_file.get()) != 0;
 }
 
-LVFileStream *LVFileStream::CreateFileStream(lString32 fname, lvopen_mode_t mode)
+std::unique_ptr<LVFileStream> LVFileStream::CreateFileStream(
+        lString32 fname, lvopen_mode_t mode)
 {
-    LVFileStream * f = new LVFileStream;
-    if (f->OpenFile( fname, mode )==LVERR_OK) {
+    std::unique_ptr<LVFileStream> f(new LVFileStream());
+    if (f->OpenFile( fname, mode )==LVERR_OK)
         return f;
-    } else {
-        delete f;
-        return NULL;
-    }
+    return std::unique_ptr<LVFileStream>();
 }
 
 lverror_t LVFileStream::OpenFile(lString32 fname, lvopen_mode_t mode)
 {
-    m_mode = mode;
-    m_file = NULL;
-    SetName(fname.c_str());
+    m_file.reset();
+    m_mode = LVOM_ERROR;
+    SetName(NULL);
+    const lvopen_mode_t openMode =
+            static_cast<lvopen_mode_t>(mode & LVOM_MASK);
     const char * modestr = "r";
-    switch (mode) {
+    switch (openMode) {
         case LVOM_READ:
             modestr = "rb";
             break;
@@ -132,31 +150,23 @@ lverror_t LVFileStream::OpenFile(lString32 fname, lvopen_mode_t mode)
             break;
         case LVOM_CLOSED:
         case LVOM_ERROR:
-            break;
+            return LVERR_FAIL;
     }
-    FILE * file = fopen(UnicodeToLocal(fname).c_str(), modestr);
+    std::unique_ptr<FILE, FileCloser> file(
+            fopen(UnicodeToLocal(fname).c_str(), modestr));
     if (!file)
     {
-        //printf("cannot open file %s\n", UnicodeToLocal(fname).c_str());
-        m_mode = LVOM_ERROR;
         return LVERR_FAIL;
     }
-    m_file = file;
-    //printf("file %s opened ok\n", UnicodeToLocal(fname).c_str());
-    // set filename
+    m_file = std::move(file);
+    m_mode = openMode;
     SetName( fname.c_str() );
     return LVERR_OK;
 }
 
-LVFileStream::LVFileStream() : m_file(NULL)
+LVFileStream::LVFileStream() : m_file(nullptr)
 {
     m_mode=LVOM_ERROR;
-}
-
-LVFileStream::~LVFileStream()
-{
-    if (m_file)
-        fclose(m_file);
 }
 
 #else
@@ -187,20 +197,84 @@ static inline lvpos_t cr3_lseek(int fd, lvoffset_t offset, int whence) {
 #endif
 }
 
+#if defined(_WIN32)
+LVFileStream::ScopedHandle::ScopedHandle()
+    : _handle(NULL)
+{
+}
+
+LVFileStream::ScopedHandle::~ScopedHandle()
+{
+    reset();
+}
+
+HANDLE LVFileStream::ScopedHandle::release()
+{
+    HANDLE handle = _handle;
+    _handle = NULL;
+    return handle;
+}
+
+bool LVFileStream::ScopedHandle::reset(HANDLE handle)
+{
+    if (_handle == handle)
+        return true;
+    bool result = true;
+    if (valid())
+        result = CloseHandle(_handle) != 0;
+    _handle = handle;
+    return result;
+}
+#else
+LVFileStream::ScopedDescriptor::ScopedDescriptor()
+    : _fd(-1)
+{
+}
+
+LVFileStream::ScopedDescriptor::ScopedDescriptor(int fd)
+    : _fd(fd)
+{
+}
+
+LVFileStream::ScopedDescriptor::~ScopedDescriptor()
+{
+    reset();
+}
+
+int LVFileStream::ScopedDescriptor::release()
+{
+    int fd = _fd;
+    _fd = -1;
+    return fd;
+}
+
+bool LVFileStream::ScopedDescriptor::reset(int fd)
+{
+    if (_fd == fd)
+        return true;
+    bool result = true;
+    if (valid())
+        result = close(_fd) == 0;
+    _fd = fd;
+    return result;
+}
+#endif
 
 lverror_t LVFileStream::Flush(bool sync)
 {
     CR_UNUSED(sync);
 #ifdef _WIN32
-    if ( m_hFile==INVALID_HANDLE_VALUE || !FlushFileBuffers( m_hFile ) )
+    if ( !m_hFile.valid() || !FlushFileBuffers( m_hFile.get() ) )
         return LVERR_FAIL;
 #else
-    if ( m_fd==-1 )
+    const int fd = descriptor();
+    if ( fd == -1 )
         return LVERR_FAIL;
     if ( sync ) {
         //            CRTimerUtil timer;
         //            CRLog::trace("calling fsync");
-        fsync( m_fd );
+        if (fsync(fd) != 0)
+            return LVERR_FAIL;
         //            CRLog::trace("fsync took %d ms", (int)timer.elapsed());
     }
 #endif
@@ -214,40 +288,40 @@ bool LVFileStream::Eof()
 
 lverror_t LVFileStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRead)
 {
+    if (nBytesRead)
+        *nBytesRead = 0;
 #ifdef _WIN32
     //fprintf(stderr, "Read(%08x, %d)\n", buf, count);
     
-    if (m_hFile == INVALID_HANDLE_VALUE || m_mode==LVOM_WRITE ) // || m_mode==LVOM_APPEND
+    if (!m_hFile.valid() || m_mode==LVOM_WRITE ) // || m_mode==LVOM_APPEND
         return LVERR_FAIL;
     //
     if ( m_pos > m_size )
         return LVERR_FAIL; // EOF
     
     lUInt32 dwBytesRead = 0;
-    if (ReadFile( m_hFile, buf, (lUInt32)count, (LPDWORD)&dwBytesRead, NULL )) {
+    if (ReadFile( m_hFile.get(), buf, (lUInt32)count,
+            (LPDWORD)&dwBytesRead, NULL )) {
         if (nBytesRead)
             *nBytesRead = dwBytesRead;
         m_pos += dwBytesRead;
         return LVERR_OK;
     } else {
         //DWORD err = GetLastError();
-        if (nBytesRead)
-            *nBytesRead = 0;
         return LVERR_FAIL;
     }
     
 #else
-    if (m_fd == -1)
+    const int fd = descriptor();
+    if (fd == -1 || m_mode == LVOM_WRITE)
         return LVERR_FAIL;
-    ssize_t res = read( m_fd, buf, count );
+    ssize_t res = read( fd, buf, count );
     if ( res!=(ssize_t)-1 ) {
         if (nBytesRead)
             *nBytesRead = res;
         m_pos += res;
         return LVERR_OK;
     }
-    if (nBytesRead)
-        *nBytesRead = 0;
     return LVERR_FAIL;
 #endif
 }
@@ -255,10 +329,10 @@ lverror_t LVFileStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRead)
 lverror_t LVFileStream::GetSize(lvsize_t *pSize)
 {
 #ifdef _WIN32
-    if (m_hFile == INVALID_HANDLE_VALUE || !pSize)
+    if (!m_hFile.valid() || !pSize)
         return LVERR_FAIL;
 #else
-    if (m_fd == -1 || !pSize)
+    if (descriptor() == -1 || !pSize)
         return LVERR_FAIL;
 #endif
     if (m_size<m_pos)
@@ -270,13 +344,13 @@ lverror_t LVFileStream::GetSize(lvsize_t *pSize)
 lvsize_t LVFileStream::GetSize()
 {
 #ifdef _WIN32
-    if (m_hFile == INVALID_HANDLE_VALUE)
+    if (!m_hFile.valid())
         return 0;
     if (m_size<m_pos)
         m_size = m_pos;
     return m_size;
 #else
-    if (m_fd == -1)
+    if (descriptor() == -1)
         return 0;
     if (m_size<m_pos)
         m_size = m_pos;
@@ -288,37 +362,53 @@ lverror_t LVFileStream::SetSize(lvsize_t size)
 {
 #ifdef _WIN32
     //
-    if (m_hFile == INVALID_HANDLE_VALUE || m_mode==LVOM_READ )
+    if (!m_hFile.valid() || m_mode==LVOM_READ )
         return LVERR_FAIL;
     lvpos_t oldpos = 0;
-    if (!Tell(&oldpos))
+    if (Tell(&oldpos) != LVERR_OK)
         return LVERR_FAIL;
-    if (!Seek(size, LVSEEK_SET, NULL))
+    if (Seek(size, LVSEEK_SET, NULL) != LVERR_OK)
         return LVERR_FAIL;
-    SetEndOfFile( m_hFile);
-    Seek(oldpos, LVSEEK_SET, NULL);
+    if (!SetEndOfFile(m_hFile.get())) {
+        Seek(oldpos, LVSEEK_SET, NULL);
+        return LVERR_FAIL;
+    }
+    m_size = size;
+    const lvpos_t restoredPos = oldpos > size ? size : oldpos;
+    if (Seek(restoredPos, LVSEEK_SET, NULL) != LVERR_OK)
+        return LVERR_FAIL;
     return LVERR_OK;
 #else
-    if (m_fd == -1)
+    const int fd = descriptor();
+    if (fd == -1 || m_mode == LVOM_READ)
         return LVERR_FAIL;
     lvpos_t oldpos = 0;
-    if (!Tell(&oldpos))
+    if (Tell(&oldpos) != LVERR_OK)
         return LVERR_FAIL;
-    if (!Seek(size, LVSEEK_SET, NULL))
+    const off_t nativeSize = static_cast<off_t>(size);
+    if (nativeSize < 0 || static_cast<lvsize_t>(nativeSize) != size)
         return LVERR_FAIL;
-    Seek(oldpos, LVSEEK_SET, NULL);
+    if (ftruncate(fd, nativeSize) != 0)
+        return LVERR_FAIL;
+    m_size = size;
+    const lvpos_t restoredPos = oldpos > size ? size : oldpos;
+    if (Seek(restoredPos, LVSEEK_SET, NULL) != LVERR_OK)
+        return LVERR_FAIL;
     return LVERR_OK;
 #endif
 }
 
 lverror_t LVFileStream::Write(const void *buf, lvsize_t count, lvsize_t *nBytesWritten)
 {
+    if (nBytesWritten)
+        *nBytesWritten = 0;
 #ifdef _WIN32
-    if (m_hFile == INVALID_HANDLE_VALUE || m_mode==LVOM_READ )
+    if (!m_hFile.valid() || m_mode==LVOM_READ )
         return LVERR_FAIL;
     //
     lUInt32 dwBytesWritten = 0;
-    if (WriteFile( m_hFile, buf, (lUInt32)count, (LPDWORD)&dwBytesWritten, NULL )) {
+    if (WriteFile( m_hFile.get(), buf, (lUInt32)count,
+            (LPDWORD)&dwBytesWritten, NULL )) {
         if (nBytesWritten)
             *nBytesWritten = dwBytesWritten;
         m_pos += dwBytesWritten;
@@ -327,14 +417,13 @@ lverror_t LVFileStream::Write(const void *buf, lvsize_t count, lvsize_t *nBytesW
         handleAutoSync(dwBytesWritten);
         return LVERR_OK;
     }
-    if (nBytesWritten)
-        *nBytesWritten = 0;
     return LVERR_FAIL;
     
 #else
-    if (m_fd == -1)
+    const int fd = descriptor();
+    if (fd == -1 || m_mode == LVOM_READ)
         return LVERR_FAIL;
-    ssize_t res = write( m_fd, buf, count );
+    ssize_t res = write( fd, buf, count );
     if ( res!=(ssize_t)-1 ) {
         if (nBytesWritten)
             *nBytesWritten = res;
@@ -344,8 +433,6 @@ lverror_t LVFileStream::Write(const void *buf, lvsize_t count, lvsize_t *nBytesW
         handleAutoSync(res);
         return LVERR_OK;
     }
-    if (nBytesWritten)
-        *nBytesWritten = 0;
     return LVERR_FAIL;
 #endif
 }
@@ -354,7 +441,7 @@ lverror_t LVFileStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t 
 {
 #ifdef _WIN32
     //fprintf(stderr, "Seek(%d,%d)\n", offset, origin);
-    if (m_hFile == INVALID_HANDLE_VALUE)
+    if (!m_hFile.valid())
         return LVERR_FAIL;
     lUInt32 pos_low = (lUInt32)((__int64)offset & 0xFFFFFFFF);
     LONG pos_high = (LONG)(((__int64)offset >> 32) & 0xFFFFFFFF);
@@ -369,9 +456,12 @@ lverror_t LVFileStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t 
         case LVSEEK_END:
             m = FILE_END;
             break;
+        default:
+            return LVERR_FAIL;
     }
     
-    pos_low = SetFilePointer(m_hFile, pos_low, &pos_high, m );
+    SetLastError(NO_ERROR);
+    pos_low = SetFilePointer(m_hFile.get(), pos_low, &pos_high, m );
     lUInt32 err;
     if (pos_low == INVALID_SET_FILE_POINTER && (err = GetLastError())!=ERROR_SUCCESS ) {
         //if (err == ERROR_NOACCESS)
@@ -388,21 +478,24 @@ lverror_t LVFileStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t 
         *pNewPos = m_pos;
     return LVERR_OK;
 #else
-    if (m_fd == -1)
+    const int fd = descriptor();
+    if (fd == -1)
         return LVERR_FAIL;
     //
     lvpos_t res = (lvpos_t)-1;
     switch ( origin )
     {
         case LVSEEK_SET:
-            res = cr3_lseek( m_fd, offset, SEEK_SET );
+            res = cr3_lseek( fd, offset, SEEK_SET );
             break;
         case LVSEEK_CUR:
-            res = cr3_lseek( m_fd, offset, SEEK_CUR );
+            res = cr3_lseek( fd, offset, SEEK_CUR );
             break;
         case LVSEEK_END:
-            res = cr3_lseek( m_fd, offset, SEEK_END );
+            res = cr3_lseek( fd, offset, SEEK_END );
             break;
+        default:
+            return LVERR_FAIL;
     }
     if (res!=(lvpos_t)-1)
     {
@@ -418,85 +511,83 @@ lverror_t LVFileStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t 
 
 lverror_t LVFileStream::Close()
 {
+    bool closed = true;
 #if defined(_WIN32)
-    if (m_hFile == INVALID_HANDLE_VALUE)
-        return LVERR_FAIL;
-    CloseHandle( m_hFile );
-    m_hFile = INVALID_HANDLE_VALUE;
+    closed = m_hFile.reset();
 #else
-    if ( m_fd != -1 ) {
-        if ( m_autoClose ) {
-            close(m_fd);
-        }
-        m_fd = -1;
-    }
+    closed = m_ownedFd.reset();
+    m_borrowedFd = -1;
 #endif
     SetName(NULL);
-    return LVERR_OK;
+    m_mode = LVOM_CLOSED;
+    m_size = 0;
+    m_pos = 0;
+    return closed ? LVERR_OK : LVERR_FAIL;
 }
 
-LVFileStream *LVFileStream::CreateFileStream(lString32 fname, lvopen_mode_t mode)
+std::unique_ptr<LVFileStream> LVFileStream::CreateFileStream(
+        lString32 fname, lvopen_mode_t mode)
 {
-    LVFileStream * f = new LVFileStream;
-    if (f->OpenFile( fname, mode )==LVERR_OK) {
+    std::unique_ptr<LVFileStream> f(new LVFileStream());
+    if (f->OpenFile( fname, mode )==LVERR_OK)
         return f;
-    } else {
-        delete f;
-        return NULL;
-    }
+    return std::unique_ptr<LVFileStream>();
 }
 
-LVFileStream *LVFileStream::CreateFileStream(int fd, lvopen_mode_t mode, bool autoClose)
+std::unique_ptr<LVFileStream> LVFileStream::CreateFileStream(
+        int fd, lvopen_mode_t mode, bool autoClose)
 {
-    LVFileStream * f = new LVFileStream;
-    if (f->OpenFile( fd, (int)mode, autoClose )==LVERR_OK) {
+    std::unique_ptr<LVFileStream> f(new LVFileStream());
+    if (f->OpenFile( fd, (int)mode, autoClose )==LVERR_OK)
         return f;
-    } else {
-        delete f;
-        return NULL;
-    }
+    return std::unique_ptr<LVFileStream>();
 }
 
 lverror_t LVFileStream::OpenFile(int fd, int mode, bool autoClose)
 {
     Close();
-    if (fd < 0)
+    m_mode = LVOM_ERROR;
+    const lvopen_mode_t openMode =
+            static_cast<lvopen_mode_t>(mode & LVOM_MASK);
+    if (fd < 0
+            || (openMode != LVOM_READ
+                    && openMode != LVOM_WRITE
+                    && openMode != LVOM_READWRITE
+                    && openMode != LVOM_APPEND))
         return LVERR_FAIL;
 #if defined(_WIN32)
     CR_UNUSED(autoClose);
-    CR_UNUSED(mode);
     return LVERR_FAIL;
 #else
-    m_autoClose = autoClose;
+    ScopedDescriptor candidate;
+    int candidateFd = fd;
     if (autoClose) {
-        m_fd = dup(fd);
-        if (m_fd < 0) {
+        candidateFd = dup(fd);
+        if (candidateFd < 0) {
             CRLog::error("LVFileStream::OpenFile(fd=%d): dup failed, errno=%d", fd, errno);
             return LVERR_FAIL;
         }
-    } else {
-        m_fd = fd;
+        candidate.reset(candidateFd);
     }
     struct stat st;
-    if (fstat(m_fd, &st)) {
+    if (fstat(candidateFd, &st)) {
         CRLog::error("LVFileStream::OpenFile(fd=%d): fstat failed", fd);
-        if (autoClose && m_fd >= 0) {
-            close(m_fd);
-            m_fd = -1;
-        }
         return LVERR_FAIL;
     }
-    m_mode = (lvopen_mode_t)(mode & LVOM_MASK);
-    m_size = (lvsize_t)st.st_size;
-    m_pos = (lvpos_t)::lseek(m_fd, 0, SEEK_SET);
-    if (m_pos == (lvpos_t)-1) {
+    const lvpos_t initialPos = cr3_lseek(
+            candidateFd, 0,
+            openMode == LVOM_APPEND ? SEEK_END : SEEK_SET);
+    if (initialPos == (lvpos_t)-1) {
         CRLog::error("LVFileStream::OpenFile(fd=%d): descriptor is not seekable", fd);
-        if (autoClose) {
-            close(m_fd);
-            m_fd = -1;
-        }
         return LVERR_FAIL;
     }
+    if (autoClose)
+        m_ownedFd.reset(candidate.release());
+    else
+        m_borrowedFd = candidateFd;
+    m_mode = openMode;
+    m_size = static_cast<lvsize_t>(st.st_size);
+    m_pos = initialPos;
     char fname[64];
     snprintf(fname, sizeof(fname), "/proc/self/fd/%d", fd);
     SetName(lString32(fname).c_str());
@@ -507,14 +598,21 @@ lverror_t LVFileStream::OpenFile(int fd, int mode, bool autoClose)
 lverror_t LVFileStream::OpenFile(lString32 fname, int mode)
 {
     Close();
-    m_autoClose = true;
-    mode = mode & LVOM_MASK;
+    m_mode = LVOM_ERROR;
+    const bool useSync = (mode & LVOM_FLAG_SYNC) != 0;
+    const lvopen_mode_t openMode =
+            static_cast<lvopen_mode_t>(mode & LVOM_MASK);
+    if (openMode != LVOM_READ
+            && openMode != LVOM_WRITE
+            && openMode != LVOM_READWRITE
+            && openMode != LVOM_APPEND)
+        return LVERR_FAIL;
 #if defined(_WIN32)
+    CR_UNUSED(useSync);
     lUInt32 m = 0;
     lUInt32 s = 0;
     lUInt32 c = 0;
-    SetName(fname.c_str());
-    switch (mode) {
+    switch (openMode) {
         case LVOM_READWRITE:
             m |= GENERIC_WRITE|GENERIC_READ;
             s |= FILE_SHARE_WRITE|FILE_SHARE_READ;
@@ -537,61 +635,88 @@ lverror_t LVFileStream::OpenFile(lString32 fname, int mode)
             break;
         case LVOM_CLOSED:
         case LVOM_ERROR:
-            crFatalError();
             break;
     }
     lString16 fn16 = UnicodeToUtf16(fname);
-    m_hFile = CreateFileW( fn16.c_str(), m, s, NULL, c, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (m_hFile == INVALID_HANDLE_VALUE || !m_hFile) {
+    ScopedHandle candidate;
+    HANDLE fileHandle =
+            CreateFileW(fn16.c_str(), m, s, NULL, c,
+                    FILE_ATTRIBUTE_NORMAL, NULL);
+    if (fileHandle == INVALID_HANDLE_VALUE || !fileHandle) {
         // unicode not implemented?
         lUInt32 err = GetLastError();
         if (err==ERROR_CALL_NOT_IMPLEMENTED)
-            m_hFile = CreateFileA( UnicodeToLocal(fname).c_str(), m, s, NULL, c, FILE_ATTRIBUTE_NORMAL, NULL);
-        if ( (m_hFile == INVALID_HANDLE_VALUE) || (!m_hFile) ) {
-            // error
+            fileHandle = CreateFileA(
+                    UnicodeToLocal(fname).c_str(), m, s, NULL, c,
+                    FILE_ATTRIBUTE_NORMAL, NULL);
+        if (fileHandle == INVALID_HANDLE_VALUE || !fileHandle)
             return LVERR_FAIL;
-        }
     }
+    candidate.reset(fileHandle);
     
-    // set file size and position
-    m_mode = (lvopen_mode_t)mode;
     lUInt32 hw=0;
-    m_size = GetFileSize( m_hFile, (LPDWORD)&hw );
+    SetLastError(NO_ERROR);
+    const lUInt32 lowSize = GetFileSize(candidate.get(), (LPDWORD)&hw);
+    if (lowSize == INVALID_FILE_SIZE && GetLastError() != NO_ERROR)
+        return LVERR_FAIL;
+    lvsize_t fileSize = lowSize;
 #if LVLONG_FILE_SUPPORT
     if (hw)
-        m_size |= (((lvsize_t)hw)<<32);
+        fileSize |= (((lvsize_t)hw)<<32);
 #endif
-    m_pos = 0;
-    
-    // set filename
-    SetName( fname.c_str() );
-    
-    // move to end of file
-    if (mode==LVOM_APPEND)
-        Seek( 0, LVSEEK_END, NULL );
+    lvpos_t initialPos = 0;
+    if (openMode == LVOM_APPEND) {
+        LONG highPos = 0;
+        SetLastError(NO_ERROR);
+        const lUInt32 lowPos =
+                SetFilePointer(candidate.get(), 0, &highPos, FILE_END);
+        if (lowPos == INVALID_SET_FILE_POINTER
+                && GetLastError() != NO_ERROR)
+            return LVERR_FAIL;
+        initialPos = lowPos;
+#if LVLONG_FILE_SUPPORT
+        initialPos |= (static_cast<lvpos_t>(highPos) << 32);
+#endif
+    }
+    m_hFile.reset(candidate.release());
+    m_mode = openMode;
+    m_size = fileSize;
+    m_pos = initialPos;
 #else
-    bool use_sync = (mode & LVOM_FLAG_SYNC)!=0;
-    m_fd = -1;
-    
-    int flags = (mode==LVOM_READ) ? O_RDONLY : O_RDWR | O_CREAT | (use_sync ? O_SYNC : 0) | (mode==LVOM_WRITE ? O_TRUNC : 0);
+    int flags = openMode == LVOM_READ
+            ? O_RDONLY
+            : O_RDWR | O_CREAT
+                    | (useSync ? O_SYNC : 0)
+                    | (openMode == LVOM_WRITE ? O_TRUNC : 0);
     lString8 fn8 = UnicodeToUtf8(fname);
-    m_fd = open( fn8.c_str(), flags, (mode_t)0666);
-    if (m_fd == -1) {
+    ScopedDescriptor candidate(
+            open(fn8.c_str(), flags, static_cast<mode_t>(0666)));
+    if (!candidate.valid()) {
 #ifndef ANDROID
-        CRLog::error( "Error opening file %s for %s", fn8.c_str(), (mode==LVOM_READ) ? "reading" : "read/write" );
+        CRLog::error(
+                "Error opening file %s for %s",
+                fn8.c_str(),
+                openMode == LVOM_READ ? "reading" : "read/write");
         //CRLog::error( "Error opening file %s for %s, errno=%d, msg=%s", fn8.c_str(), (mode==LVOM_READ) ? "reading" : "read/write",  (int)errno, strerror(errno) );
 #endif
         return LVERR_FAIL;
     }
     struct stat stat;
-    if ( fstat( m_fd, &stat ) ) {
+    if ( fstat( candidate.get(), &stat ) ) {
         CRLog::error( "Cannot get file size for %s", fn8.c_str() );
-        close(m_fd);
-        m_fd = -1;
         return LVERR_FAIL;
     }
-    m_mode = (lvopen_mode_t)mode;
-    m_size = (lvsize_t) stat.st_size;
+    const lvpos_t initialPos = cr3_lseek(
+            candidate.get(), 0,
+            openMode == LVOM_APPEND ? SEEK_END : SEEK_SET);
+    if (initialPos == static_cast<lvpos_t>(-1)) {
+        CRLog::error("Cannot seek opened file %s", fn8.c_str());
+        return LVERR_FAIL;
+    }
+    m_ownedFd.reset(candidate.release());
+    m_mode = openMode;
+    m_size = static_cast<lvsize_t>(stat.st_size);
+    m_pos = initialPos;
 #endif
     
     SetName(fname.c_str());
@@ -600,19 +725,19 @@ lverror_t LVFileStream::OpenFile(lString32 fname, int mode)
 
 LVFileStream::LVFileStream() :
     #if defined(_WIN32)
-    m_hFile(INVALID_HANDLE_VALUE),
+    m_hFile(),
     #else
-    m_fd(-1),
+    m_ownedFd(),
+    m_borrowedFd(-1),
     #endif
-    //m_parent(NULL),
-    m_size(0), m_pos(0), m_autoClose(true)
+    m_size(0), m_pos(0)
 {
+    m_mode = LVOM_ERROR;
 }
 
 LVFileStream::~LVFileStream()
 {
     Close();
-    //m_parent = NULL;
 }
 
 #endif
