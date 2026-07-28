@@ -155,7 +155,7 @@ public:
         clear();
     }
 
-    void swap(LVHashTable &table)
+    void swap(LVHashTable &table) noexcept
     {
         _table.swap(table._table);
         std::swap(_count, table._count);

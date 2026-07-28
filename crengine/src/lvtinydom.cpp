@@ -264,6 +264,7 @@ enum CacheFileBlockType {
 #include "../include/lvhtmlparser.h"
 
 #include <stddef.h>
+#include <algorithm>
 #include <math.h>
 #include <limits>
 #include <memory>
@@ -502,6 +503,7 @@ static void dumpRendMethods( ldomNode * node, lString32 prefix )
 
 
 #define CACHE_FILE_ITEM_MAGIC 0xC007B00C
+static const int CACHE_FILE_MAX_INDEX_ITEMS = 100000;
 struct CacheFileItem
 {
     lUInt32 _magic;    // magic number
@@ -523,7 +525,11 @@ struct CacheFileItem
             CRLog::error("CacheFileItem::validate: block magic doesn't match");
             return false;
         }
-        if ( _dataSize>_blockSize || _blockSize<0 || _dataSize<0 || _blockFilePos+_dataSize>fsize || _blockFilePos<CACHE_FILE_SECTOR_SIZE) {
+        const long long dataEnd =
+                static_cast<long long>(_blockFilePos) + _dataSize;
+        if ( _dataSize>_blockSize || _blockSize<0 || _dataSize<0
+                || _blockFilePos<CACHE_FILE_SECTOR_SIZE
+                || dataEnd>fsize) {
             CRLog::error("CacheFileItem::validate: invalid block size or position");
             return false;
         }
@@ -764,6 +770,7 @@ static bool resizeCacheBuffer(
 
 class CacheFile
 {
+    friend bool LVRunCacheFileIndexRegression();
     int _sectorSize; // block position and size granularity
     int _size;
     bool _indexChanged;
@@ -1020,7 +1027,12 @@ bool CacheFile::readIndex()
     CRLog::info("Header read: compression type=%u", (int)hdr.compressionType());
     if ( !hdr.validate(_domVersion) )
         return false;
-    if ( (int)hdr._fsize > _size + 4096-1 ) {
+    if (_size < 0
+            || hdr._fsize
+                    > static_cast<lUInt32>(
+                            std::numeric_limits<int>::max())
+            || static_cast<lUInt64>(hdr._fsize)
+                    > static_cast<lUInt64>(_size) + 4096 - 1) {
         CRLog::error("CacheFile::readIndex: file size doesn't match with header");
         return false;
     }
@@ -1028,9 +1040,28 @@ bool CacheFile::readIndex()
         CRLog::error("CacheFile::readIndex: compression type does not match the target");
         return false;
     }
-    if ( !hdr._indexBlock._blockFilePos )
+    if ( !hdr._indexBlock._blockFilePos ) {
+        _map.clear();
+        _freeIndex.clear();
+        _index.clear();
+        _dirty = hdr._dirty ? true : false;
+        _indexChanged = false;
         return true; // empty index is ok
-    if ( hdr._indexBlock._blockFilePos>=(int)hdr._fsize || hdr._indexBlock._blockFilePos+hdr._indexBlock._blockSize>(int)hdr._fsize+4096-1 ) {
+    }
+    const long long indexBlockEnd =
+            static_cast<long long>(
+                    hdr._indexBlock._blockFilePos)
+            + hdr._indexBlock._blockSize;
+    if (hdr._indexBlock._blockFilePos < CACHE_FILE_SECTOR_SIZE
+            || hdr._indexBlock._blockSize < 0
+            || hdr._indexBlock._dataSize < 0
+            || hdr._indexBlock._dataSize
+                    > hdr._indexBlock._blockSize
+            || hdr._indexBlock._blockFilePos
+                    >= static_cast<int>(hdr._fsize)
+            || indexBlockEnd
+                    > static_cast<long long>(hdr._fsize)
+                            + 4096 - 1) {
         CRLog::error("CacheFile::readIndex: Wrong index file position specified in header");
         return false;
     }
@@ -1038,47 +1069,109 @@ bool CacheFile::readIndex()
         CRLog::error("CacheFile::readIndex: cannot move file position to index block");
         return false;
     }
-    int count = hdr._indexBlock._dataSize / sizeof(CacheFileItem);
-    if ( count<0 || count>100000 ) {
+    const int itemSize = static_cast<int>(sizeof(CacheFileItem));
+    if (hdr._indexBlock._dataSize <= 0
+            || hdr._indexBlock._dataSize % itemSize != 0) {
+        CRLog::error("CacheFile::readIndex: invalid index byte size");
+        return false;
+    }
+    const int count = hdr._indexBlock._dataSize / itemSize;
+    if ( count > CACHE_FILE_MAX_INDEX_ITEMS ) {
         CRLog::error("CacheFile::readIndex: invalid number of blocks in index");
         return false;
     }
-    CacheFileItem * index = new CacheFileItem[count];
-    bytesRead = 0;
-    lvsize_t  sz = sizeof(CacheFileItem)*count;
-    _stream->Read(index, sz, &bytesRead );
-    if ( bytesRead!=sz )
-        return false;
-    // check CRC
-    lUInt32 hash = calcHash( (lUInt8*)index, sz );
-    if ( hdr._indexBlock._dataHash!=hash ) {
-        CRLog::error("CacheFile::readIndex: CRC doesn't match found %08x expected %08x", hash, hdr._indexBlock._dataHash);
-        delete[] index;
-        return false;
-    }
-    for ( int i=0; i<count; i++ ) {
-        if (index[i]._dataType == CBT_INDEX)
-            index[i] = hdr._indexBlock;
-        if ( !index[i].validate(_size) ) {
-            delete[] index;
+
+    try {
+        std::vector<CacheFileItem> serializedIndex(
+                static_cast<size_t>(count));
+        bytesRead = 0;
+        const lvsize_t indexSize =
+                static_cast<lvsize_t>(
+                        static_cast<size_t>(itemSize)
+                        * static_cast<size_t>(count));
+        _stream->Read(
+                serializedIndex.data(), indexSize, &bytesRead );
+        if ( bytesRead!=indexSize )
+            return false;
+
+        // check CRC
+        const lUInt32 hash = calcHash(
+                reinterpret_cast<const lUInt8 *>(
+                        serializedIndex.data()),
+                static_cast<int>(indexSize));
+        if ( hdr._indexBlock._dataHash!=hash ) {
+            CRLog::error("CacheFile::readIndex: CRC doesn't match found %08x expected %08x", hash, hdr._indexBlock._dataHash);
             return false;
         }
-        CacheFileItem * item = new CacheFileItem();
-        memcpy(item, &index[i], sizeof(CacheFileItem));
-        _index.add( item );
-        lUInt32 key = ((lUInt32)item->_dataType)<<16 | item->_dataIndex;
-        if ( key==0 )
-            _freeIndex.add( item );
-        else
-            _map.set( key, item );
-    }
-    delete[] index;
-    CacheFileItem * indexitem = findBlock(CBT_INDEX, 0);
-    if ( !indexitem ) {
-        CRLog::error("CacheFile::readIndex: index block info doesn't match header");
+
+        std::vector<lUInt32> usedKeys;
+        usedKeys.reserve(static_cast<size_t>(count));
+        int indexBlockCount = 0;
+        for ( int i=0; i<count; i++ ) {
+            CacheFileItem &item = serializedIndex[i];
+            if (item._dataType == CBT_INDEX) {
+                item = hdr._indexBlock;
+                indexBlockCount++;
+            }
+            if ( !item.validate(_size) )
+                return false;
+            const lUInt32 key =
+                    (static_cast<lUInt32>(item._dataType) << 16)
+                    | item._dataIndex;
+            if (key != 0)
+                usedKeys.push_back(key);
+        }
+        if (indexBlockCount != 1) {
+            CRLog::error("CacheFile::readIndex: index block info doesn't match header");
+            return false;
+        }
+        std::sort(usedKeys.begin(), usedKeys.end());
+        if (std::adjacent_find(
+                    usedKeys.begin(), usedKeys.end())
+                != usedKeys.end()) {
+            CRLog::error("CacheFile::readIndex: duplicate block key");
+            return false;
+        }
+
+        LVPtrVector<CacheFileItem, true> candidateIndex;
+        LVPtrVector<CacheFileItem, false> candidateFreeIndex;
+        LVHashTable<lUInt32, CacheFileItem*> candidateMap(
+                count > 1024 ? count : 1024);
+        candidateIndex.reserve(count);
+        candidateFreeIndex.reserve(count);
+        for ( int i=0; i<count; i++ ) {
+            std::unique_ptr<CacheFileItem> item(
+                    new CacheFileItem(serializedIndex[i]));
+            CacheFileItem *view = item.get();
+            candidateIndex.add(view);
+            item.release();
+            const lUInt32 key =
+                    (static_cast<lUInt32>(view->_dataType) << 16)
+                    | view->_dataIndex;
+            if (key == 0)
+                candidateFreeIndex.add(view);
+            else
+                candidateMap.set(key, view);
+        }
+        if (!candidateMap.get(
+                    static_cast<lUInt32>(CBT_INDEX) << 16)) {
+            CRLog::error("CacheFile::readIndex: index block info doesn't match header");
+            return false;
+        }
+
+        _map.swap(candidateMap);
+        _freeIndex.swap(candidateFreeIndex);
+        _index.swap(candidateIndex);
+    } catch (const std::bad_alloc &) {
+        CRLog::error("CacheFile::readIndex: cannot allocate index storage");
+        return false;
+    } catch (const std::length_error &) {
+        CRLog::error("CacheFile::readIndex: invalid index storage size");
         return false;
     }
+
     _dirty = hdr._dirty ? true : false;
+    _indexChanged = false;
     return true;
 }
 
@@ -1093,26 +1186,62 @@ bool CacheFile::writeIndex()
 
     // create copy of index in memory
     int count = _index.length();
+    if (count > CACHE_FILE_MAX_INDEX_ITEMS) {
+        CRLog::error("CacheFile::writeIndex: too many index items");
+        return false;
+    }
     CacheFileItem * indexItem = findBlock(CBT_INDEX, 0);
     if (!indexItem) {
-        int sz = sizeof(CacheFileItem) * (count * 2 + 100);
-        allocBlock(CBT_INDEX, 0, sz);
+        const size_t reservedItemCount =
+                static_cast<size_t>(count) * 2 + 100;
+        if (reservedItemCount
+                > static_cast<size_t>(
+                        std::numeric_limits<int>::max())
+                        / sizeof(CacheFileItem)) {
+            CRLog::error("CacheFile::writeIndex: index reservation is too large");
+            return false;
+        }
+        const int reservedSize =
+                static_cast<int>(
+                        reservedItemCount * sizeof(CacheFileItem));
+        allocBlock(CBT_INDEX, 0, reservedSize);
         indexItem = findBlock(CBT_INDEX, 0);
-        (void)indexItem; // silences clang warning
+        if (!indexItem)
+            return false;
         count = _index.length();
-    }
-    CacheFileItem * index = new CacheFileItem[count]();
-    int sz = count * sizeof(CacheFileItem);
-    for ( int i = 0; i < count; i++ ) {
-        memcpy( &index[i], _index[i], sizeof(CacheFileItem) );
-        if (index[i]._dataType == CBT_INDEX) {
-            index[i]._dataHash = 0;
-            index[i]._packedHash = 0;
-            index[i]._dataSize = 0;
+        if (count > CACHE_FILE_MAX_INDEX_ITEMS) {
+            CRLog::error("CacheFile::writeIndex: too many index items");
+            return false;
         }
     }
-    bool res = write(CBT_INDEX, 0, (const lUInt8*)index, sz, false);
-    delete[] index;
+
+    std::vector<CacheFileItem> serializedIndex;
+    try {
+        serializedIndex.resize(static_cast<size_t>(count));
+    } catch (const std::bad_alloc &) {
+        CRLog::error("CacheFile::writeIndex: cannot allocate index snapshot");
+        return false;
+    } catch (const std::length_error &) {
+        CRLog::error("CacheFile::writeIndex: invalid index snapshot size");
+        return false;
+    }
+    const int indexSize =
+            static_cast<int>(
+                    static_cast<size_t>(count)
+                    * sizeof(CacheFileItem));
+    for ( int i = 0; i < count; i++ ) {
+        serializedIndex[i] = *_index[i];
+        if (serializedIndex[i]._dataType == CBT_INDEX) {
+            serializedIndex[i]._dataHash = 0;
+            serializedIndex[i]._packedHash = 0;
+            serializedIndex[i]._dataSize = 0;
+        }
+    }
+    const bool res = write(
+            CBT_INDEX, 0,
+            reinterpret_cast<const lUInt8 *>(
+                    serializedIndex.data()),
+            indexSize, false);
 
     indexItem = findBlock(CBT_INDEX, 0);
     if ( !res || !indexItem ) {
@@ -1120,7 +1249,8 @@ bool CacheFile::writeIndex()
         return false;
     }
 
-    updateHeader();
+    if (!updateHeader())
+        return false;
     _indexChanged = false;
     return true;
 }
@@ -1496,8 +1626,17 @@ bool CacheFile::open( lString32 filename )
 // try open existing cache file
 bool CacheFile::open( LVStreamRef stream )
 {
+    if (stream.isNull())
+        return false;
+    const lvsize_t streamSize = stream->GetSize();
+    if (streamSize
+            > static_cast<lvsize_t>(
+                    std::numeric_limits<int>::max())) {
+        CRLog::error("CacheFile::open : file is too large");
+        return false;
+    }
     _stream = stream;
-    _size = _stream->GetSize();
+    _size = static_cast<int>(streamSize);
     //_stream->setAutoSyncSize(STREAM_AUTO_SYNC_SIZE);
 
     if ( !readIndex() ) {
@@ -2065,6 +2204,138 @@ bool LVRunCacheFileCodecRegression(
             legacy, &free);
     return legacySize == static_cast<int>(input.size())
             && memcmp(legacyOwner.get(), input.data(), input.size()) == 0;
+}
+
+bool LVRunCacheFileIndexRegression()
+{
+    const std::vector<lUInt8> first =
+            {0x10, 0x20, 0x30, 0x40};
+    const std::vector<lUInt8> second =
+            {0x51, 0x52, 0x53};
+    LVStreamRef indexedStream = LVCreateMemoryStream();
+    CacheFile writer(1, CacheCompressionNone);
+    if (indexedStream.isNull()
+            || !writer.create(indexedStream)
+            || !writer.write(
+                    CBT_TEXT_DATA, 1, first.data(),
+                    static_cast<int>(first.size()), false)
+            || !writer.write(
+                    CBT_ELEM_DATA, 2, second.data(),
+                    static_cast<int>(second.size()), false))
+        return false;
+    CRTimerUtil timer;
+    timer.infinite();
+    if (!writer.flush(true, timer))
+        return false;
+
+    CacheFile reopened(1, CacheCompressionNone);
+    std::vector<lUInt8> restoredFirst;
+    std::vector<lUInt8> restoredSecond;
+    if (!reopened.open(indexedStream)
+            || reopened._dirty
+            || reopened._indexChanged
+            || reopened._index.length() != 3
+            || !reopened.read(
+                    CBT_TEXT_DATA, 1, restoredFirst)
+            || !reopened.read(
+                    CBT_ELEM_DATA, 2, restoredSecond)
+            || restoredFirst != first
+            || restoredSecond != second)
+        return false;
+
+    const lvsize_t cacheSize = indexedStream->GetSize();
+    if (cacheSize < sizeof(CacheFileHeader)
+            || cacheSize
+                    > static_cast<lvsize_t>(
+                            std::numeric_limits<int>::max()))
+        return false;
+    std::vector<lUInt8> corruptedBytes(
+            static_cast<size_t>(cacheSize));
+    indexedStream->SetPos(0);
+    lvsize_t bytesRead = 0;
+    if (indexedStream->Read(
+                corruptedBytes.data(), cacheSize, &bytesRead)
+                    != LVERR_OK
+            || bytesRead != cacheSize)
+        return false;
+
+    CacheFileHeader header;
+    memcpy(&header, corruptedBytes.data(), sizeof(header));
+    const int indexSize = header._indexBlock._dataSize;
+    if (indexSize <= 0
+            || indexSize % static_cast<int>(sizeof(CacheFileItem)) != 0
+            || header._indexBlock._blockFilePos < 0
+            || static_cast<size_t>(
+                    header._indexBlock._blockFilePos)
+                    > corruptedBytes.size()
+            || static_cast<size_t>(indexSize)
+                    > corruptedBytes.size()
+                            - static_cast<size_t>(
+                                    header._indexBlock._blockFilePos))
+        return false;
+    const int itemCount =
+            indexSize / static_cast<int>(sizeof(CacheFileItem));
+    std::vector<CacheFileItem> serializedIndex(
+            static_cast<size_t>(itemCount));
+    memcpy(
+            serializedIndex.data(),
+            corruptedBytes.data()
+                    + header._indexBlock._blockFilePos,
+            static_cast<size_t>(indexSize));
+    int corruptIndex = -1;
+    for (int i = itemCount - 1; i >= 0; --i) {
+        if (serializedIndex[i]._dataType != CBT_INDEX) {
+            corruptIndex = i;
+            break;
+        }
+    }
+    if (corruptIndex < 0)
+        return false;
+    serializedIndex[corruptIndex]._magic ^= 1;
+    header._indexBlock._dataHash = calcHash(
+            reinterpret_cast<const lUInt8 *>(
+                    serializedIndex.data()),
+            indexSize);
+    memcpy(
+            corruptedBytes.data()
+                    + header._indexBlock._blockFilePos,
+            serializedIndex.data(),
+            static_cast<size_t>(indexSize));
+    memcpy(corruptedBytes.data(), &header, sizeof(header));
+    LVStreamRef corruptedStream = LVCreateMemoryStream(
+            corruptedBytes.data(),
+            static_cast<int>(corruptedBytes.size()),
+            true, LVOM_READWRITE);
+    if (corruptedStream.isNull())
+        return false;
+
+    LVStreamRef sentinelStream = LVCreateMemoryStream();
+    CacheFile target(1, CacheCompressionNone);
+    const std::vector<lUInt8> sentinelData = {0xA5};
+    if (sentinelStream.isNull()
+            || !target.create(sentinelStream)
+            || !target.write(
+                    CBT_TOC_DATA, 77, sentinelData.data(),
+                    static_cast<int>(sentinelData.size()), false))
+        return false;
+    CacheFileItem *sentinel =
+            target.findBlock(CBT_TOC_DATA, 77);
+    const int originalIndexLength = target._index.length();
+    const int originalFreeLength = target._freeIndex.length();
+    const int originalMapLength = target._map.length();
+    const bool originalDirty = target._dirty;
+    const bool originalIndexChanged = target._indexChanged;
+    target._stream = corruptedStream;
+    target._size = static_cast<int>(corruptedBytes.size());
+    if (target.readIndex())
+        return false;
+    return target._index.length() == originalIndexLength
+            && target._freeIndex.length() == originalFreeLength
+            && target._map.length() == originalMapLength
+            && target.findBlock(CBT_TOC_DATA, 77) == sentinel
+            && !target.findBlock(CBT_ELEM_DATA, 2)
+            && target._dirty == originalDirty
+            && target._indexChanged == originalIndexChanged;
 }
 
 // BLOB storage

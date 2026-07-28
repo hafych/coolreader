@@ -1490,6 +1490,11 @@ require_source_text(
   "ptr = ptr->next.get()"
   "hash iterators must traverse non-owning views of collision owners"
 )
+require_source_text(
+  "${HASH_TABLE_HEADER}"
+  "void swap(LVHashTable &table) noexcept"
+  "hash-table ownership must support no-throw transactional publication"
+)
 forbid_source_text(
   "${HASH_TABLE_HEADER}"
   "pair ** _table"
@@ -1645,6 +1650,11 @@ require_source_text(
   "${PTR_VECTOR_HEADER}"
   "std::sort(_list.begin(), _list.begin() + _count"
   "pointer-vector sorting must stay typed"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "void swap(LVPtrVector &vector) noexcept"
+  "pointer-vector ownership must support no-throw transactional publication"
 )
 forbid_source_text(
   "${PTR_VECTOR_HEADER}"
@@ -2357,6 +2367,43 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "inflateEnd(z);"
   "cache-file operations must not invalidate reusable zlib state"
+)
+
+# --- cache-file index snapshots and transactional publication ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "CACHE_FILE_MAX_INDEX_ITEMS"
+  "cache-file indexes must enforce their item-count bound"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<CacheFileItem> serializedIndex"
+  "cache-file index snapshots must use typed RAII storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LVPtrVector<CacheFileItem, true> candidateIndex"
+  "cache-file index loads must scope candidate item ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::adjacent_find("
+  "cache-file indexes must reject duplicate live block keys"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_map.swap(candidateMap);\n        _freeIndex.swap(candidateFreeIndex);\n        _index.swap(candidateIndex);"
+  "cache-file indexes must publish all lookup structures atomically"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "CacheFileItem * index = new CacheFileItem[count]"
+  "cache-file index snapshots must not use owning raw arrays"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete[] index"
+  "cache-file index snapshot teardown must remain automatic"
 )
 
 # --- DOM blob payload and index ownership ---

@@ -116,6 +116,13 @@ public:
     int length() const { return _count; }
     /// returns true if there are no items in vector
     bool empty() const { return _count==0; }
+    /// swaps storage and ownership without moving individual items
+    void swap(LVPtrVector &vector) noexcept
+    {
+        _list.swap(vector._list);
+        std::swap(_size, vector._size);
+        std::swap(_count, vector._count);
+    }
     /// clears all items
     void clear()
     {

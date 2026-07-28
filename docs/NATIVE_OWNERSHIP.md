@@ -92,6 +92,16 @@ malloc-compatible ownership boundary. Regression coverage exercises
 multi-chunk ZSTD/zlib round trips, reuse, corruption recovery,
 cleanup/recreation and the vector, serialization and legacy read boundaries.
 
+Cache-file index serialization uses bounded `vector<CacheFileItem>` snapshots.
+On load, every record and live block key is validated before candidate owning
+items, free-list views and the lookup map are assembled. The three structures
+publish through no-throw swaps only after the complete index succeeds, so a
+short read, allocation failure, duplicate key or late invalid record releases
+all candidates and preserves the previous cache state. Index writes likewise
+release their snapshot automatically on every failed write or header update.
+Regression coverage reopens a valid multi-block index and verifies rollback
+after a late record is corrupted while its aggregate CRC remains valid.
+
 DOM blob payloads live in `vector` storage, while the blob cache owns items as
 `vector<unique_ptr>`. Index loading builds a bounded candidate list and swaps
 it into place only after every name, size and 16-bit block index validates, so

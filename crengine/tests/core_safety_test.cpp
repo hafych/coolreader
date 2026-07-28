@@ -1731,6 +1731,12 @@ static int testCacheFileCodecOwnership() {
     return 0;
 }
 
+static int testCacheFileIndexOwnership() {
+    if (!LVRunCacheFileIndexRegression())
+        return fail("cache-file index ownership regression failed");
+    return 0;
+}
+
 static int testDomBlobOwnership() {
     if (!LVRunBlobCacheRegression())
         return fail("DOM blob ownership regression failed");
@@ -2264,6 +2270,24 @@ static int testPointerVectorOwnership() {
                 || !values[5] || values[5]->value() != 6
                 || PointerVectorTestValue::liveCount() != 4)
             return fail("pointer vector sparse set corrupted owned slots");
+
+        LVPtrVector<PointerVectorTestValue> swapPeer;
+        swapPeer.add(new PointerVectorTestValue(7));
+        values.swap(swapPeer);
+        if (values.length() != 1
+                || !values[0] || values[0]->value() != 7
+                || swapPeer.length() != 6
+                || !swapPeer[0] || swapPeer[0]->value() != 4
+                || PointerVectorTestValue::liveCount() != 5)
+            return fail("pointer vector swap changed ownership");
+        values.swap(swapPeer);
+        if (values.length() != 6
+                || swapPeer.length() != 1
+                || !swapPeer[0] || swapPeer[0]->value() != 7)
+            return fail("pointer vector swap could not restore storage");
+        swapPeer.clear();
+        if (PointerVectorTestValue::liveCount() != 4)
+            return fail("pointer vector swap peer leaked its owner");
 
         PointerVectorTestValue::resetCopies();
         LVPtrVector<PointerVectorTestValue> copied(values);
@@ -4610,6 +4634,8 @@ int main() {
     if (testSerialBufOwnership() != 0)
         return 1;
     if (testCacheFileCodecOwnership() != 0)
+        return 1;
+    if (testCacheFileIndexOwnership() != 0)
         return 1;
     if (testDomBlobOwnership() != 0)
         return 1;

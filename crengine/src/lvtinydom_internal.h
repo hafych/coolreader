@@ -10,6 +10,9 @@ bool LVRunCacheFileCodecRegression(
         CacheCompressionType type,
         const std::vector<lUInt8> &input);
 
+/// Native regression seam for cache index ownership and rollback.
+bool LVRunCacheFileIndexRegression();
+
 /// Native regression seam for DOM blob ownership and cache restoration.
 bool LVRunBlobCacheRegression();
 

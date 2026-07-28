@@ -252,6 +252,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   do not invalidate reusable state, and completed blocks move directly into
   serialization buffers while legacy DOM storage keeps an explicit
   malloc-compatible transfer boundary.
+- Cache-file index reads and writes now use bounded typed snapshots instead of
+  owning raw arrays. Loads validate every record and reject duplicate live
+  keys before atomically swapping the owning index, free-list views and lookup
+  map; a late corrupt record leaves the previous cache state unchanged.
 - DOM blob caches now own payloads and items through vectors and
   `unique_ptr`. Bounded index loads publish transactionally, failed cache
   writes do not create phantom items, and short blobs no longer feed an
