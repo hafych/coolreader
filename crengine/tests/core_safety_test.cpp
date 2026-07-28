@@ -1,5 +1,6 @@
 #include "lvstreamutils.h"
 #include "lvstreamfragment.h"
+#include "lvhashtable.h"
 #include "lvstring8collection.h"
 #include "lvstring32hashedcollection.h"
 #include "lvthread.h"
@@ -50,6 +51,7 @@
 #include <cstdint>
 #include <fcntl.h>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <sys/stat.h>
 #include <thread>
@@ -104,6 +106,51 @@ public:
                 true, LVOM_READ);
     }
 };
+
+class HashResizeValue {
+    int _value;
+    static bool _copyBlocked;
+    static int _liveCount;
+
+public:
+    explicit HashResizeValue(int value = 0)
+        : _value(value) {
+        ++_liveCount;
+    }
+
+    HashResizeValue(const HashResizeValue &value)
+        : _value(value._value) {
+        if (_copyBlocked)
+            throw std::runtime_error("hash value copy blocked");
+        ++_liveCount;
+    }
+
+    HashResizeValue &operator=(const HashResizeValue &value) {
+        if (_copyBlocked)
+            throw std::runtime_error("hash value assignment blocked");
+        _value = value._value;
+        return *this;
+    }
+
+    ~HashResizeValue() {
+        --_liveCount;
+    }
+
+    int value() const {
+        return _value;
+    }
+
+    static void setCopyBlocked(bool blocked) {
+        _copyBlocked = blocked;
+    }
+
+    static int liveCount() {
+        return _liveCount;
+    }
+};
+
+bool HashResizeValue::_copyBlocked = false;
+int HashResizeValue::_liveCount = 0;
 
 static int testMutex() {
     LVMutex mutex;
@@ -1635,6 +1682,86 @@ static int testNameIdMapOwnership() {
             || rollback.idByName(U"sentinel") != 3
             || rollback.idByName(U"alpha") != 0)
         return fail("name/id map failure replaced committed state");
+    return 0;
+}
+
+static int testHashTableOwnership() {
+    LVHashTable<lUInt32, lString32> table(1);
+    table.set(14, lString32(U"fourteen"));
+    table.set(30, lString32(U"thirty"));
+    table.set(46, lString32(U"forty-six"));
+
+    int iterated = 0;
+    LVHashTable<lUInt32, lString32>::iterator collisionIterator =
+            table.forwardIterator();
+    while (collisionIterator.next())
+        ++iterated;
+    if (iterated != 3)
+        return fail("hash iterator dropped a last-bucket collision chain");
+
+    for (lUInt32 key = 100; key < 220; ++key) {
+        lString32 value(U"value-");
+        value += lString32::itoa(key);
+        table.set(key, value);
+    }
+    table.set(14, lString32(U"updated"));
+    table.remove(30);
+    if (table.length() != 122
+            || table.get(14) != lString32(U"updated")
+            || table.get(30) != lString32()
+            || table.get(219) != lString32(U"value-219"))
+        return fail("hash resize/update/remove lost an entry");
+
+    table.resize(1);
+    iterated = 0;
+    LVHashTable<lUInt32, lString32>::iterator compactIterator =
+            table.forwardIterator();
+    while (compactIterator.next())
+        ++iterated;
+    if (table.size() != 1 || iterated != table.length())
+        return fail("hash explicit compact resize lost a collision node");
+
+    LVHashTable<lUInt32, lString32> tableCopy(table);
+    LVHashTable<lUInt32, lString32> tableAssigned(16);
+    tableAssigned = table;
+    LVHashTable<lUInt32, lString32>::pair *originalPair =
+            table.forwardIterator().next();
+    LVHashTable<lUInt32, lString32>::pair *copiedPair =
+            tableCopy.forwardIterator().next();
+    const bool copiesOwnDistinctNodes =
+            originalPair && copiedPair && originalPair != copiedPair;
+    table.clear();
+    if (!copiesOwnDistinctNodes
+            || table.length() != 0
+            || tableCopy.get(14) != lString32(U"updated")
+            || tableAssigned.get(219) != lString32(U"value-219"))
+        return fail("hash copy/assignment shared collision-node ownership");
+
+    if (HashResizeValue::liveCount() != 0)
+        return fail("hash resize fixture started with live values");
+    {
+        LVHashTable<lUInt32, HashResizeValue> values(16);
+        values.set(1, HashResizeValue(11));
+        values.set(2, HashResizeValue(22));
+        HashResizeValue::setCopyBlocked(true);
+        bool resizeThrew = false;
+        try {
+            values.resize(64);
+        } catch (const std::runtime_error &) {
+            resizeThrew = true;
+        }
+        HashResizeValue::setCopyBlocked(false);
+        if (resizeThrew
+                || values.get(1).value() != 11
+                || values.get(2).value() != 22)
+            return fail("hash resize copied values or lost owned nodes");
+        values.resize(0);
+        values.set(3, HashResizeValue(33));
+        if (values.size() < 3 || values.get(3).value() != 33)
+            return fail("hash zero-size resize broke subsequent growth");
+    }
+    if (HashResizeValue::liveCount() != 0)
+        return fail("hash clear/destructor leaked stored values");
     return 0;
 }
 
@@ -3454,6 +3581,8 @@ int main() {
     if (testStringCollectionOwnership() != 0)
         return 1;
     if (testNameIdMapOwnership() != 0)
+        return 1;
+    if (testHashTableOwnership() != 0)
         return 1;
     if (testSerialBufOwnership() != 0)
         return 1;

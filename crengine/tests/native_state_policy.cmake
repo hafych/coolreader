@@ -28,6 +28,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvstring32hashedcollection.h" HASHED_
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring32hashedcollection.cpp" HASHED_STRING_COLLECTION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lstridmap.h" NAME_ID_MAP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lstridmap.cpp" NAME_ID_MAP_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvhashtable.h" HASH_TABLE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
@@ -1344,6 +1345,51 @@ forbid_source_text(
   "${NAME_ID_MAP_SOURCE}"
   "qsort("
   "name/id map sorting must stay typed"
+)
+require_source_text(
+  "${HASH_TABLE_HEADER}"
+  "std::vector<std::unique_ptr<pair>> _table"
+  "hash table buckets must use RAII ownership"
+)
+require_source_text(
+  "${HASH_TABLE_HEADER}"
+  "std::unique_ptr<pair> next"
+  "hash table collision links must use exclusive RAII ownership"
+)
+require_source_text(
+  "${HASH_TABLE_HEADER}"
+  "LVHashTable(const LVHashTable &table)"
+  "hash table copies must rebuild independently owned nodes"
+)
+require_source_text(
+  "${HASH_TABLE_HEADER}"
+  "std::unique_ptr<pair> item = std::move(bucket)"
+  "hash table resize and teardown must transfer node ownership"
+)
+require_source_text(
+  "${HASH_TABLE_HEADER}"
+  "ptr = ptr->next.get()"
+  "hash iterators must traverse non-owning views of collision owners"
+)
+forbid_source_text(
+  "${HASH_TABLE_HEADER}"
+  "pair ** _table"
+  "hash tables must not own a raw bucket array"
+)
+forbid_source_text(
+  "${HASH_TABLE_HEADER}"
+  "new pair*"
+  "hash table bucket allocation must not regress to new[]"
+)
+forbid_source_text(
+  "${HASH_TABLE_HEADER}"
+  "delete[] _table"
+  "hash table bucket teardown must not use manual delete[]"
+)
+forbid_source_text(
+  "${HASH_TABLE_HEADER}"
+  "memset( _table"
+  "hash table clearing must not byte-reset owned nodes"
 )
 require_source_text(
   "${ZIP_STREAM_HEADER}"

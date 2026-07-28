@@ -158,6 +158,13 @@ Map copy and assignment deep-copy the owner index and rebuild name views,
 vector growth replaces the former pair of sequential reallocations, and
 deserialize swaps in a candidate only after item validation and CRC succeed.
 
+`LVHashTable` owns its bucket roots and collision links through
+`vector<unique_ptr>`. Stored pointer values keep their existing non-owning
+semantics; only the table nodes are owned. Rehash allocates the replacement
+bucket vector first and then transfers existing nodes without copying keys or
+values. Copy and assignment rebuild independent chains, removal and clear
+unlink iteratively, and iteration includes collisions in the final bucket.
+
 `SerialBuf` owns writable fixed-size and auto-growing storage through
 `std::vector`; its raw `_buf` member is only a compatibility view. The
 deserialization constructor remains explicitly borrowed, while the legacy

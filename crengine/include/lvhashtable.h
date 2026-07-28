@@ -28,8 +28,12 @@
 #define __LVHASHTABLE_H_INCLUDED__
 
 #include "lvtypes.h"
-#include <stdlib.h>
-#include <string.h>
+
+#include <climits>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 inline lUInt32 getHash( lUInt16 n )
 {
@@ -63,183 +67,208 @@ inline lUInt32 getHash(void * n )
 */
 template <typename keyT, typename valueT> class LVHashTable
 {
-	friend class iterator;
+    friend class iterator;
 public:
     class pair {
-		friend class LVHashTable;
+        friend class LVHashTable;
     public:
-        pair *  next; // extend
-        keyT    key;
-        valueT  value;
-        pair( const keyT & nkey, valueT nvalue, pair * pnext ) : next(pnext), key(nkey), value(nvalue) { }
+        std::unique_ptr<pair> next;
+        keyT key;
+        valueT value;
+
+        pair(const keyT &nkey, const valueT &nvalue)
+            : next(), key(nkey), value(nvalue)
+        {
+        }
+        pair(const pair &) = delete;
+        pair &operator=(const pair &) = delete;
     };
 
-	class iterator {
-        	friend class LVHashTable;
-		const LVHashTable & _tbl;
-		int index;
-		pair * ptr;
-		iterator & operator = (iterator &) {
-			// no assignment
-			return *this;
-		}
-	public:
-		iterator( const LVHashTable & table )
-			: _tbl( table ), index(0), ptr(NULL)
-		{
-		}
-		iterator( const iterator & v )
-			: _tbl( v._tbl ), index(v.index), ptr(v.ptr)
-		{
-		}
-		pair * next()
-		{
-			if ( index>=_tbl._size )
-				return NULL;
-			if ( ptr )
-				ptr = ptr->next;
-			if ( !ptr ) {
-				for ( ; index < _tbl._size; ) {
-					ptr = _tbl._table[ index++ ];
-					if ( ptr )
-						return ptr;
-				}
-			}
-			return ptr;
-		}
-	};
-
-	iterator forwardIterator() const
-	{
-		return iterator(*this);
-	}
-
-    LVHashTable( int size )
-    {
-        if (size < 16 )
-            size = 16;
-        _table = new pair* [ size ]();
-        _size = size;
-        _count = 0;
-    }
-    ~LVHashTable()
-    {
-        if ( _table ) {
-            clear();
-            delete[] _table;
+    class iterator {
+        friend class LVHashTable;
+        const LVHashTable &_tbl;
+        std::size_t index;
+        pair *ptr;
+        iterator &operator=(const iterator &) = delete;
+    public:
+        iterator(const LVHashTable &table)
+            : _tbl(table), index(0), ptr(NULL)
+        {
         }
-    }
-    void clear()
+        iterator(const iterator &v)
+            : _tbl(v._tbl), index(v.index), ptr(v.ptr)
+        {
+        }
+        pair *next()
+        {
+            if (ptr) {
+                ptr = ptr->next.get();
+                if (ptr)
+                    return ptr;
+            }
+            for (; index < _tbl._table.size();) {
+                ptr = _tbl._table[index++].get();
+                if (ptr)
+                    return ptr;
+            }
+            return NULL;
+        }
+    };
+
+    iterator forwardIterator() const
     {
-        for ( int i=0; i<_size; i++ ) {
-            pair * p = _table[i];
-            while ( p ) {
-                pair * tmp = p;
-                p = p->next;
-                delete tmp;
+        return iterator(*this);
+    }
+
+    LVHashTable(int size)
+        : _table(static_cast<std::size_t>(size < 16 ? 16 : size))
+        , _count(0)
+    {
+    }
+
+    LVHashTable(const LVHashTable &table)
+        : _table(table._table.size())
+        , _count(0)
+    {
+        for (std::size_t i = 0; i < table._table.size(); i++) {
+            std::unique_ptr<pair> *link = &_table[i];
+            for (pair *item = table._table[i].get();
+                    item; item = item->next.get()) {
+                link->reset(new pair(item->key, item->value));
+                link = &(*link)->next;
+                _count++;
             }
         }
-        memset( _table, 0, sizeof(pair*) * _size );
+    }
+
+    LVHashTable &operator=(const LVHashTable &table)
+    {
+        if (this != &table) {
+            LVHashTable copy(table);
+            swap(copy);
+        }
+        return *this;
+    }
+
+    ~LVHashTable()
+    {
+        clear();
+    }
+
+    void swap(LVHashTable &table)
+    {
+        _table.swap(table._table);
+        std::swap(_count, table._count);
+    }
+
+    void clear()
+    {
+        for (std::unique_ptr<pair> &bucket : _table) {
+            while (bucket) {
+                std::unique_ptr<pair> item = std::move(bucket);
+                bucket = std::move(item->next);
+            }
+        }
         _count = 0;
     }
-    int length() const { return _count; }
-    int size() const { return _size; }
-    void resize( int nsize )
-    {
-        pair ** new_table = new pair * [ nsize ]();
-		if (_table) {
-			for ( int i=0; i<_size; i++ ) {
-				pair * p = _table[i];
-				while ( p  )
-				{
-					lUInt32 index = getHash( p->key ) % ( nsize );
-					new_table[index] = new pair( p->key, p->value, new_table[index] );
-					pair * tmp = p;
-					p = p->next;
-					delete tmp;
-				}
-			}
-            delete[] _table;
-		}
-        _table = new_table;
-        _size = nsize;
 
-    }
-    void set( const keyT & key, valueT value )
+    int length() const { return _count; }
+    int size() const { return static_cast<int>(_table.size()); }
+
+    void resize(int nsize)
     {
-        lUInt32 index = getHash( key ) % ( _size );
-        pair ** p = &_table[index];
-        for ( ;*p ;p = &(*p)->next )
-        {
-            if ( (*p)->key == key )
-            {
-                (*p)->value = value;
+        const std::size_t bucketCount =
+                static_cast<std::size_t>(nsize > 0 ? nsize : 1);
+        std::vector<std::unique_ptr<pair>> replacement(bucketCount);
+        for (std::unique_ptr<pair> &bucket : _table) {
+            while (bucket) {
+                std::unique_ptr<pair> item = std::move(bucket);
+                bucket = std::move(item->next);
+                const std::size_t index =
+                        getHash(item->key) % bucketCount;
+                item->next = std::move(replacement[index]);
+                replacement[index] = std::move(item);
+            }
+        }
+        _table.swap(replacement);
+    }
+
+    void set(const keyT &key, valueT value)
+    {
+        std::size_t index = getHash(key) % _table.size();
+        std::unique_ptr<pair> *link = &_table[index];
+        for (; *link; link = &(*link)->next) {
+            if ((*link)->key == key) {
+                (*link)->value = value;
                 return;
             }
         }
-        if ( _count >= _size ) {
-            resize( _size * 2 );
-            index = getHash( key ) % ( _size );
-            p = &_table[index];
-            for ( ;*p ;p = &(*p)->next )
-            {
+        if (static_cast<std::size_t>(_count) >= _table.size()) {
+            if (_table.size()
+                    > static_cast<std::size_t>(INT_MAX) / 2)
+                throw std::length_error("LVHashTable capacity overflow");
+            const std::size_t doubled = _table.size() * 2;
+            const std::size_t required =
+                    static_cast<std::size_t>(_count) + 1;
+            resize(static_cast<int>(
+                    doubled > required ? doubled : required));
+            index = getHash(key) % _table.size();
+            link = &_table[index];
+            for (; *link; link = &(*link)->next) {
             }
         }
-        *p = new pair( key, value, NULL );
+        link->reset(new pair(key, value));
         _count++;
     }
-    void remove( const keyT & key )
+
+    void remove(const keyT &key)
     {
-        lUInt32 index = getHash( key ) % ( _size );
-        pair ** p = &_table[index];
-        for ( ;*p ;p = &(*p)->next )
-        {
-            if ( (*p)->key == key )
-            {
-                pair * tmp = *p;
-                *p = (*p)->next;
-                delete tmp;
+        const std::size_t index = getHash(key) % _table.size();
+        std::unique_ptr<pair> *link = &_table[index];
+        for (; *link; link = &(*link)->next) {
+            if ((*link)->key == key) {
+                std::unique_ptr<pair> removed = std::move(*link);
+                *link = std::move(removed->next);
                 _count--;
                 return;
             }
         }
     }
-    valueT get( const keyT & key ) const
+
+    valueT get(const keyT &key) const
     {
-        lUInt32 index = getHash( key ) % ( _size );
-        pair * p = _table[index];
-        for ( ;p ;p = p->next )
-        {
-            if ( p->key == key )
-            {
-                return p->value;
-            }
+        const std::size_t index = getHash(key) % _table.size();
+        for (pair *item = _table[index].get();
+                item; item = item->next.get()) {
+            if (item->key == key)
+                return item->value;
         }
         return valueT();
     }
-    bool get( const keyT & key, valueT & res ) const
+
+    bool get(const keyT &key, valueT &res) const
     {
-        lUInt32 index = getHash( key ) % ( _size );
-        pair * p = _table[index];
-        for ( ;p ;p = p->next )
-        {
-            if ( p->key == key )
-            {
-                res = p->value;
+        const std::size_t index = getHash(key) % _table.size();
+        for (pair *item = _table[index].get();
+                item; item = item->next.get()) {
+            if (item->key == key) {
+                res = item->value;
                 return true;
             }
         }
         return false;
     }
+
     void compact()
     {
-        if (_count > 0 && _count < _size)
+        if (_count > 0
+                && static_cast<std::size_t>(_count) < _table.size())
             resize(_count);
     }
+
 private:
-    int _size;
+    std::vector<std::unique_ptr<pair>> _table;
     int _count;
-    pair ** _table;
 };
 
 
