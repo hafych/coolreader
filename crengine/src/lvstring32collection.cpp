@@ -24,6 +24,12 @@
 
 #include <algorithm>
 
+void lString32Collection::swap(
+        lString32Collection &collection) noexcept
+{
+    _items.swap(collection._items);
+}
+
 void lString32Collection::reserve(int space)
 {
     if (space <= 0)

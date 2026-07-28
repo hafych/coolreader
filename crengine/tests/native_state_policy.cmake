@@ -5836,3 +5836,125 @@ forbid_source_text(
   "void addPage( LVPageMapItem * item )"
   "page-map creation must not accept implicit raw ownership"
 )
+
+# --- transactional DOM name/value/ID map snapshots ---
+require_source_text(
+  "${STRING32_COLLECTION_HEADER}"
+  "void swap(lString32Collection &collection) noexcept"
+  "string owner storage must support no-throw snapshot publication"
+)
+require_source_text(
+  "${HASHED_STRING_COLLECTION_HEADER}"
+  "void swap(lString32HashedCollection &collection) noexcept"
+  "hashed string owners and lookup buckets must publish together"
+)
+require_source_text(
+  "${HASHED_STRING_COLLECTION_SOURCE}"
+  "if (!buf.checkMagic(str_hash_magic))"
+  "hashed string deserialization must validate rather than overwrite magic"
+)
+require_source_text(
+  "${HASHED_STRING_COLLECTION_SOURCE}"
+  "lString32HashedCollection candidate("
+  "hashed string deserialization must build a rollback candidate"
+)
+require_source_text(
+  "${HASHED_STRING_COLLECTION_SOURCE}"
+  "candidate.add(s.c_str()) != i"
+  "hashed string snapshots must reject duplicate serialized values"
+)
+require_source_text(
+  "${HASHED_STRING_COLLECTION_SOURCE}"
+  "swap(candidate)"
+  "hashed string deserialization must publish only after CRC validation"
+)
+require_source_text(
+  "${NAME_ID_MAP_HEADER}"
+  "void swap(LDOMNameIdMap &map) noexcept"
+  "name/id owner snapshots must expose no-throw publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<id_node_map_item> items"
+  "ID-node serialization scratch storage must use RAII"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::sort("
+  "ID-node snapshots must use typed deterministic sorting"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LDOMNameIdMap elementNames(_elementNameTable)"
+  "DOM element-name maps must deserialize into a rollback candidate"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "lString32HashedCollection attrValues(_attrValueTable)"
+  "DOM attribute values must deserialize into a rollback candidate"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "serializedIdMapTrailerSize = 12"
+  "ID-node counts must remain bounded by their serialized bytes"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "nextUnknownElementId < UNKNOWN_ELEMENT_TYPE_ID"
+  "DOM map snapshots must reject invalid next-ID counters"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "idNodes.get(key, existingValue)"
+  "ID-node snapshots must reject duplicate serialized keys"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_elementNameTable.swap(elementNames)"
+  "DOM map snapshots must publish only after both CRC checks"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM map owner snapshot ordering was unstable"
+  "DOM map ownership must retain deterministic serialization coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "truncated DOM map replaced committed owners"
+  "DOM map ownership must retain whole-snapshot rollback coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM map snapshot accepted an oversized ID count"
+  "DOM map ownership must retain ID-count bound coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "hashed string bad magic replaced committed buckets"
+  "hashed string ownership must retain magic and rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "hashed string truncation published partial buckets"
+  "hashed string ownership must retain truncated-input rollback coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "id_node_map_item * array = new id_node_map_item"
+  "ID-node serialization must not own a raw scratch array"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete[] array"
+  "ID-node serialization teardown must remain automatic"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "qsort(array"
+  "ID-node serialization must not return to an untyped sorting bridge"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_idNodeMap.clear();"
+  "DOM map deserialization must not mutate the live ID index incrementally"
+)

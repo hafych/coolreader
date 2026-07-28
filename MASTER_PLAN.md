@@ -164,7 +164,8 @@ DRM или ограничений доступа, подбор/получени�
   bounded NanoSVG image/rasterizer/RGBA workspace ownership и transactional
   selection-range split/draw/text owner publication, включая batched
   word/filter/crop/extended-word owner-list factories, а также bounded
-  transactional TOC/page-map graph deserialization.
+  transactional TOC/page-map graph deserialization и whole-snapshot DOM
+  name/attribute/value/ID-node map publication.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

@@ -36,6 +36,7 @@ public:
     lString32Collection() = default;
     lString32Collection(const lString32Collection &) = default;
     lString32Collection &operator=(const lString32Collection &) = default;
+    void swap(lString32Collection &collection) noexcept;
     /// parse delimiter-separated string
     void parse( lString32 string, lChar32 delimiter, bool flgTrim );
     /// parse delimiter-separated string

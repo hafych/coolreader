@@ -2945,6 +2945,10 @@ static int testStringCollectionOwnership() {
     hashedCopy.serialize(serialized);
     if (serialized.error())
         return fail("hashed string collection could not serialize");
+    const int serializedSize = serialized.pos();
+    std::vector<lUInt8> serializedBytes(
+            serialized.buf(),
+            serialized.buf() + serializedSize);
     serialized.reset();
     lString32HashedCollection restored(4);
     restored.add(U"stale");
@@ -2953,6 +2957,37 @@ static int testStringCollectionOwnership() {
             || restored.find(collisionFirst.c_str()) != firstIndex
             || restored.find(collisionSecond.c_str()) != secondIndex)
         return fail("hashed string deserialize retained stale buckets");
+
+    restored.add(U"rollback-sentinel");
+    std::vector<lUInt8> wrongMagic(serializedBytes);
+    wrongMagic[0] ^= 0x20;
+    SerialBuf wrongMagicInput(
+            wrongMagic.data(), static_cast<int>(wrongMagic.size()));
+    if (restored.deserialize(wrongMagicInput)
+            || restored.find(U"rollback-sentinel") < 0
+            || restored.find(collisionFirst.c_str()) != firstIndex)
+        return fail(
+                "hashed string bad magic replaced committed buckets");
+
+    SerialBuf truncatedInput(
+            serializedBytes.data(), serializedSize - 1);
+    if (restored.deserialize(truncatedInput)
+            || restored.find(U"rollback-sentinel") < 0
+            || restored.find(collisionSecond.c_str()) != secondIndex)
+        return fail(
+                "hashed string truncation published partial buckets");
+
+    std::vector<lUInt8> oversizedCount(serializedBytes);
+    for (int index = 4; index < 8; ++index)
+        oversizedCount[static_cast<std::size_t>(index)] = 0xFF;
+    SerialBuf oversizedCountInput(
+            oversizedCount.data(),
+            static_cast<int>(oversizedCount.size()));
+    if (restored.deserialize(oversizedCountInput)
+            || !oversizedCountInput.error()
+            || restored.find(U"rollback-sentinel") < 0)
+        return fail(
+                "hashed string deserialize accepted an oversized count");
     return 0;
 }
 

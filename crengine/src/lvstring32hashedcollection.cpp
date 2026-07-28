@@ -45,20 +45,47 @@ bool lString32HashedCollection::deserialize( SerialBuf & buf )
 {
     if ( buf.error() )
         return false;
-    clear();
     int start = buf.pos();
-    buf.putMagic( str_hash_magic );
+    if (!buf.checkMagic(str_hash_magic))
+        return false;
     lInt32 count = 0;
     buf >> count;
+    static const int minimumSerializedStringSize = 2;
+    static const int serializedCrcSize = 4;
+    if (buf.error() || count < 0
+            || buf.space() < serializedCrcSize
+            || count > (buf.space() - serializedCrcSize)
+                    / minimumSerializedStringSize) {
+        buf.seterror();
+        return false;
+    }
+    lString32HashedCollection candidate(
+            static_cast<lUInt32>(
+                    _hashBuckets.empty()
+                            ? 32 : _hashBuckets.size()));
+    candidate.reserve(count);
     for ( int i=0; i<count; i++ ) {
         lString32 s;
         buf >> s;
-        if ( buf.error() )
-            break;
-        add( s.c_str() );
+        if (buf.error())
+            return false;
+        if (candidate.add(s.c_str()) != i) {
+            buf.seterror();
+            return false;
+        }
     }
     buf.checkCRC( buf.pos() - start );
-    return !buf.error();
+    if (buf.error())
+        return false;
+    swap(candidate);
+    return true;
+}
+
+void lString32HashedCollection::swap(
+        lString32HashedCollection &collection) noexcept
+{
+    lString32Collection::swap(collection);
+    _hashBuckets.swap(collection._hashBuckets);
 }
 
 void lString32HashedCollection::addHashItem(

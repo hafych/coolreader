@@ -28,7 +28,8 @@ static std::unique_ptr<ldomDocument> parseFixture() {
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             "<FictionBook>"
             "<body><section><title><p>Regression chapter</p></title>"
-            "<p>Alpha Needle middle needle omega.</p>"
+            "<p id=\"needle-paragraph\">"
+            "Alpha Needle middle needle omega.</p>"
             "</section></body>"
             "</FictionBook>";
     LVStreamRef stream = LVCreateMemoryStream(
@@ -259,6 +260,102 @@ static int testNavigationGraphOwnership(ldomDocument *document) {
             || !oversizedPageMapInput.error())
         return fail(
                 "page-map owner graph accepted an oversized child count");
+    return 0;
+}
+
+static int testDocumentMapOwnership(ldomDocument *document) {
+    ldomNode *idNode = document->getElementById(
+            U"needle-paragraph");
+    if (!idNode)
+        return fail("DOM map owner fixture ID node did not resolve");
+    const lUInt16 elementId =
+            document->getElementNameIndex("map-owner-element");
+    const lUInt16 attributeId =
+            document->getAttrNameIndex("map-owner-attribute");
+    const lUInt16 namespaceId =
+            document->getNsNameIndex("map-owner-namespace");
+    const lUInt32 valueId =
+            document->getAttrValueIndex(U"map-owner-value");
+
+    SerialBuf serialized(1, true);
+    document->serializeMaps(serialized);
+    if (serialized.error())
+        return fail("DOM map owner snapshot did not serialize");
+    const int serializedSize = serialized.pos();
+    std::vector<lUInt8> snapshot(
+            serialized.buf(),
+            serialized.buf() + serializedSize);
+    SerialBuf repeatedBytes(1, true);
+    document->serializeMaps(repeatedBytes);
+    std::vector<lUInt8> repeatedSnapshot(
+            repeatedBytes.buf(),
+            repeatedBytes.buf() + repeatedBytes.pos());
+    if (repeatedBytes.error() || repeatedSnapshot != snapshot)
+        return fail("DOM map owner snapshot ordering was unstable");
+
+    document->getElementNameIndex("map-owner-stale");
+    document->getAttrValueIndex(U"map-owner-stale-value");
+    SerialBuf input(snapshot.data(), serializedSize);
+    if (!document->deserializeMaps(input)
+            || document->findElementNameIndex("map-owner-stale") != 0
+            || document->findAttrValueIndex(U"map-owner-stale-value")
+                != static_cast<lUInt32>(-1)
+            || document->findElementNameIndex("map-owner-element")
+                != elementId
+            || document->getAttrNameIndex("map-owner-attribute")
+                != attributeId
+            || document->getNsNameIndex("map-owner-namespace")
+                != namespaceId
+            || document->findAttrValueIndex(U"map-owner-value")
+                != valueId
+            || document->getElementById(U"needle-paragraph")
+                != idNode)
+        return fail("DOM map owner snapshot did not replace atomically");
+
+    const lUInt16 rollbackElementId =
+            document->getElementNameIndex("map-owner-rollback");
+    const lUInt32 rollbackValueId =
+            document->getAttrValueIndex(U"map-owner-rollback-value");
+    SerialBuf truncatedInput(
+            snapshot.data(), serializedSize - 1);
+    if (document->deserializeMaps(truncatedInput)
+            || document->findElementNameIndex("map-owner-rollback")
+                != rollbackElementId
+            || document->findAttrValueIndex(
+                    U"map-owner-rollback-value")
+                != rollbackValueId
+            || document->getElementById(U"needle-paragraph")
+                != idNode)
+        return fail("truncated DOM map replaced committed owners");
+
+    static const lUInt8 idMapMagic[] = {
+        'N', 'I', 'D', 'M'
+    };
+    std::vector<lUInt8> oversizedIdMap(snapshot);
+    std::vector<lUInt8>::iterator magicPosition = std::search(
+            oversizedIdMap.begin(), oversizedIdMap.end(),
+            idMapMagic, idMapMagic + sizeof(idMapMagic));
+    if (magicPosition == oversizedIdMap.end())
+        return fail("DOM map owner snapshot lost its ID-map marker");
+    const std::size_t countOffset =
+            static_cast<std::size_t>(
+                    magicPosition - oversizedIdMap.begin())
+            + sizeof(idMapMagic);
+    if (countOffset + 4 > oversizedIdMap.size())
+        return fail("DOM map owner snapshot ID count was truncated");
+    for (std::size_t index = 0; index < 4; ++index)
+        oversizedIdMap[countOffset + index] = 0xFF;
+    SerialBuf oversizedIdMapInput(
+            oversizedIdMap.data(),
+            static_cast<int>(oversizedIdMap.size()));
+    if (document->deserializeMaps(oversizedIdMapInput)
+            || !oversizedIdMapInput.error()
+            || document->findElementNameIndex("map-owner-rollback")
+                != rollbackElementId
+            || document->findAttrValueIndex(
+                    U"map-owner-rollback-value")
+                != rollbackValueId)
+        return fail("DOM map snapshot accepted an oversized ID count");
     return 0;
 }
 
@@ -891,6 +988,8 @@ int main() {
         return fail("document results changed between equivalent parses");
     }
     if (testNavigationGraphOwnership(first.get()) != 0)
+        return 1;
+    if (testDocumentMapOwnership(first.get()) != 0)
         return 1;
     first.reset();
     second.reset();

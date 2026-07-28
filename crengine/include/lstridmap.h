@@ -80,7 +80,6 @@ private:
     bool    m_changed;
 
     void    Sort();
-    void    swap( LDOMNameIdMap & map );
 public:
     /// Main constructor
     LDOMNameIdMap( lUInt16 maxId );
@@ -88,6 +87,7 @@ public:
     LDOMNameIdMap( const LDOMNameIdMap & map );
     LDOMNameIdMap &operator=( const LDOMNameIdMap & map );
     ~LDOMNameIdMap() = default;
+    void swap(LDOMNameIdMap &map) noexcept;
 
 	/// serialize to byte array (pointer will be incremented by number of bytes written)
 	void serialize( SerialBuf & buf );

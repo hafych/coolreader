@@ -224,7 +224,7 @@ LDOMNameIdMap &LDOMNameIdMap::operator=(const LDOMNameIdMap &map)
     return *this;
 }
 
-void LDOMNameIdMap::swap(LDOMNameIdMap &map)
+void LDOMNameIdMap::swap(LDOMNameIdMap &map) noexcept
 {
     m_by_id.swap(map.m_by_id);
     m_by_name.swap(map.m_by_name);

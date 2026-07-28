@@ -6418,16 +6418,6 @@ typedef struct {
     lUInt32 value;
 } id_node_map_item;
 
-int compare_id_node_map_items(const void * item1, const void * item2) {
-    id_node_map_item * v1 = (id_node_map_item*)item1;
-    id_node_map_item * v2 = (id_node_map_item*)item2;
-    if (v1->key > v2->key)
-        return 1;
-    if (v1->key < v2->key)
-        return -1;
-    return 0;
-}
-
 /// serialize to byte array (pointer will be incremented by number of bytes written)
 void lxmlDocBase::serializeMaps( SerialBuf & buf )
 {
@@ -6449,33 +6439,29 @@ void lxmlDocBase::serializeMaps( SerialBuf & buf )
 
     int start = buf.pos();
     buf.putMagic( node_by_id_map_magic );
-    lUInt32 cnt = 0;
-    {
-        LVHashTable<lUInt32,lInt32>::iterator ii = _idNodeMap.forwardIterator();
-        for ( LVHashTable<lUInt32,lInt32>::pair * p = ii.next(); p!=NULL; p = ii.next() ) {
-            cnt++;
-        }
+    std::vector<id_node_map_item> items;
+    items.reserve(static_cast<std::size_t>(_idNodeMap.length()));
+    LVHashTable<lUInt32,lInt32>::iterator ii =
+            _idNodeMap.forwardIterator();
+    for (LVHashTable<lUInt32,lInt32>::pair *p = ii.next();
+            p != NULL; p = ii.next()) {
+        items.push_back(id_node_map_item{
+                static_cast<lUInt32>(p->key),
+                static_cast<lUInt32>(p->value)});
     }
+    const lUInt32 cnt = static_cast<lUInt32>(items.size());
     // TODO: investigate why length() doesn't work as count
     if ( (int)cnt!=_idNodeMap.length() )
         CRLog::error("_idNodeMap.length=%d doesn't match real item count %d", _idNodeMap.length(), cnt);
     buf << cnt;
-    if (cnt > 0)
-    {
-        // sort items before serializing!
-        id_node_map_item * array = new id_node_map_item[cnt];
-        int i = 0;
-        LVHashTable<lUInt32,lInt32>::iterator ii = _idNodeMap.forwardIterator();
-        for ( LVHashTable<lUInt32,lInt32>::pair * p = ii.next(); p!=NULL; p = ii.next() ) {
-            array[i].key = (lUInt32)p->key;
-            array[i].value = (lUInt32)p->value;
-            i++;
-        }
-        qsort(array, cnt, sizeof(id_node_map_item), &compare_id_node_map_items);
-        for (i = 0; i < (int)cnt; i++)
-            buf << array[i].key << array[i].value;
-        delete[] array;
-    }
+    std::sort(
+            items.begin(), items.end(),
+            [](const id_node_map_item &left,
+                    const id_node_map_item &right) {
+                return left.key < right.key;
+            });
+    for (const id_node_map_item &item : items)
+        buf << item.key << item.value;
     buf.putMagic( node_by_id_map_magic );
     buf.putCRC( buf.pos() - start );
 
@@ -6490,35 +6476,55 @@ bool lxmlDocBase::deserializeMaps( SerialBuf & buf )
     int pos = buf.pos();
     buf.checkMagic( id_map_list_magic );
     buf.checkMagic( elem_id_map_magic );
-    _elementNameTable.deserialize( buf );
-    buf >> _nextUnknownElementId; // Next Id for unknown element
+    LDOMNameIdMap elementNames(_elementNameTable);
+    if (!elementNames.deserialize(buf))
+        return false;
+    lUInt16 nextUnknownElementId = 0;
+    buf >> nextUnknownElementId;
 
-    if ( buf.error() ) {
+    if (buf.error()
+            || nextUnknownElementId < UNKNOWN_ELEMENT_TYPE_ID
+            || elementNames.findItem(nextUnknownElementId)) {
+        buf.seterror();
         CRLog::error("Error while deserialization of Element ID map");
         return false;
     }
 
     buf.checkMagic( attr_id_map_magic );
-    _attrNameTable.deserialize( buf );
-    buf >> _nextUnknownAttrId;    // Next Id for unknown attribute
+    LDOMNameIdMap attrNames(_attrNameTable);
+    if (!attrNames.deserialize(buf))
+        return false;
+    lUInt16 nextUnknownAttrId = 0;
+    buf >> nextUnknownAttrId;
 
-    if ( buf.error() ) {
+    if (buf.error()
+            || nextUnknownAttrId < UNKNOWN_ATTRIBUTE_TYPE_ID
+            || attrNames.findItem(nextUnknownAttrId)) {
+        buf.seterror();
         CRLog::error("Error while deserialization of Attr ID map");
         return false;
     }
 
 
     buf.checkMagic( ns_id_map_magic );
-    _nsNameTable.deserialize( buf );
-    buf >> _nextUnknownNsId;      // Next Id for unknown namespace
+    LDOMNameIdMap namespaceNames(_nsNameTable);
+    if (!namespaceNames.deserialize(buf))
+        return false;
+    lUInt16 nextUnknownNsId = 0;
+    buf >> nextUnknownNsId;
 
-    if ( buf.error() ) {
+    if (buf.error()
+            || nextUnknownNsId < UNKNOWN_NAMESPACE_TYPE_ID
+            || namespaceNames.findItem(nextUnknownNsId)) {
+        buf.seterror();
         CRLog::error("Error while deserialization of NS ID map");
         return false;
     }
 
     buf.checkMagic( attr_value_map_magic );
-    _attrValueTable.deserialize( buf );
+    lString32HashedCollection attrValues(_attrValueTable);
+    if (!attrValues.deserialize(buf))
+        return false;
 
     if ( buf.error() ) {
         CRLog::error("Error while deserialization of AttrValue map");
@@ -6527,19 +6533,31 @@ bool lxmlDocBase::deserializeMaps( SerialBuf & buf )
 
     int start = buf.pos();
     buf.checkMagic( node_by_id_map_magic );
-    lUInt32 idmsize;
+    lUInt32 idmsize = 0;
     buf >> idmsize;
-    _idNodeMap.clear();
-    if ( idmsize < 20000 )
-        _idNodeMap.resize( idmsize*2 );
+    static const int serializedIdNodeSize = 8;
+    static const int serializedIdMapTrailerSize = 12;
+    if (buf.error()
+            || buf.space() < serializedIdMapTrailerSize
+            || idmsize > static_cast<lUInt32>(
+                    (buf.space() - serializedIdMapTrailerSize)
+                            / serializedIdNodeSize)) {
+        buf.seterror();
+        return false;
+    }
+    LVHashTable<lUInt32,lInt32> idNodes(
+            idmsize < 20000
+                    ? static_cast<int>(idmsize * 2) : 8192);
     for ( unsigned i=0; i<idmsize; i++ ) {
-        lUInt32 key;
-        lUInt32 value;
-        buf >> key;
-        buf >> value;
-        _idNodeMap.set( key, value );
-        if ( buf.error() )
+        lUInt32 key = 0;
+        lInt32 value = 0;
+        buf >> key >> value;
+        lInt32 existingValue = 0;
+        if (buf.error() || idNodes.get(key, existingValue)) {
+            buf.seterror();
             return false;
+        }
+        idNodes.set(key, value);
     }
     buf.checkMagic( node_by_id_map_magic );
 
@@ -6557,7 +6575,19 @@ bool lxmlDocBase::deserializeMaps( SerialBuf & buf )
 
     buf.checkCRC( buf.pos() - pos );
 
-    return !buf.error();
+    if (buf.error())
+        return false;
+    _elementNameTable.swap(elementNames);
+    _attrNameTable.swap(attrNames);
+    _nsNameTable.swap(namespaceNames);
+    _attrValueTable.swap(attrValues);
+    _idNodeMap.swap(idNodes);
+    _nextUnknownElementId = nextUnknownElementId;
+    _nextUnknownAttrId = nextUnknownAttrId;
+    _nextUnknownNsId = nextUnknownNsId;
+    _idAttrId = 0;
+    _nameAttrId = 0;
+    return true;
 }
 #endif
 

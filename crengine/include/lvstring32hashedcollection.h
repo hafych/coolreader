@@ -46,6 +46,7 @@ public:
             const lString32HashedCollection &) = default;
     lString32HashedCollection &operator=(
             const lString32HashedCollection &) = default;
+    void swap(lString32HashedCollection &collection) noexcept;
     lString32HashedCollection( lUInt32 hashSize );
     ~lString32HashedCollection() = default;
     void clear();

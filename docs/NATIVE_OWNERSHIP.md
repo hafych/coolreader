@@ -276,8 +276,8 @@ slots through `std::vector`, so copy, assignment, insertion, erase and teardown
 cannot share or manually shift one raw pointer array. Typed `std::sort`
 replaces the process-global custom-comparator bridge. The hashed 32-bit
 collection owns collision buckets as nested vectors; copies retain independent
-indices, while `clear()` and deserialize discard stale bucket contents before
-new strings are indexed.
+indices, while deserialization validates magic, count and CRC in a complete
+candidate and swaps string owners and lookup buckets together.
 
 `LDOMNameIdMap` owns every name/id item exactly once through a vector of
 `unique_ptr`; its sorted name vector is a non-owning lookup index into those
@@ -664,3 +664,13 @@ previous graph. TOC recursion is capped by the parser depth budget, and both
 child counts are bounded by the minimum serialized item size before reserve.
 Native coverage exercises nested parent links, independent replacement,
 truncated-input rollback and oversized-count rejection for both graph types.
+
+The complete DOM map cache block is also transactional. Element, attribute and
+namespace name maps, hashed attribute values, next-ID counters and the
+ID-to-node index all deserialize into independent candidates. Serialized entry
+counts are bounded by the remaining bytes, duplicate ID keys are rejected, and
+the live snapshot changes only after both nested and outer CRCs succeed.
+ID-to-node serialization uses a typed vector and deterministic `std::sort`
+instead of a manual scratch array. Native regressions verify byte-stable output,
+successful whole-snapshot replacement, retained ID-node lookup, corrupted-input
+rollback and oversized-count rejection.
