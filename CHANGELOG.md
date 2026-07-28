@@ -205,8 +205,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   `-Werror` gate alongside the existing high-confidence classes.
 - Cacheable-object ID counter and MathML stylesheet lazy init now use
   `std::atomic` and `std::call_once` instead of unsynchronized statics.
-- String-literal interning tables (`cs8`/`cs32`) are mutex-guarded; chunk
-  storage and block-size allocator initialization uses `std::call_once`.
+- String-literal interning tables (`cs8`/`cs32`) are mutex-guarded and covered
+  by a real-thread regression test.
 - The FB2/FB3 first-body flag is now per-document instead of a file-scope
   static shared across all parser instances.
 - Approximately 15 read-only globals in `lvdocview`, `textlang` and `props`

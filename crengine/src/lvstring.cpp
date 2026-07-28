@@ -274,7 +274,7 @@ struct lstring_chunk_slice_t {
 #if (LDOM_USE_OWN_MEM_MAN == 1)
 static lstring_chunk_slice_t * slices[MAX_SLICE_COUNT];
 static int slices_count = 0;
-static std::once_flag slices_init_once;
+static bool slices_initialized = false;
 #endif
 
 #if (LDOM_USE_OWN_MEM_MAN == 1)
@@ -282,22 +282,25 @@ static void init_ls_storage()
 {
     slices[0] = new lstring_chunk_slice_t( FIRST_SLICE_SIZE );
     slices_count = 1;
+    slices_initialized = true;
 }
 
 void free_ls_storage()
 {
-    if (slices_count == 0)
+    if (!slices_initialized)
         return;
     for (int i=0; i<slices_count; i++)
     {
         delete slices[i];
     }
     slices_count = 0;
+    slices_initialized = false;
 }
 
 lstring8_chunk_t * lstring8_chunk_t::alloc()
 {
-    std::call_once(slices_init_once, init_ls_storage);
+    if (!slices_initialized)
+        init_ls_storage();
     // search for existing slice
     for (int i=slices_count-1; i>=0; --i)
     {
@@ -324,7 +327,8 @@ void lstring8_chunk_t::free( lstring8_chunk_t * pChunk )
 
 lstring16_chunk_t * lstring16_chunk_t::alloc()
 {
-    std::call_once(slices_init_once, init_ls_storage);
+    if (!slices_initialized)
+        init_ls_storage();
     // search for existing slice
     for (int i=slices_count-1; i>=0; --i)
     {
@@ -351,7 +355,8 @@ void lstring16_chunk_t::free( lstring16_chunk_t * pChunk )
 
 lstring32_chunk_t * lstring32_chunk_t::alloc()
 {
-    std::call_once(slices_init_once, init_ls_storage);
+    if (!slices_initialized)
+        init_ls_storage();
     // search for existing slice
     for (int i=slices_count-1; i>=0; --i)
     {

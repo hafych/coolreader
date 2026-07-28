@@ -4,7 +4,13 @@
 
 #include <atomic>
 #include <cstdio>
+#include <memory>
 #include <sched.h>
+#include <vector>
+
+static const char INTERNED_TEXT_8[] = "thread-safe-interning-8";
+static const char INTERNED_TEXT_32_NARROW[] = "thread-safe-interning-32-narrow";
+static const lChar32 INTERNED_TEXT_32_WIDE[] = U"thread-safe-interning-32-wide";
 
 static int fail(const char *message) {
     std::fprintf(stderr, "%s\n", message);
@@ -109,6 +115,54 @@ static int testThreadLocalRecursionLimit() {
     return 0;
 }
 
+static int testStringLiteralInterningAcrossThreads() {
+    class InterningThread : public LVThread {
+    private:
+        std::atomic<bool> &_start;
+        std::atomic<bool> &_valid;
+
+    protected:
+        void run() override {
+            while (!_start.load(std::memory_order_acquire))
+                sched_yield();
+            for (int i = 0; i < 10000; ++i) {
+                const lString8 &value8 = cs8(INTERNED_TEXT_8);
+                const lString32 &value32Narrow = cs32(INTERNED_TEXT_32_NARROW);
+                const lString32 &value32Wide = cs32(INTERNED_TEXT_32_WIDE);
+                if (value8 != INTERNED_TEXT_8
+                        || value32Narrow != U"thread-safe-interning-32-narrow"
+                        || value32Wide != INTERNED_TEXT_32_WIDE
+                        || &value8 != &cs8(INTERNED_TEXT_8)
+                        || &value32Narrow != &cs32(INTERNED_TEXT_32_NARROW)
+                        || &value32Wide != &cs32(INTERNED_TEXT_32_WIDE)) {
+                    _valid.store(false, std::memory_order_release);
+                    return;
+                }
+            }
+        }
+
+    public:
+        InterningThread(std::atomic<bool> &start, std::atomic<bool> &valid)
+            : _start(start), _valid(valid) {
+        }
+    };
+
+    std::atomic<bool> start(false);
+    std::atomic<bool> valid(true);
+    std::vector<std::unique_ptr<InterningThread> > workers;
+    for (int i = 0; i < 8; ++i) {
+        workers.emplace_back(new InterningThread(start, valid));
+        workers.back()->start();
+    }
+    start.store(true, std::memory_order_release);
+    for (size_t i = 0; i < workers.size(); ++i) {
+        workers[i]->join();
+    }
+    if (!valid.load(std::memory_order_acquire))
+        return fail("string literal interning was inconsistent across threads");
+    return 0;
+}
+
 static int testPageImageCacheMissReleasesMutex() {
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
     class LockProbeThread : public LVThread {
@@ -158,6 +212,8 @@ int main() {
     if (testMutexAcrossThreads() != 0)
         return 1;
     if (testThreadLocalRecursionLimit() != 0)
+        return 1;
+    if (testStringLiteralInterningAcrossThreads() != 0)
         return 1;
     return testPageImageCacheMissReleasesMutex();
 }

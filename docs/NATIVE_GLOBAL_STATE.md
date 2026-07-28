@@ -83,16 +83,12 @@ the lock is held for both lookup and insert because open-addressing reads can
 race with concurrent inserts. The tables are cold after startup — subsequent
 calls with the same literal hit the existing entry under the lock.
 
-The string chunk storage (used when `LDOM_USE_OWN_MEM_MAN` is active) replaces
-its former `slices_initialized` flag with `std::once_flag` and
-`std::call_once`. The per-slice allocators themselves are not internally
-synchronized; callers must ensure chunk alloc/free is externally serialized
-when the engine runs multi-threaded.
-
-The block-size memory allocator (`ldomAlloc`/`ldomFree`, also
-`LDOM_USE_OWN_MEM_MAN`) replaces its check-then-act lazy initialization with
-one `std::call_once` per storage slot. The `ref_count_rec_t` pool (`pmsREF`)
-uses the same pattern.
+The custom string-chunk, block-size and reference-count pools remain
+single-threaded process-lifecycle allocators. Their initialization, runtime
+allocation, teardown and possible reinitialization must all be externally
+serialized. A one-time primitive must not be used for these pools while their
+public teardown path permits later reinitialization. Multi-threaded Android
+builds keep `LDOM_USE_OWN_MEM_MAN=0`.
 
 The FB2/FB3 first-body flag (`IS_FIRST_BODY`) was a file-scope static shared
 across all document instances. It is now a per-document boolean

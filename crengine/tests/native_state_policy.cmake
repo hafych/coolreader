@@ -20,8 +20,6 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HE
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
-file(READ "${SOURCE_ROOT}/crengine/src/lvmemman.cpp" MEMMAN_SOURCE)
-file(READ "${SOURCE_ROOT}/crengine/include/lvref.h" LVREF_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -410,21 +408,6 @@ require_source_text(
   "std::lock_guard<std::mutex> guard(cs32_mutex)"
   "cs32 interning access must hold the mutex"
 )
-require_source_text(
-  "${LVSTRING_SOURCE}"
-  "static std::once_flag slices_init_once"
-  "chunk storage initialization must use std::call_once"
-)
-require_source_text(
-  "${LVSTRING_SOURCE}"
-  "std::call_once(slices_init_once"
-  "chunk storage must be initialized exactly once"
-)
-forbid_source_text(
-  "${LVSTRING_SOURCE}"
-  "static bool slices_initialized"
-  "chunk storage must not use unsynchronized init flag"
-)
 
 # --- lvtinydom: per-document first-body flag ---
 require_source_text(
@@ -441,28 +424,4 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "static bool IS_FIRST_BODY"
   "first-body flag must not be file-scope static"
-)
-
-# --- lvmemman: block storage lazy init ---
-require_source_text(
-  "${MEMMAN_SOURCE}"
-  "static std::once_flag block_storage_once"
-  "block storage init must use std::call_once"
-)
-require_source_text(
-  "${MEMMAN_SOURCE}"
-  "std::call_once(block_storage_once"
-  "block storage must be initialized exactly once per slot"
-)
-
-# --- lvref: ref-count storage lazy init ---
-require_source_text(
-  "${LVREF_HEADER}"
-  "extern std::once_flag pmsREF_once"
-  "ref-count storage init flag must be declared"
-)
-require_source_text(
-  "${LVREF_HEADER}"
-  "std::call_once(pmsREF_once"
-  "ref-count storage must be initialized exactly once"
 )

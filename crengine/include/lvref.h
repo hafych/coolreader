@@ -32,7 +32,6 @@
 #include "lvmemman.h"
 #include "crlocks.h"
 #include "lvautoptr.h"
-#include <mutex>
 
 /// Memory manager pool for ref counting
 /**
@@ -40,7 +39,6 @@
 */
 #if (LDOM_USE_OWN_MEM_MAN==1)
 extern ldomMemManStorage * pmsREF;
-extern std::once_flag pmsREF_once;
 #endif
 
 /// Reference counter structure
@@ -58,9 +56,10 @@ public:
 #if (LDOM_USE_OWN_MEM_MAN==1)
     void * operator new( size_t )
     {
-        std::call_once(pmsREF_once, []() {
+        if (pmsREF == NULL)
+        {
             pmsREF = new ldomMemManStorage(sizeof(ref_count_rec_t));
-        });
+        }
         return pmsREF->alloc();
     }
     void operator delete( void * p )

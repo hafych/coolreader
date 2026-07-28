@@ -55,13 +55,10 @@ extern "C" {
 #endif
 #endif	// _WIN32
 
-#ifdef __clang__
-#pragma clang diagnostic ignored "-Wvariadic-macro-arguments-omitted"
-#endif
 #ifdef _DEBUG
-#define TRACE(x, ...) CRLog::trace(x, ##__VA_ARGS__)
+#define TRACE(...) CRLog::trace(__VA_ARGS__)
 #else
-#define TRACE(x, ...)
+#define TRACE(...)
 #endif
 
 static ldomDocumentWriter * writer = NULL;
@@ -863,4 +860,3 @@ bool ImportWordDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
 
 #endif //ENABLE_ANTIWORD==1
-
