@@ -3428,6 +3428,71 @@ forbid_source_text(
 # --- persistent DOM node-part ownership and cache loading ---
 require_source_text(
   "${DOM_HEADER}"
+  "std::unique_ptr<CacheFile> _cacheFile"
+  "the persistent DOM cache file must have scoped ownership"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "void adoptCacheFile(std::unique_ptr<CacheFile> cacheFile)"
+  "persistent DOM cache publication must transfer explicit ownership"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "non-owning cache view supplied by tinyNodeCollection"
+  "DOM cache consumers must document their borrowed status"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_cacheFile = std::move(cacheFile)"
+  "the persistent DOM cache candidate must enter its owner before publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "CacheFile *cacheView = _cacheFile.get()"
+  "DOM storage managers must receive one borrowed cache view"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_blobCache.setCacheFile(cacheView)"
+  "DOM blob storage must receive the owner-backed cache view"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "f->setCachePath(cache_path);\n    adoptCacheFile(std::move(f));\n    return true;"
+  "opened DOM caches must transfer scoped ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "f->setCachePath(cache_path);\n    adoptCacheFile(std::move(f));\n    _mapped = true;"
+  "created DOM caches must transfer scoped ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "CacheFile *cacheView = cache.get();\n    collection.adoptCacheFile(std::move(cache));"
+  "DOM cache ownership must retain native transfer regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "DOM node-part/cache-file ownership regression failed"
+  "DOM cache ownership regression must remain wired into the native suite"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_cacheFile = f.release()"
+  "DOM cache candidates must not regress to raw ownership publication"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_cacheFile = cache.release()"
+  "DOM cache regression setup must not bypass scoped ownership"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete _cacheFile"
+  "persistent DOM cache teardown must remain automatic"
+)
+require_source_text(
+  "${DOM_HEADER}"
   "typedef std::unique_ptr<ldomNode, ldomNodePartDeleter>"
   "DOM node parts must use explicit malloc-compatible RAII ownership"
 )

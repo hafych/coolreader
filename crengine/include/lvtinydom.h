@@ -258,6 +258,7 @@ class ldomBlobItem;
 #define MOBI_IMAGE_NAME_PREFIX U"mobi_image_"
 class ldomBlobCache
 {
+    /// non-owning cache view supplied by tinyNodeCollection
     CacheFile * _cacheFile;
     std::vector<std::unique_ptr<ldomBlobItem> > _list;
     bool _changed;
@@ -282,6 +283,7 @@ protected:
     LVPtrVector<ldomTextStorageChunk> _chunks;
     ldomTextStorageChunk * _activeChunk;
     ldomTextStorageChunk * _recentChunk;
+    /// non-owning cache view supplied by tinyNodeCollection
     CacheFile * _cache;
     lUInt32 _uncompressedSize;
     lUInt32 _maxUncompressedSize;
@@ -474,7 +476,7 @@ protected:
 #if BUILD_LITE!=1
     /// final block cache
     CVRendBlockCache _renderedBlockCache;
-    CacheFile * _cacheFile;
+    std::unique_ptr<CacheFile> _cacheFile;
     bool _cacheFileStale;
     bool _cacheFileLeaveAsDirty;
     bool _mapped;
@@ -536,6 +538,7 @@ protected:
 
     bool hasRenderData() { return _rectStorage.hasChunks(); }
 
+    void adoptCacheFile(std::unique_ptr<CacheFile> cacheFile);
     bool openCacheFile();
 
     void setNodeStyleIndex( lUInt32 dataIndex, lUInt16 index );
@@ -684,7 +687,7 @@ public:
     }
 
     /// if a cache file is in use
-    bool hasCacheFile() { return _cacheFile != NULL; }
+    bool hasCacheFile() { return static_cast<bool>(_cacheFile); }
     /// set cache file as dirty, so it's not re-used on next load
     void invalidateCacheFile() { _cacheFileLeaveAsDirty = true; }
     /// get cache file full path

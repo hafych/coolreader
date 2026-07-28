@@ -2519,7 +2519,7 @@ static int testDomChunkStorageOwnership() {
 
 static int testDomNodePartOwnership() {
     if (!LVRunDomNodePartOwnershipRegression())
-        return fail("DOM node-part ownership regression failed");
+        return fail("DOM node-part/cache-file ownership regression failed");
     return 0;
 }
 

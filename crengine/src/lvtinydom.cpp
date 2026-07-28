@@ -3351,7 +3351,7 @@ tinyNodeCollection::tinyNodeCollection()
 , _itemCount(0)
 #if BUILD_LITE!=1
 , _renderedBlockCache( 256 )
-, _cacheFile(NULL)
+, _cacheFile()
 , _cacheFileStale(true)
 , _cacheFileLeaveAsDirty(false)
 , _mapped(false)
@@ -3392,7 +3392,7 @@ tinyNodeCollection::tinyNodeCollection( tinyNodeCollection & v )
 , _itemCount(0)
 #if BUILD_LITE!=1
 , _renderedBlockCache( 256 )
-, _cacheFile(NULL)
+, _cacheFile()
 , _cacheFileStale(true)
 , _cacheFileLeaveAsDirty(false)
 , _mapped(false)
@@ -3464,6 +3464,18 @@ bool tinyNodeCollection::setInterlineScaleFactor(int value) {
 }
 
 #if BUILD_LITE!=1
+void tinyNodeCollection::adoptCacheFile(
+        std::unique_ptr<CacheFile> cacheFile)
+{
+    _cacheFile = std::move(cacheFile);
+    CacheFile *cacheView = _cacheFile.get();
+    _textStorage.setCache(cacheView);
+    _elemStorage.setCache(cacheView);
+    _rectStorage.setCache(cacheView);
+    _styleStorage.setCache(cacheView);
+    _blobCache.setCacheFile(cacheView);
+}
+
 bool tinyNodeCollection::openCacheFile()
 {
     if ( _cacheFile )
@@ -3494,12 +3506,7 @@ bool tinyNodeCollection::openCacheFile()
     }
     CRLog::info("ldomDocument::openCacheFile() - index read successfully %s", UnicodeToUtf8(fname).c_str() );
     f->setCachePath(cache_path);
-    _cacheFile = f.release();
-    _textStorage.setCache( _cacheFile );
-    _elemStorage.setCache( _cacheFile );
-    _rectStorage.setCache( _cacheFile );
-    _styleStorage.setCache( _cacheFile );
-    _blobCache.setCacheFile( _cacheFile );
+    adoptCacheFile(std::move(f));
     return true;
 }
 
@@ -3541,13 +3548,8 @@ bool tinyNodeCollection::createCacheFile()
         return false;
     }
     f->setCachePath(cache_path);
-    _cacheFile = f.release();
+    adoptCacheFile(std::move(f));
     _mapped = true;
-    _textStorage.setCache( _cacheFile );
-    _elemStorage.setCache( _cacheFile );
-    _rectStorage.setCache( _cacheFile );
-    _styleStorage.setCache( _cacheFile );
-    _blobCache.setCacheFile( _cacheFile );
     setCacheFileStale(true);
     return true;
 }
@@ -3853,7 +3855,11 @@ bool LVRunDomNodePartOwnershipRegression()
                     static_cast<int>(
                             serializedNodes.size() - 1), false))
         return false;
-    collection._cacheFile = cache.release();
+    CacheFile *cacheView = cache.get();
+    collection.adoptCacheFile(std::move(cache));
+    if (cache || collection._cacheFile.get() != cacheView
+            || !collection.hasCacheFile())
+        return false;
 
     if (collection.loadNodeData()
             || collection._textList[0].get() != sentinelPart
@@ -4027,10 +4033,6 @@ void tinyNodeCollection::destroyNodeParts(
 
 tinyNodeCollection::~tinyNodeCollection()
 {
-#if BUILD_LITE!=1
-    if ( _cacheFile )
-        delete _cacheFile;
-#endif
     destroyNodeParts(_elemList, _elemCount);
     destroyNodeParts(_textList, _textCount);
     // document unregistered in ldomDocument destructor

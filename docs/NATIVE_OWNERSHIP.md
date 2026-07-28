@@ -149,6 +149,15 @@ catalogs swap without relocating any node. Count bounds match the encoded
 28-bit address space. Regression coverage verifies that a truncated later part
 preserves the prior catalog and that a corrected cache replaces both catalogs.
 
+`tinyNodeCollection` exclusively owns its persistent `CacheFile` in a
+`unique_ptr`. Opening or creating a cache keeps the candidate scoped until it
+is complete, then one adoption boundary moves it into the collection and
+publishes borrowed views to the four data-storage managers and blob cache.
+Those dependants are declared after the owner, so their destructors run first
+and cannot observe a released cache. The node-part regression also verifies
+that adoption empties the candidate, preserves one owner/view identity and
+uses that cache through failed rollback and a successful repeated load.
+
 Temporary draw mark lists and SVG decoder input/output buffers also use
 standard RAII containers. These operation-scoped resources cannot outlive
 their call and no longer rely on matching cleanup at each return.
