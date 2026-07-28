@@ -428,6 +428,18 @@ static int testRenderedDocumentBehavior() {
             result = 1;
         else if (!equalRenderedSnapshots(first, second))
             result = fail("equivalent renders produced different snapshots");
+        else {
+            const font_lang_compat firstCompatibility =
+                    fontMan->checkFontLangCompat(
+                            lString8("Roboto"), lString8("en"));
+            const font_lang_compat cachedCompatibility =
+                    fontMan->checkFontLangCompat(
+                            lString8("Roboto"), lString8("en"));
+            if (firstCompatibility == font_lang_compat_invalid_tag
+                    || cachedCompatibility != firstCompatibility)
+                result = fail(
+                        "font language compatibility cache lost its owner");
+        }
     }
     if (!ShutdownFontManager() && result == 0)
         return fail("rendered fixture font manager did not shut down");

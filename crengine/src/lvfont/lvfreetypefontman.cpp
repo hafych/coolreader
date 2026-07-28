@@ -105,8 +105,9 @@ int getFontWeight(FT_Face face) {
 }
 
 #if USE_LOCALE_DATA==1
-LVHashTable<lString8, font_lang_compat>* getSupportedLangs(FT_Face face) {
-    LVHashTable<lString8, font_lang_compat>* langs = new LVHashTable<lString8, font_lang_compat>(16);
+LVFontLangCompatibilityTableRef getSupportedLangs(FT_Face face) {
+    LVFontLangCompatibilityTableRef langs =
+            std::make_shared<LVFontLangCompatibilityTable>(16);
 #define FC_LANG_START_INTERVAL_CODE     0xF0F0FFFF
     bool fullSupport;
     bool partialSupport;
@@ -719,13 +720,7 @@ bool LVFreeTypeFontManager::initSystemFonts() {
 
 LVFreeTypeFontManager::~LVFreeTypeFontManager() {
     FONT_MAN_GUARD
-    LVHashTable<lString8, LVHashTable<lString8, font_lang_compat>* >::iterator it = _supportedLangs.forwardIterator();
-    LVHashTable<lString8, LVHashTable<lString8, font_lang_compat>* >::pair* p;
-    while ((p = it.next()) != NULL) {
-        LVHashTable<lString8, font_lang_compat>* langTable = p->value;
-        if (langTable)
-            delete langTable;
-    }
+    _supportedLangs.clear();
     _globalCache.clear();
     _cache.clear();
     if (_library)
@@ -971,7 +966,10 @@ fprintf(_log, "GetFont(size=%d, weight=%d, italic=%d, family=%d, typeface='%s')\
         fprintf(_log, "   no instance: adding new one for filename=%s, index = %d\n", fname.c_str(), index );
     }
 #endif
-    LVFreeTypeFace *font = new LVFreeTypeFace(_lock, _library, &_globalCache);
+    std::unique_ptr<LVFreeTypeFace> fontOwner =
+            std::make_unique<LVFreeTypeFace>(
+                    _lock, _library, &_globalCache);
+    LVFreeTypeFace *font = fontOwner.get();
     lString8 pathname = makeFontFileName(fname);
     //def.setName( fname );
     //def.setIndex( index );
@@ -1004,7 +1002,7 @@ fprintf(_log, "GetFont(size=%d, weight=%d, italic=%d, family=%d, typeface='%s')\
     if (loaded) {
         //fprintf(_log, "    : loading from file %s : %s %d\n", item->getDef()->getName().c_str(),
         //    item->getDef()->getTypeFace().c_str(), item->getDef()->getSize() );
-        LVFontRef ref(font);
+        LVFontRef ref(fontOwner.release());
         // Instantiate this font with the requested OpenType features
         newDef.setFeatures( features );
         font->setFeatures( features ); // followup setKerningMode() will create/update hb_features if needed
@@ -1042,8 +1040,9 @@ fprintf(_log, "GetFont(size=%d, weight=%d, italic=%d, family=%d, typeface='%s')\
         }
         // filling in the language support table if it is empty
 #if USE_LOCALE_DATA==1
-        LVHashTable<lString8, font_lang_compat>* langTable = NULL;
-        if (!_supportedLangs.get(font->getTypeFace(), langTable) || NULL == langTable) {
+        LVFontLangCompatibilityTableRef langTable;
+        if (!_supportedLangs.get(font->getTypeFace(), langTable)
+                || !langTable) {
             FT_Face face = (FT_Face) font->GetHandle();
             if (NULL != face) {
                 langTable = getSupportedLangs(face);
@@ -1062,8 +1061,6 @@ fprintf(_log, "GetFont(size=%d, weight=%d, italic=%d, family=%d, typeface='%s')\
     } else {
         //printf("    not found!\n");
     }
-    //delete def;
-    delete font;
     return LVFontRef(NULL);
 }
 
@@ -1091,14 +1088,10 @@ font_lang_compat LVFreeTypeFontManager::checkFontLangCompat(const lString8 &type
 #if USE_LOCALE_DATA==1
     CRLocaleData loc(langTag);
     if (loc.isValid()) {
-        LVHashTable<lString8, font_lang_compat>* langTable = NULL;
+        LVFontLangCompatibilityTableRef langTable;
         res = font_lang_compat_none;
-        if (!_supportedLangs.get(typeface, langTable) || NULL == langTable) {
-            if (NULL != langTable) {
-                delete langTable;
-                langTable = NULL;
-                _supportedLangs.remove(typeface);
-            }
+        if (!_supportedLangs.get(typeface, langTable) || !langTable) {
+            _supportedLangs.remove(typeface);
             LVFontRef fntRef = GetFont(-1, 400, false, css_ff_inherit, typeface, -1);
             if (!fntRef.isNull()) {
                 FT_Face face = (FT_Face) fntRef->GetHandle();
@@ -1108,10 +1101,11 @@ font_lang_compat LVFreeTypeFontManager::checkFontLangCompat(const lString8 &type
                 }
             }
         }
-        if (NULL != langTable) {
+        if (langTable) {
             lString8 best_lang;
-            LVHashTable<lString8, font_lang_compat>::iterator it = langTable->forwardIterator();
-            LVHashTable<lString8, font_lang_compat>::pair* p;
+            LVFontLangCompatibilityTable::iterator it =
+                    langTable->forwardIterator();
+            LVFontLangCompatibilityTable::pair* p;
             int max_match = 0;
             font_lang_compat compat;
             while ((p = it.next()) != NULL) {

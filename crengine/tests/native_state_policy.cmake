@@ -54,6 +54,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.h" FONT_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.cpp" FONT_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.cpp" FREETYPE_FONT_MANAGER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.h" FREETYPE_FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvembeddedfont.h" EMBEDDED_FONT_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvembeddedfont.cpp" EMBEDDED_FONT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HEADER)
@@ -662,6 +663,51 @@ require_source_text(
   "${FREETYPE_FONT_MANAGER_SOURCE}"
   "const LVFontCacheItemList &fonts = _cache.getInstances();"
   "FreeType settings updates must borrow the font-cache instance view"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_HEADER}"
+  "std::shared_ptr<LVFontLangCompatibilityTable>"
+  "FreeType language tables must retain container-compatible shared owners"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_HEADER}"
+  "LVHashTable<lString8, LVFontLangCompatibilityTableRef> _supportedLangs"
+  "the FreeType language cache must store owner values"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "std::make_shared<LVFontLangCompatibilityTable>(16)"
+  "FreeType language-table construction must enter scoped ownership"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "std::unique_ptr<LVFreeTypeFace> fontOwner"
+  "FreeType face candidates must enter exclusive ownership immediately"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "LVFontRef ref(fontOwner.release())"
+  "loaded FreeType faces must transfer into the intrusive owner explicitly"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "font language compatibility cache lost its owner"
+  "FreeType language-cache ownership must retain rendered lifecycle coverage"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "delete langTable"
+  "FreeType language tables must not use manual teardown"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "LVFreeTypeFace *font = new LVFreeTypeFace"
+  "FreeType face candidates must not regress to raw allocation"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "delete font"
+  "FreeType face failure must remain scope-bound"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"

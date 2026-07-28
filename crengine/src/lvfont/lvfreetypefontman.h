@@ -47,6 +47,8 @@
 #include "lvfontcache.h"
 #include "lvstring8collection.h"
 
+#include <memory>
+
 #if (DEBUG_FONT_MAN == 1)
 #include <stdio.h>
 #endif
@@ -56,6 +58,11 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+using LVFontLangCompatibilityTable =
+        LVHashTable<lString8, font_lang_compat>;
+using LVFontLangCompatibilityTableRef =
+        std::shared_ptr<LVFontLangCompatibilityTable>;
+
 class LVFreeTypeFontManager : public LVFontManager {
 private:
     lString8 _path;
@@ -64,7 +71,7 @@ private:
     FT_Library _library;
     LVFontGlobalGlyphCache _globalCache;
     lString32 _requiredChars;
-    LVHashTable<lString8, LVHashTable<lString8, font_lang_compat>* > _supportedLangs;
+    LVHashTable<lString8, LVFontLangCompatibilityTableRef> _supportedLangs;
 #if (DEBUG_FONT_MAN == 1)
     FILE * _log;
 #endif

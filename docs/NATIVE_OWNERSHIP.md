@@ -625,3 +625,12 @@ same boundary for generated rows/cells and temporarily owns cells while
 moving them between rows. The rendered-document fixture verifies both the
 floating table path and a nested `msubsup` table graph under normal and
 sanitized execution.
+
+`LVFreeTypeFontManager` stores language-compatibility tables as shared owner
+values because the legacy hash-table contract copies mapped values. Table
+construction begins in `make_shared`, cache replacement/clear releases owners
+automatically, and manager teardown clears them before closing FreeType.
+Each `LVFreeTypeFace` load candidate is exclusively owned until a successful
+load transfers it into the intrusive `LVFontRef`; failed loads now unwind
+without a manual delete. The rendered lifecycle queries the same language
+twice to cover population, cached lookup and manager teardown.
