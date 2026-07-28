@@ -647,3 +647,11 @@ after successful geometry conversion, while text-range fragments enter their
 owning list from scoped candidates. The rendered-document regression validates
 the exact five segments of three overlapping selections, repeated isolated
 draw-owner replacement and all six marked/unmarked text fragments.
+
+Range-derived owner-list factories publish in complete batches. Word-to-range
+conversion, filtered range clones, cropped draw ranges and extended selectable
+words first construct every item in `vector<unique_ptr>`, then check the final
+list size, reserve it once and release the batch without further allocation.
+The append contracts used for a two-page word selector remain intact. Rendered
+coverage verifies independent clones, stable existing owners, translated crop
+coordinates and repeated extended-word publication.

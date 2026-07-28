@@ -337,6 +337,70 @@ static int snapshotRenderedDocument(
             || splitTextRanges[5]->flags != 0x01)
         return fail("split text owner lost the unmarked suffix");
 
+    LVArray<ldomWord> selectionWords;
+    selection.getRangeWords(selectionWords);
+    if (selectionWords.length() < 3)
+        return fail("range owner fixture did not expose enough words");
+    ldomXRangeList wordRanges(selectionWords);
+    if (wordRanges.length() != selectionWords.length())
+        return fail("word range owners were not published completely");
+    ldomXRange *firstWordRange = wordRanges[0];
+    ldomWord firstWord = selectionWords[0];
+    ldomXRange wordFilter(
+            ldomXPointer(
+                    firstWord.getNode(), firstWord.getStart() + 1),
+            ldomXPointer(
+                    firstWord.getNode(), firstWord.getEnd() - 1));
+    ldomXRangeList filteredWordRanges(wordRanges, wordFilter);
+    if (filteredWordRanges.length() != 1
+            || filteredWordRanges[0] == firstWordRange
+            || !(*filteredWordRanges[0] == *firstWordRange))
+        return fail("filtered range owners were shared or incomplete");
+    const int wordRangeCount = wordRanges.length();
+    wordRanges.addWords(selectionWords);
+    if (wordRanges.length() != wordRangeCount * 2
+            || wordRanges[0] != firstWordRange
+            || wordRanges[wordRangeCount] == firstWordRange
+            || !(*wordRanges[wordRangeCount] == *firstWordRange))
+        return fail("appended word range owners were shared or incomplete");
+
+    ldomMarkedRange *firstDrawRange = splitDrawRanges[0];
+    lvRect cropAnchor(
+            firstDrawRange->start.x - 1,
+            firstDrawRange->start.y - 1,
+            firstDrawRange->end.x + 1,
+            firstDrawRange->end.y + 1);
+    ldomMarkedRangeList croppedDrawRanges(
+            &splitDrawRanges, cropAnchor);
+    if (croppedDrawRanges.empty()
+            || croppedDrawRanges[0] == firstDrawRange
+            || croppedDrawRanges[0]->start.x
+                != firstDrawRange->start.x - cropAnchor.left
+            || croppedDrawRanges[0]->start.y
+                != firstDrawRange->start.y - cropAnchor.top
+            || croppedDrawRanges[0]->end.x
+                != firstDrawRange->end.x - cropAnchor.left
+            || croppedDrawRanges[0]->end.y
+                != firstDrawRange->end.y - cropAnchor.top
+            || croppedDrawRanges[0]->flags != firstDrawRange->flags)
+        return fail("cropped draw range owners were shared or incomplete");
+
+    ldomWordExList extendedWords;
+    const int extendedWordCount =
+            extendedWords.addRangeWords(selection, true);
+    if (extendedWordCount != selectionWords.length()
+            || extendedWords.length() != extendedWordCount)
+        return fail("extended word owners were not published completely");
+    ldomWordEx *firstExtendedWord = extendedWords[0];
+    if (extendedWords.addRangeWords(selection, true)
+                != extendedWordCount
+            || extendedWords.length() != extendedWordCount * 2
+            || extendedWords[0] != firstExtendedWord
+            || extendedWords[extendedWordCount] == firstExtendedWord
+            || extendedWords[extendedWordCount]->getText()
+                != firstExtendedWord->getText())
+        return fail("extended word owner append changed its contract");
+
     selection.getSegmentRects(snapshot.selectionRects);
     if (snapshot.selectionRects.length() < 2)
         return fail("rendered selection did not span line segments");

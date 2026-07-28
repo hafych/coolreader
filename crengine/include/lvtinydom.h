@@ -46,7 +46,9 @@
 
 #include <atomic>
 #include <array>
+#include <climits>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "lvmemman.h"
@@ -2164,8 +2166,18 @@ public:
     /// add ranges for words
     void addWords( const LVArray<ldomWord> & words )
     {
-        for ( int i=0; i<words.length(); i++ )
-            LVPtrVector<ldomXRange>::add( new ldomXRange( words[i] ) );
+        const int wordCount = words.length();
+        if (wordCount > 0 && length() > INT_MAX - wordCount)
+            throw std::length_error("range owner list overflow");
+        std::vector<std::unique_ptr<ldomXRange> > candidates;
+        candidates.reserve(static_cast<std::size_t>(wordCount));
+        for (int i = 0; i < wordCount; ++i)
+            candidates.push_back(
+                    std::make_unique<ldomXRange>(words[i]));
+        reserve(length() + wordCount);
+        for (int i = 0; i < wordCount; ++i)
+            LVPtrVector<ldomXRange>::add(
+                    candidates[static_cast<std::size_t>(i)].release());
     }
     ldomXRangeList( const LVArray<ldomWord> & words )
     {

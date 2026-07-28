@@ -5689,3 +5689,63 @@ forbid_source_text(
   "ldomMarkedRange * item = new ldomMarkedRange"
   "draw-range candidates must not regress to raw ownership"
 )
+require_source_text(
+  "${DOM_HEADER}"
+  "std::vector<std::unique_ptr<ldomXRange> > candidates"
+  "word-range construction must stage a complete owner batch"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "reserve(length() + wordCount)"
+  "word-range publication must reserve its final owning-list size"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "static void publishOwnedRangeItems"
+  "range-derived owner batches must share a checked publication boundary"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<std::unique_ptr<ldomMarkedRange> > candidates"
+  "cropped draw ranges must remain scoped until batch publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<std::unique_ptr<ldomWordEx> > candidates"
+  "extended words must remain scoped until batch publication"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "filtered range owners were shared or incomplete"
+  "filtered range ownership must retain rendered clone coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "cropped draw range owners were shared or incomplete"
+  "cropped draw-range ownership must retain rendered clone coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "extended word owner append changed its contract"
+  "extended word ownership must retain append-contract coverage"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "LVPtrVector<ldomXRange>::add( new ldomXRange"
+  "word-range construction must not publish raw candidates"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LVPtrVector<ldomXRange>::add( new ldomXRange"
+  "filtered range construction must not publish raw candidates"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "add( new ldomMarkedRange("
+  "cropped draw-range construction must not publish raw candidates"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "add( new ldomWordEx"
+  "extended word construction must not publish raw candidates"
+)

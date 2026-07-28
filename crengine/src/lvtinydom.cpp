@@ -11685,13 +11685,49 @@ bool ldomXRange::checkIntersection( ldomXRange & v )
     return true;
 }
 
+template <typename T>
+static T * publishOwnedRangeItem(
+        LVPtrVector<T> &destination,
+        std::unique_ptr<T> candidate,
+        int position = -1)
+{
+    if (destination.length() == INT_MAX)
+        throw std::length_error("range item limit exceeded");
+    destination.reserve(destination.length() + 1);
+    T *borrowed = candidate.get();
+    destination.insert(position, candidate.release());
+    return borrowed;
+}
+
+template <typename T>
+static void publishOwnedRangeItems(
+        LVPtrVector<T> &destination,
+        std::vector<std::unique_ptr<T> > candidates)
+{
+    if (candidates.size() > static_cast<std::size_t>(INT_MAX))
+        throw std::length_error("range item batch limit exceeded");
+    const int candidateCount =
+            static_cast<int>(candidates.size());
+    if (candidateCount > 0
+            && destination.length() > INT_MAX - candidateCount)
+        throw std::length_error("range item list limit exceeded");
+    destination.reserve(destination.length() + candidateCount);
+    for (int index = 0; index < candidateCount; ++index)
+        destination.add(
+                candidates[static_cast<std::size_t>(index)].release());
+}
+
 /// create list by filtering existing list, to get only values which intersect filter range
 ldomXRangeList::ldomXRangeList( ldomXRangeList & srcList, ldomXRange & filter )
 {
+    std::vector<std::unique_ptr<ldomXRange> > candidates;
+    candidates.reserve(static_cast<std::size_t>(srcList.length()));
     for ( int i=0; i<srcList.length(); i++ ) {
         if ( srcList[i]->checkIntersection( filter ) )
-            LVPtrVector<ldomXRange>::add( new ldomXRange( *srcList[i] ) );
+            candidates.push_back(
+                    std::make_unique<ldomXRange>(*srcList[i]));
     }
+    publishOwnedRangeItems(*this, std::move(candidates));
 }
 
 /// copy constructor of full node range
@@ -11755,20 +11791,6 @@ static const ldomXPointerEx & _min( const ldomXPointerEx & v1,  const ldomXPoint
 ldomXRange::ldomXRange( const ldomXRange & v1,  const ldomXRange & v2 )
     : _start( _max( v1._start, v2._start ) ), _end( _min( v1._end, v2._end ) )
 {
-}
-
-template <typename T>
-static T * publishOwnedRangeItem(
-        LVPtrVector<T> &destination,
-        std::unique_ptr<T> candidate,
-        int position = -1)
-{
-    if (destination.length() == INT_MAX)
-        throw std::length_error("range item limit exceeded");
-    destination.reserve(destination.length() + 1);
-    T *borrowed = candidate.get();
-    destination.insert(position, candidate.release());
-    return borrowed;
 }
 
 static void replaceOwnedRange(
@@ -12620,15 +12642,22 @@ ldomMarkedRangeList::ldomMarkedRangeList( const ldomMarkedRangeList * list, lvRe
         // If no alternate crop_rc provided, crop to the rc anchor
         crop_rc = &rc;
     }
+    std::vector<std::unique_ptr<ldomMarkedRange> > candidates;
+    candidates.reserve(static_cast<std::size_t>(list->length()));
     for ( int i=0; i<list->length(); i++ ) {
         ldomMarkedRange * src = list->get(i);
         if ( src->start.y >= crop_rc->bottom || src->end.y < crop_rc->top )
             continue;
-        add( new ldomMarkedRange(
-            lvPoint(src->start.x-rc.left, src->start.y-rc.top ),
-            lvPoint(src->end.x-rc.left, src->end.y-rc.top ),
-            src->flags ) );
+        candidates.push_back(std::make_unique<ldomMarkedRange>(
+                lvPoint(
+                        src->start.x - rc.left,
+                        src->start.y - rc.top),
+                lvPoint(
+                        src->end.x - rc.left,
+                        src->end.y - rc.top),
+                src->flags));
     }
+    publishOwnedRangeItems(*this, std::move(candidates));
 }
 
 /// returns nearest common element for start and end points
@@ -14007,8 +14036,12 @@ void ldomXRange::getRangeWords( LVArray<ldomWord> & list )
 int ldomWordExList::addRangeWords( ldomXRange & range, bool /*trimPunctuation*/ ) {
     LVArray<ldomWord> list;
     range.getRangeWords( list );
+    std::vector<std::unique_ptr<ldomWordEx> > candidates;
+    candidates.reserve(static_cast<std::size_t>(list.length()));
     for ( int i=0; i<list.length(); i++ )
-        add( new ldomWordEx(list[i]) );
+        candidates.push_back(
+                std::make_unique<ldomWordEx>(list[i]));
+    publishOwnedRangeItems(*this, std::move(candidates));
     init();
     return list.length();
 }
