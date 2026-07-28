@@ -178,6 +178,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   `unique_ptr` ownership. Failed eviction or flush retains dirty blocks for
   retry, repeated flush keeps the bounded count coherent, and invalid cache
   dimensions are rejected by the factory.
+- File-mapped streams now scope mapping regions, POSIX descriptors and Windows
+  handles with RAII wrappers. Open/remap failure cannot publish stale stream
+  state, mapped buffer views retain their stream owner, and size/buffer
+  arithmetic rejects overflow and shrinking safely.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.

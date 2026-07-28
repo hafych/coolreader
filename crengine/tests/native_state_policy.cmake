@@ -61,6 +61,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.cpp" DEFAULT_S
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.h" DEFAULT_STREAM_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvblockwritestream.cpp" BLOCK_WRITE_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvblockwritestream.h" BLOCK_WRITE_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilemappedstream.cpp" FILE_MAPPED_STREAM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilemappedstream.h" FILE_MAPPED_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.cpp" MEMORY_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.h" MEMORY_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvstreamutils.cpp" STREAM_UTILS_SOURCE)
@@ -1253,6 +1255,98 @@ forbid_source_text(
   "${CACHED_STREAM_SOURCE}"
   "delete[] flags"
   "cached stream scratch cleanup must remain automatic"
+)
+
+# --- mapped-file region and OS-handle ownership ---
+require_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "class MappedRegion"
+  "mapped files must wrap mapping lifetime in an RAII type"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "class ScopedDescriptor"
+  "POSIX mapped-file descriptors must use scoped ownership"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "class ScopedHandle"
+  "Windows mapped-file handles must use scoped ownership"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "MappedRegion m_map"
+  "mapped-file stream must own its mapping region"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "static std::unique_ptr<LVFileMappedStream> CreateFileStream"
+  "mapped-file factory results must express ownership"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "LVFileMappedStream::MappedRegion::~MappedRegion()"
+  "mapped regions must release themselves at scope exit"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "m_map.adopt"
+  "successful mappings must transfer into the region owner"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "m_fd.reset(fd)"
+  "POSIX file descriptors must transfer into the scoped owner"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "m_hFile.reset(fileHandle)"
+  "Windows file handles must transfer into the scoped owner"
+)
+require_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "std::make_unique<LVFileMappedStream>()"
+  "mapped-file candidates must stay scoped during open"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "LVFileMappedStream::CreateFileStream("
+  "mapped-file utility must use the owning factory"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "LVStreamRef(stream.release())"
+  "mapped-file ownership must transfer only at the reference boundary"
+)
+forbid_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "lUInt8* m_map"
+  "mapped-file regions must not regress to raw ownership"
+)
+forbid_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "int m_fd"
+  "mapped-file descriptors must not regress to raw ownership"
+)
+forbid_source_text(
+  "${FILE_MAPPED_STREAM_HEADER}"
+  "HANDLE m_hFile"
+  "mapped-file handles must not regress to raw ownership"
+)
+forbid_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "::close(m_fd"
+  "mapped-file descriptor cleanup must remain scope-bound"
+)
+forbid_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "CloseHandle(m_h"
+  "mapped-file handle cleanup must remain scope-bound"
+)
+forbid_source_text(
+  "${FILE_MAPPED_STREAM_SOURCE}"
+  "LVFileMappedStream * f = new"
+  "mapped-file factory rollback must remain automatic"
 )
 
 # --- block write-cache buffer and LRU ownership ---

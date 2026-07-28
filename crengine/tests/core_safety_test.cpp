@@ -22,6 +22,7 @@
 #include "textlang.h"
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontglyphcache.h"
+#include "../src/lvstream/lvfilemappedstream.h"
 #include "../src/lvstream/lvmemorystream.h"
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
@@ -2189,6 +2190,131 @@ static int testBlockWriteStreamOwnership() {
     return 0;
 }
 
+#if defined(_LINUX) || defined(_WIN32)
+static int testFileMappedStreamOwnership() {
+    char path[] = "/tmp/coolreader-mmap-test-XXXXXX";
+    int fd = mkstemp(path);
+    if (fd < 0)
+        return fail("mapped-stream fixture could not create a file");
+    std::vector<unsigned char> expected(64, 0);
+    for (std::size_t i = 0; i < 8; ++i)
+        expected[i] = static_cast<unsigned char>(i + 1);
+    if (write(fd, expected.data(), 8) != static_cast<ssize_t>(8)) {
+        close(fd);
+        unlink(path);
+        return fail("mapped-stream fixture could not write its payload");
+    }
+    close(fd);
+
+    LVStreamRef mapped = LVMapFileStream(path, LVOM_READ, 0);
+    if (mapped.isNull() || mapped->GetSize() != 8) {
+        unlink(path);
+        return fail("readonly mapped stream rejected a valid file");
+    }
+    LVStreamBufferRef anchored = mapped->GetReadBuffer(2, 4);
+    if (anchored.isNull()
+            || anchored->getSize() != 4
+            || anchored->getReadOnly()[0] != 3
+            || anchored->getReadWrite() != NULL
+            || !mapped->GetReadBuffer(LV_INVALID_SIZE, 2).isNull()) {
+        anchored.Clear();
+        mapped.Clear();
+        unlink(path);
+        return fail("mapped read-buffer bounds or readonly view are invalid");
+    }
+    mapped.Clear();
+    if (anchored->getReadOnly()[3] != 6) {
+        anchored.Clear();
+        unlink(path);
+        return fail("mapped buffer did not retain its stream owner");
+    }
+    anchored.Clear();
+
+    LVStreamRef writable = LVMapFileStream(path, LVOM_APPEND, 32);
+    if (writable.isNull() || writable->GetSize() != 32) {
+        unlink(path);
+        return fail("writable mapped stream did not grow to its minimum");
+    }
+    LVStreamBufferRef writeView = writable->GetWriteBuffer(8, 4);
+    lUInt8 *writeData =
+            writeView.isNull() ? NULL : writeView->getReadWrite();
+    if (!writeData) {
+        writeView.Clear();
+        writable.Clear();
+        unlink(path);
+        return fail("writable mapped stream did not expose its mapped view");
+    }
+    for (int i = 0; i < 4; ++i) {
+        writeData[i] = static_cast<lUInt8>(0xa1 + i);
+        expected[8 + i] = writeData[i];
+    }
+    writeView.Clear();
+
+    static const unsigned char directWrite[] =
+            {0xb1, 0xb2, 0xb3, 0xb4};
+    lvsize_t bytesWritten = 0;
+    if (writable->SetPos(12) != 12
+            || writable->Write(
+                    directWrite, sizeof(directWrite), &bytesWritten)
+                    != LVERR_OK
+            || bytesWritten != sizeof(directWrite)) {
+        writable.Clear();
+        unlink(path);
+        return fail("mapped stream direct write failed");
+    }
+    std::copy(
+            directWrite, directWrite + sizeof(directWrite),
+            expected.begin() + 12);
+    if (writable->SetSize(64) != LVERR_OK
+            || writable->SetSize(16) != LVERR_FAIL
+            || writable->GetSize() != 64
+            || writable->Seek(-1, LVSEEK_SET, NULL) != LVERR_FAIL) {
+        writable.Clear();
+        unlink(path);
+        return fail("mapped stream remap or bounds rollback failed");
+    }
+    writable.Clear();
+
+    LVStreamRef persisted = LVOpenFileStream(path, LVOM_READ);
+    if (persisted.isNull()
+            || !verifyStreamRange(
+                    persisted, expected, 0, expected.size())) {
+        persisted.Clear();
+        unlink(path);
+        return fail("mapped stream teardown did not persist shared writes");
+    }
+    persisted.Clear();
+
+    LVFileMappedStream reusable;
+    const lString32 path32 = Utf8ToUnicode(lString8(path));
+    const lString32 missing =
+            Utf8ToUnicode(lString8((std::string(path) + ".missing").c_str()));
+    if (reusable.OpenFile(path32, LVOM_READ) != LVERR_OK
+            || reusable.OpenFile(missing, LVOM_READ) != LVERR_FAIL
+            || reusable.GetMode() != LVOM_ERROR
+            || reusable.GetSize() != 0) {
+        unlink(path);
+        return fail("mapped stream reopen failure retained old resources");
+    }
+    if (!LVMapFileStream(path, LVOM_WRITE, 0).isNull()) {
+        unlink(path);
+        return fail("mapped stream factory accepted an unsupported mode");
+    }
+    unlink(path);
+
+    char emptyPath[] = "/tmp/coolreader-empty-mmap-test-XXXXXX";
+    int emptyFd = mkstemp(emptyPath);
+    if (emptyFd < 0)
+        return fail("empty mapped-stream fixture could not create a file");
+    close(emptyFd);
+    LVStreamRef empty = LVMapFileStream(emptyPath, LVOM_READ, 0);
+    unlink(emptyPath);
+    if (!empty.isNull())
+        return fail("mapped stream published a failed empty-file mapping");
+    return 0;
+}
+#endif
+
 static int testDefaultStreamBufferOwnership() {
     std::vector<unsigned char> payload(12);
     for (std::size_t i = 0; i < payload.size(); ++i)
@@ -2678,6 +2804,10 @@ int main() {
         return 1;
     if (testBlockWriteStreamOwnership() != 0)
         return 1;
+#if defined(_LINUX) || defined(_WIN32)
+    if (testFileMappedStreamOwnership() != 0)
+        return 1;
+#endif
     if (testDefaultStreamBufferOwnership() != 0)
         return 1;
     if (testTcrStreamOwnership() != 0)

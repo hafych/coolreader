@@ -165,3 +165,13 @@ flushes update the cached-block count as nodes leave the chain, and the factory
 rejects non-positive block dimensions. Regression coverage reads across
 cached/flushed blocks, reuses the cache after flush and retries a failed
 single-slot eviction without losing dirty bytes.
+
+`LVFileMappedStream` owns its mapping through a length-aware `MappedRegion` and
+its platform resource through `ScopedDescriptor` or `ScopedHandle`. Member
+destruction order unmaps the view before closing the mapping and file handles.
+`LVBuffer::m_buf` remains a non-owning zero-copy view whose `LVStreamRef`
+anchors the stream lifetime. The factory keeps candidates in `std::unique_ptr`
+until open and mapping succeed, while reopen failure clears the previous
+mapping and publishes `LVOM_ERROR`. Regression coverage exercises anchored
+readonly views, writable shared mappings, grow/remap, shrink rejection,
+persisted writes, failed reopen and empty-file mapping rollback.

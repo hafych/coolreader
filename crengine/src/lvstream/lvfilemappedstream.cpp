@@ -25,6 +25,11 @@
 #include "lvstreamutils.h"
 #include "crlog.h"
 
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <memory>
+
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
 extern "C" {
 #include <windows.h>
@@ -51,42 +56,158 @@ static inline lvpos_t cr3_lseek(int fd, lvoffset_t offset, int whence) {
 #endif
 }
 
+namespace {
+
+bool checkedMappedSize(lvsize_t size, std::size_t &result)
+{
+    if (size > static_cast<lvsize_t>(
+            std::numeric_limits<std::size_t>::max()))
+        return false;
+    result = static_cast<std::size_t>(size);
+    return true;
+}
+
+bool checkedMappedOffset(
+        lvpos_t base, lvoffset_t offset, lvpos_t &result)
+{
+    if (offset < 0) {
+        const lvpos_t magnitude =
+                static_cast<lvpos_t>(-(offset + 1)) + 1;
+        if (magnitude > base)
+            return false;
+        result = base - magnitude;
+        return true;
+    }
+    const lvpos_t magnitude = static_cast<lvpos_t>(offset);
+    if (magnitude > std::numeric_limits<lvpos_t>::max() - base)
+        return false;
+    result = base + magnitude;
+    return true;
+}
+
+} // namespace
+
+LVFileMappedStream::MappedRegion::MappedRegion()
+    : _data(NULL), _size(0)
+{
+}
+
+LVFileMappedStream::MappedRegion::~MappedRegion()
+{
+    reset();
+}
+
+void LVFileMappedStream::MappedRegion::adopt(
+        lUInt8 *data, lvsize_t size)
+{
+    reset();
+    _data = data;
+    _size = size;
+}
+
+bool LVFileMappedStream::MappedRegion::reset()
+{
+    if (!_data)
+        return true;
+    lUInt8 *data = _data;
+    const lvsize_t size = _size;
+    _data = NULL;
+    _size = 0;
+#if defined(_WIN32)
+    return UnmapViewOfFile(data) != 0;
+#else
+    return munmap(data, size) != -1;
+#endif
+}
+
+#if defined(_WIN32)
+LVFileMappedStream::ScopedHandle::ScopedHandle()
+    : _handle(NULL)
+{
+}
+
+LVFileMappedStream::ScopedHandle::~ScopedHandle()
+{
+    reset();
+}
+
+bool LVFileMappedStream::ScopedHandle::reset(HANDLE handle)
+{
+    if (_handle == handle)
+        return true;
+    HANDLE previous = _handle;
+    _handle = handle;
+    return previous == NULL
+            || previous == INVALID_HANDLE_VALUE
+            || CloseHandle(previous) != 0;
+}
+#else
+LVFileMappedStream::ScopedDescriptor::ScopedDescriptor()
+    : _fd(-1)
+{
+}
+
+LVFileMappedStream::ScopedDescriptor::~ScopedDescriptor()
+{
+    reset();
+}
+
+bool LVFileMappedStream::ScopedDescriptor::reset(int fd)
+{
+    if (_fd == fd)
+        return true;
+    const int previous = _fd;
+    _fd = fd;
+    return previous < 0 || ::close(previous) == 0;
+}
+#endif
+
 LVStreamBufferRef LVFileMappedStream::GetReadBuffer(lvpos_t pos, lvpos_t size)
 {
     LVStreamBufferRef res;
-    if ( !m_map )
+    if ( m_map.empty() )
         return res;
-    if ( (m_mode!=LVOM_APPEND && m_mode!=LVOM_READ) || pos + size > m_size || size==0 )
+    if ( (m_mode!=LVOM_APPEND && m_mode!=LVOM_READ)
+            || pos > m_size || size > m_size - pos || size==0 )
         return res;
-    return LVStreamBufferRef ( new LVBuffer( LVStreamRef(this), m_map + pos, size, true ) );
+    std::unique_ptr<LVBuffer> buffer = std::make_unique<LVBuffer>(
+            LVStreamRef(this), m_map.data() + pos, size, true);
+    return LVStreamBufferRef(buffer.release());
 }
 
 LVStreamBufferRef LVFileMappedStream::GetWriteBuffer(lvpos_t pos, lvpos_t size)
 {
     LVStreamBufferRef res;
-    if ( !m_map )
+    if ( m_map.empty() )
         return res;
-    if ( m_mode!=LVOM_APPEND || pos + size > m_size || size==0 )
+    if ( m_mode!=LVOM_APPEND
+            || pos > m_size || size > m_size - pos || size==0 )
         return res;
-    return LVStreamBufferRef ( new LVBuffer( LVStreamRef(this), m_map + pos, size, false ) );
+    std::unique_ptr<LVBuffer> buffer = std::make_unique<LVBuffer>(
+            LVStreamRef(this), m_map.data() + pos, size, false);
+    return LVStreamBufferRef(buffer.release());
 }
 
 lverror_t LVFileMappedStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t* pNewPos)
 {
-    //
-    lvpos_t newpos = m_pos;
+    lvpos_t base = 0;
     switch ( origin )
     {
         case LVSEEK_SET:
-            newpos = offset;
+            base = 0;
             break;
         case LVSEEK_CUR:
-            newpos += offset;
+            base = m_pos;
             break;
         case LVSEEK_END:
-            newpos = m_size + offset;
+            base = m_size;
             break;
+        default:
+            return LVERR_FAIL;
     }
+    lvpos_t newpos = 0;
+    if (!checkedMappedOffset(base, offset, newpos))
+        return LVERR_FAIL;
     if ( newpos>m_size )
         return LVERR_FAIL;
     if ( pNewPos!=NULL )
@@ -97,6 +218,8 @@ lverror_t LVFileMappedStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lv
 
 lverror_t LVFileMappedStream::Tell(lvpos_t* pPos)
 {
+    if (!pPos)
+        return LVERR_FAIL;
     *pPos = m_pos;
     return LVERR_OK;
 }
@@ -113,46 +236,50 @@ lvpos_t LVFileMappedStream::SetPos(lvpos_t p)
 lverror_t LVFileMappedStream::error()
 {
 #if defined(_WIN32)
-    if ( m_hFile!=NULL ) {
-        UnMap();
-        if ( !CloseHandle(m_hFile) )
+    UnMap();
+    if (m_hFile.valid()) {
+        if (!m_hFile.reset())
             CRLog::error("Error while closing file handle");
-        m_hFile = NULL;
     }
 #else
-    if ( m_fd!= -1 ) {
+    UnMap();
+    if (m_fd.valid()) {
         CRLog::trace("Closing mapped file %s", UnicodeToUtf8(GetName()).c_str() );
-        UnMap();
-        ::close(m_fd);
+        if (!m_fd.reset())
+            CRLog::error("Error while closing mapped file descriptor");
     }
-    m_fd = -1;
 #endif
-    m_map = NULL;
     m_size = 0;
+    m_pos = 0;
     m_mode = LVOM_ERROR;
     return LVERR_FAIL;
 }
 
 lverror_t LVFileMappedStream::Read(void* buf, lvsize_t count, lvsize_t* nBytesRead)
 {
-    if ( !m_map )
-        return LVERR_FAIL;
-    int cnt = (int)count;
-    if ( m_pos + cnt > m_size )
-        cnt = (int)(m_size - m_pos);
-    if ( cnt <= 0 )
-        return LVERR_FAIL;
-    memcpy( buf, m_map + m_pos, cnt );
-    m_pos += cnt;
     if (nBytesRead)
-        *nBytesRead = cnt;
+        *nBytesRead = 0;
+    if (m_map.empty() || !buf || m_pos > m_size)
+        return LVERR_FAIL;
+    const lvsize_t amount = std::min(count, m_size - m_pos);
+    if (amount == 0)
+        return LVERR_FAIL;
+    std::size_t offset = 0;
+    std::size_t bytes = 0;
+    if (!checkedMappedSize(m_pos, offset)
+            || !checkedMappedSize(amount, bytes))
+        return LVERR_FAIL;
+    std::memcpy(buf, m_map.data() + offset, bytes);
+    m_pos += amount;
+    if (nBytesRead)
+        *nBytesRead = amount;
     return LVERR_OK;
 }
 
 bool LVFileMappedStream::Read(lUInt8* buf)
 {
-    if ( m_pos < m_size ) {
-        *buf = m_map[ m_pos++ ];
+    if (buf && !m_map.empty() && m_pos < m_size) {
+        *buf = m_map.data()[m_pos++];
         return true;
     }
     return false;
@@ -160,8 +287,10 @@ bool LVFileMappedStream::Read(lUInt8* buf)
 
 bool LVFileMappedStream::Read(lUInt16* buf)
 {
-    if ( m_pos+1 < m_size ) {
-        *buf = m_map[ m_pos ] | ( ( (lUInt16)m_map[ m_pos+1 ] )<<8 );
+    if (buf && !m_map.empty()
+            && m_pos <= m_size && m_size - m_pos >= 2) {
+        *buf = m_map.data()[m_pos]
+                | (((lUInt16)m_map.data()[m_pos+1])<<8);
         m_pos += 2;
         return true;
     }
@@ -170,10 +299,12 @@ bool LVFileMappedStream::Read(lUInt16* buf)
 
 bool LVFileMappedStream::Read(lUInt32* buf)
 {
-    if ( m_pos+3 < m_size ) {
-        *buf = m_map[ m_pos ] | ( ( (lUInt32)m_map[ m_pos+1 ] )<<8 )
-                | ( ( (lUInt32)m_map[ m_pos+2 ] )<<16 )
-                | ( ( (lUInt32)m_map[ m_pos+3 ] )<<24 )
+    if (buf && !m_map.empty()
+            && m_pos <= m_size && m_size - m_pos >= 4) {
+        *buf = m_map.data()[m_pos]
+                | (((lUInt32)m_map.data()[m_pos+1])<<8)
+                | (((lUInt32)m_map.data()[m_pos+2])<<16)
+                | (((lUInt32)m_map.data()[m_pos+3])<<24)
                 ;
         m_pos += 4;
         return true;
@@ -183,74 +314,88 @@ bool LVFileMappedStream::Read(lUInt32* buf)
 
 int LVFileMappedStream::ReadByte()
 {
-    if ( m_pos < m_size ) {
-        return m_map[ m_pos++ ];
+    if (!m_map.empty() && m_pos < m_size) {
+        return m_map.data()[m_pos++];
     }
     return -1;
 }
 
 lverror_t LVFileMappedStream::Write(const void* buf, lvsize_t count, lvsize_t* nBytesWritten)
 {
-    if ( m_mode!=LVOM_APPEND )
+    if (nBytesWritten)
+        *nBytesWritten = 0;
+    if (m_mode!=LVOM_APPEND || m_map.empty()
+            || !buf || m_pos > m_size)
         return LVERR_FAIL;
-    lvsize_t maxSize = (lvsize_t)(m_size - m_pos);
-    if ( maxSize<=0 )
+    const lvsize_t maxSize = m_size - m_pos;
+    if ( maxSize==0 )
         return LVERR_FAIL; // end of file reached: resize is not supported yet
-    if ( count > maxSize || count > m_size )
-        count = maxSize;
-    memcpy( m_map + m_pos, buf, count );
-    m_pos += count;
+    const lvsize_t amount = std::min(count, maxSize);
+    std::size_t offset = 0;
+    std::size_t bytes = 0;
+    if (amount == 0
+            || !checkedMappedSize(m_pos, offset)
+            || !checkedMappedSize(amount, bytes))
+        return LVERR_FAIL;
+    std::memcpy(m_map.data() + offset, buf, bytes);
+    m_pos += amount;
     if ( nBytesWritten )
-        *nBytesWritten = count;
+        *nBytesWritten = amount;
     return LVERR_OK;
 }
 
-LVFileMappedStream* LVFileMappedStream::CreateFileStream(lString32 fname, lvopen_mode_t mode, int minSize)
+std::unique_ptr<LVFileMappedStream>
+LVFileMappedStream::CreateFileStream(
+        lString32 fname, lvopen_mode_t mode, lvsize_t minSize)
 {
-    LVFileMappedStream * f = new LVFileMappedStream();
-    if ( f->OpenFile( fname, mode, minSize )==LVERR_OK ) {
-        return f;
-    } else {
-        delete f;
-        return NULL;
-    }
+    std::unique_ptr<LVFileMappedStream> stream =
+            std::make_unique<LVFileMappedStream>();
+    if (stream->OpenFile(fname, mode, minSize) != LVERR_OK)
+        return std::unique_ptr<LVFileMappedStream>();
+    return stream;
 }
 
 lverror_t LVFileMappedStream::Map()
 {
+    std::size_t mappedSize = 0;
+    if (m_size == 0 || !checkedMappedSize(m_size, mappedSize))
+        return error();
 #if defined(_WIN32)
-    m_hMap = CreateFileMapping(
-                 m_hFile,
+    m_hMap.reset(CreateFileMapping(
+                 m_hFile.get(),
                  NULL,
                  (m_mode==LVOM_READ)?PAGE_READONLY:PAGE_READWRITE, //flProtect,
                  0,
                  0,
                  NULL
-                 );
-    if ( m_hMap==NULL ) {
+                 ));
+    if (!m_hMap.valid()) {
         DWORD err = GetLastError();
-        CRLog::error( "LVFileMappedStream::Map() -- Cannot map file to memory, err=%08x, hFile=%p", err, m_hFile );
+        CRLog::error( "LVFileMappedStream::Map() -- Cannot map file to memory, err=%08x, hFile=%p", err, m_hFile.get() );
         return error();
     }
-    m_map = (lUInt8*) MapViewOfFile(
-                m_hMap,
+    lUInt8 *mapped = static_cast<lUInt8 *>(MapViewOfFile(
+                m_hMap.get(),
                 m_mode==LVOM_READ ? FILE_MAP_READ : FILE_MAP_READ|FILE_MAP_WRITE,
                 0,
                 0,
-                m_size
-                );
-    if ( m_map==NULL ) {
+                mappedSize
+                ));
+    if (!mapped) {
         CRLog::error( "LVFileMappedStream::Map() -- Cannot map file to memory" );
         return error();
     }
+    m_map.adopt(mapped, m_size);
     return LVERR_OK;
 #else
     int mapFlags = (m_mode==LVOM_READ) ? PROT_READ : PROT_READ | PROT_WRITE;
-    m_map = (lUInt8*)mmap( 0, m_size, mapFlags, MAP_SHARED, m_fd, 0 );
-    if ( m_map == MAP_FAILED ) {
+    void *mapped = mmap(
+            0, mappedSize, mapFlags, MAP_SHARED, m_fd.get(), 0);
+    if (mapped == MAP_FAILED) {
         CRLog::error( "LVFileMappedStream::Map() -- Cannot map file to memory" );
         return error();
     }
+    m_map.adopt(static_cast<lUInt8 *>(mapped), m_size);
     return LVERR_OK;
 #endif
 }
@@ -258,29 +403,18 @@ lverror_t LVFileMappedStream::Map()
 lverror_t LVFileMappedStream::UnMap()
 {
 #if defined(_WIN32)
-    lverror_t res = LVERR_OK;
-    if ( m_map!=NULL ) {
-        if ( !UnmapViewOfFile( m_map ) ) {
-            CRLog::error("LVFileMappedStream::UnMap() -- Error while unmapping file");
-            res = LVERR_FAIL;
-        }
-        m_map = NULL;
+    const bool viewReleased = m_map.reset();
+    const bool handleReleased = m_hMap.reset();
+    if (!viewReleased || !handleReleased) {
+        CRLog::error(
+                "LVFileMappedStream::UnMap() -- Error while unmapping file");
+        return LVERR_FAIL;
     }
-    if ( m_hMap!=NULL ) {
-        if ( !CloseHandle( m_hMap ) ) {
-            CRLog::error("LVFileMappedStream::UnMap() -- Error while unmapping file");
-            res = LVERR_FAIL;
-        }
-        m_hMap = NULL;
-    }
-    if ( res!=LVERR_OK )
-        return error();
-    return res;
+    return LVERR_OK;
 #else
-    if ( m_map!=NULL && munmap( m_map, m_size ) == -1 ) {
-        m_map = NULL;
+    if (!m_map.reset()) {
         CRLog::error("LVFileMappedStream::UnMap() -- Error while unmapping file");
-        return error();
+        return LVERR_FAIL;
     }
     return LVERR_OK;
 #endif
@@ -293,12 +427,11 @@ lverror_t LVFileMappedStream::SetSize(lvsize_t size)
         return LVERR_FAIL;
     if ( size == m_size )
         return LVERR_OK;
-    //if ( size < m_size )
-    //    return LVERR_FAIL;
+    if (size == 0 || size < m_size)
+        return LVERR_FAIL;
 
-    bool wasMapped = false;
-    if ( m_map!=NULL ) {
-        wasMapped = true;
+    const bool wasMapped = !m_map.empty();
+    if (wasMapped) {
         if ( UnMap()!=LVERR_OK )
             return LVERR_FAIL;
     }
@@ -309,7 +442,8 @@ lverror_t LVFileMappedStream::SetSize(lvsize_t size)
     __int64 offset = size - 1;
     lUInt32 pos_low = (lUInt32)((__int64)offset & 0xFFFFFFFF);
     LONG pos_high = (long)(((__int64)offset >> 32) & 0xFFFFFFFF);
-    pos_low = SetFilePointer(m_hFile, pos_low, &pos_high, FILE_BEGIN );
+    pos_low = SetFilePointer(
+            m_hFile.get(), pos_low, &pos_high, FILE_BEGIN );
     if (pos_low == 0xFFFFFFFF) {
         lUInt32 err = GetLastError();
         if (err == ERROR_NOACCESS)
@@ -318,15 +452,17 @@ lverror_t LVFileMappedStream::SetSize(lvsize_t size)
             return error();
     }
     DWORD bytesWritten = 0;
-    if ( !WriteFile( m_hFile, "", 1, &bytesWritten, NULL ) || bytesWritten!=1 )
+    if ( !WriteFile(
+            m_hFile.get(), "", 1, &bytesWritten, NULL )
+            || bytesWritten!=1 )
         return error();
 #else
     // LINUX
-    if ( cr3_lseek( m_fd, size-1, SEEK_SET ) == (lvpos_t)-1 ) {
+    if ( cr3_lseek( m_fd.get(), size-1, SEEK_SET ) == (lvpos_t)-1 ) {
         CRLog::error("LVFileMappedStream::SetSize() -- Seek error");
         return error();
     }
-    if ( write(m_fd, "", 1) != 1 ) {
+    if ( write(m_fd.get(), "", 1) != 1 ) {
         CRLog::error("LVFileMappedStream::SetSize() -- File resize error");
         return error();
     }
@@ -341,13 +477,15 @@ lverror_t LVFileMappedStream::SetSize(lvsize_t size)
 
 lverror_t LVFileMappedStream::OpenFile(lString32 fname, lvopen_mode_t mode, lvsize_t minSize)
 {
-    m_mode = mode;
+    error();
     if ( mode!=LVOM_READ && mode!=LVOM_APPEND )
         return LVERR_FAIL; // not supported
     if ( minSize==(lvsize_t)-1 ) {
         if ( !LVFileExists(fname) )
             return LVERR_FAIL;
+        minSize = 0;
     }
+    m_mode = mode;
     //if ( mode==LVOM_APPEND && minSize<=0 )
     //    return LVERR_FAIL;
     SetName(fname.c_str());
@@ -385,22 +523,25 @@ lverror_t LVFileMappedStream::OpenFile(lString32 fname, lvopen_mode_t mode, lvsi
             crFatalError();
             break;
     }
-    m_hFile = CreateFileW( fn16.c_str(), m, s, NULL, c, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (m_hFile == INVALID_HANDLE_VALUE || !m_hFile) {
+    HANDLE fileHandle = CreateFileW(
+            fn16.c_str(), m, s, NULL, c, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (fileHandle == INVALID_HANDLE_VALUE || !fileHandle) {
         // unicode not implemented?
         lUInt32 err = GetLastError();
         if (err==ERROR_CALL_NOT_IMPLEMENTED)
-            m_hFile = CreateFileA( UnicodeToLocal(fname).c_str(), m, s, NULL, c, FILE_ATTRIBUTE_NORMAL, NULL);
-        if ( (m_hFile == INVALID_HANDLE_VALUE) || (!m_hFile) ) {
+            fileHandle = CreateFileA(
+                    UnicodeToLocal(fname).c_str(), m, s,
+                    NULL, c, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (fileHandle == INVALID_HANDLE_VALUE || !fileHandle) {
             CRLog::error("Error opening file %s", fn8.c_str() );
-            m_hFile = NULL;
             // error
             return error();
         }
     }
+    m_hFile.reset(fileHandle);
     // check size
     lUInt32 hw=0;
-    m_size = GetFileSize( m_hFile, (LPDWORD)&hw );
+    m_size = GetFileSize( m_hFile.get(), (LPDWORD)&hw );
 #if LVLONG_FILE_SUPPORT
     if (hw)
         m_size |= (((lvsize_t)hw)<<32);
@@ -422,16 +563,15 @@ lverror_t LVFileMappedStream::OpenFile(lString32 fname, lvopen_mode_t mode, lvsi
 #else
     //========================================================
     // LINUX IMPLEMENTATION
-    m_fd = -1;
-
     int flags = (mode==LVOM_READ) ? O_RDONLY : O_RDWR | O_CREAT; // | O_SYNC
-    m_fd = open( fn8.c_str(), flags, (mode_t)0666);
-    if (m_fd == -1) {
+    const int fd = open( fn8.c_str(), flags, (mode_t)0666);
+    if (fd == -1) {
         CRLog::error( "Error opening file %s for %s, errno=%d, msg=%s", fn8.c_str(), (mode==LVOM_READ) ? "reading" : "read/write",  (int)errno, strerror(errno) );
         return error();
     }
+    m_fd.reset(fd);
     struct stat stat;
-    if ( fstat( m_fd, &stat ) ) {
+    if ( fstat( m_fd.get(), &stat ) ) {
         CRLog::error( "Cannot get file size for %s", fn8.c_str() );
         return error();
     }
@@ -443,10 +583,8 @@ lverror_t LVFileMappedStream::OpenFile(lString32 fname, lvopen_mode_t mode, lvsi
         }
     }
 
-    int mapFlags = (mode==LVOM_READ) ? PROT_READ : PROT_READ | PROT_WRITE;
-    m_map = (lUInt8*)mmap( 0, m_size, mapFlags, MAP_SHARED, m_fd, 0 );
-    if ( m_map == MAP_FAILED ) {
-        CRLog::error( "Cannot map file %s to memory", fn8.c_str() );
+    if (Map() != LVERR_OK) {
+        CRLog::error("Cannot map file %s to memory", fn8.c_str());
         return error();
     }
     return LVERR_OK;
@@ -454,18 +592,7 @@ lverror_t LVFileMappedStream::OpenFile(lString32 fname, lvopen_mode_t mode, lvsi
 }
 
 LVFileMappedStream::LVFileMappedStream()
-#if defined(_WIN32)
-    : m_hFile(NULL), m_hMap(NULL),
-      #else
-    : m_fd(-1),
-      #endif
-      m_map(NULL), m_size(0), m_pos(0)
+    : m_size(0), m_pos(0)
 {
     m_mode=LVOM_ERROR;
-}
-
-LVFileMappedStream::~LVFileMappedStream()
-{
-    // reuse error() to close file
-    error();
 }
