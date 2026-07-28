@@ -34,6 +34,8 @@
 #include "../include/crlog.h"
 #include "odxutil.h"
 
+#include <memory>
+
 // If you add new element - update odt_elements_mapping table below
 #define ODT_TAGS \
     ODT_TAG(a)\
@@ -321,20 +323,17 @@ class odt_stylesHandler : public xml_ElementHandler
 private:
     LVArray<int> m_levels;
     odx_StyleRef m_styleRef;
-    odx_Style *m_style;
     odt_ListStyleRef m_ListStyleRef;
-    odt_ListStyle *m_ListStyle;
     odt_ListLevelStyleRef m_ListLevelStyleRef;
-    odt_ListLevelStyle *m_ListLevelStyle;
     odx_pPr* m_pPr;
     odx_rPr* m_rPr;
-    odtImportContext *m_context;
+    odtImportContext &m_context;
 public:
     /// constructor
     odt_stylesHandler(docXMLreader * reader, ldomDocumentWriter *writer, int element,
-                      odtImportContext *context) :
+                      odtImportContext &context) :
         xml_ElementHandler(reader, writer, element, odt_style_elements),
-            m_style(NULL), m_ListStyle(NULL), m_pPr(NULL), m_rPr(NULL), m_context(context)
+            m_pPr(NULL), m_rPr(NULL), m_context(context)
     {
     }
     ldomNode * handleTagOpen(int tagId);
@@ -350,7 +349,7 @@ class odt_documentHandler : public xml_ElementHandler, odx_styleTagsHandler
     ldomDocumentWriter m_footNotesWriter;
     ldomDocumentWriter m_endNotesWriter;
     ldomDocumentWriter *m_saveWriter;
-    odtImportContext * m_context;
+    odtImportContext &m_context;
     ldomNode *m_footNotes;
     ldomNode *m_endNotes;
     ldomNode *m_body;
@@ -400,7 +399,7 @@ protected:
 public:
     odt_documentHandler(ldomDocument * doc, docXMLreader * reader,
                         ldomDocumentWriter * writer, odx_titleHandler* titleHandler,
-                        odtImportContext * context) :
+                        odtImportContext &context) :
         xml_ElementHandler(reader, writer, odt_el_NULL, odt_elements),
         m_footNotesWriter(doc), m_endNotesWriter(doc), m_saveWriter(NULL),
         m_context(context), m_footNotes(NULL), m_endNotes(NULL), m_body(NULL),
@@ -418,14 +417,15 @@ public:
     void reset();
 };
 
-static bool parseStyles(odtImportContext *context)
+static bool parseStyles(odtImportContext &context)
 {
-    LVStreamRef stream = context->openFile(U"styles.xml");
+    LVStreamRef stream = context.openFile(U"styles.xml");
     if ( stream.isNull() )
         return false;
 
     docXMLreader docReader(NULL);
-    odt_stylesHandler stylesHandler(&docReader, NULL, odt_el_documentStyles, context);
+    odt_stylesHandler stylesHandler(
+            &docReader, NULL, odt_el_documentStyles, context);
     docReader.setHandler(&stylesHandler);
 
     LVXMLParser parser(stream, &docReader);
@@ -447,7 +447,8 @@ bool ImportOpenDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallba
     LVStreamRef meta_stream = arc->OpenStream(U"meta.xml", LVOM_READ);
     if ( meta_stream.isNull() )
         return false;
-    ldomDocument * metaDoc = LVParseXMLStream( meta_stream );
+    std::unique_ptr<ldomDocument> metaDoc(
+            LVParseXMLStream(meta_stream));
     if ( metaDoc ) {
         CRPropRef doc_props = doc->getProps();
 
@@ -457,7 +458,6 @@ bool ImportOpenDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallba
         doc_props->setString(DOC_PROP_TITLE, title);
         doc_props->setString(DOC_PROP_AUTHORS, author );
         doc_props->setString(DOC_PROP_DESCRIPTION, description );
-        delete metaDoc;
     } else {
         CRLog::error("Couldn't parse document meta data");
     }
@@ -475,7 +475,7 @@ bool ImportOpenDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallba
     docXMLreader docReader(&writer);
 
     odtImportContext importContext(doc);
-    if( !parseStyles(&importContext) )
+    if( !parseStyles(importContext) )
         return false;
 
     LVStreamRef m_stream = arc->OpenStream(U"content.xml", LVOM_READ);
@@ -491,7 +491,8 @@ bool ImportOpenDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallba
     odx_titleHandler titleHandler(&writer);  //<hx>..</hx>
 #endif
 
-    odt_documentHandler documentHandler(doc, &docReader, &writer, &titleHandler, &importContext);
+    odt_documentHandler documentHandler(
+            doc, &docReader, &writer, &titleHandler, importContext);
     docReader.setHandler(&documentHandler);
 
     LVXMLParser parser(m_stream, &docReader);
@@ -518,12 +519,12 @@ void odt_documentHandler::startParagraph()
         m_writer->OnTagOpenNoAttr(U"", U"li");
     }
     m_writer->OnTagOpen(U"", U"p");
-    odx_Style* style = m_context->getStyle(m_StyleName);
+    odx_Style* style = m_context.getStyle(m_StyleName);
     if( style ) {
         odx_pPr pPr;
 
-        pPr.combineWith(style->get_pPr(m_context));
-        pPr.combineWith(m_context->get_pPrDefault());
+        pPr.combineWith(style->get_pPr(&m_context));
+        pPr.combineWith(m_context.get_pPrDefault());
         lString32 css = pPr.getCss();
         if( !css.empty() )
             m_writer->OnAttribute(U"", U"style", css.c_str());
@@ -720,7 +721,8 @@ void odt_documentHandler::handleTagBody()
         {
             css_list_style_type_t listType = css_lst_none;
             css_length_t levelStart(css_val_unspecified, 0);
-            odt_ListStyle* listStyle = m_context->getListStyle(m_StyleName);
+            odt_ListStyle* listStyle =
+                    m_context.getListStyle(m_StyleName);
             if( !listStyle && !m_ListLevels.empty() ) {
                 listStyle = m_ListLevels.get( m_ListLevels.length() -1);
             }
@@ -732,7 +734,9 @@ void odt_documentHandler::handleTagBody()
                     levelStart = levelStyle->getLevelStart();
                 }
             }
-            m_writer->OnAttribute(U"", U"style", m_context->getListStyleCss(listType).c_str());
+            m_writer->OnAttribute(
+                    U"", U"style",
+                    m_context.getListStyleCss(listType).c_str());
             if(levelStart.type != css_val_unspecified)
                 m_writer->OnAttribute(U"", U"start", lString32::itoa(levelStart.value).c_str());
             m_writer->OnTagBody();
@@ -824,12 +828,14 @@ void odt_documentHandler::handleText(const lChar32 *text, int len, lUInt32 flags
     case odt_el_h:
     case odt_el_p:
     case odt_el_span:
-        style = m_context->getStyle(m_state == odt_el_span ? m_spanStyleName : m_StyleName);
+        style = m_context.getStyle(
+                m_state == odt_el_span
+                        ? m_spanStyleName : m_StyleName);
         if(style) {
             odx_rPr rPr;
 
-            rPr.combineWith(style->get_rPr(m_context));
-            rPr.combineWith(m_context->get_rPrDefault());
+            rPr.combineWith(style->get_rPr(&m_context));
+            rPr.combineWith(m_context.get_rPrDefault());
             if( rPr.isHidden() )
                 break;
             checkParagraphStart();
@@ -884,25 +890,31 @@ ldomNode *odt_stylesHandler::handleTagOpen(int tagId)
 {
     switch(tagId) {
     case odt_el_defaultStyle:
-        m_style = NULL;
+        m_styleRef.Clear();
         break;
-    case odt_el_paragraphProperties:
-        m_pPr = m_style ? m_style->get_pPrPointer() : m_context->get_pPrDefault();
+    case odt_el_paragraphProperties: {
+        odx_Style *style = m_styleRef.get();
+        m_pPr = style
+                ? style->get_pPrPointer()
+                : m_context.get_pPrDefault();
         break;
-    case odt_el_textProperties:
-        m_rPr = m_style ? m_style->get_rPrPointer() : m_context->get_rPrDefault();
+    }
+    case odt_el_textProperties: {
+        odx_Style *style = m_styleRef.get();
+        m_rPr = style
+                ? style->get_rPrPointer()
+                : m_context.get_rPrDefault();
         break;
+    }
     case odt_el_style:
         m_styleRef = odx_StyleRef( new odx_Style );
-        m_style = m_styleRef.get();
+        break;
     case odt_el_listStyle:
         m_ListStyleRef = odt_ListStyleRef( new odt_ListStyle );
-        m_ListStyle = m_ListStyleRef.get();
         break;
     case odt_el_listLevelStyleBullet:
     case odt_el_listLevelStyleNumber:
         m_ListLevelStyleRef = odt_ListLevelStyleRef( new odt_ListLevelStyle );
-        m_ListLevelStyle = m_ListLevelStyleRef.get();
         break;
     default:
         break;
@@ -917,20 +929,20 @@ void odt_stylesHandler::handleAttribute(const lChar32 *attrname, const lChar32 *
     switch(m_state) {
     case odt_el_style:
         if( !lStr_cmp(attrname, "name") ) {
-            m_style->setId(attrvalue);
+            m_styleRef->setId(attrvalue);
         } else if( !lStr_cmp(attrname, "display-name") ) {
-            m_style->setName(attrvalue);
+            m_styleRef->setName(attrvalue);
         } else if( !lStr_cmp(attrname, "family") ) {
             int n = parse_name(styleFamily_attr_values, attrvalue);
             if(n != -1)
-                m_style->setStyleType((odx_style_type)n);
+                m_styleRef->setStyleType((odx_style_type)n);
         } else if( !lStr_cmp(attrname, "parent-style-name") ) {
-            m_style->setBasedOn(attrvalue);
+            m_styleRef->setBasedOn(attrvalue);
         }
         break;
     case odt_el_listStyle:
         if( !lStr_cmp(attrname, "name") )
-            m_ListStyle->setId(attrvalue);
+            m_ListStyleRef->setId(attrvalue);
         break;
     case odt_el_listLevelStyleNumber:
         if( !lStr_cmp(attrname, "num-format") ) {
@@ -939,38 +951,38 @@ void odt_stylesHandler::handleAttribute(const lChar32 *attrname, const lChar32 *
             if( format.length() == 1) {
                 switch(attrvalue[0]) {
                 case '1':
-                    m_ListLevelStyle->setLevelType(css_lst_decimal);
+                    m_ListLevelStyleRef->setLevelType(css_lst_decimal);
                     break;
                 case 'a':
-                    m_ListLevelStyle->setLevelType(css_lst_lower_alpha);
+                    m_ListLevelStyleRef->setLevelType(css_lst_lower_alpha);
                     break;
                 case 'A':
-                    m_ListLevelStyle->setLevelType(css_lst_upper_alpha);
+                    m_ListLevelStyleRef->setLevelType(css_lst_upper_alpha);
                     break;
                 case 'i':
-                    m_ListLevelStyle->setLevelType(css_lst_lower_roman);
+                    m_ListLevelStyleRef->setLevelType(css_lst_lower_roman);
                     break;
                 case 'I':
-                    m_ListLevelStyle->setLevelType(css_lst_upper_roman);
+                    m_ListLevelStyleRef->setLevelType(css_lst_upper_roman);
                     break;
                 default:
-                    m_ListLevelStyle->setLevelType(css_lst_none);
+                    m_ListLevelStyleRef->setLevelType(css_lst_none);
                     break;
                 }
             } else if( format.empty() )
-                m_ListLevelStyle->setLevelType(css_lst_none);
+                m_ListLevelStyleRef->setLevelType(css_lst_none);
             break;
         }
         if( !lStr_cmp(attrname, "start-value") ) {
             int startValue;
 
             if( lString32(attrvalue).atoi( startValue) )
-                m_ListLevelStyle->setLevelStart( startValue );
+                m_ListLevelStyleRef->setLevelStart( startValue );
             break;
         }
     case odt_el_listLevelStyleBullet:
         if( !lStr_cmp(attrname, "level") )
-            m_ListLevelStyle->setLevel(attrvalue);
+            m_ListLevelStyleRef->setLevel(attrvalue);
         break;
     case odt_el_paragraphProperties:
         if( !lStr_cmp(attrname, "break-before") ) {
@@ -984,8 +996,8 @@ void odt_stylesHandler::handleAttribute(const lChar32 *attrname, const lChar32 *
         }
         break;
     case odt_el_textProperties:
-        if( NULL == m_style && !lStr_cmp(attrname, "language") ) {
-            m_context->setLanguage(attrvalue);
+        if( m_styleRef.isNull() && !lStr_cmp(attrname, "language") ) {
+            m_context.setLanguage(attrvalue);
         } else if( !lStr_cmp(attrname, "font-style") ) {
             m_rPr->setItalic( lStr_cmp(attrvalue, "normal") !=0 );
         } else if( !lStr_cmp(attrname, "font-weight") ) {
@@ -1017,16 +1029,18 @@ void odt_stylesHandler::handleTagClose(const lChar32 *nsname, const lChar32 *tag
 
     switch(m_state) {
     case odt_el_listStyle:
-        m_context->addListStyle(m_ListStyleRef);
+        m_context.addListStyle(m_ListStyleRef);
+        m_ListStyleRef.Clear();
         break;
     case odt_el_listLevelStyleBullet:
     case odt_el_listLevelStyleNumber:
-        m_ListStyle->addLevel(m_ListLevelStyleRef);
+        m_ListStyleRef->addLevel(m_ListLevelStyleRef);
+        m_ListLevelStyleRef.Clear();
         break;
     case odt_el_style:
-        if(m_style && m_style->isValid()) {
-            m_context->addStyle(m_styleRef);
-        }
+        if(!m_styleRef.isNull() && m_styleRef->isValid())
+            m_context.addStyle(m_styleRef);
+        m_styleRef.Clear();
     default:
         break;
     }

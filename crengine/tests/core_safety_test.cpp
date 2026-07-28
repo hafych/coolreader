@@ -10,6 +10,7 @@
 #include "lvstring32hashedcollection.h"
 #include "lvthread.h"
 #include "lvcontaineriteminfo.h"
+#include "lvdocview.h"
 #include "hyphman.h"
 #include "lvcolordrawbuf.h"
 #include "lvfntman.h"
@@ -30,6 +31,7 @@
 #include "fb3fmt.h"
 #include "lstridmap.h"
 #include "logredactor.h"
+#include "odtfmt.h"
 #include "parsebudget.h"
 #include "pdbfmt.h"
 #include "props.h"
@@ -4421,6 +4423,74 @@ static std::vector<unsigned char> buildFb3Fixture(
     });
 }
 
+static std::vector<unsigned char> buildOdtFixture(
+        const std::string &styles) {
+    const std::string meta =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<office:document-meta"
+            " xmlns:office=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:office:1.0\""
+            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
+            "<office:meta>"
+            "<dc:creator>ODT Owner</dc:creator>"
+            "<dc:title>Owned ODT</dc:title>"
+            "<dc:description>Scoped metadata DOM</dc:description>"
+            "</office:meta></office:document-meta>";
+    const std::string content =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<office:document-content"
+            " xmlns:office=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:office:1.0\""
+            " xmlns:text=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:text:1.0\""
+            " xmlns:style=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:style:1.0\">"
+            "<office:body><office:text>"
+            "<text:h text:outline-level=\"1\">ODT Chapter</text:h>"
+            "<text:p text:style-name=\"Body\">"
+            "Owned <text:span text:style-name=\"Body\">ODT</text:span>"
+            " text</text:p>"
+            "<text:list text:style-name=\"Numbers\">"
+            "<text:list-item><text:p>List item</text:p></text:list-item>"
+            "</text:list>"
+            "</office:text></office:body></office:document-content>";
+    return buildStoredZipEntries({
+        {"mimetype", byteVector(
+                "application/vnd.oasis.opendocument.text")},
+        {"meta.xml", byteVector(meta)},
+        {"styles.xml", byteVector(styles)},
+        {"content.xml", byteVector(content)},
+    });
+}
+
+static std::string validOdtStyles() {
+    return
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<office:document-styles"
+            " xmlns:office=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:office:1.0\""
+            " xmlns:style=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:style:1.0\""
+            " xmlns:text=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:text:1.0\""
+            " xmlns:fo=\"urn:oasis:names:tc:opendocument:"
+            "xmlns:xsl-fo-compatible:1.0\">"
+            "<office:styles>"
+            "<style:default-style style:family=\"paragraph\">"
+            "<style:text-properties fo:language=\"en-US\"/>"
+            "</style:default-style>"
+            "<style:style style:name=\"Body\""
+            " style:family=\"paragraph\">"
+            "<style:paragraph-properties fo:text-align=\"center\"/>"
+            "<style:text-properties fo:font-weight=\"bold\"/>"
+            "</style:style>"
+            "<text:list-style style:name=\"Numbers\">"
+            "<text:list-level-style-number text:level=\"1\""
+            " style:num-format=\"1\" text:start-value=\"3\"/>"
+            "</text:list-style>"
+            "</office:styles></office:document-styles>";
+}
+
 static std::vector<unsigned char> deflateRaw(
         const std::vector<unsigned char> &payload) {
     z_stream stream = {};
@@ -4517,6 +4587,102 @@ static bool verifyStreamRange(LVStreamRef stream,
             return false;
     }
     return true;
+}
+
+static int testOdtOwnership() {
+    class ScopedFontManager {
+        bool _owned;
+    public:
+        explicit ScopedFontManager(bool owned) : _owned(owned) {}
+        ~ScopedFontManager() {
+            if (_owned)
+                ShutdownFontManager();
+        }
+    };
+
+    const bool ownsFontManager = fontMan == NULL;
+    if (ownsFontManager
+            && (!InitFontManager(lString8::empty_str) || !fontMan))
+        return fail("ODT ownership fixture could not initialize fonts");
+    ScopedFontManager fontManagerScope(ownsFontManager);
+    const lString8 fontPath(
+            COOLREADER_SOURCE_DIR
+            "/thirdparty/harfbuzz-14.2.1/test/subset/data/expected/"
+            "retain-num-glyphs/Roboto-Regular.retain-num-glyphs.all.ttf");
+    if (!fontMan->RegisterFont(fontPath))
+        return fail("ODT ownership fixture font did not register");
+
+    std::vector<unsigned char> archiveBytes =
+            buildOdtFixture(validOdtStyles());
+    LVStreamRef stream = LVCreateMemoryStream(
+            archiveBytes.data(), static_cast<int>(archiveBytes.size()),
+            true, LVOM_READ);
+    if (stream.isNull() || !DetectOpenDocumentFormat(stream))
+        return fail("ODT ownership fixture was not detected");
+    if (stream->SetPos(0) != 0)
+        return fail("ODT ownership fixture could not rewind");
+
+    LVDocView view(16, true);
+    view.setShowCover(false);
+    if (!view.LoadDocument(stream, U"owned-fixture.odt", false))
+        return fail("ODT ownership fixture did not import");
+    ldomDocument *imported = view.getDocument();
+    CRPropRef properties = imported->getProps();
+    ldomNode *body =
+            imported->nodeFromXPath(cs32("FictionBook/body"));
+    ldomNode *paragraph =
+            imported->nodeFromXPath(cs32("FictionBook/body/section/p"));
+    ldomNode *list =
+            imported->nodeFromXPath(cs32("FictionBook/body/section/ol"));
+    if (properties->getStringDef(DOC_PROP_TITLE) != U"Owned ODT"
+            || properties->getStringDef(DOC_PROP_AUTHORS) != U"ODT Owner"
+            || properties->getStringDef(DOC_PROP_DESCRIPTION)
+                    != U"Scoped metadata DOM"
+            || properties->getStringDef(DOC_PROP_LANGUAGE) != U"en"
+            || !body
+            || body->getText(U' ').pos(U"Owned ODT text") < 0
+            || body->getText(U' ').pos(U"List item") < 0
+            || !paragraph
+            || paragraph->getAttributeValue("style").pos(
+                    U"text-align: center") < 0
+            || !list
+            || list->getAttributeValue("style").pos(
+                    U"list-style-type: decimal") < 0
+            || list->getAttributeValue("start") != U"3")
+        return fail("ODT scoped owners did not publish the complete import");
+
+    std::string rejectedStyles = validOdtStyles();
+    const std::size_t closePos =
+            rejectedStyles.rfind("</office:styles>");
+    if (closePos == std::string::npos)
+        return fail("ODT rejected-style fixture could not be assembled");
+    std::string deep;
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        deep += "<n>";
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        deep += "</n>";
+    rejectedStyles.insert(closePos, deep);
+
+    std::vector<unsigned char> rejectedArchive =
+            buildOdtFixture(rejectedStyles);
+    LVStreamRef rejectedStream = LVCreateMemoryStream(
+            rejectedArchive.data(),
+            static_cast<int>(rejectedArchive.size()),
+            true, LVOM_READ);
+    if (view.LoadDocument(
+            rejectedStream, U"rejected-fixture.odt", false))
+        return fail("ODT style candidates survived a rejected parse");
+
+    LVStreamRef repeatedStream = LVCreateMemoryStream(
+            archiveBytes.data(), static_cast<int>(archiveBytes.size()),
+            true, LVOM_READ);
+    if (!view.LoadDocument(
+            repeatedStream, U"repeated-fixture.odt", false)
+            || view.getTitle() != U"Owned ODT")
+        return fail("ODT rejected parse retained shared ownership state");
+    return 0;
 }
 
 static int testOpcFb3Ownership() {
@@ -5852,6 +6018,8 @@ int main() {
     if (testTcrStreamOwnership() != 0)
         return 1;
     if (testArchiveContainerOwnership() != 0)
+        return 1;
+    if (testOdtOwnership() != 0)
         return 1;
     if (testOpcFb3Ownership() != 0)
         return 1;

@@ -18,6 +18,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/chmfmt.cpp" CHM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/chmfmt_internal.h" CHM_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/epubfmt.cpp" EPUB_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/tests/epub3_regression_test.cpp" EPUB3_REGRESSION_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/odtfmt.cpp" ODT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstsheet.cpp" STYLESHEET_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
@@ -4198,4 +4199,87 @@ forbid_source_text(
   "${DOC_VIEW_SOURCE}"
   "m_doc = new ldomDocument()"
   "LVDocView document replacement must remain scope-bound"
+)
+
+# --- ODT metadata DOM, style candidates and borrowed parse context ---
+require_source_text(
+  "${ODT_SOURCE}"
+  "std::unique_ptr<ldomDocument> metaDoc"
+  "ODT metadata documents must remain scope-owned"
+)
+require_source_text(
+  "${ODT_SOURCE}"
+  "odtImportContext &m_context"
+  "ODT handlers must retain non-null borrowed context references"
+)
+require_source_text(
+  "${ODT_SOURCE}"
+  "static bool parseStyles(odtImportContext &context)"
+  "ODT style parsing must label its context as borrowed"
+)
+require_source_text(
+  "${ODT_SOURCE}"
+  "m_styleRef = odx_StyleRef( new odx_Style );
+        break;"
+  "ODT paragraph styles must not fall through into unrelated list ownership"
+)
+require_source_text(
+  "${ODT_SOURCE}"
+  "m_context.addStyle(m_styleRef)"
+  "ODT style candidates must publish through their intrusive owner"
+)
+require_source_text(
+  "${ODT_SOURCE}"
+  "m_context.addListStyle(m_ListStyleRef)"
+  "ODT list-style candidates must publish through their intrusive owner"
+)
+require_source_text(
+  "${ODT_SOURCE}"
+  "m_ListLevelStyleRef.Clear()"
+  "ODT list-level handler ownership must end after publication"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testOdtOwnership()"
+  "ODT import ownership must retain end-to-end native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "ODT style candidates survived a rejected parse"
+  "ODT regression must retain failed-style cleanup coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "ODT rejected parse retained shared ownership state"
+  "ODT regression must retain clean repeated-import coverage"
+)
+forbid_source_text(
+  "${ODT_SOURCE}"
+  "ldomDocument * metaDoc = LVParseXMLStream"
+  "ODT metadata parsing must not regress to raw document ownership"
+)
+forbid_source_text(
+  "${ODT_SOURCE}"
+  "delete metaDoc"
+  "ODT metadata document teardown must remain automatic"
+)
+forbid_source_text(
+  "${ODT_SOURCE}"
+  "odx_Style *m_style"
+  "ODT style handlers must not shadow their intrusive owner with a raw field"
+)
+forbid_source_text(
+  "${ODT_SOURCE}"
+  "odt_ListStyle *m_ListStyle"
+  "ODT list-style handlers must not shadow their intrusive owner with a raw field"
+)
+forbid_source_text(
+  "${ODT_SOURCE}"
+  "odt_ListLevelStyle *m_ListLevelStyle"
+  "ODT list-level handlers must not shadow their intrusive owner with a raw field"
+)
+forbid_source_text(
+  "${ODT_SOURCE}"
+  "odtImportContext *"
+  "ODT parse handlers must not use nullable context pointers"
 )

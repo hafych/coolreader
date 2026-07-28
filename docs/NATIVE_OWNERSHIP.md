@@ -478,3 +478,13 @@ idempotently, document recreation enters the owner immediately, and copying or
 assigning a view is disabled so ownership cannot be duplicated. The document
 regression replaces a populated document, verifies that no nodes from the old
 DOM survive, repeats `Clear()`, and recreates a usable document afterward.
+
+ODT metadata parsing adopts the temporary `meta.xml` DOM immediately into a
+`unique_ptr`. Style and list-style handlers keep candidates only in their
+intrusive reference owners; they no longer maintain parallel raw aliases, and
+release their handler-held reference after the import context adopts a
+candidate. Handler/context links are non-null borrowed references, while
+paragraph and list property pointers remain short-lived views bounded by their
+active style element. The in-memory ODT regression verifies metadata, language,
+paragraph/list style publication, cleanup after a depth-rejected style document
+with a valid prefix, and a successful repeated import in the same view.

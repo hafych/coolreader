@@ -146,8 +146,8 @@ DRM или ограничений доступа, подбор/получени�
   owner/index publication, FB3 description/parser state и CHM
   container/file/metadata/HTML parse ownership, а также EPUB encrypted-container,
   font-key snapshot, manifest-item и OPF/nav/NCX/page-map DOM ownership и
-  lifecycle основного документа `LVDocView`. Остальные участки мигрируются
-  отдельными bounded-пакетами.
+  lifecycle основного документа `LVDocView`, ODT metadata DOM и style/list
+  parse-candidates. Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для
