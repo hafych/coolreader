@@ -18,6 +18,7 @@
 #include "parsebudget.h"
 #include "rtfimp.h"
 #include "textlang.h"
+#include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontglyphcache.h"
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
@@ -1347,6 +1348,33 @@ static int testImageSourceOwnership() {
             || xpmCallback.ends != 2)
         return fail("XPM source callback lifecycle is incomplete");
 
+    const std::vector<int> ninePatchMap =
+            LVImageScaledDrawCallback::GenNinePatchMap(6, 8, 1, 1);
+    if (ninePatchMap.size() != 8
+            || ninePatchMap.front() != 1
+            || ninePatchMap[3] != 2
+            || ninePatchMap[4] != 3
+            || ninePatchMap.back() != 4)
+        return fail("nine-patch scaling map changed during RAII migration");
+
+    static const lUInt32 scaledSentinel = 0x00123456;
+    for (bool smooth : {false, true}) {
+        LVColorDrawBuf scaled(4, 4, 32);
+        scaled.Clear(scaledSentinel);
+        scaled.setSmoothScalingImages(smooth);
+        scaled.Draw(xpm, 0, 0, 4, 4, false);
+        bool changed = false;
+        for (int y = 0; y < 4; ++y) {
+            for (int x = 0; x < 4; ++x)
+                changed = changed
+                        || scaled.GetPixel(x, y) != scaledSentinel;
+        }
+        if (!changed)
+            return fail(smooth
+                    ? "smooth image scaling did not render its RAII snapshot"
+                    : "mapped image scaling did not render its RAII maps");
+    }
+
     static const int unpackedBpps[] = {8, 16, 32};
     for (int bpp : unpackedBpps) {
         LVImageSourceRef unpacked =
@@ -1371,6 +1399,19 @@ static int testImageSourceOwnership() {
     if (unpackFallback.get() != failingSource.get()
             || failingDecodeCalls != 1)
         return fail("failed unpack did not release its candidate buffers");
+
+    LVColorDrawBuf failedScale(4, 4, 32);
+    failedScale.Clear(scaledSentinel);
+    failedScale.setSmoothScalingImages(true);
+    failedScale.Draw(failingSource, 0, 0, 4, 4, false);
+    if (failingDecodeCalls != 2)
+        return fail("failed scaling fixture did not enter decode");
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            if (failedScale.GetPixel(x, y) != scaledSentinel)
+                return fail("failed smooth scaling rendered partial data");
+        }
+    }
 
     static const char *invalidXpm[] = {
         "2 2 2 1",

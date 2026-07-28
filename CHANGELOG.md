@@ -158,6 +158,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   RAII containers, eliminating the legacy 16-bit teardown leak; repeat-decode
   regressions cover every storage depth, while failed predecode rolls back to
   the original image source.
+- Scaled-image drawing now owns coordinate maps, decoded RGBA snapshots and
+  allocator-specific smooth-scale results through RAII; failed smooth decodes
+  no longer render partially initialized image data.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.

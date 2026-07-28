@@ -25,6 +25,8 @@
 #include "lvimagedecodercallback.h"
 #include "lvbasedrawbuf.h"
 
+#include <vector>
+
 class LVImageScaledDrawCallback : public LVImageDecoderCallback
 {
 private:
@@ -36,18 +38,18 @@ private:
     int dst_dy;
     int src_dx;
     int src_dy;
-    int * xmap;
-    int * ymap;
+    std::vector<int> xmap;
+    std::vector<int> ymap;
     bool dither;
     bool invert;
     bool smoothscale;
-    lUInt8 * decoded;
+    std::vector<lUInt8> decoded;
     bool isNinePatch;
 public:
-    static int * GenMap( int src_len, int dst_len );
-    static int * GenNinePatchMap( int src_len, int dst_len, int frame1, int frame2);
+    static std::vector<int> GenMap( int src_len, int dst_len );
+    static std::vector<int> GenNinePatchMap( int src_len, int dst_len, int frame1, int frame2);
     LVImageScaledDrawCallback(LVBaseDrawBuf * dstbuf, LVImageSourceRef img, int x, int y, int width, int height, bool dith, bool inv, bool smooth );
-    virtual ~LVImageScaledDrawCallback();
+    virtual ~LVImageScaledDrawCallback() = default;
     virtual void OnStartDecode( LVImageSource * );
     virtual bool OnLineDecoded( LVImageSource *, int y, lUInt32 * data );
     virtual void OnEndDecode( LVImageSource * obj, bool );

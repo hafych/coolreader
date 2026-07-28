@@ -45,6 +45,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.cpp" XPM_IMAGE_SOU
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.h" XPM_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.cpp" UNPACKED_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.h" UNPACKED_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.cpp" SCALED_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.h" SCALED_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.cpp" ZIP_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.h" ZIP_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREAM_SOURCE)
@@ -854,6 +856,71 @@ forbid_source_text(
   "${IMAGE_FACTORY_SOURCE}"
   "LVUnpackedImgSource * img"
   "unpacked image construction must not use implicit raw ownership"
+)
+require_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "std::vector<int> xmap"
+  "scaled-image horizontal maps must use RAII ownership"
+)
+require_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "std::vector<int> ymap"
+  "scaled-image vertical maps must use RAII ownership"
+)
+require_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "std::vector<lUInt8> decoded"
+  "smooth-scaling decoded snapshots must use RAII ownership"
+)
+require_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "static std::vector<int> GenNinePatchMap"
+  "nine-patch map construction must transfer container ownership"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "std::unique_ptr<lUInt8, SmoothScaledBufferDeleter> scaled"
+  "smooth-scale results must have scoped ownership"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "if ( errors || !smoothscale )"
+  "failed image decodes must not render partial smooth-scale snapshots"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "int * xmap"
+  "scaled-image callback must not own a raw horizontal map"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "int * ymap"
+  "scaled-image callback must not own a raw vertical map"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "lUInt8 * decoded"
+  "scaled-image callback must not own a raw decoded snapshot"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "new int["
+  "scaled-image maps must remain container-managed"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "new lUInt8["
+  "smooth-scaling snapshots must remain container-managed"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "delete []"
+  "scaled-image teardown must remain automatic"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "free(sdata)"
+  "smooth-scale result cleanup must remain scope-bound"
 )
 
 # --- TCR decoder dictionary, index and decoded buffers ---

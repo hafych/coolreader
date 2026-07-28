@@ -96,6 +96,12 @@ teardown also closes the legacy 16-bit leak caused by checking the unrelated
 through `std::unique_ptr`; a failed source decode releases the partial pixel
 snapshot and returns the original source instead of publishing invalid data.
 
+`LVImageScaledDrawCallback` owns nearest-neighbor and nine-patch coordinate
+maps plus its full smooth-scaling RGBA snapshot through `std::vector`. The
+allocator-specific result returned by `qSmoothScaleImage()` is held by a
+scoped `std::unique_ptr` with the matching platform deleter. A failed decode
+does not run the smooth post-processing pass over a partial snapshot.
+
 The ZIP decoder owns persistent inflate buffers and CRC scratch storage through
 `std::vector`; fallback CRC calculation uses a position guard and supports
 archives whose header omits the checksum. `LVCachedStream` owns cache slots as
