@@ -22,6 +22,8 @@
 #define __LVCACHEDSTREAM_H_INCLUDED__
 
 #include "lvnamedstream.h"
+#include <memory>
+#include <vector>
 
 class LVCachedStream : public LVNamedStream
 {
@@ -46,7 +48,7 @@ private:
     int m_bufSize;
     lvsize_t    m_size;
     lvpos_t     m_pos;
-    BufItem * * m_buf;
+    std::vector<std::unique_ptr<BufItem>> m_buf;
     BufItem *   m_head;
     BufItem *   m_tail;
     int         m_bufItems;

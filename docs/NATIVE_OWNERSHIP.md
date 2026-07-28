@@ -73,3 +73,10 @@ rows, use standard containers. `LVDrawBufImgSource` keeps a non-owning
 compatibility view and, only when requested by its legacy factory, a
 `std::unique_ptr` owner. Invalid XPM construction releases partially parsed
 rows without depending on dimensions that were reset after the error.
+
+The ZIP decoder owns persistent inflate buffers and CRC scratch storage through
+`std::vector`; fallback CRC calculation uses a position guard and supports
+archives whose header omits the checksum. `LVCachedStream` owns cache slots as
+`std::unique_ptr<BufItem>` values inside a vector while its LRU links remain
+non-owning views. Slot eviction transfers ownership instead of deleting and
+reallocating nodes.

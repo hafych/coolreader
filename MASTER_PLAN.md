@@ -115,8 +115,9 @@ DRM или ограничений доступа, подбор/получени�
   опасные raw pointers/ручные пары acquire-release на RAII.
   Выполнено: ownership для hyphenation/text-language/font-manager; временные
   буферы INI, cache-file, SVG/GIF/XPM/image rows, encoding autodetect и parser
-  format detection; parser selection, draw-buffer source и draw mark list.
-  Остальные участки мигрируются отдельными bounded-пакетами.
+  format detection; parser selection, draw-buffer source, ZIP decoder,
+  cached-stream slots и draw mark list. Остальные участки мигрируются
+  отдельными bounded-пакетами.
 - [-] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

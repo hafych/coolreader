@@ -154,6 +154,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   draw mark collection and SVG/GIF/XPM image decoding now use scoped RAII
   ownership instead of manual temporary-buffer cleanup; encoding probes also
   restore stream position on every exit.
+- ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
+  ownership; missing-checksum CRC fallback restores the caller's stream
+  position, and cache eviction transfers slot ownership safely.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

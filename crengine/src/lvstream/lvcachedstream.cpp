@@ -21,12 +21,15 @@
 #include "lvcachedstream.h"
 
 #include <stdio.h>
+#include <utility>
+#include <vector>
 
 LVCachedStream::BufItem *LVCachedStream::addNewItem(int start)
 {
     //
     int index = (start >> CACHE_BUF_BLOCK_SHIFT);
-    BufItem * item = new BufItem();
+    std::unique_ptr<BufItem> itemOwner = std::make_unique<BufItem>();
+    BufItem * item = itemOwner.get();
     if (!m_head)
     {
         m_head = m_tail = item;
@@ -42,7 +45,7 @@ LVCachedStream::BufItem *LVCachedStream::addNewItem(int start)
     if ( start + sz > (int)m_size )
         sz = (int)(m_size - start);
     item->size = sz;
-    m_buf[ index ] = item;
+    m_buf[index] = std::move(itemOwner);
     m_bufLen++;
     assert( !(m_head && !m_tail) );
     return item;
@@ -50,7 +53,7 @@ LVCachedStream::BufItem *LVCachedStream::addNewItem(int start)
 
 void LVCachedStream::moveToTop(int index)
 {
-    BufItem * item = m_buf[index];
+    BufItem * item = m_buf[index].get();
     if ( !item || m_head == item )
         return;
     if ( m_tail == item )
@@ -73,10 +76,10 @@ LVCachedStream::BufItem *LVCachedStream::reuseItem(int start)
     if (m_tail->prev)
         m_tail->prev->next = NULL;
     m_tail = m_tail->prev;
-    BufItem * item = m_buf[rem_index];
-    m_buf[ rem_index ] = NULL;
+    std::unique_ptr<BufItem> itemOwner = std::move(m_buf[rem_index]);
+    BufItem * item = itemOwner.get();
     int index = (start >> CACHE_BUF_BLOCK_SHIFT);
-    m_buf[ index ] = item;
+    m_buf[index] = std::move(itemOwner);
     item->start = start;
     int sz = CACHE_BUF_BLOCK_SIZE;
     if ( start + sz > (int)m_size )
@@ -152,20 +155,11 @@ LVCachedStream::LVCachedStream(LVStreamRef stream, int bufSize) : m_stream(strea
     m_bufSize = (bufSize + CACHE_BUF_BLOCK_SIZE - 1) >> CACHE_BUF_BLOCK_SHIFT;
     if (m_bufSize<3)
         m_bufSize = 3;
-    m_buf = new BufItem* [m_bufItems]();
+    m_buf.resize(m_bufItems);
     SetName( stream->GetName() );
 }
 
-LVCachedStream::~LVCachedStream()
-{
-    if (m_buf)
-    {
-        for (int i=0; i<m_bufItems; i++)
-            if (m_buf[i])
-                delete m_buf[i];
-        delete[] m_buf;
-    }
-}
+LVCachedStream::~LVCachedStream() = default;
 
 lverror_t LVCachedStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t *newPos)
 {
@@ -207,7 +201,7 @@ lverror_t LVCachedStream::Read(void *buf, lvsize_t size, lvsize_t *pBytesRead)
     int extraItems = (m_bufSize - count); // max move backward
     if (extraItems<0)
         extraItems = 0;
-    char * flags = new char[ count ]();
+    std::vector<char> flags(count);
     
     //if ( m_stream
     int start = (int)m_pos;
@@ -217,7 +211,7 @@ lverror_t LVCachedStream::Read(void *buf, lvsize_t size, lvsize_t *pBytesRead)
     int istart = start & (CACHE_BUF_BLOCK_SIZE - 1);
     for ( i=startIndex; i<=endIndex; i++ )
     {
-        BufItem * item = m_buf[i];
+        BufItem * item = m_buf[i].get();
         if (item)
         {
             int isz = item->size - istart;
@@ -260,7 +254,7 @@ lverror_t LVCachedStream::Read(void *buf, lvsize_t size, lvsize_t *pBytesRead)
                 }
                 flgFirstNE = false;
             }
-            BufItem * item = m_buf[i];
+            BufItem * item = m_buf[i].get();
             int isz = item->size - istart;
             if (isz > dstsz)
                 isz = dstsz;
@@ -270,8 +264,6 @@ lverror_t LVCachedStream::Read(void *buf, lvsize_t size, lvsize_t *pBytesRead)
         dstsz -= CACHE_BUF_BLOCK_SIZE - istart;
         istart = 0;
     }
-    delete[] flags;
-    
     lvsize_t bytesRead = size;
     if ( m_pos + size > m_size )
         bytesRead = m_size - m_pos;

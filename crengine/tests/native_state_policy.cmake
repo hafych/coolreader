@@ -34,6 +34,10 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.h" DRAWBUF_IMAGE
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdummyimagesource.h" DUMMY_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.cpp" XPM_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.h" XPM_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.cpp" ZIP_STREAM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.h" ZIP_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREAM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.h" CACHED_STREAM_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -546,6 +550,78 @@ forbid_source_text(
   "${XPM_IMAGE_SOURCE}"
   "new lUInt32"
   "XPM source must not use owning palette/output arrays"
+)
+
+# --- ZIP decoder and cached stream buffers ---
+require_source_text(
+  "${ZIP_STREAM_HEADER}"
+  "std::vector<lUInt8> m_inbuf"
+  "ZIP decoder input buffer must use RAII ownership"
+)
+require_source_text(
+  "${ZIP_STREAM_HEADER}"
+  "std::vector<lUInt8> m_outbuf"
+  "ZIP decoder output buffer must use RAII ownership"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "LVZipStreamPositionGuard positionGuard"
+  "ZIP CRC fallback must restore stream position with a scope guard"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "std::vector<lUInt8> tmp_buff"
+  "ZIP CRC scratch buffer must use RAII ownership"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "m_originalCRC != 0 && m_CRC != m_originalCRC"
+  "ZIP streams with a missing CRC must allow fallback calculation"
+)
+forbid_source_text(
+  "${ZIP_STREAM_HEADER}"
+  "lUInt8 *    m_inbuf"
+  "ZIP decoder must not own a raw input buffer"
+)
+forbid_source_text(
+  "${ZIP_STREAM_HEADER}"
+  "lUInt8 *    m_outbuf"
+  "ZIP decoder must not own a raw output buffer"
+)
+forbid_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "malloc(ARC_OUTBUF_SIZE)"
+  "ZIP CRC scratch allocation must not regress to malloc"
+)
+require_source_text(
+  "${CACHED_STREAM_HEADER}"
+  "std::vector<std::unique_ptr<BufItem>> m_buf"
+  "cached stream slots must use RAII ownership"
+)
+require_source_text(
+  "${CACHED_STREAM_SOURCE}"
+  "std::unique_ptr<BufItem> itemOwner"
+  "cached stream item creation/reuse must transfer explicit ownership"
+)
+require_source_text(
+  "${CACHED_STREAM_SOURCE}"
+  "std::vector<char> flags"
+  "cached stream read flags must use RAII ownership"
+)
+forbid_source_text(
+  "${CACHED_STREAM_HEADER}"
+  "BufItem * * m_buf"
+  "cached stream must not own a raw pointer array"
+)
+forbid_source_text(
+  "${CACHED_STREAM_SOURCE}"
+  "new BufItem*"
+  "cached stream slot allocation must not regress to new[]"
+)
+forbid_source_text(
+  "${CACHED_STREAM_SOURCE}"
+  "delete[] flags"
+  "cached stream scratch cleanup must remain automatic"
 )
 
 # --- lvstring: string literal interning tables ---

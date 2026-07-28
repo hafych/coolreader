@@ -33,6 +33,7 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include <zlib.h>
 
 static int fail(const char *message) {
     std::fprintf(stderr, "%s\n", message);
@@ -1284,6 +1285,148 @@ static std::vector<unsigned char> buildStoredZip(
     return bytes;
 }
 
+static std::vector<unsigned char> deflateRaw(
+        const std::vector<unsigned char> &payload) {
+    z_stream stream = {};
+    if (deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+            -MAX_WBITS, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+        return {};
+
+    std::vector<unsigned char> compressed(compressBound(payload.size()));
+    stream.next_in = const_cast<Bytef *>(payload.data());
+    stream.avail_in = static_cast<uInt>(payload.size());
+    stream.next_out = compressed.data();
+    stream.avail_out = static_cast<uInt>(compressed.size());
+    const int result = deflate(&stream, Z_FINISH);
+    const std::size_t compressedSize = stream.total_out;
+    deflateEnd(&stream);
+    if (result != Z_STREAM_END)
+        return {};
+    compressed.resize(compressedSize);
+    return compressed;
+}
+
+static std::vector<unsigned char> buildDeflatedZip(
+        const std::string &name, const std::vector<unsigned char> &payload,
+        bool storeCrc) {
+    const std::vector<unsigned char> compressed = deflateRaw(payload);
+    if (compressed.empty())
+        return {};
+    const std::uint32_t checksum = storeCrc
+            ? static_cast<std::uint32_t>(
+                    ::crc32(0, payload.data(), payload.size()))
+            : 0;
+
+    std::vector<unsigned char> bytes;
+    appendLe32(bytes, 0x04034b50);
+    appendLe16(bytes, 20);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 8);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe32(bytes, checksum);
+    appendLe32(bytes, static_cast<std::uint32_t>(compressed.size()));
+    appendLe32(bytes, static_cast<std::uint32_t>(payload.size()));
+    appendLe16(bytes, static_cast<std::uint16_t>(name.size()));
+    appendLe16(bytes, 0);
+    bytes.insert(bytes.end(), name.begin(), name.end());
+    bytes.insert(bytes.end(), compressed.begin(), compressed.end());
+
+    const std::uint32_t centralOffset =
+            static_cast<std::uint32_t>(bytes.size());
+    appendLe32(bytes, 0x02014b50);
+    appendLe16(bytes, 20);
+    appendLe16(bytes, 20);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 8);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe32(bytes, checksum);
+    appendLe32(bytes, static_cast<std::uint32_t>(compressed.size()));
+    appendLe32(bytes, static_cast<std::uint32_t>(payload.size()));
+    appendLe16(bytes, static_cast<std::uint16_t>(name.size()));
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe32(bytes, 0);
+    appendLe32(bytes, 0);
+    bytes.insert(bytes.end(), name.begin(), name.end());
+
+    const std::uint32_t centralSize =
+            static_cast<std::uint32_t>(bytes.size()) - centralOffset;
+    appendLe32(bytes, 0x06054b50);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 1);
+    appendLe16(bytes, 1);
+    appendLe32(bytes, centralSize);
+    appendLe32(bytes, centralOffset);
+    appendLe16(bytes, 0);
+    return bytes;
+}
+
+static bool verifyStreamRange(LVStreamRef stream,
+        const std::vector<unsigned char> &expected,
+        std::size_t offset, std::size_t count) {
+    if (stream->SetPos(offset) != offset)
+        return false;
+    std::vector<unsigned char> actual(count);
+    lvsize_t bytesRead = 0;
+    if (stream->Read(actual.data(), count, &bytesRead) != LVERR_OK
+            || bytesRead != count)
+        return false;
+    for (std::size_t i = 0; i < count; ++i) {
+        if (actual[i] != expected[offset + i])
+            return false;
+    }
+    return true;
+}
+
+static int testStreamBufferOwnership() {
+    std::vector<unsigned char> payload(5 * 4096 + 731);
+    for (std::size_t i = 0; i < payload.size(); ++i)
+        payload[i] = static_cast<unsigned char>((i * 37 + 11) % 251);
+
+    LVStreamRef source = LVCreateMemoryStream(
+            payload.data(), static_cast<int>(payload.size()),
+            true, LVOM_READ);
+    LVStreamRef cached = LVCreateBufferedStream(source, 3 * 4096);
+    if (cached.isNull()
+            || !verifyStreamRange(cached, payload, 0, 5000)
+            || !verifyStreamRange(cached, payload, 2 * 4096 + 17, 9000)
+            || !verifyStreamRange(cached, payload, 101, 6000))
+        return fail("cached stream failed block reuse across RAII slots");
+
+    const std::string entryName("payload.bin");
+    std::vector<unsigned char> zipBytes =
+            buildDeflatedZip(entryName, payload, false);
+    if (zipBytes.empty())
+        return fail("deflated ZIP fixture could not be built");
+    LVContainerRef archive = LVOpenArchieve(LVCreateMemoryStream(
+            zipBytes.data(), static_cast<int>(zipBytes.size()),
+            true, LVOM_READ));
+    if (archive.isNull())
+        return fail("deflated ZIP fixture did not open");
+    LVStreamRef decoded = archive->OpenStream(
+            Utf8ToUnicode(lString8(entryName.c_str())).c_str(), LVOM_READ);
+    if (decoded.isNull() || !verifyStreamRange(
+            decoded, payload, 7000, 321))
+        return fail("ZIP decoder failed its multi-buffer fixture");
+
+    const lvpos_t savedPosition = decoded->GetPos();
+    lUInt32 checksum = 0;
+    const lUInt32 expectedChecksum = lStr_crc32(
+            0, payload.data(), static_cast<int>(payload.size()));
+    if (decoded->getcrc32(checksum) != LVERR_OK
+            || checksum != expectedChecksum
+            || decoded->GetPos() != savedPosition)
+        return fail("ZIP CRC fallback did not restore stream position");
+    if (!verifyStreamRange(decoded, payload, savedPosition, 4096))
+        return fail("ZIP decoder could not continue after CRC fallback");
+    return 0;
+}
+
 static bool zipOpens(const std::vector<ZipEntrySpec> &entries) {
     std::vector<unsigned char> bytes = buildHeaderOnlyZip(entries);
     LVStreamRef stream = LVCreateMemoryStream(
@@ -1559,6 +1702,8 @@ int main() {
         return 1;
 #endif
     if (testImageSourceOwnership() != 0)
+        return 1;
+    if (testStreamBufferOwnership() != 0)
         return 1;
     if (testZipArchiveBudgets() != 0)
         return 1;

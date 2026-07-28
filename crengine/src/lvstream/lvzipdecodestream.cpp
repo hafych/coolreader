@@ -34,27 +34,45 @@
 #define ARC_INBUF_SIZE  5000
 #define ARC_OUTBUF_SIZE 10000
 
+namespace {
+
+class LVZipStreamPositionGuard {
+private:
+    LVZipDecodeStream *m_stream;
+    lvpos_t m_position;
+
+public:
+    explicit LVZipStreamPositionGuard(LVZipDecodeStream *stream)
+        : m_stream(stream), m_position(stream->GetPos())
+    {
+    }
+
+    ~LVZipStreamPositionGuard()
+    {
+        m_stream->Seek(m_position, LVSEEK_SET, NULL);
+    }
+
+    LVZipStreamPositionGuard(const LVZipStreamPositionGuard &) = delete;
+    LVZipStreamPositionGuard &operator=(
+            const LVZipStreamPositionGuard &) = delete;
+};
+
+} // namespace
 
 LVZipDecodeStream::LVZipDecodeStream(LVStreamRef stream, lvsize_t /*start*/,
                                      lvsize_t packsize, lvsize_t unpacksize,
                                      lUInt32 crc, unsigned containerDepth)
     : m_stream(stream), m_packsize(packsize), m_unpacksize(unpacksize),
       m_inbytesleft(0), m_outbytesleft(0), m_zInitialized(false), m_decodedpos(0),
-      m_inbuf(NULL), m_outbuf(NULL), m_CRC(0), m_originalCRC(crc), m_decodedCRC(0),
-      m_containerDepth(containerDepth)
+      m_inbuf(ARC_INBUF_SIZE), m_outbuf(ARC_OUTBUF_SIZE), m_CRC(0),
+      m_originalCRC(crc), m_decodedCRC(0), m_containerDepth(containerDepth)
 {
-    m_inbuf = new lUInt8[ARC_INBUF_SIZE];
-    m_outbuf = new lUInt8[ARC_OUTBUF_SIZE];
     rewind();
 }
 
 LVZipDecodeStream::~LVZipDecodeStream()
 {
     zUninit();
-    if (m_inbuf)
-        delete[] m_inbuf;
-    if (m_outbuf)
-        delete[] m_outbuf;
 }
 
 void LVZipDecodeStream::zUninit()
@@ -69,13 +87,14 @@ int LVZipDecodeStream::fillInBuf()
 {
     if (m_zstream.avail_in < ARC_INBUF_SIZE / 4 && m_inbytesleft > 0)
     {
-        int inpos = (int)(m_zstream.next_in ? (m_zstream.next_in - m_inbuf) : 0);
+        int inpos = (int)(m_zstream.next_in
+                ? (m_zstream.next_in - m_inbuf.data()) : 0);
         if ( inpos > ARC_INBUF_SIZE/2 )
         {
             // move rest of data to beginning of buffer
             for ( int i=0; i<(int)m_zstream.avail_in; i++)
                 m_inbuf[i] = m_inbuf[ i+inpos ];
-            m_zstream.next_in = m_inbuf;
+            m_zstream.next_in = m_inbuf.data();
             inpos = 0;
         }
         int tailpos = inpos + m_zstream.avail_in;
@@ -85,20 +104,22 @@ int LVZipDecodeStream::fillInBuf()
         if (bytes_to_read > 0)
         {
             lvsize_t bytesRead = 0;
-            if ( m_stream->Read( m_inbuf + tailpos, bytes_to_read, &bytesRead ) != LVERR_OK )
+            if ( m_stream->Read( m_inbuf.data() + tailpos,
+                    bytes_to_read, &bytesRead ) != LVERR_OK )
             {
                 // read error
                 m_zstream.avail_in = 0;
                 return -1;
             }
-            m_CRC = lStr_crc32( m_CRC, m_inbuf + tailpos, (int)(bytesRead) );
+            m_CRC = lStr_crc32( m_CRC, m_inbuf.data() + tailpos,
+                    (int)(bytesRead) );
             m_zstream.avail_in += (int)bytesRead;
             m_inbytesleft -= bytesRead;
         }
         else
         {
             //check CRC
-            if ( m_CRC != m_originalCRC ) {
+            if ( m_originalCRC != 0 && m_CRC != m_originalCRC ) {
                 CRLog::error("ZIP stream '%s': CRC doesn't match", LCSTR(lString32(GetName())) );
                 return -1; // CRC error
             }
@@ -117,11 +138,11 @@ bool LVZipDecodeStream::rewind()
     memset( &m_zstream, 0, sizeof(m_zstream) );
     // inbuf
     m_inbytesleft = m_packsize;
-    m_zstream.next_in = m_inbuf;
+    m_zstream.next_in = m_inbuf.data();
     m_zstream.avail_in = 0;
     fillInBuf();
     // outbuf
-    m_zstream.next_out = m_outbuf;
+    m_zstream.next_out = m_outbuf.data();
     m_zstream.avail_out = ARC_OUTBUF_SIZE;
     m_decodedpos = 0;
     m_outbytesleft = m_unpacksize;
@@ -147,7 +168,7 @@ int LVZipDecodeStream::decodeNext()
     if (m_decodedpos > ARC_OUTBUF_SIZE/2 || (m_zstream.avail_out < ARC_OUTBUF_SIZE / 4 && m_outbytesleft > 0) )
     {
         
-        int outpos = (int)(m_zstream.next_out - m_outbuf);
+        int outpos = (int)(m_zstream.next_out - m_outbuf.data());
         if ( m_decodedpos > ARC_OUTBUF_SIZE/2 || outpos > ARC_OUTBUF_SIZE*2/4 || m_zstream.avail_out==0 || m_inbytesleft==0 )
         {
             // move rest of data to beginning of buffer
@@ -228,7 +249,7 @@ int LVZipDecodeStream::read(lUInt8 *buf, int bytesToRead)
         
         
         // copy data
-        lUInt8 * src = m_outbuf + m_decodedpos;
+        lUInt8 * src = m_outbuf.data() + m_decodedpos;
         for (int i=delta; i>0; --i)
             *buf++ = *src++;
         
@@ -249,23 +270,18 @@ lverror_t LVZipDecodeStream::getcrc32(lUInt32 &dst)
         if (m_decodedCRC != 0)
             dst = m_decodedCRC;
         else {
-            lUInt8* tmp_buff = (lUInt8*)malloc(ARC_OUTBUF_SIZE);
-            if (!tmp_buff) {
-                dst = 0;
-                return LVERR_FAIL;
-            }
-            lvpos_t curr_pos;
-            Seek(0, LVSEEK_CUR, &curr_pos);
+            LVZipStreamPositionGuard positionGuard(this);
+            std::vector<lUInt8> tmp_buff(ARC_OUTBUF_SIZE);
             Seek(0, LVSEEK_SET, 0);
             lvsize_t bytesRead = 0;
-            while (Read(tmp_buff, ARC_OUTBUF_SIZE, &bytesRead) == LVERR_OK) {
+            while (Read(tmp_buff.data(), ARC_OUTBUF_SIZE,
+                    &bytesRead) == LVERR_OK) {
                 if (bytesRead > 0)
-                    m_decodedCRC = lStr_crc32(m_decodedCRC, tmp_buff, bytesRead);
+                    m_decodedCRC = lStr_crc32(m_decodedCRC,
+                            tmp_buff.data(), bytesRead);
                 else
                     break;
             }
-            free(tmp_buff);
-            Seek((lvoffset_t)curr_pos, LVSEEK_SET, 0);
             dst = m_decodedCRC;
         }
     }

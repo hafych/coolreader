@@ -29,6 +29,7 @@
 #include "lvnamedstream.h"
 
 #include <zlib.h>
+#include <vector>
 
 class LVZipDecodeStream : public LVNamedStream
 {
@@ -41,8 +42,8 @@ private:
     lvpos_t     m_outbytesleft;
     bool        m_zInitialized;
     int         m_decodedpos;
-    lUInt8 *    m_inbuf;
-    lUInt8 *    m_outbuf;
+    std::vector<lUInt8> m_inbuf;
+    std::vector<lUInt8> m_outbuf;
     lUInt32     m_CRC;
     lUInt32     m_originalCRC;
     lUInt32     m_decodedCRC;
@@ -71,7 +72,7 @@ private:
     // returns count of available decoded bytes in buffer
     inline int getAvailBytes()
     {
-        return (int)(m_zstream.next_out - m_outbuf - m_decodedpos);
+        return (int)(m_zstream.next_out - m_outbuf.data() - m_decodedpos);
     }
     /// decode next portion of data, returns number of decoded bytes available, -1 if error
     int decodeNext();
