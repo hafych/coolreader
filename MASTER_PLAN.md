@@ -132,7 +132,8 @@ DRM или ограничений доступа, подбор/получени�
   buckets, bounded custom string-chunk и DOM block-pool slice/size-class
   owners, DOM name/id owner/index storage, generic hash-table buckets/chains,
   generic value-array, transactional reference adoption/clone, reference-vector,
-  owning/borrowed pointer-vector and contiguous matrix-cell storage,
+  transactional owning/borrowed pointer-vector adoption/storage and
+  contiguous matrix-cell storage,
   pagination compact arrays/line-link lists,
   Word/PDB transient import buffers/factory candidates, cache-file ZSTD/zlib
   contexts/chunk output/block scratch, scoped live-block candidates and

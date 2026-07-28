@@ -357,13 +357,17 @@ objects instead of writing into `malloc` bytes, and erase clears inactive slots
 immediately. Its public icon/battery-facing API remains unchanged.
 
 `LVPtrVector` keeps its contiguous compatibility slots in `vector<T*>`.
-`ownItems=true` remains an owning adoption contract: replacement, erase and
-clear move each slot through a local `unique_ptr` before destruction, while
-`remove()` and `pop()` clear the inactive slot and transfer the raw pointer to
-their caller. Owning copies build all clones under temporary `unique_ptr`
-guards before publishing them and preserve null gaps. `ownItems=false` copies
-only borrowed views and never deletes them. Typed `std::sort` replaces the
-erased `qsort` bridge while `get()` retains the legacy contiguous view.
+`insert()` and `set()` create a compile-time-selected adoption guard before
+validating indices or growing slot storage: the owning specialization holds a
+`unique_ptr`, while the borrowed specialization keeps a non-owning view. A
+rejected owning operation therefore deletes its unpublished candidate; a
+rejected borrowed operation leaves the viewed object with its caller.
+Replacement, erase and clear move each owned slot through a local `unique_ptr`
+before destruction, while `remove()` and `pop()` clear the inactive slot and
+transfer the raw pointer to their caller. Owning copies build all clones under
+temporary `unique_ptr` guards before publishing them and preserve null gaps.
+Typed `std::sort` replaces the erased `qsort` bridge while `get()` retains the
+legacy contiguous view.
 
 `LVMatrix` owns one contiguous `vector<T>` instead of a manually allocated
 row table. `SetSize()` rejects invalid or oversized dimensions, constructs and

@@ -3211,6 +3211,31 @@ require_source_text(
 )
 require_source_text(
   "${PTR_VECTOR_HEADER}"
+  "using AdoptionCandidate = typename std::conditional<"
+  "pointer-vector adoption must select ownership at compile time"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "ownItems, std::unique_ptr<T>, BorrowedCandidate>::type"
+  "owning pointer-vector candidates must enter scoped ownership"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "AdoptionCandidate candidate(item)"
+  "pointer-vector insert and set must guard candidates before validation or growth"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "_list[index] = candidate.release()"
+  "pointer-vector set must publish only after reserve succeeds"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "_list[pos] = candidate.release()"
+  "pointer-vector insert must publish only after growth succeeds"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
   "std::vector<std::unique_ptr<T> > owners"
   "owning pointer-vector copies must scope partial clones"
 )
@@ -3239,10 +3264,30 @@ require_source_text(
   "void swap(LVPtrVector &vector) noexcept"
   "pointer-vector ownership must support no-throw transactional publication"
 )
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "owning pointer vector leaked rejected adoption candidates"
+  "owning pointer-vector rejection must retain candidate cleanup coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "borrowed pointer vector consumed a rejected view"
+  "borrowed pointer-vector rejection must retain non-owning coverage"
+)
 forbid_source_text(
   "${PTR_VECTOR_HEADER}"
   "T * * _list"
   "pointer vectors must not own a raw slot array"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "_list[index] = item"
+  "pointer-vector set must not bypass its adoption guard"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "_list[pos] = item"
+  "pointer-vector insert must not bypass its adoption guard"
 )
 forbid_source_text(
   "${PTR_VECTOR_HEADER}"

@@ -3716,6 +3716,21 @@ static int testPointerVectorOwnership() {
     if (PointerVectorTestValue::liveCount() != 0)
         return fail("pointer vector fixture started with live values");
     {
+        LVPtrVector<PointerVectorTestValue> rejected;
+        bool rejectedSetThrew = false;
+        try {
+            rejected.set(std::numeric_limits<int>::max(),
+                    new PointerVectorTestValue(99));
+        } catch (const std::length_error &) {
+            rejectedSetThrew = true;
+        }
+        rejected.set(-1, new PointerVectorTestValue(98));
+        if (!rejectedSetThrew || !rejected.empty()
+                || PointerVectorTestValue::liveCount() != 0)
+            return fail("owning pointer vector leaked rejected adoption candidates");
+    }
+
+    {
         LVPtrVector<PointerVectorTestValue> source;
         source.add(new PointerVectorTestValue(1));
         source.add(new PointerVectorTestValue(2));
@@ -3825,9 +3840,24 @@ static int testPointerVectorOwnership() {
     {
         PointerVectorTestValue *first = new PointerVectorTestValue(11);
         PointerVectorTestValue *second = new PointerVectorTestValue(12);
+        PointerVectorTestValue *rejected =
+                new PointerVectorTestValue(13);
         LVPtrVector<PointerVectorTestValue, false> views;
         views.add(first);
         views.set(2, second);
+        bool rejectedSetThrew = false;
+        try {
+            views.set(std::numeric_limits<int>::max(), rejected);
+        } catch (const std::length_error &) {
+            rejectedSetThrew = true;
+        }
+        if (!rejectedSetThrew
+                || PointerVectorTestValue::liveCount() != 3) {
+            delete rejected;
+            delete first;
+            delete second;
+            return fail("borrowed pointer vector consumed a rejected view");
+        }
         PointerVectorTestValue::resetCopies();
         PointerVectorTestValue::setCopyBudget(0);
         LVPtrVector<PointerVectorTestValue, false> copiedViews(views);
@@ -3840,8 +3870,9 @@ static int testPointerVectorOwnership() {
         views.erase(0, 1);
         views.clear();
         copiedViews.clear();
-        if (PointerVectorTestValue::liveCount() != 2)
+        if (PointerVectorTestValue::liveCount() != 3)
             return fail("borrowed pointer vector deleted a viewed item");
+        delete rejected;
         delete first;
         delete second;
     }

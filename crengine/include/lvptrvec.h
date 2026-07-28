@@ -38,6 +38,7 @@
 #include <climits>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -52,6 +53,21 @@ class LVPtrVector
     int _size;
     int _count;
     LVPtrVector &operator=(const LVPtrVector &) = delete;
+
+    class BorrowedCandidate {
+        T *_item;
+    public:
+        explicit BorrowedCandidate(T *item) : _item(item) {}
+        T *release() noexcept
+        {
+            T *item = _item;
+            _item = NULL;
+            return item;
+        }
+    };
+
+    using AdoptionCandidate = typename std::conditional<
+            ownItems, std::unique_ptr<T>, BorrowedCandidate>::type;
 
     void discardSlot(int index)
     {
@@ -95,18 +111,20 @@ public:
     /// sets item by index (extends vector if necessary)
     void set( int index, T * item )
     {
+        AdoptionCandidate candidate(item);
         if (index < 0)
             return;
         if (index == INT_MAX)
             throw std::length_error("LVPtrVector index overflow");
         reserve(index + 1);
         if (_list[index] == item) {
+            candidate.release();
             if (_count <= index)
                 _count = index + 1;
             return;
         }
         discardSlot(index);
-        _list[index] = item;
+        _list[index] = candidate.release();
         if (_count <= index)
             _count = index + 1;
     }
@@ -206,6 +224,7 @@ public:
     /// inserts new item to specified position
     void insert( int pos, T * item )
     {
+        AdoptionCandidate candidate(item);
         if (pos<0 || pos>_count)
             pos = _count;
         if (_count == INT_MAX)
@@ -222,7 +241,7 @@ public:
         }
         for (int i=_count; i>pos; --i)
             _list[i] = _list[i-1];
-        _list[pos] = item;
+        _list[pos] = candidate.release();
         _count++;
     }
     /// move item to specified position, other items will be shifted
