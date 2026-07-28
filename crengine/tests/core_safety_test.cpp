@@ -1,4 +1,5 @@
 #include "chmfmt.h"
+#include "crtxtenc.h"
 #include "lvstreamutils.h"
 #include "lvstreamfragment.h"
 #include "lvarray.h"
@@ -2902,6 +2903,42 @@ static int testXPointerStateOwnership() {
 static int testDoubleCharStatOwnership() {
     if (!LVRunDoubleCharStatOwnershipRegression())
         return fail("double-character statistic ownership regression failed");
+    return 0;
+}
+
+static int testEncodingStatsFileOwnership() {
+    char inputPath[] = "/tmp/coolreader-encoding-stats-XXXXXX";
+    int input = mkstemp(inputPath);
+    if (input < 0)
+        return fail("encoding stats owner fixture could not create input");
+    static const char payload[] =
+            "<html><body>Ownership statistics input.</body></html>";
+    if (write(input, payload, sizeof(payload) - 1)
+            != static_cast<ssize_t>(sizeof(payload) - 1)) {
+        close(input);
+        unlink(inputPath);
+        return fail("encoding stats owner fixture could not write input");
+    }
+    close(input);
+
+    std::unique_ptr<FILE, decltype(&fclose)> output(tmpfile(), &fclose);
+    if (!output) {
+        unlink(inputPath);
+        return fail("encoding stats owner fixture could not create output");
+    }
+    lString8 list;
+    MakeStatsForFile(
+            inputPath, "utf8", "en", 7, output.get(), list);
+    unlink(inputPath);
+
+    if (list.pos("ch_stat_utf8_en7") < 0
+            || list.pos("dbl_ch_stat_utf8_en7") < 0)
+        return fail("encoding stats scoped owners lost list output");
+    if (fflush(output.get()) != 0
+            || fseek(output.get(), 0, SEEK_END) != 0
+            || ftell(output.get()) <= 0) {
+        return fail("encoding stats scoped owners lost generated output");
+    }
     return 0;
 }
 
@@ -6793,6 +6830,8 @@ int main() {
     if (testXPointerStateOwnership() != 0)
         return 1;
     if (testDoubleCharStatOwnership() != 0)
+        return 1;
+    if (testEncodingStatsFileOwnership() != 0)
         return 1;
     if (testWolBufferOwnership() != 0)
         return 1;

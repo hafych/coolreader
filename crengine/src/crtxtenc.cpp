@@ -30,6 +30,7 @@
 #include <stdio.h>
 
 #include <array>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -1937,23 +1938,31 @@ bool hasXmlTags(const lUInt8 * buf, int size) {
 
 void MakeStatsForFile( const char * fname, const char * cp_name, const char * lang_name, int index, FILE * f, lString8 & list )
 {
-   FILE * in = fopen( fname, "rb" );
+   std::unique_ptr<FILE, decltype(&fclose)> in(
+           fopen(fname, "rb"), &fclose);
    if (!in)
       return;
-   fseek( in, 0, SEEK_END );
-   size_t buf_size = ftell(in);
-   fseek( in, 0, SEEK_SET );
-   unsigned char * buf = new unsigned char[buf_size];
-   if ( fread(buf, 1, buf_size, in) != buf_size ) {
-      fclose(in);
-       delete[] buf;
+   if (fseek(in.get(), 0, SEEK_END) != 0)
+      return;
+   const long file_size = ftell(in.get());
+   if (file_size < 0
+           || file_size > std::numeric_limits<int>::max()
+           || fseek(in.get(), 0, SEEK_SET) != 0) {
       return;
    }
+   const int buf_size = static_cast<int>(file_size);
+   std::vector<unsigned char> buf(
+           static_cast<std::size_t>(buf_size));
+   if (buf_size > 0
+           && fread(buf.data(), 1, buf.size(), in.get()) != buf.size())
+      return;
    short char_stat[256] = { 0 };
    dbl_char_stat_t dbl_char_stat[DBL_CHAR_STAT_SIZE];
-   bool skipHtml = hasXmlTags(buf, buf_size);
-   MakeCharStat(buf, buf_size, char_stat, skipHtml);
-   MakeDblCharStat(buf, buf_size, dbl_char_stat, DBL_CHAR_STAT_SIZE, skipHtml);
+   bool skipHtml = hasXmlTags(buf.data(), buf_size);
+   MakeCharStat(buf.data(), buf_size, char_stat, skipHtml);
+   MakeDblCharStat(
+           buf.data(), buf_size, dbl_char_stat,
+           DBL_CHAR_STAT_SIZE, skipHtml);
    fprintf(f, "\n\nstatic const short ch_stat_%s_%s%d[256]={\n", cp_name, lang_name, index);
    int i;
    for (i=0; i<16; i++)
@@ -1978,6 +1987,4 @@ void MakeStatsForFile( const char * fname, const char * cp_name, const char * la
    snprintf(str, sizeof(str), "{ch_stat_%s_%s%d,dbl_ch_stat_%s_%s%d,\"%s\",\"%s\"}, \n", cp_name, lang_name, index, cp_name, lang_name, index, cp_name, lang_name );
    list += str;
    fprintf(f, "};\n\n" );
-   delete [] buf;
-   fclose(in);
 }

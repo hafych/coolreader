@@ -80,6 +80,11 @@ recursive manual deletion are gone. The live collector cannot be copied, and
 reset releases every allocated row while restoring both counters so the same
 object can run another collection cycle. Native regression coverage verifies
 scaled output, complete row teardown and successful reuse after reset.
+The offline statistic generator likewise owns its input `FILE` with a scoped
+closer and its complete input bytes with a vector. Seek/read failures unwind
+both resources uniformly, and files larger than the downstream `int` size
+contract are rejected before allocation. Native coverage generates both table
+output and the matching registry entry from a temporary HTML fixture.
 
 The shared file-parser read window and text-parser charset conversion table are
 owned by `std::vector`. Parser subclasses use indexed access or temporary

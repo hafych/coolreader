@@ -1585,6 +1585,43 @@ forbid_source_text(
   "encoding statistic output teardown must remain automatic"
 )
 
+# --- encoding statistic source-file ownership ---
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "std::unique_ptr<FILE, decltype(&fclose)> in("
+  "encoding statistic input files must enter scoped ownership"
+)
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "std::vector<unsigned char> buf("
+  "encoding statistic input bytes must use scoped container storage"
+)
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "file_size > std::numeric_limits<int>::max()"
+  "encoding statistic input must respect its analyzer size contract"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "encoding stats scoped owners lost generated output"
+  "encoding statistic file ownership must retain native output coverage"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "new unsigned char[buf_size]"
+  "encoding statistic input bytes must not use manual array ownership"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "delete [] buf"
+  "encoding statistic input teardown must remain automatic"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "fclose(in)"
+  "encoding statistic input file teardown must remain automatic"
+)
+
 # --- plain-text line queue owners and parser borrow ---
 require_source_text(
   "${TEXT_LINE_QUEUE_HEADER}"
