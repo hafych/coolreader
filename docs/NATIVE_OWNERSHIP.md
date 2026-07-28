@@ -177,6 +177,18 @@ allocator-specific result returned by `qSmoothScaleImage()` is held by a
 scoped `std::unique_ptr` with the matching platform deleter. A failed decode
 does not run the smooth post-processing pass over a partial snapshot.
 
+`LVColorDrawBuf` and `LVGrayDrawBuf` keep their public raw scanline API as a
+non-owning view, while directly allocated pixel backing lives in a private
+`std::vector`. Windows DIB backing retains its handle representation but is
+replaced transactionally under scoped candidate-handle guards. External-buffer
+constructors explicitly mark borrowed storage, and copying or moving either
+wrapper is disabled. A resize, rotation or bitmap conversion first builds a
+checked, bounded candidate and publishes it only after allocation succeeds;
+operations that detach from borrowed memory never release the caller's buffer.
+The color buffer retains its legacy borrowed-resize no-op contract. Gray
+buffers include the diagnostic guard byte inside their owned vector, including
+every converted bitmap row.
+
 WOL writing stages TOC records, page pixels, cover pixels and LZSS output in
 scoped vectors. Image-size arithmetic is checked against a 64 MiB decoded
 limit, the compressor reports output overflow, and its required trailing byte

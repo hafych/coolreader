@@ -31,6 +31,7 @@
 #define __LVCOLORDRAWBUF_H_INCLUDED__
 
 #include "lvbasedrawbuf.h"
+#include <vector>
 
 /// 16/32-bit RGB buffer
 class LVColorDrawBuf : public LVBaseDrawBuf
@@ -41,7 +42,8 @@ private:
     HBITMAP _drawbmp;
 #endif
     int _bpp;
-    bool _ownData;
+    std::vector<lUInt8> _ownedData;
+    bool _isBorrowed;
 public:
     /// rotates buffer contents by specified angle
     virtual void Rotate( cr_rotate_angle_t angle );
@@ -88,6 +90,10 @@ public:
     LVColorDrawBuf(int dx, int dy, lUInt8 * externalBuffer, int bpp=32 );
     /// destructor
     virtual ~LVColorDrawBuf();
+    LVColorDrawBuf(const LVColorDrawBuf &) = delete;
+    LVColorDrawBuf & operator=(const LVColorDrawBuf &) = delete;
+    LVColorDrawBuf(LVColorDrawBuf &&) = delete;
+    LVColorDrawBuf & operator=(LVColorDrawBuf &&) = delete;
     /// convert to 1-bit bitmap
     void ConvertToBitmap(bool flgDither);
     /// draw line

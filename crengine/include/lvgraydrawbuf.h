@@ -25,6 +25,7 @@
 #define __LVGRAYDRAWBUF_H_INCLUDED__
 
 #include "lvbasedrawbuf.h"
+#include <vector>
 
 /**
  * Gray bitmap buffer, partial support for 1-bit buffer
@@ -40,7 +41,8 @@ class LVGrayDrawBuf : public LVBaseDrawBuf
 {
 private:
     int _bpp;
-    bool _ownData;
+    std::vector<lUInt8> _ownedData;
+    bool _isBorrowed;
 public:
     /// rotates buffer contents by specified angle
     virtual void Rotate( cr_rotate_angle_t angle );
@@ -84,6 +86,10 @@ public:
     LVGrayDrawBuf(int dx, int dy, int bpp=2, void * auxdata = NULL );
     /// destructor
     virtual ~LVGrayDrawBuf();
+    LVGrayDrawBuf(const LVGrayDrawBuf &) = delete;
+    LVGrayDrawBuf & operator=(const LVGrayDrawBuf &) = delete;
+    LVGrayDrawBuf(LVGrayDrawBuf &&) = delete;
+    LVGrayDrawBuf & operator=(LVGrayDrawBuf &&) = delete;
     /// convert to 1-bit bitmap
     void ConvertToBitmap(bool flgDither);
     virtual void DrawLine(int x0, int y0, int x1, int y1, lUInt32 color0,int length1,int length2,int direction=0);

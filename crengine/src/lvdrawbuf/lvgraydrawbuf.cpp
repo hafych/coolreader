@@ -31,8 +31,56 @@
 #include "lvcolordrawbuf.h"
 #endif
 
-#include <stdlib.h>
+#include <limits>
+#include <stdexcept>
 #include <string.h>
+#include <vector>
+
+namespace {
+
+static const std::size_t DRAW_BUFFER_MAX_BYTES =
+        static_cast<std::size_t>(512) * 1024 * 1024;
+
+struct GrayBufferLayout {
+    int width;
+    int height;
+    int rowSize;
+    std::size_t payloadBytes;
+    std::size_t storageBytes;
+};
+
+static GrayBufferLayout getGrayBufferLayout(
+        int width, int height, int bitsPerPixel)
+{
+    if (width < 0 || height < 0)
+        throw std::length_error("negative gray draw-buffer size");
+    if (bitsPerPixel != 1 && bitsPerPixel != 2
+            && bitsPerPixel != 3 && bitsPerPixel != 4
+            && bitsPerPixel != 8)
+        throw std::invalid_argument(
+                "gray draw buffer supports only 1, 2, 3, 4 or 8 bpp");
+    if (width == 0 || height == 0)
+        return GrayBufferLayout{0, 0, 0, 0, 0};
+
+    const std::size_t pixelWidth = static_cast<std::size_t>(width);
+    const std::size_t rowSize = bitsPerPixel <= 2
+            ? (pixelWidth * static_cast<std::size_t>(bitsPerPixel) + 7) / 8
+            : pixelWidth;
+    if (rowSize > static_cast<std::size_t>(
+                std::numeric_limits<int>::max())
+            || static_cast<std::size_t>(height)
+                > (DRAW_BUFFER_MAX_BYTES - 1) / rowSize)
+        throw std::length_error("gray draw buffer is too large");
+    const std::size_t payloadBytes =
+            rowSize * static_cast<std::size_t>(height);
+    if (payloadBytes >= DRAW_BUFFER_MAX_BYTES)
+        throw std::length_error("gray draw buffer is too large");
+    return GrayBufferLayout{
+            width, height, static_cast<int>(rowSize),
+            payloadBytes, payloadBytes + 1};
+}
+
+} // namespace
 
 #define INVERT_PRSERVE_GRAYS
 
@@ -332,6 +380,8 @@ void LVGrayDrawBuf::Rotate( cr_rotate_angle_t angle )
 {
     if ( angle==CR_ROTATE_ANGLE_0 )
         return;
+    if (!_data || _dx <= 0 || _dy <= 0)
+        return;
     int sz = (_rowsize * _dy);
     if ( angle==CR_ROTATE_ANGLE_180 ) {
         if ( _bpp==DRAW_BUF_1_BPP ) {
@@ -356,9 +406,10 @@ void LVGrayDrawBuf::Rotate( cr_rotate_angle_t angle )
         }
         return;
     }
-    int newrowsize = _bpp<=2 ? (_dy * _bpp + 7) / 8 : _dy;
-    sz = (newrowsize * _dx);
-    lUInt8 * dst = (lUInt8 *)calloc(sz, sizeof(*dst));
+    const GrayBufferLayout layout =
+            getGrayBufferLayout(_dy, _dx, _bpp);
+    std::vector<lUInt8> rotated(layout.storageBytes, 0);
+    lUInt8 * dst = rotated.data();
     for ( int y=0; y<_dy; y++ ) {
         lUInt8 * src = _data + _rowsize*y;
         int dstx, dsty;
@@ -372,24 +423,25 @@ void LVGrayDrawBuf::Rotate( cr_rotate_angle_t angle )
             }
             if ( _bpp==DRAW_BUF_1_BPP ) {
                 lUInt8 px = (src[ x >> 3 ] << (x&7)) & 0x80;
-                lUInt8 * dstrow = dst + newrowsize * dsty;
+                lUInt8 * dstrow = dst + layout.rowSize * dsty;
                 dstrow[ dstx >> 3 ] |= (px >> (dstx&7));
             } else if (_bpp==DRAW_BUF_2_BPP ) {
                 lUInt8 px = (src[ x >> 2 ] << ((x&3)<<1)) & 0xC0;
-                lUInt8 * dstrow = dst + newrowsize * dsty;
+                lUInt8 * dstrow = dst + layout.rowSize * dsty;
                 dstrow[ dstx >> 2 ] |= (px >> ((dstx&3)<<1));
             } else { // DRAW_BUF_3_BPP, DRAW_BUF_4_BPP, DRAW_BUF_8_BPP
-                lUInt8 * dstrow = dst + newrowsize * dsty;
+                lUInt8 * dstrow = dst + layout.rowSize * dsty;
                 dstrow[ dstx ] = src[ x ];
             }
         }
     }
-    free( _data );
-    _data = dst;
-    int tmp = _dx;
-    _dx = _dy;
-    _dy = tmp;
-    _rowsize = newrowsize;
+    rotated[layout.payloadBytes] = GUARD_BYTE;
+    _ownedData.swap(rotated);
+    _data = _ownedData.data();
+    _isBorrowed = false;
+    _dx = layout.width;
+    _dy = layout.height;
+    _rowsize = layout.rowSize;
 }
 
 void LVGrayDrawBuf::Draw( LVImageSourceRef img, int x, int y, int width, int height, bool /*dither*/ )
@@ -595,23 +647,19 @@ void LVGrayDrawBuf::InvertRect(int x0, int y0, int x1, int y1)
 }
 void LVGrayDrawBuf::Resize( int dx, int dy )
 {
-    if (!_ownData) {
-        _data = NULL;
-        _ownData = false;
-    } else if (_data) {
-    	CHECK_GUARD_BYTE;
-        free(_data);
-        _data = NULL;
-	}
-    _dx = dx;
-    _dy = dy;
-    _rowsize = _bpp<=2 ? (_dx * _bpp + 7) / 8 : _dx;
-    if (dx > 0 && dy > 0) {
-        _data = (unsigned char *)calloc(_rowsize * _dy + 1, sizeof(*_data));
-        _data[_rowsize * _dy] = GUARD_BYTE;
-    } else {
-        Clear(0);
-    }
+    if (!_isBorrowed)
+        CHECK_GUARD_BYTE;
+    const GrayBufferLayout layout =
+            getGrayBufferLayout(dx, dy, _bpp);
+    std::vector<lUInt8> candidate(layout.storageBytes, 0);
+    if (layout.storageBytes > 0)
+        candidate[layout.payloadBytes] = GUARD_BYTE;
+    _ownedData.swap(candidate);
+    _data = _ownedData.empty() ? NULL : _ownedData.data();
+    _isBorrowed = false;
+    _dx = layout.width;
+    _dy = layout.height;
+    _rowsize = layout.rowSize;
     SetClipRect( NULL );
 }
 
@@ -641,22 +689,24 @@ lUInt32 LVGrayDrawBuf::GetBlackColor() const
 }
 
 LVGrayDrawBuf::LVGrayDrawBuf(int dx, int dy, int bpp, void * auxdata )
-    : LVBaseDrawBuf(), _bpp(bpp), _ownData(true)
+    : LVBaseDrawBuf(), _bpp(bpp), _isBorrowed(auxdata != NULL)
 {
-    _dx = dx;
-    _dy = dy;
-    _bpp = bpp;
-    _rowsize = (bpp<=2) ? (_dx * _bpp + 7) / 8 : _dx;
+    const GrayBufferLayout layout =
+            getGrayBufferLayout(dx, dy, _bpp);
+    _dx = layout.width;
+    _dy = layout.height;
+    _rowsize = layout.rowSize;
 
     _backgroundColor = GetWhiteColor(); // NOLINT: Call to virtual function during construction
     _textColor = GetBlackColor();       // NOLINT
 
     if ( auxdata ) {
-        _data = (lUInt8 *) auxdata;
-        _ownData = false;
-    } else if (_dx && _dy) {
-        _data = (lUInt8 *) calloc(_rowsize * _dy + 1, sizeof(*_data));
-        _data[_rowsize * _dy] = GUARD_BYTE;
+        _data = layout.payloadBytes == 0
+                ? NULL : static_cast<lUInt8 *>(auxdata);
+    } else if (layout.storageBytes > 0) {
+        _ownedData.assign(layout.storageBytes, 0);
+        _ownedData[layout.payloadBytes] = GUARD_BYTE;
+        _data = _ownedData.data();
     }
     SetClipRect( NULL );
     CHECK_GUARD_BYTE;
@@ -664,10 +714,8 @@ LVGrayDrawBuf::LVGrayDrawBuf(int dx, int dy, int bpp, void * auxdata )
 
 LVGrayDrawBuf::~LVGrayDrawBuf()
 {
-    if (_data && _ownData ) {
-    	CHECK_GUARD_BYTE;
-    	free( _data );
-    }
+    CHECK_GUARD_BYTE;
+    _data = NULL;
 }
 
 void LVGrayDrawBuf::DrawLine(int x0, int y0, int x1, int y1, lUInt32 color0,int length1,int length2,int direction)
@@ -852,8 +900,9 @@ void LVGrayDrawBuf::ConvertToBitmap(bool flgDither)
     if (_bpp==1)
         return;
     // TODO: implement for byte per pixel mode
-    int sz = GetRowSize();
-    lUInt8 * bitmap = (lUInt8*) calloc(sz, sizeof(*bitmap));
+    const GrayBufferLayout layout =
+            getGrayBufferLayout(_dx, _dy, 1);
+    std::vector<lUInt8> bitmap(layout.storageBytes, 0);
     if (flgDither)
     {
         static const lUInt8 cmap[4][4] = {
@@ -865,7 +914,7 @@ void LVGrayDrawBuf::ConvertToBitmap(bool flgDither)
         for (int y=0; y<_dy; y++)
         {
             lUInt8 * src = GetScanLine(y);
-            lUInt8 * dst = bitmap + ((_dx+7)/8)*y;
+            lUInt8 * dst = bitmap.data() + layout.rowSize*y;
             for (int x=0; x<_dx; x++) {
                 int cl = (src[x>>2] >> (6-((x&3)*2)))&3;
                 cl = cmap[cl][ (x&1) + ((y&1)<<1) ];
@@ -879,7 +928,7 @@ void LVGrayDrawBuf::ConvertToBitmap(bool flgDither)
         for (int y=0; y<_dy; y++)
         {
             lUInt8 * src = GetScanLine(y);
-            lUInt8 * dst = bitmap + ((_dx+7)/8)*y;
+            lUInt8 * dst = bitmap.data() + layout.rowSize*y;
             for (int x=0; x<_dx; x++) {
                 int cl = (src[x>>2] >> (7-((x&3)*2)))&1;
                 if (cl)
@@ -887,10 +936,13 @@ void LVGrayDrawBuf::ConvertToBitmap(bool flgDither)
             }
         }
     }
-    free( _data );
-    _data = bitmap;
+    if (layout.storageBytes > 0)
+        bitmap[layout.payloadBytes] = GUARD_BYTE;
+    _ownedData.swap(bitmap);
+    _data = _ownedData.empty() ? NULL : _ownedData.data();
+    _isBorrowed = false;
     _bpp = 1;
-    _rowsize = (_dx+7)/8;
+    _rowsize = layout.rowSize;
 	CHECK_GUARD_BYTE;
 }
 
@@ -1480,7 +1532,7 @@ void LVGrayDrawBuf::DrawRescaled(LVDrawBuf * src, int x, int y, int dx, int dy, 
                 }
 #if 1
             	{
-            		if (_ownData && _data[_rowsize * _dy] != GUARD_BYTE) {
+				if (!_isBorrowed && _data[_rowsize * _dy] != GUARD_BYTE) {
             			CRLog::error("lin interpolation, corrupted buffer, yy=%d of %d", yy, dy);
             			crFatalError(-5, "corrupted bitmap buffer");
             		}
@@ -1530,7 +1582,7 @@ void LVGrayDrawBuf::DrawRescaled(LVDrawBuf * src, int x, int y, int dx, int dy, 
                 }
 #if 1
                 {
-            		if (_ownData && _data[_rowsize * _dy] != GUARD_BYTE) {
+				if (!_isBorrowed && _data[_rowsize * _dy] != GUARD_BYTE) {
             			CRLog::error("area avg, corrupted buffer, yy=%d of %d", yy, dy);
             			crFatalError(-5, "corrupted bitmap buffer");
             		}

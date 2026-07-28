@@ -74,6 +74,11 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.cpp" UNPACKED_I
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.h" UNPACKED_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.cpp" SCALED_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.h" SCALED_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvcolordrawbuf.cpp" COLOR_DRAW_BUFFER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvcolordrawbuf.h" COLOR_DRAW_BUFFER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvgraydrawbuf.cpp" GRAY_DRAW_BUFFER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvgraydrawbuf.h" GRAY_DRAW_BUFFER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/tests/core_safety_test.cpp" CORE_SAFETY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.cpp" ZIP_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.h" ZIP_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREAM_SOURCE)
@@ -1346,6 +1351,81 @@ forbid_source_text(
   "free(sdata)"
   "smooth-scale result cleanup must remain scope-bound"
 )
+
+# --- color/gray draw-buffer pixel backing ---
+foreach(DRAW_BUFFER_HEADER
+    "${COLOR_DRAW_BUFFER_HEADER}"
+    "${GRAY_DRAW_BUFFER_HEADER}")
+  require_source_text(
+    "${DRAW_BUFFER_HEADER}"
+    "std::vector<lUInt8> _ownedData"
+    "draw-buffer pixel storage must have a scoped owner"
+  )
+  require_source_text(
+    "${DRAW_BUFFER_HEADER}"
+    "bool _isBorrowed"
+    "draw-buffer raw scanline views must identify borrowed storage"
+  )
+  forbid_source_text(
+    "${DRAW_BUFFER_HEADER}"
+    "_ownData"
+    "draw-buffer ownership must not regress to an owning boolean"
+  )
+endforeach()
+require_source_text(
+  "${COLOR_DRAW_BUFFER_HEADER}"
+  "LVColorDrawBuf(const LVColorDrawBuf &) = delete"
+  "color draw-buffer views must not be shallow-copied"
+)
+require_source_text(
+  "${GRAY_DRAW_BUFFER_HEADER}"
+  "LVGrayDrawBuf(const LVGrayDrawBuf &) = delete"
+  "gray draw-buffer views must not be shallow-copied"
+)
+require_source_text(
+  "${COLOR_DRAW_BUFFER_SOURCE}"
+  "getColorBufferLayout"
+  "color draw-buffer allocation must use checked layouts"
+)
+require_source_text(
+  "${GRAY_DRAW_BUFFER_SOURCE}"
+  "getGrayBufferLayout"
+  "gray draw-buffer allocation must use checked layouts"
+)
+require_source_text(
+  "${GRAY_DRAW_BUFFER_SOURCE}"
+  "bitmap(layout.storageBytes, 0)"
+  "gray bitmap conversion must allocate every output row plus its guard"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "testDrawBufferStorageOwnership"
+  "draw-buffer ownership must retain native regression coverage"
+)
+foreach(DRAW_BUFFER_SOURCE
+    "${COLOR_DRAW_BUFFER_SOURCE}"
+    "${GRAY_DRAW_BUFFER_SOURCE}")
+  forbid_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "malloc("
+    "draw-buffer pixel allocation must remain container-managed"
+  )
+  forbid_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "calloc("
+    "draw-buffer pixel allocation must remain container-managed"
+  )
+  forbid_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "free("
+    "draw-buffer pixel teardown must remain automatic"
+  )
+  forbid_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "_ownData"
+    "draw-buffer ownership must not regress to manual state"
+  )
+endforeach()
 
 # --- WOL image/TOC buffers and reader result ownership ---
 require_source_text(

@@ -59,6 +59,7 @@
 #include <cstring>
 #include <cstdint>
 #include <fcntl.h>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -3226,6 +3227,147 @@ static int testGifDecoderOwnership() {
 }
 #endif
 
+static int testDrawBufferStorageOwnership() {
+    LVColorDrawBuf ownedColor(3, 2, 32);
+    lUInt32 colorValue = 1;
+    for (int y = 0; y < ownedColor.GetHeight(); ++y) {
+        lUInt32 *row = reinterpret_cast<lUInt32 *>(
+                ownedColor.GetScanLine(y));
+        for (int x = 0; x < ownedColor.GetWidth(); ++x)
+            row[x] = colorValue++;
+    }
+    lUInt8 *ownedColorData = ownedColor.GetScanLine(0);
+    bool colorResizeRejected = false;
+    try {
+        ownedColor.Resize(
+                std::numeric_limits<int>::max(),
+                std::numeric_limits<int>::max());
+    } catch (const std::length_error &) {
+        colorResizeRejected = true;
+    }
+    if (!colorResizeRejected
+            || ownedColor.GetWidth() != 3
+            || ownedColor.GetHeight() != 2
+            || ownedColor.GetRowSize() != 12
+            || ownedColor.GetScanLine(0) != ownedColorData)
+        return fail("color draw-buffer resize did not roll back");
+    ownedColor.Rotate(CR_ROTATE_ANGLE_90);
+    if (ownedColor.GetWidth() != 2
+            || ownedColor.GetHeight() != 3
+            || ownedColor.GetRowSize() != 8)
+        return fail("owned color draw-buffer rotation lost its layout");
+    std::vector<lUInt32> rotatedColor;
+    for (int y = 0; y < ownedColor.GetHeight(); ++y) {
+        lUInt32 *row = reinterpret_cast<lUInt32 *>(
+                ownedColor.GetScanLine(y));
+        rotatedColor.insert(
+                rotatedColor.end(), row, row + ownedColor.GetWidth());
+    }
+    std::sort(rotatedColor.begin(), rotatedColor.end());
+    if (rotatedColor != std::vector<lUInt32>({1, 2, 3, 4, 5, 6}))
+        return fail("owned color draw-buffer rotation lost pixels");
+
+    lUInt32 externalColor[] = {11, 12, 13, 14, 15, 16};
+    lUInt32 externalColorCopy[6];
+    std::memcpy(
+            externalColorCopy, externalColor, sizeof(externalColor));
+    LVColorDrawBuf borrowedColor(
+            3, 2, reinterpret_cast<lUInt8 *>(externalColor), 32);
+    borrowedColor.Resize(4, 4);
+    if (borrowedColor.GetWidth() != 3
+            || borrowedColor.GetHeight() != 2
+            || borrowedColor.GetScanLine(0)
+                != reinterpret_cast<lUInt8 *>(externalColor))
+        return fail("borrowed color draw-buffer changed its resize contract");
+    borrowedColor.Rotate(CR_ROTATE_ANGLE_90);
+    if (borrowedColor.GetWidth() != 2
+            || borrowedColor.GetHeight() != 3
+            || borrowedColor.GetScanLine(0)
+                == reinterpret_cast<lUInt8 *>(externalColor)
+            || std::memcmp(
+                    externalColorCopy, externalColor,
+                    sizeof(externalColor)) != 0)
+        return fail("color draw-buffer did not detach borrowed storage");
+
+    LVGrayDrawBuf ownedGray(5, 3, 2);
+    ownedGray.GetScanLine(0)[0] = 0xFF;
+    ownedGray.GetScanLine(0)[1] = 0xFF;
+    ownedGray.GetScanLine(1)[0] = 0x00;
+    ownedGray.GetScanLine(1)[1] = 0x00;
+    ownedGray.GetScanLine(2)[0] = 0xAA;
+    ownedGray.GetScanLine(2)[1] = 0xAA;
+    ownedGray.ConvertToBitmap(false);
+    if (ownedGray.GetBitsPerPixel() != 1
+            || ownedGray.GetRowSize() != 1
+            || ownedGray.GetScanLine(0)[0] != 0xF8
+            || ownedGray.GetScanLine(1)[0] != 0x00
+            || ownedGray.GetScanLine(2)[0] != 0xF8)
+        return fail("gray bitmap conversion lost row storage");
+    ownedGray.Rotate(CR_ROTATE_ANGLE_90);
+    if (ownedGray.GetWidth() != 3
+            || ownedGray.GetHeight() != 5
+            || ownedGray.GetRowSize() != 1)
+        return fail("owned gray draw-buffer rotation lost its layout");
+    lUInt8 *ownedGrayData = ownedGray.GetScanLine(0);
+    bool grayResizeRejected = false;
+    try {
+        ownedGray.Resize(
+                std::numeric_limits<int>::max(),
+                std::numeric_limits<int>::max());
+    } catch (const std::length_error &) {
+        grayResizeRejected = true;
+    }
+    if (!grayResizeRejected
+            || ownedGray.GetWidth() != 3
+            || ownedGray.GetHeight() != 5
+            || ownedGray.GetScanLine(0) != ownedGrayData)
+        return fail("gray draw-buffer resize did not roll back");
+
+    lUInt8 externalGray[] = {
+        0xFF, 0xFF, 0x00, 0x00, 0xAA, 0xAA};
+    lUInt8 externalGrayCopy[sizeof(externalGray)];
+    std::memcpy(externalGrayCopy, externalGray, sizeof(externalGray));
+    LVGrayDrawBuf borrowedGray(5, 3, 2, externalGray);
+    borrowedGray.ConvertToBitmap(false);
+    if (borrowedGray.GetBitsPerPixel() != 1
+            || borrowedGray.GetRowSize() != 1
+            || borrowedGray.GetScanLine(0) == externalGray
+            || std::memcmp(
+                    externalGrayCopy, externalGray,
+                    sizeof(externalGray)) != 0)
+        return fail("gray conversion did not detach borrowed storage");
+
+    LVGrayDrawBuf rotatedBorrowedGray(5, 3, 2, externalGray);
+    rotatedBorrowedGray.Rotate(CR_ROTATE_ANGLE_90);
+    if (rotatedBorrowedGray.GetWidth() != 3
+            || rotatedBorrowedGray.GetHeight() != 5
+            || rotatedBorrowedGray.GetRowSize() != 1
+            || rotatedBorrowedGray.GetScanLine(0) == externalGray
+            || std::memcmp(
+                    externalGrayCopy, externalGray,
+                    sizeof(externalGray)) != 0)
+        return fail("gray rotation did not detach borrowed storage");
+
+    lUInt8 resizedExternalGray[] = {
+        0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+    lUInt8 resizedExternalGrayCopy[sizeof(resizedExternalGray)];
+    std::memcpy(
+            resizedExternalGrayCopy, resizedExternalGray,
+            sizeof(resizedExternalGray));
+    LVGrayDrawBuf resizedBorrowedGray(
+            5, 3, 2, resizedExternalGray);
+    resizedBorrowedGray.Resize(4, 4);
+    if (resizedBorrowedGray.GetWidth() != 4
+            || resizedBorrowedGray.GetHeight() != 4
+            || resizedBorrowedGray.GetRowSize() != 1
+            || resizedBorrowedGray.GetScanLine(0) == resizedExternalGray
+            || std::memcmp(
+                    resizedExternalGrayCopy, resizedExternalGray,
+                    sizeof(resizedExternalGray)) != 0)
+        return fail("gray resize did not detach borrowed storage");
+    return 0;
+}
+
 class CountingColorDrawBuf : public LVColorDrawBuf {
 private:
     int &m_destroyed;
@@ -4698,6 +4840,8 @@ int main() {
     if (testGifDecoderOwnership() != 0)
         return 1;
 #endif
+    if (testDrawBufferStorageOwnership() != 0)
+        return 1;
     if (testImageSourceOwnership() != 0)
         return 1;
     if (testMemoryStreamOwnership() != 0)

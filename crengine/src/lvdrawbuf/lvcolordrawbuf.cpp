@@ -27,6 +27,103 @@
 #include "lvimagescaleddrawcallback.h"
 #include "lvdrawbuf_utils.h"
 
+#include <limits>
+#include <new>
+#include <stdexcept>
+#include <vector>
+
+namespace {
+
+static const std::size_t DRAW_BUFFER_MAX_BYTES =
+        static_cast<std::size_t>(512) * 1024 * 1024;
+
+struct ColorBufferLayout {
+    int width;
+    int height;
+    int rowSize;
+    std::size_t byteCount;
+};
+
+static ColorBufferLayout getColorBufferLayout(
+        int width, int height, int bitsPerPixel)
+{
+    if (width < 0 || height < 0)
+        throw std::length_error("negative color draw-buffer size");
+    if (bitsPerPixel != 16 && bitsPerPixel != 32)
+        throw std::invalid_argument(
+                "color draw buffer supports only 16 or 32 bpp");
+    if (width == 0 || height == 0)
+        return ColorBufferLayout{0, 0, 0, 0};
+
+    const std::size_t bytesPerPixel =
+            static_cast<std::size_t>(bitsPerPixel >> 3);
+    const std::size_t rowSize =
+            static_cast<std::size_t>(width) * bytesPerPixel;
+    if (rowSize > static_cast<std::size_t>(
+                std::numeric_limits<int>::max())
+            || static_cast<std::size_t>(height)
+                > DRAW_BUFFER_MAX_BYTES / rowSize)
+        throw std::length_error("color draw buffer is too large");
+    const std::size_t byteCount =
+            rowSize * static_cast<std::size_t>(height);
+    if (byteCount > DRAW_BUFFER_MAX_BYTES)
+        throw std::length_error("color draw buffer is too large");
+    return ColorBufferLayout{
+            width, height, static_cast<int>(rowSize), byteCount};
+}
+
+#if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
+class ScopedBitmap {
+    HBITMAP m_value;
+public:
+    explicit ScopedBitmap(HBITMAP value = NULL)
+        : m_value(value) {}
+    ~ScopedBitmap() {
+        if (m_value)
+            DeleteObject(m_value);
+    }
+    HBITMAP get() const { return m_value; }
+    void reset(HBITMAP value) {
+        if (m_value)
+            DeleteObject(m_value);
+        m_value = value;
+    }
+    HBITMAP release() {
+        HBITMAP value = m_value;
+        m_value = NULL;
+        return value;
+    }
+    ScopedBitmap(const ScopedBitmap &) = delete;
+    ScopedBitmap & operator=(const ScopedBitmap &) = delete;
+};
+
+class ScopedCompatibleDC {
+    HDC m_value;
+public:
+    explicit ScopedCompatibleDC(HDC value = NULL)
+        : m_value(value) {}
+    ~ScopedCompatibleDC() {
+        if (m_value)
+            DeleteDC(m_value);
+    }
+    HDC get() const { return m_value; }
+    void reset(HDC value) {
+        if (m_value)
+            DeleteDC(m_value);
+        m_value = value;
+    }
+    HDC release() {
+        HDC value = m_value;
+        m_value = NULL;
+        return value;
+    }
+    ScopedCompatibleDC(const ScopedCompatibleDC &) = delete;
+    ScopedCompatibleDC & operator=(const ScopedCompatibleDC &) = delete;
+};
+#endif
+
+} // namespace
+
 
 // Blend mono 1-bit bitmap (8 pixels per byte)
 static inline void blendBitmap_monoTo16bpp(LVDrawBuf* d, int x, int y, const lUInt8 * bitmap, int width, int height, int bmp_pitch, lUInt16 color) {
@@ -485,6 +582,8 @@ void LVColorDrawBuf::Rotate( cr_rotate_angle_t angle )
 {
     if ( angle==CR_ROTATE_ANGLE_0 )
         return;
+    if (!_data || _dx <= 0 || _dy <= 0)
+        return;
     if ( _bpp==16 ) {
         int sz = (_dx * _dy);
         if ( angle==CR_ROTATE_ANGLE_180 ) {
@@ -496,9 +595,11 @@ void LVColorDrawBuf::Rotate( cr_rotate_angle_t angle )
             }
             return;
         }
-        int newrowsize = _dy * 2;
-        sz = (_dx * newrowsize);
-        lUInt16 * dst = (lUInt16*) malloc( sz );
+        const ColorBufferLayout layout =
+                getColorBufferLayout(_dy, _dx, _bpp);
+        std::vector<lUInt8> rotated(layout.byteCount, 0);
+        lUInt16 * dst =
+                reinterpret_cast<lUInt16 *>(rotated.data());
 #if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
         bool cw = angle!=CR_ROTATE_ANGLE_90;
 #else
@@ -522,16 +623,21 @@ void LVColorDrawBuf::Rotate( cr_rotate_angle_t angle )
             }
         }
 #if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
-        memcpy( _data, dst, sz );
-        free( dst );
+        if (_drawbmp) {
+            memcpy(_data, rotated.data(), layout.byteCount);
+        } else {
+            _ownedData.swap(rotated);
+            _data = _ownedData.data();
+            _isBorrowed = false;
+        }
 #else
-        free( _data );
-        _data = (lUInt8*)dst;
+        _ownedData.swap(rotated);
+        _data = _ownedData.data();
+        _isBorrowed = false;
 #endif
-        int tmp = _dx;
-        _dx = _dy;
-        _dy = tmp;
-        _rowsize = newrowsize;
+        _dx = layout.width;
+        _dy = layout.height;
+        _rowsize = layout.rowSize;
     } else {
         int sz = (_dx * _dy);
         if ( angle==CR_ROTATE_ANGLE_180 ) {
@@ -543,9 +649,11 @@ void LVColorDrawBuf::Rotate( cr_rotate_angle_t angle )
             }
             return;
         }
-        int newrowsize = _dy * 4;
-        sz = (_dx * newrowsize);
-        lUInt32 * dst = (lUInt32*) malloc( sz );
+        const ColorBufferLayout layout =
+                getColorBufferLayout(_dy, _dx, _bpp);
+        std::vector<lUInt8> rotated(layout.byteCount, 0);
+        lUInt32 * dst =
+                reinterpret_cast<lUInt32 *>(rotated.data());
 #if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
         bool cw = angle!=CR_ROTATE_ANGLE_90;
 #else
@@ -569,16 +677,21 @@ void LVColorDrawBuf::Rotate( cr_rotate_angle_t angle )
             }
         }
 #if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
-        memcpy( _data, dst, sz );
-        free( dst );
+        if (_drawbmp) {
+            memcpy(_data, rotated.data(), layout.byteCount);
+        } else {
+            _ownedData.swap(rotated);
+            _data = _ownedData.data();
+            _isBorrowed = false;
+        }
 #else
-        free( _data );
-        _data = (lUInt8*)dst;
+        _ownedData.swap(rotated);
+        _data = _ownedData.data();
+        _isBorrowed = false;
 #endif
-        int tmp = _dx;
-        _dx = _dy;
-        _dy = tmp;
-        _rowsize = newrowsize;
+        _dx = layout.width;
+        _dy = layout.height;
+        _rowsize = layout.rowSize;
     }
 }
 
@@ -766,41 +879,22 @@ void LVColorDrawBuf::Resize( int dx, int dy )
     	//CRLog::trace("LVColorDrawBuf::Resize : no resize, not changed");
     	return;
     }
-    if ( !_ownData ) {
+    if ( _isBorrowed ) {
     	//CRLog::trace("LVColorDrawBuf::Resize : no resize, own data");
         return;
     }
+    const ColorBufferLayout layout =
+            getColorBufferLayout(dx, dy, _bpp);
     //CRLog::trace("LVColorDrawBuf::Resize : resizing %d x %d to %d x %d", _dx, _dy, dx, dy);
-    // delete old bitmap
-    if ( _dx>0 && _dy>0 && _data )
-    {
 #if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
-        if (_drawbmp)
-            DeleteObject( _drawbmp );
-        if (_drawdc)
-            DeleteObject( _drawdc );
-        _drawbmp = NULL;
-        _drawdc = NULL;
-#else
-        free(_data);
-#endif
-        _data = NULL;
-        _rowsize = 0;
-        _dx = 0;
-        _dy = 0;
-    }
-
-    if (dx>0 && dy>0)
-    {
-        // create new bitmap
-        _dx = dx;
-        _dy = dy;
-        _rowsize = dx*(_bpp>>3);
-#if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
+    ScopedBitmap candidateBitmap;
+    ScopedCompatibleDC candidateDC;
+    lUInt8 * candidateData = NULL;
+    if (layout.byteCount > 0) {
         BITMAPINFO bmi = { 0 };
         bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
-        bmi.bmiHeader.biWidth = _dx;
-        bmi.bmiHeader.biHeight = _dy;
+        bmi.bmiHeader.biWidth = layout.width;
+        bmi.bmiHeader.biHeight = layout.height;
         bmi.bmiHeader.biPlanes = 1;
         bmi.bmiHeader.biBitCount = 32;
         bmi.bmiHeader.biCompression = BI_RGB;
@@ -810,14 +904,34 @@ void LVColorDrawBuf::Resize( int dx, int dy )
         bmi.bmiHeader.biClrUsed = 0;
         bmi.bmiHeader.biClrImportant = 0;
 
-        _drawbmp = CreateDIBSection( NULL, &bmi, DIB_RGB_COLORS, (void**)(&_data), NULL, 0 );
-        _drawdc = CreateCompatibleDC(NULL);
-        SelectObject(_drawdc, _drawbmp);
-        memset( _data, 0, _rowsize * _dy );
-#else
-        _data = (lUInt8 *)calloc((_bpp>>3) * _dx * _dy, sizeof(*_data));
-#endif
+        candidateBitmap.reset(CreateDIBSection(
+                NULL, &bmi, DIB_RGB_COLORS,
+                reinterpret_cast<void **>(&candidateData), NULL, 0));
+        if (!candidateBitmap.get() || !candidateData)
+            throw std::bad_alloc();
+        candidateDC.reset(CreateCompatibleDC(NULL));
+        if (!candidateDC.get())
+            throw std::bad_alloc();
+        SelectObject(candidateDC.get(), candidateBitmap.get());
+        memset(candidateData, 0, layout.byteCount);
     }
+    if (_drawdc)
+        DeleteDC(_drawdc);
+    if (_drawbmp)
+        DeleteObject(_drawbmp);
+    _drawdc = candidateDC.release();
+    _drawbmp = candidateBitmap.release();
+    std::vector<lUInt8> emptyStorage;
+    _ownedData.swap(emptyStorage);
+    _data = candidateData;
+#else
+    std::vector<lUInt8> candidate(layout.byteCount, 0);
+    _ownedData.swap(candidate);
+    _data = _ownedData.empty() ? NULL : _ownedData.data();
+#endif
+    _dx = layout.width;
+    _dy = layout.height;
+    _rowsize = layout.rowSize;
     SetClipRect( NULL );
 }
 
@@ -1342,9 +1456,8 @@ LVColorDrawBuf::LVColorDrawBuf(int dx, int dy, int bpp)
     ,_drawbmp(NULL)
 #endif
     ,_bpp(bpp)
-    ,_ownData(true)
+    ,_isBorrowed(false)
 {
-    _rowsize = dx*(_bpp>>3);
     Resize( dx, dy ); // NOLINT: Call to virtual function during construction
 }
 
@@ -1356,29 +1469,27 @@ LVColorDrawBuf::LVColorDrawBuf(int dx, int dy, lUInt8 * externalBuffer, int bpp 
     ,_drawbmp(NULL)
 #endif
     ,_bpp(bpp)
-    ,_ownData(false)
+    ,_isBorrowed(true)
 {
-    _dx = dx;
-    _dy = dy;
-    _rowsize = dx*(_bpp>>3);
-    _data = externalBuffer;
+    const ColorBufferLayout layout =
+            getColorBufferLayout(dx, dy, _bpp);
+    _dx = layout.width;
+    _dy = layout.height;
+    _rowsize = layout.rowSize;
+    _data = layout.byteCount == 0 ? NULL : externalBuffer;
     SetClipRect( NULL );
 }
 
 /// destructor
 LVColorDrawBuf::~LVColorDrawBuf()
 {
-	if ( !_ownData )
-		return;
 #if !defined(__SYMBIAN32__) && defined(_WIN32) && !defined(QT_GL)
     if (_drawdc)
         DeleteDC(_drawdc);
     if (_drawbmp)
         DeleteObject(_drawbmp);
-#else
-    if (_data)
-        free( _data );
 #endif
+    _data = NULL;
 }
 
 /// convert to 1-bit bitmap

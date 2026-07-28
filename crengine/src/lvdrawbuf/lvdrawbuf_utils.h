@@ -34,7 +34,7 @@
 #define CHECK_GUARD_BYTE \
 	{ \
         if (_bpp != 1 && _bpp != 2 && _bpp !=3 && _bpp != 4 && _bpp != 8 && _bpp != 16 && _bpp != 32) crFatalError(-5, "wrong bpp"); \
-        if (_ownData && _data && _data[_rowsize * _dy] != GUARD_BYTE) crFatalError(-5, "corrupted bitmap buffer"); \
+        if (!_isBorrowed && _data && _data[_rowsize * _dy] != GUARD_BYTE) crFatalError(-5, "corrupted bitmap buffer"); \
     }
 
 inline lUInt32 RevRGB( lUInt32 cl ) {

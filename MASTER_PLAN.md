@@ -115,7 +115,8 @@ DRM или ограничений доступа, подбор/получени�
   опасные raw pointers/ручные пары acquire-release на RAII.
   Выполнено: ownership для hyphenation/text-language/font-manager; временные
   буферы INI, cache-file, SVG/GIF/XPM/image rows, encoding autodetect и parser
-  format detection; parser selection, draw-buffer source, ZIP decoder/entry
+  format detection; parser selection, draw-buffer source и owned/borrowed
+  color/gray pixel backing, ZIP decoder/entry
   factories and bounded stream fragments, cached-stream slots, parser
   read/charset buffers, RTF text/destination
   ownership, TCR dictionary/index/decoded buffers, unpacked 8/16/32-bit pixel
