@@ -2858,6 +2858,47 @@ static int testDomNodePartOwnership() {
     return 0;
 }
 
+static int testXPointerStateOwnership() {
+    ldomXPointer pointer;
+    pointer.setOffset(11);
+    {
+        ldomXPointer alias(pointer);
+        alias.setOffset(22);
+        if (pointer.getOffset() != 22)
+            return fail("XPointer copy lost shared state semantics");
+
+        ldomXPointer assigned;
+        assigned = pointer;
+        assigned.setOffset(33);
+        if (pointer.getOffset() != 33 || alias.getOffset() != 33)
+            return fail("XPointer assignment lost shared state semantics");
+
+        alias.clear();
+        alias.clear();
+        if (alias.getOffset() != 0 || pointer.getOffset() != 33)
+            return fail("XPointer clear did not detach shared state");
+    }
+    if (pointer.getOffset() != 33)
+        return fail("XPointer alias teardown released live shared state");
+
+    std::unique_ptr<ldomXPointer> clone(pointer.clone());
+    clone->setOffset(44);
+    if (pointer.getOffset() != 33 || clone->getOffset() != 44)
+        return fail("XPointer clone did not own an independent state");
+
+    ldomXPointerEx extended(pointer);
+    extended.setOffset(55);
+    if (pointer.getOffset() != 33 || extended.getOffset() != 55)
+        return fail("extended XPointer copy shared base state");
+
+    ldomXPointerEx extendedCopy;
+    extendedCopy = extended;
+    extendedCopy.setOffset(66);
+    if (extended.getOffset() != 55 || extendedCopy.getOffset() != 66)
+        return fail("extended XPointer assignment shared cloned state");
+    return 0;
+}
+
 static int testDoubleCharStatOwnership() {
     if (!LVRunDoubleCharStatOwnershipRegression())
         return fail("double-character statistic ownership regression failed");
@@ -6748,6 +6789,8 @@ int main() {
     if (testDomChunkStorageOwnership() != 0)
         return 1;
     if (testDomNodePartOwnership() != 0)
+        return 1;
+    if (testXPointerStateOwnership() != 0)
         return 1;
     if (testDoubleCharStatOwnership() != 0)
         return 1;

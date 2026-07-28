@@ -6073,3 +6073,70 @@ forbid_source_text(
   "(ch>>9) & 0x1ff"
   "FreeType metric page lookup must not alias high codepoints"
 )
+
+# --- XPointer shared-state ownership ---
+require_source_text(
+  "${DOM_HEADER}"
+  "std::shared_ptr<XPointerData> _data"
+  "XPointer state must use shared RAII ownership"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "ldomXPointer( const ldomXPointer& v ) = default"
+  "ordinary XPointer copies must retain shared-state semantics"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "_data = std::make_shared<XPointerData>();"
+  "XPointer clear must publish a fresh owned state"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "_data = std::make_shared<XPointerData>( *v._data );"
+  "extended XPointer assignment must clone before replacement"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "~ldomXPointer() = default"
+  "XPointer teardown must remain owner-managed"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "XPointer copy lost shared state semantics"
+  "XPointer ownership must retain shared-copy coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "XPointer clear did not detach shared state"
+  "XPointer ownership must retain clear-detach coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "extended XPointer assignment shared cloned state"
+  "XPointer ownership must retain deep-copy coverage"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "int _refCount"
+  "XPointer state must not keep a manual reference count"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "_data->addRef()"
+  "XPointer copies must not manually increment ownership"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "_data->decRef()"
+  "XPointer teardown must not manually decrement ownership"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "delete _data"
+  "XPointer state must not use manual teardown"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "_data = new XPointerData"
+  "XPointer state replacement must remain exception-safe"
+)

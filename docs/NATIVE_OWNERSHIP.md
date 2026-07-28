@@ -687,3 +687,10 @@ candidate before publication; `clear()` and cache destruction release pages
 without manual array teardown. Direct unsigned and signed cache coverage checks
 page boundaries, repeated clear, the last supported codepoint, and verifies
 that unsupported high codepoints cannot alias a lower page.
+
+`ldomXPointer` stores its shared mutable state in `shared_ptr<XPointerData>`.
+Ordinary copies intentionally retain alias semantics, while `clear()` publishes
+a fresh null state and leaves aliases alive. The protected clone boundary,
+`clone()` and `ldomXPointerEx` copies create independent state before replacing
+their current owner. Native coverage preserves shared copy/assignment,
+clear-detach, alias teardown and extended-pointer deep-copy behavior.

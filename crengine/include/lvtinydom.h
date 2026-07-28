@@ -1456,21 +1456,18 @@ protected:
 		ldomDocument * _doc;
 		lInt32 _dataIndex;
 		int _offset;
-		int _refCount;
 	public:
-		inline void addRef() { _refCount++; }
-		inline int decRef() { return --_refCount; }
 		// create empty
-		XPointerData() : _doc(NULL), _dataIndex(0), _offset(0), _refCount(1) { }
+		XPointerData() : _doc(NULL), _dataIndex(0), _offset(0) { }
 		// create instance
         XPointerData( ldomNode * node, int offset )
 			: _doc(node?node->getDocument():NULL)
 			, _dataIndex(node?node->getDataIndex():0)
 			, _offset( offset )
-			, _refCount( 1 )
 		{ }
 		// clone
-		XPointerData( const XPointerData & v )  : _doc(v._doc), _dataIndex(v._dataIndex), _offset(v._offset), _refCount(1) { }
+		XPointerData( const XPointerData & v )
+			: _doc(v._doc), _dataIndex(v._dataIndex), _offset(v._offset) { }
 		inline ldomDocument * getDocument() { return _doc; }
         inline bool operator == (const XPointerData & v) const
 		{
@@ -1495,25 +1492,22 @@ protected:
 		}
 		inline void setOffset( int offset ) { _offset = offset; }
         inline void addOffset( int offset ) { _offset+=offset; }
-        ~XPointerData() { }
 	};
-	XPointerData * _data;
+	std::shared_ptr<XPointerData> _data;
 	/// node pointer
     //ldomNode * _node;
 	/// offset within node for pointer, -1 for xpath
 	//int _offset;
 	// cloning constructor
-	ldomXPointer( const XPointerData * data )
-		: _data( new XPointerData( *data ) )
+	ldomXPointer( const std::shared_ptr<XPointerData> & data )
+		: _data( std::make_shared<XPointerData>( *data ) )
 	{
 	}
 public:
     /// clear pointer (make null)
     void clear()
     {
-        if (_data->decRef() == 0)
-            delete _data;
-        _data = new XPointerData();
+        _data = std::make_shared<XPointerData>();
     }
     /// return document
 	inline ldomDocument * getDocument() { return _data->getDocument(); }
@@ -1533,35 +1527,18 @@ public:
 	inline void setOffset( int offset ) { _data->setOffset( offset ); }
     /// default constructor makes NULL pointer
 	ldomXPointer()
-		: _data( new XPointerData() )
+		: _data( std::make_shared<XPointerData>() )
 	{
 	}
-	/// remove reference
-	~ldomXPointer()
-	{
-		if (_data->decRef() == 0)
-			delete _data;
-	}
+	/// release shared state
+	~ldomXPointer() = default;
     /// copy constructor
-	ldomXPointer( const ldomXPointer& v )
-		: _data(v._data)
-	{
-		_data->addRef();
-	}
+	ldomXPointer( const ldomXPointer& v ) = default;
     /// assignment operator
-	ldomXPointer & operator =( const ldomXPointer& v )
-	{
-		if ( _data==v._data )
-			return *this;
-		if (_data->decRef() == 0)
-			delete _data;
-		_data = v._data;
-		_data->addRef();
-		return *this;
-	}
+	ldomXPointer & operator =( const ldomXPointer& v ) = default;
     /// constructor
     ldomXPointer( ldomNode * node, int offset )
-		: _data( new XPointerData( node, offset ) )
+		: _data( std::make_shared<XPointerData>( node, offset ) )
 	{
 	}
     /// get pointer for relative path
@@ -1697,9 +1674,7 @@ public:
     {
 		if ( _data==v._data )
 			return *this;
-		if (_data->decRef() == 0)
-			delete _data;
-		_data = new XPointerData( *v._data );
+		_data = std::make_shared<XPointerData>( *v._data );
         initIndex();
         return *this;
     }
@@ -1708,9 +1683,7 @@ public:
     {
 		if ( _data==v._data )
 			return *this;
-		if (_data->decRef() == 0)
-			delete _data;
-		_data = new XPointerData( *v._data );
+		_data = std::make_shared<XPointerData>( *v._data );
         _level = v._level;
         for ( int i=0; i<_level; i++ )
             _indexes[ i ] = v._indexes[i];
