@@ -29,16 +29,19 @@
 #include "lvstreambuffer.h"
 #include "lvstream.h"
 
+#include <vector>
+
 // default implementation, with RAM buffer
 class LVDefStreamBuffer : public LVStreamBuffer
 {
 protected:
     LVStreamRef m_stream;
-    lUInt8 * m_buf;
+    std::vector<lUInt8> m_buf;
     lvpos_t m_pos;
     lvsize_t m_size;
     bool m_readonly;
     bool m_writeonly;
+    bool m_ready;
 public:
     static LVStreamBufferRef create( LVStreamRef stream, lvpos_t pos, lvsize_t size, bool readonly );
 
@@ -46,12 +49,12 @@ public:
     /// get pointer to read-only buffer, returns NULL if unavailable
     virtual const lUInt8 * getReadOnly()
     {
-        return m_writeonly ? NULL : m_buf;
+        return m_writeonly || !m_ready ? NULL : m_buf.data();
     }
     /// get pointer to read-write buffer, returns NULL if unavailable
     virtual lUInt8 * getReadWrite()
     {
-        return m_readonly ? NULL : m_buf;
+        return m_readonly || !m_ready ? NULL : m_buf.data();
     }
     /// get buffer size
     virtual lvsize_t getSize()

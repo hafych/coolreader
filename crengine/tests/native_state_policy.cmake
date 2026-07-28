@@ -53,6 +53,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREA
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.h" CACHED_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.cpp" TCR_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.h" TCR_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.cpp" DEFAULT_STREAM_BUFFER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.h" DEFAULT_STREAM_BUFFER_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -921,6 +923,73 @@ forbid_source_text(
   "${SCALED_IMAGE_SOURCE}"
   "free(sdata)"
   "smooth-scale result cleanup must remain scope-bound"
+)
+
+# --- default stream region buffer ownership and rollback ---
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_HEADER}"
+  "std::vector<lUInt8> m_buf"
+  "default stream regions must use RAII buffer ownership"
+)
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_HEADER}"
+  "bool m_ready"
+  "default stream regions must distinguish activation from rollback"
+)
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "std::unique_ptr<LVDefStreamBuffer> buf"
+  "default stream-buffer candidates must have explicit ownership"
+)
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "stream->SetPos(pos)!=pos"
+  "default stream-buffer seeks must validate the returned position"
+)
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "if ( !buf->m_writeonly )"
+  "write-only stream buffers must not attempt a read preload"
+)
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "buf->m_ready = true"
+  "default stream buffers must activate only after initialization"
+)
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "LVStreamBufferRef(buf.release())"
+  "default stream-buffer ownership must transfer at the reference boundary"
+)
+require_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "m_stream->SetPos(m_pos)!=m_pos"
+  "default stream-buffer flushes must validate the returned position"
+)
+forbid_source_text(
+  "${DEFAULT_STREAM_BUFFER_HEADER}"
+  "lUInt8 * m_buf"
+  "default stream buffer must not own raw storage"
+)
+forbid_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "LVDefStreamBuffer * buf"
+  "default stream-buffer factory must not use implicit raw ownership"
+)
+forbid_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "malloc("
+  "default stream-buffer allocation must remain container-managed"
+)
+forbid_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "free("
+  "default stream-buffer teardown must remain automatic"
+)
+forbid_source_text(
+  "${DEFAULT_STREAM_BUFFER_SOURCE}"
+  "delete buf"
+  "default stream-buffer rollback must remain scope-bound"
 )
 
 # --- TCR decoder dictionary, index and decoded buffers ---

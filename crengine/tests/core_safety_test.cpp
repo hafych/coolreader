@@ -7,6 +7,7 @@
 #include "lvimg.h"
 #include "lvimagedecodercallback.h"
 #include "lvrend.h"
+#include "lvstreambuffer.h"
 #include "crskin.h"
 #include "lvhtmlparser.h"
 #include "lvtextbookmarkparser.h"
@@ -1665,6 +1666,154 @@ static bool verifyStreamRange(LVStreamRef stream,
     return true;
 }
 
+class FailingBufferStream : public LVStream {
+private:
+    lvpos_t _pos;
+    int &_writeCalls;
+
+public:
+    explicit FailingBufferStream(int &writeCalls)
+        : _pos(0), _writeCalls(writeCalls)
+    {
+    }
+
+    lvopen_mode_t GetMode() override { return LVOM_READWRITE; }
+
+    lverror_t Seek(lvoffset_t offset, lvseek_origin_t origin,
+            lvpos_t *newPos) override
+    {
+        lvoffset_t target = offset;
+        if (origin == LVSEEK_CUR)
+            target += static_cast<lvoffset_t>(_pos);
+        else if (origin == LVSEEK_END)
+            target += 8;
+        if (target < 0 || target > 8)
+            return LVERR_FAIL;
+        _pos = static_cast<lvpos_t>(target);
+        if (newPos)
+            *newPos = _pos;
+        return LVERR_OK;
+    }
+
+    lverror_t GetSize(lvsize_t *size) override
+    {
+        *size = 8;
+        return LVERR_OK;
+    }
+
+    lverror_t SetSize(lvsize_t) override { return LVERR_FAIL; }
+
+    lverror_t Read(void *, lvsize_t, lvsize_t *bytesRead) override
+    {
+        if (bytesRead)
+            *bytesRead = 0;
+        return LVERR_FAIL;
+    }
+
+    lverror_t Write(const void *, lvsize_t count,
+            lvsize_t *bytesWritten) override
+    {
+        ++_writeCalls;
+        if (bytesWritten)
+            *bytesWritten = count;
+        return LVERR_OK;
+    }
+
+    bool Eof() override { return false; }
+};
+
+static int testDefaultStreamBufferOwnership() {
+    std::vector<unsigned char> payload(12);
+    for (std::size_t i = 0; i < payload.size(); ++i)
+        payload[i] = static_cast<unsigned char>(i + 1);
+
+    LVStreamRef readStream = LVCreateMemoryStream(
+            payload.data(), static_cast<int>(payload.size()),
+            true, LVOM_READ);
+    LVStreamBufferRef readBuffer = readStream->GetReadBuffer(3, 4);
+    if (readBuffer.isNull()
+            || readBuffer->getSize() != 4
+            || readBuffer->getReadWrite() != NULL)
+        return fail("default read buffer rejected a nonzero region");
+    const lUInt8 *readData = readBuffer->getReadOnly();
+    if (!readData || readData[0] != 4 || readData[3] != 7)
+        return fail("default read buffer exposed the wrong region");
+    if (!readBuffer->close()
+            || readBuffer->getReadOnly() != NULL
+            || readBuffer->getSize() != 0
+            || !readBuffer->close())
+        return fail("default read buffer close is not idempotent");
+
+    LVStreamRef writeStream = LVCreateMemoryStream(
+            payload.data(), static_cast<int>(payload.size()),
+            true, LVOM_READWRITE);
+    LVStreamBufferRef writeBuffer = writeStream->GetWriteBuffer(4, 3);
+    lUInt8 *writeData = writeBuffer.isNull()
+            ? NULL : writeBuffer->getReadWrite();
+    if (!writeData || writeData[0] != 5 || writeData[2] != 7)
+        return fail("default write buffer did not preload its region");
+    writeData[0] = 0xa1;
+    writeData[1] = 0xa2;
+    writeData[2] = 0xa3;
+    if (!writeBuffer->close() || !writeBuffer->close())
+        return fail("default write buffer did not flush exactly once");
+    std::vector<unsigned char> expected = payload;
+    expected[4] = 0xa1;
+    expected[5] = 0xa2;
+    expected[6] = 0xa3;
+    if (!verifyStreamRange(writeStream, expected, 0, expected.size()))
+        return fail("default write buffer flushed to the wrong offset");
+
+    {
+        LVStreamBufferRef destructorBuffer =
+                writeStream->GetWriteBuffer(8, 2);
+        lUInt8 *destructorData = destructorBuffer.isNull()
+                ? NULL : destructorBuffer->getReadWrite();
+        if (!destructorData)
+            return fail("default write buffer destructor fixture failed");
+        destructorData[0] = 0xb1;
+        destructorData[1] = 0xb2;
+    }
+    expected[8] = 0xb1;
+    expected[9] = 0xb2;
+    if (!verifyStreamRange(writeStream, expected, 0, expected.size()))
+        return fail("default write buffer destructor did not flush");
+
+    std::vector<unsigned char> writeOnlyBytes(8, 0xcc);
+    LVStreamRef writeOnlyStream = LVCreateMemoryStream(
+            writeOnlyBytes.data(), static_cast<int>(writeOnlyBytes.size()),
+            true, LVOM_WRITE);
+    LVStreamBufferRef writeOnlyBuffer =
+            writeOnlyStream->GetWriteBuffer(2, 3);
+    lUInt8 *writeOnlyData = writeOnlyBuffer.isNull()
+            ? NULL : writeOnlyBuffer->getReadWrite();
+    if (!writeOnlyData || writeOnlyBuffer->getReadOnly() != NULL)
+        return fail("write-only stream buffer attempted a read preload");
+    writeOnlyData[0] = 0x31;
+    writeOnlyData[1] = 0x32;
+    writeOnlyData[2] = 0x33;
+    if (!writeOnlyBuffer->close()
+            || writeOnlyStream->SetMode(LVOM_READ) != LVERR_OK)
+        return fail("write-only stream buffer did not flush");
+    std::vector<unsigned char> writeOnlyExpected(8, 0xcc);
+    writeOnlyExpected[2] = 0x31;
+    writeOnlyExpected[3] = 0x32;
+    writeOnlyExpected[4] = 0x33;
+    if (!verifyStreamRange(
+            writeOnlyStream, writeOnlyExpected, 0, writeOnlyExpected.size()))
+        return fail("write-only stream buffer flushed the wrong bytes");
+
+    int rollbackWrites = 0;
+    LVStreamRef failingStream(new FailingBufferStream(rollbackWrites));
+    LVStreamBufferRef failedBuffer =
+            failingStream->GetWriteBuffer(2, 4);
+    if (!failedBuffer.isNull() || rollbackWrites != 0)
+        return fail("failed stream-buffer construction flushed partial data");
+    if (!failingStream->GetReadBuffer(2, 0).isNull())
+        return fail("default stream buffer accepted an empty region");
+    return 0;
+}
+
 static std::vector<unsigned char> buildTcrFixture(
         std::vector<unsigned char> &decoded) {
     static const unsigned char signature[] = {
@@ -2047,6 +2196,8 @@ int main() {
         return 1;
 #endif
     if (testImageSourceOwnership() != 0)
+        return 1;
+    if (testDefaultStreamBufferOwnership() != 0)
         return 1;
     if (testTcrStreamOwnership() != 0)
         return 1;

@@ -161,6 +161,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Scaled-image drawing now owns coordinate maps, decoded RGBA snapshots and
   allocator-specific smooth-scale results through RAII; failed smooth decodes
   no longer render partially initialized image data.
+- Default stream-region buffers now use RAII storage and rollback-safe factory
+  ownership. Nonzero read/write offsets, write-only initialization and
+  idempotent flush are covered without writing partial factory state.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.

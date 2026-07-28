@@ -102,6 +102,13 @@ allocator-specific result returned by `qSmoothScaleImage()` is held by a
 scoped `std::unique_ptr` with the matching platform deleter. A failed decode
 does not run the smooth post-processing pass over a partial snapshot.
 
+`LVDefStreamBuffer` owns copied stream regions through `std::vector`; its
+factory keeps a candidate in `std::unique_ptr` and marks it ready only after
+the requested position and optional read preload succeed. Rollback therefore
+cannot flush partial data. Write-only regions skip preload, nonzero offsets
+validate the position returned by `SetPos()`, and `close()` flushes at most once
+before releasing both storage and the stream reference.
+
 The ZIP decoder owns persistent inflate buffers and CRC scratch storage through
 `std::vector`; fallback CRC calculation uses a position guard and supports
 archives whose header omits the checksum. `LVCachedStream` owns cache slots as
