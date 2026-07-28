@@ -161,7 +161,8 @@ DRM или ограничений доступа, подбор/получени�
   page-context ownership, draw-time bookmark-range filters и full CCRTable
   row-group/row/column/cell graph publication, включая MathML table expansion,
   FreeType face load-candidates и language-compatibility cache owners, а также
-  bounded NanoSVG image/rasterizer/RGBA workspace ownership.
+  bounded NanoSVG image/rasterizer/RGBA workspace ownership и transactional
+  selection-range split/draw/text owner publication.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

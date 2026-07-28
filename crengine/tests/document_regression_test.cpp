@@ -265,6 +265,78 @@ static int snapshotRenderedDocument(
             ldomXPointer(
                     selectionPointer.getNode(), selectionText.length()));
     selection.setFlags(0x11);
+
+    static const int overlapStarts[] = {0, 5, 12};
+    static const int overlapEnds[] = {10, 15, 20};
+    static const lUInt32 overlapFlags[] = {0x11, 0x12, 0x14};
+    ldomXRangeList overlappingRanges;
+    overlappingRanges.reserve(3);
+    for (int index = 0; index < 3; ++index) {
+        std::unique_ptr<ldomXRange> range =
+                std::make_unique<ldomXRange>(
+                        ldomXPointer(
+                                selectionPointer.getNode(),
+                                overlapStarts[index]),
+                        ldomXPointer(
+                                selectionPointer.getNode(),
+                                overlapEnds[index]));
+        range->setFlags(overlapFlags[index]);
+        overlappingRanges.add(range.release());
+    }
+    ldomXRangeList splitRanges(overlappingRanges, true);
+    static const int expectedStarts[] = {0, 5, 10, 12, 15};
+    static const int expectedEnds[] = {5, 10, 12, 15, 20};
+    static const lUInt32 expectedFlags[] = {
+        0x11, 0x13, 0x12, 0x16, 0x14
+    };
+    if (splitRanges.length() != 5)
+        return fail("overlapping range owners did not split completely");
+    for (int index = 0; index < splitRanges.length(); ++index) {
+        if (splitRanges[index]->getStart().getOffset()
+                    != expectedStarts[index]
+                || splitRanges[index]->getEnd().getOffset()
+                    != expectedEnds[index]
+                || splitRanges[index]->getFlags()
+                    != expectedFlags[index])
+            return fail(
+                    "overlapping range replacement changed its segments");
+    }
+    ldomMarkedRangeList splitDrawRanges;
+    splitRanges.getRanges(splitDrawRanges);
+    if (splitDrawRanges.length() < splitRanges.length())
+        return fail("split range draw owners were not published");
+    ldomMarkedRange *firstDrawOwner = splitDrawRanges[0];
+    const int firstDrawCount = splitDrawRanges.length();
+    splitRanges.getRanges(splitDrawRanges);
+    if (splitDrawRanges.length() != firstDrawCount
+            || splitDrawRanges[0] == firstDrawOwner)
+        return fail("split range draw owner replacement was not isolated");
+
+    ldomMarkedTextList splitTextRanges;
+    overlappingRanges.splitText(
+            splitTextRanges, selectionPointer.getNode());
+    if (splitTextRanges.length() != 6)
+        return fail("split text range owners did not cover the source");
+    static const lUInt32 expectedTextFlags[] = {
+        0x11, 0x13, 0x13, 0x17, 0x15
+    };
+    for (int index = 0; index < 5; ++index) {
+        if (splitTextRanges[index]->offset != expectedStarts[index]
+                || splitTextRanges[index]->text
+                    != selectionText.substr(
+                            expectedStarts[index],
+                            expectedEnds[index]
+                                    - expectedStarts[index])
+                || splitTextRanges[index]->flags
+                    != expectedTextFlags[index])
+            return fail("split text owner changed its range payload");
+    }
+    if (splitTextRanges[5]->offset != 20
+            || splitTextRanges[5]->text
+                != selectionText.substr(20)
+            || splitTextRanges[5]->flags != 0x01)
+        return fail("split text owner lost the unmarked suffix");
+
     selection.getSegmentRects(snapshot.selectionRects);
     if (snapshot.selectionRects.length() < 2)
         return fail("rendered selection did not span line segments");

@@ -637,3 +637,13 @@ Each `LVFreeTypeFace` load candidate is exclusively owned until a successful
 load transfers it into the intrusive `LVFontRef`; failed loads now unwind
 without a manual delete. The rendered lifecycle queries the same language
 twice to cover population, cached lookup and manager teardown.
+
+Selection-range splitting copies its input before mutation, constructs the
+complete replacement set in a vector of `unique_ptr`, and reserves the final
+owning-list capacity before erasing or publishing anything. This also keeps a
+self-aliased split argument valid throughout the operation. Draw-range
+conversion builds a complete candidate owner list and swaps it into place only
+after successful geometry conversion, while text-range fragments enter their
+owning list from scoped candidates. The rendered-document regression validates
+the exact five segments of three overlapping selections, repeated isolated
+draw-owner replacement and all six marked/unmarked text fragments.

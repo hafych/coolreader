@@ -5637,3 +5637,55 @@ forbid_source_text(
   "delete _docview"
   "GUI document-view teardown must remain automatic"
 )
+
+# --- selection range graph ownership and transactional publication ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "static T * publishOwnedRangeItem"
+  "range graph nodes must remain scoped until owning-vector publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<std::unique_ptr<ldomXRange> > replacements"
+  "range splitting must build every replacement under scoped ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "replaceOwnedRange(*this, i, std::move(replacements))"
+  "range splitting must publish only a complete replacement set"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "ldomMarkedRangeList candidate"
+  "draw-range conversion must build a transactional owner list"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "dst.swap(candidate)"
+  "draw-range conversion must publish with a no-throw swap"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "overlapping range owners did not split completely"
+  "range graph ownership must retain rendered overlap coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "split range draw owner replacement was not isolated"
+  "draw-range ownership must retain replacement isolation coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "ldomXRange * src = remove( i )"
+  "range splitting must not detach an owner before replacements exist"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete src"
+  "range split teardown must remain automatic"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "ldomMarkedRange * item = new ldomMarkedRange"
+  "draw-range candidates must not regress to raw ownership"
+)

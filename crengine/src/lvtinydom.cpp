@@ -11757,6 +11757,37 @@ ldomXRange::ldomXRange( const ldomXRange & v1,  const ldomXRange & v2 )
 {
 }
 
+template <typename T>
+static T * publishOwnedRangeItem(
+        LVPtrVector<T> &destination,
+        std::unique_ptr<T> candidate,
+        int position = -1)
+{
+    if (destination.length() == INT_MAX)
+        throw std::length_error("range item limit exceeded");
+    destination.reserve(destination.length() + 1);
+    T *borrowed = candidate.get();
+    destination.insert(position, candidate.release());
+    return borrowed;
+}
+
+static void replaceOwnedRange(
+        ldomXRangeList &ranges, int position,
+        std::vector<std::unique_ptr<ldomXRange> > replacements)
+{
+    const int replacementCount =
+            static_cast<int>(replacements.size());
+    const int growth = replacementCount - 1;
+    if (growth > 0 && ranges.length() > INT_MAX - growth)
+        throw std::length_error("range split limit exceeded");
+    ranges.reserve(ranges.length() + growth);
+    ranges.erase(position, 1);
+    for (int index = 0; index < replacementCount; ++index)
+        ranges.insert(
+                position + index,
+                replacements[static_cast<std::size_t>(index)].release());
+}
+
 /// create list splittiny existing list into non-overlapping ranges
 ldomXRangeList::ldomXRangeList( ldomXRangeList & srcList, bool splitIntersections )
 {
@@ -11764,7 +11795,9 @@ ldomXRangeList::ldomXRangeList( ldomXRangeList & srcList, bool splitIntersection
         return;
     int i;
     if ( splitIntersections ) {
-        ldomXRange * maxRange = new ldomXRange( *srcList[0] );
+        std::unique_ptr<ldomXRange> maxRangeOwner =
+                std::make_unique<ldomXRange>(*srcList[0]);
+        ldomXRange *maxRange = maxRangeOwner.get();
         for ( i=1; i<srcList.length(); i++ ) {
             if ( srcList[i]->getStart().compare( maxRange->getStart() ) < 0 )
                 maxRange->setStart( srcList[i]->getStart() );
@@ -11772,7 +11805,7 @@ ldomXRangeList::ldomXRangeList( ldomXRangeList & srcList, bool splitIntersection
                 maxRange->setEnd( srcList[i]->getEnd() );
         }
         maxRange->setFlags(0);
-        add( maxRange );
+        publishOwnedRangeItem(*this, std::move(maxRangeOwner));
         for ( i=0; i<srcList.length(); i++ )
             split( srcList[i] );
         for ( int i=length()-1; i>=0; i-- ) {
@@ -11780,65 +11813,80 @@ ldomXRangeList::ldomXRangeList( ldomXRangeList & srcList, bool splitIntersection
                 erase( i, 1 );
         }
     } else {
-        for ( i=0; i<srcList.length(); i++ )
-            add( new ldomXRange( *srcList[i] ) );
+        reserve(srcList.length());
+        for ( i=0; i<srcList.length(); i++ ) {
+            publishOwnedRangeItem(
+                    *this,
+                    std::make_unique<ldomXRange>(*srcList[i]));
+        }
     }
 }
 
 /// split into subranges using intersection
 void ldomXRangeList::split( ldomXRange * r )
 {
-    int i;
-    for ( i=0; i<length(); i++ ) {
-        if ( r->checkIntersection( *get(i) ) ) {
-            ldomXRange * src = remove( i );
-            int cmp1 = src->getStart().compare( r->getStart() );
-            int cmp2 = src->getEnd().compare( r->getEnd() );
+    if (!r)
+        return;
+    ldomXRange splitRange(*r);
+    for ( int i=0; i<length(); i++ ) {
+        ldomXRange *src = get(i);
+        if ( splitRange.checkIntersection( *src ) ) {
+            int cmp1 = src->getStart().compare(
+                    splitRange.getStart());
+            int cmp2 = src->getEnd().compare(
+                    splitRange.getEnd());
+            std::vector<std::unique_ptr<ldomXRange> > replacements;
             //TODO: add intersections
             if ( cmp1 < 0 && cmp2 < 0 ) {
                 //   0====== src ======0
                 //        X======= r=========X
                 //   1111122222222222222
-                ldomXRange * r1 = new ldomXRange( src->getStart(), r->getStart(), src->getFlags() );
-                ldomXRange * r2 = new ldomXRange( r->getStart(), src->getEnd(), src->getFlags() | r->getFlags() );
-                insert( i++, r1 );
-                insert( i, r2 );
-                delete src;
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        src->getStart(), splitRange.getStart(),
+                        src->getFlags()));
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        splitRange.getStart(), src->getEnd(),
+                        src->getFlags() | splitRange.getFlags()));
             } else if ( cmp1 > 0 && cmp2 > 0 ) {
                 //           0====== src ======0
                 //     X======= r=========X
                 //           2222222222222233333
-                ldomXRange * r2 = new ldomXRange( src->getStart(), r->getEnd(), src->getFlags() | r->getFlags() );
-                ldomXRange * r3 = new ldomXRange( r->getEnd(), src->getEnd(), src->getFlags() );
-                insert( i++, r2 );
-                insert( i, r3 );
-                delete src;
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        src->getStart(), splitRange.getEnd(),
+                        src->getFlags() | splitRange.getFlags()));
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        splitRange.getEnd(), src->getEnd(),
+                        src->getFlags()));
             } else if ( cmp1 < 0 && cmp2 > 0 ) {
                 // 0====== src ================0
                 //     X======= r=========X
-                ldomXRange * r1 = new ldomXRange( src->getStart(), r->getStart(), src->getFlags() );
-                ldomXRange * r2 = new ldomXRange( r->getStart(), r->getEnd(), src->getFlags() | r->getFlags() );
-                ldomXRange * r3 = new ldomXRange( r->getEnd(), src->getEnd(), src->getFlags() );
-                insert( i++, r1 );
-                insert( i++, r2 );
-                insert( i, r3 );
-                delete src;
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        src->getStart(), splitRange.getStart(),
+                        src->getFlags()));
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        splitRange.getStart(), splitRange.getEnd(),
+                        src->getFlags() | splitRange.getFlags()));
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        splitRange.getEnd(), src->getEnd(),
+                        src->getFlags()));
             } else if ( cmp1 == 0 && cmp2 > 0 ) {
                 //   0====== src ========0
                 //   X====== r=====X
-                ldomXRange * r1 = new ldomXRange( src->getStart(), r->getEnd(), src->getFlags() | r->getFlags() );
-                ldomXRange * r2 = new ldomXRange( r->getEnd(), src->getEnd(), src->getFlags() );
-                insert( i++, r1 );
-                insert( i, r2 );
-                delete src;
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        src->getStart(), splitRange.getEnd(),
+                        src->getFlags() | splitRange.getFlags()));
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        splitRange.getEnd(), src->getEnd(),
+                        src->getFlags()));
             } else if ( cmp1 < 0 && cmp2 == 0 ) {
                 //   0====== src =====0
                 //      X====== r=====X
-                ldomXRange * r1 = new ldomXRange( src->getStart(), r->getStart(), src->getFlags() );
-                ldomXRange * r2 = new ldomXRange( r->getStart(), r->getEnd(), src->getFlags() | r->getFlags() );
-                insert( i++, r1 );
-                insert( i, r2 );
-                delete src;
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        src->getStart(), splitRange.getStart(),
+                        src->getFlags()));
+                replacements.push_back(std::make_unique<ldomXRange>(
+                        splitRange.getStart(), splitRange.getEnd(),
+                        src->getFlags() | splitRange.getFlags()));
             } else {
                 //        0====== src =====0
                 //   X============== r===========X
@@ -11851,9 +11899,14 @@ void ldomXRangeList::split( ldomXRange * r )
                 //
                 //   0====== src ========0
                 //   X========== r=======X
-                src->setFlags( src->getFlags() | r->getFlags() );
-                insert( i, src );
+                src->setFlags(
+                        src->getFlags() | splitRange.getFlags());
+                continue;
             }
+            const int replacementCount =
+                    static_cast<int>(replacements.size());
+            replaceOwnedRange(*this, i, std::move(replacements));
+            i += replacementCount - 1;
         }
     }
 }
@@ -12097,9 +12150,11 @@ bool ldomXRange::findText( lString32 pattern, bool caseInsensitive, bool reverse
 // drawing of highlights
 void ldomXRangeList::getRanges( ldomMarkedRangeList &dst )
 {
-    dst.clear();
-    if ( empty() )
+    if ( empty() ) {
+        dst.clear();
         return;
+    }
+    ldomMarkedRangeList candidate;
     for ( int i=0; i<length(); i++ ) {
         ldomXRange * range = get(i);
         if (range->getFlags() < 0x10) {
@@ -12121,11 +12176,12 @@ void ldomXRangeList::getRanges( ldomMarkedRangeList &dst )
                 ptStart = ptEnd;
                 ptEnd = ptTmp;
             }
-            ldomMarkedRange * item = new ldomMarkedRange( ptStart, ptEnd, range->getFlags() );
+            std::unique_ptr<ldomMarkedRange> item =
+                    std::make_unique<ldomMarkedRange>(
+                            ptStart, ptEnd, range->getFlags());
             if ( !item->empty() )
-                dst.add( item );
-            else
-                delete item;
+                publishOwnedRangeItem(
+                        candidate, std::move(item));
         }
         else {
             // Enhanced marks drawing: from a single ldomXRange, make multiple segmented
@@ -12135,14 +12191,17 @@ void ldomXRangeList::getRanges( ldomMarkedRangeList &dst )
             for (int i=0; i<rects.length(); i++) {
                 lvRect r = rects[i];
                 // printf("r %d %dx%d %dx%d\n", i, r.topLeft().x, r.topLeft().y, r.bottomRight().x, r.bottomRight().y);
-                ldomMarkedRange * item = new ldomMarkedRange( r.topLeft(), r.bottomRight(), range->getFlags() );
+                std::unique_ptr<ldomMarkedRange> item =
+                        std::make_unique<ldomMarkedRange>(
+                                r.topLeft(), r.bottomRight(),
+                                range->getFlags());
                 if ( !item->empty() )
-                    dst.add( item );
-                else
-                    delete item;
+                    publishOwnedRangeItem(
+                            candidate, std::move(item));
             }
         }
     }
+    dst.swap(candidate);
 }
 
 /// fill text selection list by splitting text into monotonic flags ranges
@@ -12150,12 +12209,15 @@ void ldomXRangeList::splitText( ldomMarkedTextList &dst, ldomNode * textNodeToSp
 {
     lString32 text = textNodeToSplit->getText();
     if ( length()==0 ) {
-        dst.add( new ldomMarkedText( text, 0, 0 ) );
+        publishOwnedRangeItem(
+                dst, std::make_unique<ldomMarkedText>(
+                        text, 0, 0));
         return;
     }
     ldomXRange textRange( textNodeToSplit );
     ldomXRangeList ranges;
-    ranges.add( new ldomXRange(textRange) );
+    publishOwnedRangeItem(
+            ranges, std::make_unique<ldomXRange>(textRange));
     int i;
     for ( i=0; i<length(); i++ ) {
         ranges.split( get(i) );
@@ -12164,8 +12226,12 @@ void ldomXRangeList::splitText( ldomMarkedTextList &dst, ldomNode * textNodeToSp
         ldomXRange * r = ranges[i];
         int start = r->getStart().getOffset();
         int end = r->getEnd().getOffset();
-        if ( end>start )
-            dst.add( new ldomMarkedText( text.substr(start, end-start), r->getFlags(), start ) );
+        if ( end>start ) {
+            publishOwnedRangeItem(
+                    dst, std::make_unique<ldomMarkedText>(
+                            text.substr(start, end-start),
+                            r->getFlags(), start));
+        }
     }
     /*
     if ( dst.length() ) {
