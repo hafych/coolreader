@@ -694,3 +694,10 @@ a fresh null state and leaves aliases alive. The protected clone boundary,
 `clone()` and `ldomXPointerEx` copies create independent state before replacing
 their current owner. Native coverage preserves shared copy/assignment,
 clear-detach, alias teardown and extended-pointer deep-copy behavior.
+
+Computed CSS styles own their transient `::before` and `::after` accumulator
+styles with `unique_ptr`. Selector application borrows those scoped owners;
+`setNodeStyle()` records whether generated nodes are required and resets both
+temporary slots before publishing the computed style to the shared cache.
+Rendered CSS coverage verifies one before/after node, clean cached styles and
+stable ownership across a repeated render.

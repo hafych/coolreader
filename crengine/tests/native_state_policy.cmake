@@ -26,6 +26,7 @@ file(READ "${SOURCE_ROOT}/crengine/tests/epub3_regression_test.cpp" EPUB3_REGRES
 file(READ "${SOURCE_ROOT}/crengine/src/odtfmt.cpp" ODT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstsheet.cpp" STYLESHEET_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvstyles.h" STYLE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/wolutil.cpp" WOL_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/wolutil.h" WOL_HEADER)
@@ -6139,4 +6140,81 @@ forbid_source_text(
   "${DOM_HEADER}"
   "_data = new XPointerData"
   "XPointer state replacement must remain exception-safe"
+)
+
+# --- CSS pseudo-element temporary style ownership ---
+require_source_text(
+  "${STYLE_HEADER}"
+  "std::unique_ptr<css_style_rec_t> pseudo_elem_before_style"
+  "CSS before-pseudo temporary style must use RAII ownership"
+)
+require_source_text(
+  "${STYLE_HEADER}"
+  "std::unique_ptr<css_style_rec_t> pseudo_elem_after_style"
+  "CSS after-pseudo temporary style must use RAII ownership"
+)
+require_source_text(
+  "${STYLESHEET_SOURCE}"
+  "std::make_unique<css_style_rec_t>()"
+  "CSS pseudo-element temporary styles must be scoped before use"
+)
+require_source_text(
+  "${STYLESHEET_SOURCE}"
+  "target_style = style->pseudo_elem_before_style.get()"
+  "CSS pseudo-element application must borrow its temporary owner"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "pstyle->pseudo_elem_before_style.reset()"
+  "CSS before-pseudo temporary style must release automatically"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "pstyle->pseudo_elem_after_style.reset()"
+  "CSS after-pseudo temporary style must release automatically"
+)
+require_source_text(
+  "${CSS_REGRESSION_SOURCE}"
+  "pseudo-element temporary styles reached the style cache"
+  "CSS pseudo-element ownership must retain cache-cleanup coverage"
+)
+require_source_text(
+  "${CSS_REGRESSION_SOURCE}"
+  "CSS pseudo-element owners changed generated nodes"
+  "CSS pseudo-element ownership must retain generated-node coverage"
+)
+require_source_text(
+  "${CSS_REGRESSION_SOURCE}"
+  "CSS pseudo-element rerender retained or duplicated owners"
+  "CSS pseudo-element ownership must retain repeated-render coverage"
+)
+forbid_source_text(
+  "${STYLE_HEADER}"
+  "css_style_rec_t *    pseudo_elem_before_style"
+  "CSS before-pseudo temporary style must not be a raw owner"
+)
+forbid_source_text(
+  "${STYLE_HEADER}"
+  "css_style_rec_t *    pseudo_elem_after_style"
+  "CSS after-pseudo temporary style must not be a raw owner"
+)
+forbid_source_text(
+  "${STYLESHEET_SOURCE}"
+  "pseudo_elem_before_style = new css_style_rec_t"
+  "CSS before-pseudo allocation must remain automatic"
+)
+forbid_source_text(
+  "${STYLESHEET_SOURCE}"
+  "pseudo_elem_after_style = new css_style_rec_t"
+  "CSS after-pseudo allocation must remain automatic"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete pstyle->pseudo_elem_before_style"
+  "CSS before-pseudo teardown must remain automatic"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete pstyle->pseudo_elem_after_style"
+  "CSS after-pseudo teardown must remain automatic"
 )

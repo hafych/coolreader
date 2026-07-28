@@ -149,9 +149,12 @@ static std::unique_ptr<LVDocView> loadStyledFixture()
             "#parent { color: #123456; text-align: right;"
             " font-size: 24px; }"
             "#child { font-size: 0.5em; }"
+            "#pseudo::before { content: \"Before\"; }"
+            "#pseudo::after { content: \"After\"; }"
             "</style></head><body>"
             "<p id=\"cascade\" class=\"cascade\">Cascade</p>"
             "<div id=\"parent\"><span id=\"child\">Inherited</span></div>"
+            "<p id=\"pseudo\">Pseudo</p>"
             "</body></html>";
     LVStreamRef stream = LVCreateMemoryStream(
             const_cast<char *>(fixture),
@@ -174,6 +177,24 @@ static std::unique_ptr<LVDocView> loadStyledFixture()
     return view;
 }
 
+static void countPseudoElements(
+        ldomNode *node, int &beforeCount, int &afterCount) {
+    for (int index = 0; index < node->getChildCount(); index++) {
+        ldomNode *child = node->getChildNode(index);
+        if (child->isNodeName("pseudoElem")) {
+            for (int attrIndex = 0;
+                    attrIndex < child->getAttrCount(); attrIndex++) {
+                const lString32 &name = child->getAttributeName(attrIndex);
+                if (name == U"Before")
+                    beforeCount++;
+                if (name == U"After")
+                    afterCount++;
+            }
+        }
+        countPseudoElements(child, beforeCount, afterCount);
+    }
+}
+
 static int testCascadeSpecificityAndInheritance()
 {
     std::unique_ptr<LVDocView> view = loadStyledFixture();
@@ -183,7 +204,8 @@ static int testCascadeSpecificityAndInheritance()
     ldomNode *cascade = document->getElementById(U"cascade");
     ldomNode *parent = document->getElementById(U"parent");
     ldomNode *child = document->getElementById(U"child");
-    if (!cascade || !parent || !child)
+    ldomNode *pseudo = document->getElementById(U"pseudo");
+    if (!cascade || !parent || !child || !pseudo)
         return fail("styled HTML fixture IDs did not resolve");
 
     css_style_ref_t cascadeStyle = cascade->getStyle();
@@ -212,6 +234,28 @@ static int testCascadeSpecificityAndInheritance()
     if (childStyle->font_size.type != css_val_px
             || childStyle->font_size.value != 12 * 256)
         return fail("CSS em font-size did not resolve against parent");
+
+    css_style_ref_t pseudoStyle = pseudo->getStyle();
+    if (pseudoStyle.isNull()
+            || pseudoStyle->pseudo_elem_before_style
+            || pseudoStyle->pseudo_elem_after_style)
+        return fail("pseudo-element temporary styles reached the style cache");
+    int beforeCount = 0;
+    int afterCount = 0;
+    countPseudoElements(pseudo, beforeCount, afterCount);
+    if (beforeCount != 1 || afterCount != 1)
+        return fail("CSS pseudo-element owners changed generated nodes");
+
+    view->Render(320, 240);
+    beforeCount = 0;
+    afterCount = 0;
+    countPseudoElements(pseudo, beforeCount, afterCount);
+    pseudoStyle = pseudo->getStyle();
+    if (beforeCount != 1 || afterCount != 1
+            || pseudoStyle.isNull()
+            || pseudoStyle->pseudo_elem_before_style
+            || pseudoStyle->pseudo_elem_after_style)
+        return fail("CSS pseudo-element rerender retained or duplicated owners");
     return 0;
 }
 

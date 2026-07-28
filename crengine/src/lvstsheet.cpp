@@ -4476,15 +4476,17 @@ void LVCssSelector::applyToPseudoElement( const ldomNode * node, css_style_rec_t
         // they are not the ones that will be associated to the pseudo element.
         if ( _pseudo_elem == csspe_before ) {
             if ( !style->pseudo_elem_before_style ) {
-                style->pseudo_elem_before_style = new css_style_rec_t;
+                style->pseudo_elem_before_style =
+                        std::make_unique<css_style_rec_t>();
             }
-            target_style = style->pseudo_elem_before_style;
+            target_style = style->pseudo_elem_before_style.get();
         }
         else if ( _pseudo_elem == csspe_after ) {
             if ( !style->pseudo_elem_after_style ) {
-                style->pseudo_elem_after_style = new css_style_rec_t;
+                style->pseudo_elem_after_style =
+                        std::make_unique<css_style_rec_t>();
             }
-            target_style = style->pseudo_elem_after_style;
+            target_style = style->pseudo_elem_after_style.get();
         }
     }
 

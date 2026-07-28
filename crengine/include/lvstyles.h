@@ -29,6 +29,8 @@
 #if !defined(__LV_STYLES_H_INCLUDED__)
 #define __LV_STYLES_H_INCLUDED__
 
+#include <memory>
+
 #include "cssdef.h"
 #include "lvmemman.h"
 #include "lvrefcache.h"
@@ -194,8 +196,8 @@ struct css_style_rec_tag {
     // The following should only be used when applying stylesheets while in lvend.cpp setNodeStyle(),
     // and cleaned up there, before the style is cached and shared. They are not serialized.
     lInt8                flags; // bitmap of STYLE_REC_FLAG_*
-    css_style_rec_t *    pseudo_elem_before_style;
-    css_style_rec_t *    pseudo_elem_after_style;
+    std::unique_ptr<css_style_rec_t> pseudo_elem_before_style;
+    std::unique_ptr<css_style_rec_t> pseudo_elem_after_style;
 
     css_style_rec_tag()
     : refCount(0)
@@ -248,8 +250,8 @@ struct css_style_rec_tag {
     , word_break(css_wb_inherit)
     , cr_hint(css_val_inherited, 0)
     , flags(0)
-    , pseudo_elem_before_style(NULL)
-    , pseudo_elem_after_style(NULL)
+    , pseudo_elem_before_style()
+    , pseudo_elem_after_style()
     {
         // css_length_t fields are initialized by css_length_tag()
         // to (css_val_screen_px, 0)

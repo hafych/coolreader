@@ -10336,26 +10336,28 @@ void setNodeStyle( ldomNode * enode, css_style_ref_t parent_style, LVFontRef par
     bool requires_pseudo_element_before = false;
     bool requires_pseudo_element_after = false;
     if ( pstyle->pseudo_elem_before_style ) {
-        if ( pstyle->pseudo_elem_before_style->display != css_d_none
-                && pstyle->pseudo_elem_before_style->content.length() > 0
-                && pstyle->pseudo_elem_before_style->content[0] != U'X' ) {
+        const css_style_rec_t *pseudo_style =
+                pstyle->pseudo_elem_before_style.get();
+        if ( pseudo_style->display != css_d_none
+                && pseudo_style->content.length() > 0
+                && pseudo_style->content[0] != U'X' ) {
             // Not "display: none" and with "content:" different than "none":
             // this pseudo element can be generated
             requires_pseudo_element_before = true;
         }
-        delete pstyle->pseudo_elem_before_style;
-        pstyle->pseudo_elem_before_style = NULL;
+        pstyle->pseudo_elem_before_style.reset();
     }
     if ( pstyle->pseudo_elem_after_style ) {
-        if ( pstyle->pseudo_elem_after_style->display != css_d_none
-                && pstyle->pseudo_elem_after_style->content.length() > 0
-                && pstyle->pseudo_elem_after_style->content[0] != U'X' ) {
+        const css_style_rec_t *pseudo_style =
+                pstyle->pseudo_elem_after_style.get();
+        if ( pseudo_style->display != css_d_none
+                && pseudo_style->content.length() > 0
+                && pseudo_style->content[0] != U'X' ) {
             // Not "display: none" and with "content:" different than "none":
             // this pseudo element can be generated
             requires_pseudo_element_after = true;
         }
-        delete pstyle->pseudo_elem_after_style;
-        pstyle->pseudo_elem_after_style = NULL;
+        pstyle->pseudo_elem_after_style.reset();
     }
 
     if ( nodeElementId == el_pseudoElem ) {
