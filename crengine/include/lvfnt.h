@@ -183,7 +183,8 @@ typedef void * lvfont_handle;
 **********************************************************************/
 
 /** 
-   \brief loads font from file, allocates memory 
+   \brief loads font from file and transfers the allocation on success
+   \param hfont receives NULL on failure and an owned handle on success
    \return 1 if successful, 0 for error
 */
 int lvfontOpen( const char * fname, lvfont_handle * hfont );

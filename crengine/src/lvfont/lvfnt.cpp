@@ -25,6 +25,9 @@
 #include <string.h>
 #include "lvfnt.h"
 
+#include <cstdlib>
+#include <memory>
+
 #define MIN_FONT_SIZE 2048
 #define MAX_FONT_SIZE 0x100000
 
@@ -68,24 +71,27 @@ int lvfontOpen( const char * fname, lvfont_handle * pfont )
 {
     static lvByteOrderConv cnv;
 
-    FILE * f = fopen( fname, "rb" );
-    if (f == NULL)
+    if (pfont == NULL)
         return 0;
-    fseek( f, 0, SEEK_END );
-    lUInt32 sz = ftell(f);
-    if (sz < MIN_FONT_SIZE || sz > MAX_FONT_SIZE )
-    {
-        fclose(f);
+    *pfont = NULL;
+    std::unique_ptr<FILE, decltype(&fclose)> f(
+            fname == NULL ? NULL : fopen(fname, "rb"), &fclose);
+    if (!f || fseek(f.get(), 0, SEEK_END) != 0)
         return 0;
-    }
-    *pfont = (lvfont_handle) malloc( sz );
-    fseek( f, 0, SEEK_SET );
-    if ( fread( *pfont, sz, 1, f ) != sz ) {
-        fclose(f);
+    const long fileSize = ftell(f.get());
+    if (fileSize < MIN_FONT_SIZE || fileSize > MAX_FONT_SIZE
+            || fseek(f.get(), 0, SEEK_SET) != 0) {
         return 0;
     }
-    fclose(f);
-    tag_lvfont_header * hdr = (tag_lvfont_header *)lvfontGetHeader( *pfont );
+    const lUInt32 sz = static_cast<lUInt32>(fileSize);
+    std::unique_ptr<lUInt8, decltype(&std::free)> candidate(
+            static_cast<lUInt8 *>(std::malloc(sz)), &std::free);
+    if (!candidate
+            || fread(candidate.get(), 1, sz, f.get()) != sz) {
+        return 0;
+    }
+    tag_lvfont_header * hdr =
+            reinterpret_cast<tag_lvfont_header *>(candidate.get());
 
     cnv.lsf( &hdr->fileSize );
 
@@ -99,7 +105,6 @@ int lvfontOpen( const char * fname, lvfont_handle * pfont )
         || hdr->version[2]!='0'
         || hdr->version[3]!='0' )
     {
-        free( *pfont );
         return 0;
     }
     if (cnv.msf()) {
@@ -113,7 +118,7 @@ int lvfontOpen( const char * fname, lvfont_handle * pfont )
             if ( rangeoffset<=0 || rangeoffset>(int)sz )
                 continue;
             lvfont_range_t * range = (lvfont_range_t *)
-                ( ((const char *)*pfont) + rangeoffset );
+                ( ((const char *)candidate.get()) + rangeoffset );
 
             for ( int j=0; j<64; j++ ) {
                 cnv.rev( &range->glyphsOffset[j] );
@@ -127,6 +132,7 @@ int lvfontOpen( const char * fname, lvfont_handle * pfont )
 
         }
     }
+    *pfont = candidate.release();
     return 1;
 }
 
@@ -239,4 +245,3 @@ void lvfontUnpackGlyph( const lUInt8 * packed, const hrle_decode_info_t * table,
             *unpacked++ = srcdata;
     }
 }
-

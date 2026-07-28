@@ -15,6 +15,7 @@
 #include "hyphman.h"
 #include "lvcolordrawbuf.h"
 #include "lvfntman.h"
+#include "lvfnt.h"
 #include "lvgraydrawbuf.h"
 #include "lvimg.h"
 #include "lvimagedecodercallback.h"
@@ -1061,6 +1062,57 @@ static int testFreeTypeColorGlyphScaleOwnership() {
     return 0;
 }
 #endif
+
+static int testBitmapFontFileOwnership() {
+    char path[] = "/tmp/coolreader-bitmap-font-XXXXXX";
+    int fd = mkstemp(path);
+    if (fd < 0)
+        return fail("bitmap font owner fixture could not create a file");
+
+    lvfont_header_t header = {};
+    std::memcpy(header.magic, "LFNT", 4);
+    std::memcpy(header.version, "1.00", 4);
+    header.fileSize = static_cast<lUInt32>(sizeof(header));
+    std::vector<lUInt8> bytes(sizeof(header));
+    std::memcpy(bytes.data(), &header, sizeof(header));
+    if (write(fd, bytes.data(), bytes.size())
+            != static_cast<ssize_t>(bytes.size())) {
+        close(fd);
+        unlink(path);
+        return fail("bitmap font owner fixture could not write its file");
+    }
+    close(fd);
+
+    for (int lifecycle = 0; lifecycle < 2; lifecycle++) {
+        lvfont_handle font = NULL;
+        if (lvfontOpen(path, &font) != 1 || font == NULL
+                || lvfontGetHeader(font)->fileSize != bytes.size()) {
+            if (font != NULL)
+                lvfontClose(font);
+            unlink(path);
+            return fail("bitmap font candidate was not published");
+        }
+        lvfontClose(font);
+    }
+
+    fd = open(path, O_WRONLY);
+    const char corruptMagic = 'X';
+    if (fd < 0 || write(fd, &corruptMagic, 1) != 1) {
+        if (fd >= 0)
+            close(fd);
+        unlink(path);
+        return fail("bitmap font owner fixture could not corrupt its file");
+    }
+    close(fd);
+
+    lvfont_handle rejected =
+            reinterpret_cast<lvfont_handle>(static_cast<uintptr_t>(1));
+    const int accepted = lvfontOpen(path, &rejected);
+    unlink(path);
+    if (accepted != 0 || rejected != NULL)
+        return fail("invalid bitmap font candidate was published");
+    return 0;
+}
 
 static int testBoundedObservableDecodedImageCache() {
     LVCacheMap<int, int> cache(2);
@@ -6767,6 +6819,8 @@ int main() {
     if (testFreeTypeColorGlyphScaleOwnership() != 0)
         return 1;
 #endif
+    if (testBitmapFontFileOwnership() != 0)
+        return 1;
     if (testBoundedObservableDecodedImageCache() != 0)
         return 1;
     if (testSkinOwnership() != 0)

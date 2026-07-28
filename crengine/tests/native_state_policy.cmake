@@ -53,6 +53,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfntman.h" FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.h" FREETYPE_FACE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfnt.cpp" BITMAP_FONT_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvfnt.h" BITMAP_FONT_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.h" FONT_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.cpp" FONT_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.cpp" FREETYPE_FONT_MANAGER_SOURCE)
@@ -6157,6 +6159,53 @@ forbid_source_text(
   "${FREETYPE_FACE_SOURCE}"
   "free(scaled_bmp)"
   "FreeType color glyph scaling teardown must remain automatic"
+)
+
+# --- bitmap-font file candidate ownership ---
+require_source_text(
+  "${BITMAP_FONT_SOURCE}"
+  "std::unique_ptr<FILE, decltype(&fclose)> f("
+  "bitmap-font input files must enter scoped ownership"
+)
+require_source_text(
+  "${BITMAP_FONT_SOURCE}"
+  "std::unique_ptr<lUInt8, decltype(&std::free)> candidate("
+  "bitmap-font bytes must remain scoped until validation"
+)
+require_source_text(
+  "${BITMAP_FONT_SOURCE}"
+  "fread(candidate.get(), 1, sz, f.get()) != sz"
+  "bitmap-font reads must compare the requested byte count"
+)
+require_source_text(
+  "${BITMAP_FONT_SOURCE}"
+  "*pfont = candidate.release()"
+  "bitmap-font publication must be the explicit ownership transfer"
+)
+require_source_text(
+  "${BITMAP_FONT_HEADER}"
+  "hfont receives NULL on failure"
+  "bitmap-font output ownership must remain documented"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "invalid bitmap font candidate was published"
+  "bitmap-font ownership must retain invalid-candidate coverage"
+)
+forbid_source_text(
+  "${BITMAP_FONT_SOURCE}"
+  "*pfont = (lvfont_handle) malloc"
+  "bitmap-font candidates must not publish raw allocations"
+)
+forbid_source_text(
+  "${BITMAP_FONT_SOURCE}"
+  "free( *pfont )"
+  "bitmap-font validation failure must remain automatic"
+)
+forbid_source_text(
+  "${BITMAP_FONT_SOURCE}"
+  "fclose(f)"
+  "bitmap-font input teardown must remain automatic"
 )
 
 # --- XPointer shared-state ownership ---

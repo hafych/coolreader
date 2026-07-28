@@ -700,6 +700,14 @@ buffer only while copying the smaller BGRA image back into its existing
 storage. Native coverage repeats a synthetic 4-by-4 to 2-by-2 scale and checks
 both the copied solid-color pixels and every adjusted metric under sanitizers.
 
+The legacy bitmap-font loader treats its file and complete malloc-backed image
+as scoped candidates. It reads bytes with a byte-count contract, validates the
+header and performs any endian fixups before publishing the handle through the
+C API; every failure leaves the output null. The matching `lvfontClose()` call
+remains the documented caller-side transfer boundary. Native coverage opens
+the same minimal valid LFNT image twice and rejects a corrupt-header candidate
+without publishing or leaking it.
+
 `ldomXPointer` stores its shared mutable state in `shared_ptr<XPointerData>`.
 Ordinary copies intentionally retain alias semantics, while `clear()` publishes
 a fresh null state and leaves aliases alive. The protected clone boundary,
