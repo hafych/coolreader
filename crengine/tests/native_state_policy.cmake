@@ -31,6 +31,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lstridmap.cpp" NAME_ID_MAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvhashtable.h" HASH_TABLE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvarray.h" VALUE_ARRAY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvref.h" REF_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvptrvec.h" PTR_VECTOR_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrefcache.h" REF_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
@@ -1487,6 +1488,73 @@ forbid_source_text(
   "${REF_HEADER}"
   "free( _array )"
   "reference-vector teardown must not mix allocation families"
+)
+
+# --- owning/borrowed pointer-vector slot and item lifecycle ---
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "std::vector<T *> _list"
+  "pointer-vector slots must use container-backed storage"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "void discardSlot(int index)"
+  "pointer-vector item disposal must use one ownership boundary"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "std::unique_ptr<T> item(_list[index])"
+  "owning pointer-vector disposal must scope item ownership"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "std::vector<std::unique_ptr<T> > owners"
+  "owning pointer-vector copies must scope partial clones"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "if constexpr (ownItems)"
+  "pointer-vector ownership branches must be compile-time explicit"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "storage[i] = v[i]"
+  "borrowed pointer-vector copies must preserve non-owning views"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "_list[_count] = NULL"
+  "pointer-vector transfers must clear inactive slots"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "std::sort(_list.begin(), _list.begin() + _count"
+  "pointer-vector sorting must stay typed"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "T * * _list"
+  "pointer vectors must not own a raw slot array"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "cr_realloc( _list"
+  "pointer-vector growth must not use realloc"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "free( _list"
+  "pointer-vector teardown must not free raw slot storage"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "delete _list"
+  "pointer-vector item disposal must remain scope-bound"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "qsort(_list"
+  "pointer-vector sorting must not use an erased comparator"
 )
 
 # --- reference-cache bucket, index and export ownership ---

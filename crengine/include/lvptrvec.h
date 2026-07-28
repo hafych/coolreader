@@ -34,6 +34,12 @@
 #include <stdlib.h>
 #include "lvmemman.h"
 
+#include <algorithm>
+#include <climits>
+#include <memory>
+#include <stdexcept>
+#include <vector>
+
 /** \brief template which implements vector of pointer
 
     Automatically deletes objects when vector items are destroyed.
@@ -41,20 +47,28 @@
 template < class T, bool ownItems = true >
 class LVPtrVector
 {
-    T * * _list;
+    std::vector<T *> _list;
     int _size;
     int _count;
-    LVPtrVector & operator = (LVPtrVector&) {
-        // no assignment
-        return *this;
+    LVPtrVector &operator=(const LVPtrVector &) = delete;
+
+    void discardSlot(int index)
+    {
+        if constexpr (ownItems) {
+            std::unique_ptr<T> item(_list[index]);
+            _list[index] = NULL;
+        } else {
+            _list[index] = NULL;
+        }
     }
+
 public:
     /// default constructor
-    LVPtrVector() : _list(NULL), _size(0), _count(0) {}
+    LVPtrVector() : _list(), _size(0), _count(0) {}
     /// retrieves item from specified position
     T * operator [] ( int pos ) const { return _list[pos]; }
     /// returns pointer array
-    T ** get() { return _list; }
+    T ** get() { return _list.empty() ? NULL : _list.data(); }
     /// retrieves item from specified position
     T * get( int pos ) const { return _list[pos]; }
     /// retrieves item reference from specified position
@@ -62,27 +76,37 @@ public:
     /// ensures that size of vector is not less than specified value
     void reserve( int size )
     {
-        if ( size > _size )
-        {
-            _list = cr_realloc( _list, size );
-            for (int i=_size; i<size; i++)
-                _list[i] = NULL;
-            _size = size;
-        }
+        if (size <= _size)
+            return;
+        _list.resize(static_cast<size_t>(size), NULL);
+        _size = size;
     }
     void sort(int (comparator)(const T ** item1, const T ** item2 ) ) {
-    	qsort(_list, _count, sizeof(T*), (int (*)(const void *, const void *))comparator);
+        if (!comparator || _count < 2)
+            return;
+        std::sort(_list.begin(), _list.begin() + _count,
+                [comparator](T *left, T *right) {
+                    const T *leftView = left;
+                    const T *rightView = right;
+                    return comparator(&leftView, &rightView) < 0;
+                });
     }
     /// sets item by index (extends vector if necessary)
     void set( int index, T * item )
     {
-        reserve( index+1 );
-        while (length()<index)
-            add(NULL);
-        if ( ownItems && _list[index] )
-            delete _list[index];
+        if (index < 0)
+            return;
+        if (index == INT_MAX)
+            throw std::length_error("LVPtrVector index overflow");
+        reserve(index + 1);
+        if (_list[index] == item) {
+            if (_count <= index)
+                _count = index + 1;
+            return;
+        }
+        discardSlot(index);
         _list[index] = item;
-        if (_count<=index)
+        if (_count <= index)
             _count = index + 1;
     }
     /// returns size of buffer
@@ -94,37 +118,25 @@ public:
     /// clears all items
     void clear()
     {
-        if (_list)
-        {
-            int cnt = _count;
-            _count = 0;
-            if ( ownItems ) {
-                for (int i=cnt - 1; i>=0; --i)
-                    if (_list[i])
-                        delete _list[i];
-            }
-            free( _list );
-        }
-        _list = NULL;
-        _size = 0;
+        const int count = _count;
         _count = 0;
+        for (int i = count - 1; i >= 0; --i)
+            discardSlot(i);
+        std::vector<T *>().swap(_list);
+        _size = 0;
     }
     /// removes several items from vector
     void erase( int pos, int count )
     {
         if ( count<=0 )
             return;
-        if ( pos<0 || pos+count > _count )
+        if (pos < 0 || pos > _count || count > _count - pos)
             crFatalError();
         int i;
         for (i=0; i<count; i++)
         {
             if (_list[pos+i])
-            {
-                if ( ownItems )
-                    delete _list[pos+i];
-                _list[pos+i] = NULL;
-            }
+                discardSlot(pos + i);
         }
         for (i=pos+count; i<_count; i++)
         {
@@ -141,11 +153,9 @@ public:
         int i;
         T * item = _list[pos];
         for ( i=pos; i<_count-1; i++ )
-        {
             _list[i] = _list[i+1];
-            //_list[i+1] = NULL;
-        }
-        _count--;
+        --_count;
+        _list[_count] = NULL;
         return item;
     }
     /// returns vector index of specified pointer, -1 if not found
@@ -178,10 +188,9 @@ public:
             return NULL;
         T * item = _list[pos];
         for ( i=pos; i<_count-1; i++ )
-        {
             _list[i] = _list[i+1];
-        }
-        _count--;
+        --_count;
+        _list[_count] = NULL;
         return item;
     }
     /// adds new item to end of vector
@@ -191,8 +200,18 @@ public:
     {
         if (pos<0 || pos>_count)
             pos = _count;
-        if ( _count >= _size )
-            reserve( _count * 3 / 2  + 8 );
+        if (_count == INT_MAX)
+            throw std::length_error("LVPtrVector insertion overflow");
+        if (_count >= _size) {
+            const long long desiredSize =
+                    static_cast<long long>(_count) * 3 / 2 + 8;
+            int grownSize = desiredSize > INT_MAX
+                    ? INT_MAX
+                    : static_cast<int>(desiredSize);
+            if (grownSize < _count + 1)
+                grownSize = _count + 1;
+            reserve(grownSize);
+        }
         for (int i=_count; i>pos; --i)
             _list[i] = _list[i-1];
         _list[pos] = item;
@@ -201,6 +220,9 @@ public:
     /// move item to specified position, other items will be shifted
     void move( int indexTo, int indexFrom )
     {
+        if (indexTo < 0 || indexTo >= _count
+                || indexFrom < 0 || indexFrom >= _count)
+            crFatalError();
         if ( indexTo==indexFrom )
             return;
         T * p = _list[indexFrom];
@@ -216,23 +238,31 @@ public:
     /// reverse items
     void reverse()
     {
-        if ( empty() )
-            return;
-        for ( int i=0; i < _count/2; i++ ) {
-            T * tmp = _list[i];
-            _list[i] = _list[_count-1 - i];
-            _list[_count-1 - i] = tmp;
-        }
+        std::reverse(_list.begin(), _list.begin() + _count);
     }
     /// copy constructor
     LVPtrVector( const LVPtrVector & v )
-        : _list(NULL), _size(0), _count(0)
+        : _list(), _size(0), _count(0)
     {
-        if ( v._count>0 ) {
-            reserve( v._count );
-            for ( int i=0; i<v._count; i++ )
-                add( new T(*v[i]) );
+        if (v._count <= 0)
+            return;
+        std::vector<T *> storage(
+                static_cast<size_t>(v._count), NULL);
+        if constexpr (ownItems) {
+            std::vector<std::unique_ptr<T> > owners(
+                    static_cast<size_t>(v._count));
+            for (int i = 0; i < v._count; ++i) {
+                if (v[i])
+                    owners[i].reset(new T(*v[i]));
+            }
+            for (int i = 0; i < v._count; ++i)
+                storage[i] = owners[i].release();
+        } else {
+            for (int i = 0; i < v._count; ++i)
+                storage[i] = v[i];
         }
+        _list.swap(storage);
+        _size = _count = v._count;
     }
     /// stack-like interface: pop top item from stack
     T * pop()

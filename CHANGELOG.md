@@ -230,6 +230,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   `unique_ptr<LVRef<T>[]>`. Copy, growth, self-append, sparse set, trim and
   erase no longer depend on raw arrays, mixed allocation families or stale
   inactive references.
+- Native pointer vectors now keep slots in `std::vector`, scope owning item
+  disposal with `unique_ptr`, roll back partial deep copies and shallow-copy
+  borrowed views. Remove/pop transfers clear inactive slots, null gaps survive
+  copies, and typed sorting replaces the erased `qsort` bridge.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is

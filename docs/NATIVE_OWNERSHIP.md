@@ -180,6 +180,15 @@ Sparse `set()` allocates the addressed slot, trim constructs real reference
 objects instead of writing into `malloc` bytes, and erase clears inactive slots
 immediately. Its public icon/battery-facing API remains unchanged.
 
+`LVPtrVector` keeps its contiguous compatibility slots in `vector<T*>`.
+`ownItems=true` remains an owning adoption contract: replacement, erase and
+clear move each slot through a local `unique_ptr` before destruction, while
+`remove()` and `pop()` clear the inactive slot and transfer the raw pointer to
+their caller. Owning copies build all clones under temporary `unique_ptr`
+guards before publishing them and preserve null gaps. `ownItems=false` copies
+only borrowed views and never deletes them. Typed `std::sort` replaces the
+erased `qsort` bridge while `get()` retains the legacy contiguous view.
+
 `LVRefCache` and `LVIndexedRefCache` own bucket roots and collision links
 through vectors of `unique_ptr`. Collision teardown unlinks iteratively, while
 the indexed cache keeps only non-owning node views in vector-backed index

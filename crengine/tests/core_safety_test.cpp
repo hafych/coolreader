@@ -2,6 +2,7 @@
 #include "lvstreamfragment.h"
 #include "lvarray.h"
 #include "lvhashtable.h"
+#include "lvptrvec.h"
 #include "lvrefcache.h"
 #include "lvstring8collection.h"
 #include "lvstring32hashedcollection.h"
@@ -213,6 +214,72 @@ static lUInt32 calcHash(RefCacheTestRef &value) {
     if (!value.isNull() && value->value() == 99)
         throw std::runtime_error("reference cache hash blocked");
     return 1;
+}
+
+class PointerVectorTestValue {
+    int _value;
+    static int _liveCount;
+    static int _copyCount;
+    static int _copyBudget;
+
+public:
+    explicit PointerVectorTestValue(int value)
+        : _value(value) {
+        ++_liveCount;
+    }
+
+    PointerVectorTestValue(const PointerVectorTestValue &value)
+        : _value(value._value) {
+        if (_copyBudget == 0)
+            throw std::runtime_error("pointer vector copy blocked");
+        if (_copyBudget > 0)
+            --_copyBudget;
+        ++_liveCount;
+        ++_copyCount;
+    }
+
+    ~PointerVectorTestValue() {
+        --_liveCount;
+    }
+
+    int value() const {
+        return _value;
+    }
+
+    static int liveCount() {
+        return _liveCount;
+    }
+
+    static int copyCount() {
+        return _copyCount;
+    }
+
+    static void resetCopies() {
+        _copyCount = 0;
+        _copyBudget = -1;
+    }
+
+    static void setCopyBudget(int budget) {
+        _copyBudget = budget;
+    }
+};
+
+int PointerVectorTestValue::_liveCount = 0;
+int PointerVectorTestValue::_copyCount = 0;
+int PointerVectorTestValue::_copyBudget = -1;
+
+static int pointerVectorValueComparator(
+        const PointerVectorTestValue **left,
+        const PointerVectorTestValue **right) {
+    if (!*left)
+        return *right ? 1 : 0;
+    if (!*right)
+        return -1;
+    if ((*left)->value() < (*right)->value())
+        return -1;
+    if ((*left)->value() > (*right)->value())
+        return 1;
+    return 0;
 }
 
 static int testMutex() {
@@ -2039,6 +2106,126 @@ static int testReferenceVectorOwnership() {
     }
     if (RefCacheTestValue::liveCount() != 0)
         return fail("reference vector fill storage leaked a value");
+    return 0;
+}
+
+static int testPointerVectorOwnership() {
+    if (PointerVectorTestValue::liveCount() != 0)
+        return fail("pointer vector fixture started with live values");
+    {
+        LVPtrVector<PointerVectorTestValue> source;
+        source.add(new PointerVectorTestValue(1));
+        source.add(new PointerVectorTestValue(2));
+        PointerVectorTestValue::setCopyBudget(1);
+        bool copyThrew = false;
+        try {
+            LVPtrVector<PointerVectorTestValue> failedCopy(source);
+        } catch (const std::runtime_error &) {
+            copyThrew = true;
+        }
+        PointerVectorTestValue::resetCopies();
+        if (!copyThrew || PointerVectorTestValue::liveCount() != 2)
+            return fail("failed pointer vector copy leaked a partial clone");
+    }
+    if (PointerVectorTestValue::liveCount() != 0)
+        return fail("pointer vector failed-copy source leaked values");
+
+    {
+        LVPtrVector<PointerVectorTestValue> values;
+        values.add(new PointerVectorTestValue(3));
+        values.pushHead(new PointerVectorTestValue(1));
+        values.insert(1, new PointerVectorTestValue(2));
+        values.reverse();
+        values.move(0, 2);
+        values.sort(pointerVectorValueComparator);
+        PointerVectorTestValue *orderedFirst = values.first();
+        PointerVectorTestValue *orderedMiddle = values[1];
+        PointerVectorTestValue *orderedLast = values.last();
+        if (values.length() != 3
+                || !orderedFirst || orderedFirst->value() != 1
+                || !orderedMiddle || orderedMiddle->value() != 2
+                || !orderedLast || orderedLast->value() != 3)
+            return fail("pointer vector ordering operations lost an item");
+
+        PointerVectorTestValue *same = values[0];
+        values.set(0, same);
+        if (values[0] != same || PointerVectorTestValue::liveCount() != 3)
+            return fail("pointer vector same-slot set deleted its item");
+        values.set(0, new PointerVectorTestValue(4));
+        values.set(5, new PointerVectorTestValue(6));
+        if (values.length() != 6
+                || !values[0] || values[0]->value() != 4
+                || !values[1] || values[1]->value() != 2
+                || !values[2] || values[2]->value() != 3
+                || values[3] != NULL || values[4] != NULL
+                || !values[5] || values[5]->value() != 6
+                || PointerVectorTestValue::liveCount() != 4)
+            return fail("pointer vector sparse set corrupted owned slots");
+
+        PointerVectorTestValue::resetCopies();
+        LVPtrVector<PointerVectorTestValue> copied(values);
+        if (copied.length() != 6 || copied.size() != 6
+                || !copied[0] || !copied[1] || !copied[5]
+                || copied[0] == values[0] || copied[1] == values[1]
+                || copied[0]->value() != 4 || copied[5]->value() != 6
+                || copied[3] != NULL || copied[4] != NULL
+                || PointerVectorTestValue::copyCount() != 4
+                || PointerVectorTestValue::liveCount() != 8)
+            return fail("owning pointer vector copy was not deep");
+        values.clear();
+        if (PointerVectorTestValue::liveCount() != 4)
+            return fail("pointer vector clear invalidated its deep copy");
+
+        PointerVectorTestValue *transferred = copied.remove(0);
+        if (!transferred || transferred->value() != 4
+                || copied.length() != 5 || copied.get()[5] != NULL
+                || PointerVectorTestValue::liveCount() != 4)
+            return fail("pointer vector remove did not transfer ownership");
+        delete transferred;
+        copied.erase(2, 2);
+        if (copied.length() != 3
+                || !copied[2] || copied[2]->value() != 6
+                || PointerVectorTestValue::liveCount() != 3)
+            return fail("pointer vector erase lost shifted ownership");
+        transferred = copied.popHead();
+        if (!transferred || transferred->value() != 2)
+            return fail("pointer vector popHead returned the wrong owner");
+        delete transferred;
+        copied.erase(0, 1);
+        transferred = copied.pop();
+        if (!transferred || transferred->value() != 6
+                || !copied.empty() || copied.get()[0] != NULL)
+            return fail("pointer vector pop did not clear its inactive slot");
+        delete transferred;
+    }
+    if (PointerVectorTestValue::liveCount() != 0)
+        return fail("owning pointer vector lifecycle leaked values");
+
+    {
+        PointerVectorTestValue *first = new PointerVectorTestValue(11);
+        PointerVectorTestValue *second = new PointerVectorTestValue(12);
+        LVPtrVector<PointerVectorTestValue, false> views;
+        views.add(first);
+        views.set(2, second);
+        PointerVectorTestValue::resetCopies();
+        PointerVectorTestValue::setCopyBudget(0);
+        LVPtrVector<PointerVectorTestValue, false> copiedViews(views);
+        PointerVectorTestValue::resetCopies();
+        if (copiedViews.length() != 3
+                || copiedViews[0] != first || copiedViews[1] != NULL
+                || copiedViews[2] != second
+                || PointerVectorTestValue::copyCount() != 0)
+            return fail("borrowed pointer vector copy cloned its views");
+        views.erase(0, 1);
+        views.clear();
+        copiedViews.clear();
+        if (PointerVectorTestValue::liveCount() != 2)
+            return fail("borrowed pointer vector deleted a viewed item");
+        delete first;
+        delete second;
+    }
+    if (PointerVectorTestValue::liveCount() != 0)
+        return fail("borrowed pointer vector fixture leaked values");
     return 0;
 }
 
@@ -4014,6 +4201,8 @@ int main() {
     if (testValueArrayOwnership() != 0)
         return 1;
     if (testReferenceVectorOwnership() != 0)
+        return 1;
+    if (testPointerVectorOwnership() != 0)
         return 1;
     if (testReferenceCacheOwnership() != 0)
         return 1;
