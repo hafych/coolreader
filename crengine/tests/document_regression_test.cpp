@@ -1,8 +1,10 @@
 #include "fb2def.h"
 #include "lvdocview.h"
 #include "lvfntman.h"
+#include "lvhtmlparser.h"
 #include "lvtinydom.h"
 #include "lvstreamutils.h"
+#include "lvxmlutils.h"
 
 #include <algorithm>
 #include <atomic>
@@ -356,6 +358,56 @@ static int testDocumentMapOwnership(ldomDocument *document) {
                     U"map-owner-rollback-value")
                 != rollbackValueId)
         return fail("DOM map snapshot accepted an oversized ID count");
+    return 0;
+}
+
+static int testLegacyAutoCloseRuleOwnership() {
+    static const char fixture[] =
+            "<html><body>"
+            "<p>first<p>second"
+            "<ul><li>alpha<li>beta</ul>"
+            "</body></html>";
+    for (int iteration = 0; iteration < 2; ++iteration) {
+        LVStreamRef stream = LVCreateMemoryStream(
+                const_cast<char *>(fixture),
+                static_cast<int>(sizeof(fixture) - 1),
+                true, LVOM_READ);
+        std::unique_ptr<ldomDocument> document =
+                std::make_unique<ldomDocument>();
+        document->setDOMVersionRequested(20200101);
+        document->setDocFlags(0);
+        document->setNodeTypes(fb2_elem_table);
+        document->setAttributeTypes(fb2_attr_table);
+        document->setNameSpaceTypes(fb2_ns_table);
+        ldomDocumentWriterFilter writer(
+                document.get(), false, HTML_AUTOCLOSE_TABLE);
+        LVHTMLParser parser(stream, &writer);
+        if (!parser.CheckFormat() || !parser.Parse())
+            return fail("legacy autoclose owner fixture did not parse");
+
+        ldomXPointer firstParagraph = document->createXPointer(
+                U"/html/body/p[1]/text()[1]");
+        ldomXPointer secondParagraph = document->createXPointer(
+                U"/html/body/p[2]/text()[1]");
+        ldomXPointer firstItem = document->createXPointer(
+                U"/html/body/ul[1]/li[1]/text()[1]");
+        ldomXPointer secondItem = document->createXPointer(
+                U"/html/body/ul[1]/li[2]/text()[1]");
+        if (firstParagraph.isNull()
+                || secondParagraph.isNull()
+                || firstItem.isNull()
+                || secondItem.isNull()
+                || firstParagraph.getText() != U"first"
+                || secondParagraph.getText() != U"second"
+                || firstItem.getText() != U"alpha"
+                || secondItem.getText() != U"beta"
+                || firstParagraph.getNode()->getParentNode()
+                    == secondParagraph.getNode()->getParentNode()
+                || firstItem.getNode()->getParentNode()
+                    == secondItem.getNode()->getParentNode())
+            return fail(
+                    "legacy autoclose rules changed sibling ownership");
+    }
     return 0;
 }
 
@@ -990,6 +1042,8 @@ int main() {
     if (testNavigationGraphOwnership(first.get()) != 0)
         return 1;
     if (testDocumentMapOwnership(first.get()) != 0)
+        return 1;
+    if (testLegacyAutoCloseRuleOwnership() != 0)
         return 1;
     first.reset();
     second.reset();

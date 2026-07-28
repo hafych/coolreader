@@ -2791,7 +2791,7 @@ protected:
     bool _libRuParseAsPre;
     lUInt16 _styleAttrId;
     lUInt16 _classAttrId;
-    lUInt16 * _rules[MAX_ELEMENT_TYPE_ID];
+    std::array<std::vector<lUInt16>, MAX_ELEMENT_TYPE_ID> _rules;
     bool _tagBodyCalled;
     // Some states used when gDOMVersionRequested >= 20200824
     bool _htmlTagSeen;

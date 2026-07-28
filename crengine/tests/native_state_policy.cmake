@@ -5958,3 +5958,50 @@ forbid_source_text(
   "_idNodeMap.clear();"
   "DOM map deserialization must not mutate the live ID index incrementally"
 )
+
+# --- legacy HTML autoclose rule ownership ---
+require_source_text(
+  "${DOM_HEADER}"
+  "std::array<std::vector<lUInt16>, MAX_ELEMENT_TYPE_ID> _rules"
+  "legacy HTML autoclose rules must use nested RAII storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "const std::vector<lUInt16> &rule = _rules[tag_id]"
+  "legacy autoclose traversal must borrow its owned rule vector"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<lUInt16> candidate"
+  "legacy autoclose rule replacement must remain scoped"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_rules[id].swap(candidate)"
+  "duplicate legacy rules must replace storage automatically"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "ldomDocumentWriterFilter::~ldomDocumentWriterFilter() = default"
+  "legacy autoclose teardown must remain container-managed"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "legacy autoclose rules changed sibling ownership"
+  "legacy autoclose ownership must retain malformed-HTML coverage"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "lUInt16 * _rules[MAX_ELEMENT_TYPE_ID]"
+  "legacy autoclose rules must not own raw arrays"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_rules[ id ] = new lUInt16"
+  "legacy autoclose rule creation must not use manual arrays"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete[] _rules[i]"
+  "legacy autoclose rule teardown must remain automatic"
+)

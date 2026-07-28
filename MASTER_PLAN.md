@@ -165,7 +165,8 @@ DRM или ограничений доступа, подбор/получени�
   selection-range split/draw/text owner publication, включая batched
   word/filter/crop/extended-word owner-list factories, а также bounded
   transactional TOC/page-map graph deserialization и whole-snapshot DOM
-  name/attribute/value/ID-node map publication.
+  name/attribute/value/ID-node map publication, плюс RAII legacy HTML
+  autoclose-rule tables.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

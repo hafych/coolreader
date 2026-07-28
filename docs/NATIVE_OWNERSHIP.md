@@ -674,3 +674,9 @@ ID-to-node serialization uses a typed vector and deterministic `std::sort`
 instead of a manual scratch array. Native regressions verify byte-stable output,
 successful whole-snapshot replacement, retained ID-node lookup, corrupted-input
 rollback and oversized-count rejection.
+
+The legacy pre-20200824 HTML autoclose table is an array of owned rule vectors.
+Construction stages each rule in a local vector and swaps duplicate tag entries,
+while modern DOM versions simply retain an empty table with automatic teardown.
+The legacy parser regression processes two malformed HTML lifecycles and verifies
+that unclosed paragraphs and list items still become the same sibling nodes.

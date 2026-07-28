@@ -14832,16 +14832,18 @@ void ldomDocumentWriterFilter::appendStyle( const lChar32 * style )
 // Legacy auto close handler (gDOMVersionRequested < 20200824)
 void ldomDocumentWriterFilter::AutoClose( lUInt16 tag_id, bool open )
 {
-    lUInt16 * rule = _rules[tag_id];
-    if ( !rule )
+    const std::vector<lUInt16> &rule = _rules[tag_id];
+    if (rule.empty())
         return;
     if ( open ) {
         ldomElementWriter * found = NULL;
         ldomElementWriter * p = _currNode;
         while ( p && !found ) {
             lUInt16 id = p->_element->getNodeId();
-            for ( int i=0; rule[i]; i++ ) {
-                if ( rule[i]==id ) {
+            for (lUInt16 closeId : rule) {
+                if (!closeId)
+                    break;
+                if (closeId == id) {
                     found = p;
                     break;
                 }
@@ -14860,7 +14862,7 @@ void ldomDocumentWriterFilter::AutoClose( lUInt16 tag_id, bool open )
             }
         }
     } else {
-        if ( !rule[0] )
+        if (!rule.front())
             _currNode = pop( _currNode, _currNode->getElement()->getNodeId() );
     }
 }
@@ -16065,8 +16067,6 @@ ldomDocumentWriterFilter::ldomDocumentWriterFilter(ldomDocument * document, bool
         return;
     }
     lUInt16 i;
-    for ( i=0; i<MAX_ELEMENT_TYPE_ID; i++ )
-        _rules[i] = NULL;
     lUInt16 items[MAX_ELEMENT_TYPE_ID];
     for ( i=0; rules[i]; i++ ) {
         const char ** rule = rules[i];
@@ -16077,24 +16077,19 @@ ldomDocumentWriterFilter::ldomDocumentWriterFilter(ldomDocument * document, bool
         }
         if ( j>=1 ) {
             lUInt16 id = items[0];
-            _rules[ id ] = new lUInt16[j];
-            for ( int k=0; k<j; k++ ) {
-                _rules[id][k] = k==j-1 ? 0 : items[k+1];
-            }
+            if (id >= _rules.size())
+                continue;
+            std::vector<lUInt16> candidate;
+            candidate.reserve(j);
+            for (int k = 0; k < j; ++k)
+                candidate.push_back(
+                        k == j - 1 ? 0 : items[k + 1]);
+            _rules[id].swap(candidate);
         }
     }
 }
 
-ldomDocumentWriterFilter::~ldomDocumentWriterFilter()
-{
-    if (_document->getDOMVersionRequested() >= 20200824) {
-        return;
-    }
-    for ( int i=0; i<MAX_ELEMENT_TYPE_ID; i++ ) {
-        if ( _rules[i] )
-            delete[] _rules[i];
-    }
-}
+ldomDocumentWriterFilter::~ldomDocumentWriterFilter() = default;
 
 #if BUILD_LITE!=1
 static const char * doc_file_magic = "CR3\n";
