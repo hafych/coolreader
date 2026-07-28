@@ -29,18 +29,11 @@
 #include "../include/lvstreamutils.h"
 #include "../include/crlog.h"
 
-static const lChar32 * const OPC_PropertiesContentType = U"application/vnd.openxmlformats-package.core-properties+xml";
+#include <memory>
+#include <utility>
+#include <vector>
 
-OpcPart::~OpcPart()
-{
-    LVHashTable<lString32, LVHashTable<lString32, lString32> *>::iterator it = m_relations.forwardIterator();
-    LVHashTable<lString32, LVHashTable<lString32, lString32> *>::pair* p;
-    while ((p = it.next()) != NULL) {
-        LVHashTable<lString32, lString32>* relationsTable = p->value;
-        if (relationsTable)
-            delete relationsTable;
-    }
-}
+static const lChar32 * const OPC_PropertiesContentType = U"application/vnd.openxmlformats-package.core-properties+xml";
 
 LVStreamRef OpcPart::open()
 {
@@ -53,7 +46,7 @@ lString32 OpcPart::getRelatedPartName(const lChar32 * const relationType, const 
         readRelations();
         m_relationsValid = true;
     }
-    LVHashTable<lString32, lString32> *relationsTable = m_relations.get(relationType);
+    RelationTable *relationsTable = m_relations.get(relationType);
     if( relationsTable ) {
         if( id.empty() ) {
             LVHashTable<lString32, lString32>::iterator it = relationsTable->forwardIterator();
@@ -79,26 +72,34 @@ void OpcPart::readRelations()
     LVStreamRef container_stream = m_package->open(relsPath);
 
     if ( !container_stream.isNull() ) {
-        ldomDocument * doc = LVParseXMLStream( container_stream );
+        std::unique_ptr<ldomDocument> doc(
+                LVParseXMLStream(container_stream));
         lString32 srcPath = LVExtractPath(m_name);
 
         if ( doc ) {
+            std::vector<std::unique_ptr<RelationTable> > relationOwners;
+            LVHashTable<lString32, RelationTable *> relations(16);
             ldomNode *root = doc->nodeFromXPath(cs32("Relationships"));
             if( root ) {
+                relationOwners.reserve(root->getChildCount());
                 for(int i = 0; i < root->getChildCount(); i++) {
                     ldomNode * relationshipNode = root->getChildNode((lUInt32)i);
                     const lString32 relType = relationshipNode->getAttributeValue(U"Type");
-                    LVHashTable<lString32, lString32> *relationsTable = m_relations.get(relType);
+                    RelationTable *relationsTable = relations.get(relType);
                     if( !relationsTable ) {
-                        relationsTable = new LVHashTable<lString32, lString32>(16);
-                        m_relations.set(relType, relationsTable);
+                        std::unique_ptr<RelationTable> table(
+                                new RelationTable(16));
+                        relationsTable = table.get();
+                        relationOwners.push_back(std::move(table));
+                        relations.set(relType, relationsTable);
                     }
                     const lString32 id = relationshipNode->getAttributeValue(U"Id");
                     relationsTable->set( id, getTargetPath(srcPath, relationshipNode->getAttributeValue(U"TargetMode"),
                                                            relationshipNode->getAttributeValue(U"Target")) );
                 }
+                m_relationOwners.swap(relationOwners);
+                m_relations.swap(relations);
             }
-            delete doc;
         }
     }
 }
@@ -130,7 +131,8 @@ lString32 OpcPackage::getContentPartName(const lChar32 *contentType)
 
 OpcPartRef OpcPackage::getPart(const lString32 partName)
 {
-    return OpcPartRef(createPart(this, partName));
+    std::unique_ptr<OpcPart> part = createPart(this, partName);
+    return OpcPartRef(part.release());
 }
 
 bool OpcPackage::partExist(const lString32 partName)
@@ -141,10 +143,13 @@ bool OpcPackage::partExist(const lString32 partName)
 
 void OpcPackage::readCoreProperties(CRPropRef doc_props)
 {
+    if ( doc_props.isNull() )
+        return;
     LVStreamRef propStream = openContentPart(OPC_PropertiesContentType);
 
     if ( !propStream.isNull() ) {
-        ldomDocument * propertiesDoc = LVParseXMLStream( propStream );
+        std::unique_ptr<ldomDocument> propertiesDoc(
+                LVParseXMLStream(propStream));
         if ( propertiesDoc ) {
             lString32 author = propertiesDoc->textFromXPath( cs32("coreProperties/creator") );
             lString32 title = propertiesDoc->textFromXPath( cs32("coreProperties/title") );
@@ -154,7 +159,6 @@ void OpcPackage::readCoreProperties(CRPropRef doc_props)
             doc_props->setString(DOC_PROP_AUTHORS, author );
             doc_props->setString(DOC_PROP_LANGUAGE, language );
             doc_props->setString(DOC_PROP_DESCRIPTION, description );
-            delete propertiesDoc;
         } else {
             CRLog::error("Couldn't parse core properties");
         }
@@ -167,19 +171,20 @@ void OpcPackage::readContentTypes()
 {
     LVStreamRef mtStream = m_container->OpenStream(U"[Content_Types].xml", LVOM_READ );
     if ( !mtStream.isNull() ) {
-        ldomDocument * doc = LVParseXMLStream( mtStream );
+        std::unique_ptr<ldomDocument> doc(LVParseXMLStream(mtStream));
         if( doc ) {
+            LVHashTable<lString32, lString32> contentTypes(16);
             ldomNode *root = doc->nodeFromXPath(cs32("Types"));
             if(root) {
                 for(int i = 0; i < root->getChildCount(); i++) {
                     ldomNode * typeNode = root->getChildNode(i);
 
                     if(typeNode->getNodeName() == cs32("Override")) //Don't care about Extensions
-                        m_contentTypes.set( typeNode->getAttributeValue(U"ContentType"),
+                        contentTypes.set( typeNode->getAttributeValue(U"ContentType"),
                                             typeNode->getAttributeValue(U"PartName") );
                 }
+                m_contentTypes.swap(contentTypes);
             }
-            delete doc;
         }
     }
 }

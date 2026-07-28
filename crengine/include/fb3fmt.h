@@ -31,21 +31,25 @@
 #include "../include/lvtinydom.h"
 #include "../include/lvopc.h"
 
+#include <memory>
+
 bool DetectFb3Format( LVStreamRef stream );
 bool ImportFb3Document( LVStreamRef stream, ldomDocument * doc, LVDocViewCallback * progressCallback, CacheLoadingCallback * formatCallback );
 
 class fb3ImportContext
 {
 private:
+    /// Non-owning view; the import context is scoped inside its package.
     OpcPackage *m_package;
     OpcPartRef m_bookPart;
-    ldomDocument *m_descDoc;
+    std::unique_ptr<ldomDocument> m_descDoc;
 public:
     fb3ImportContext(OpcPackage *package);
-    virtual ~fb3ImportContext();
+    virtual ~fb3ImportContext() = default;
 
     lString32 geImageTarget(const lString32 relationId);
     LVStreamRef openBook();
+    /// Returns a non-owning view into the cached description document.
     ldomDocument *getDescription();
 public:
     lString32 m_coverImage;

@@ -432,3 +432,15 @@ copy directly, deep-copies that state, and keeps factory candidates scoped until
 the legacy raw-return boundary transfers ownership. Regression coverage also
 round-trips escaped synchronization text, ensuring decoding reads the encoded
 input rather than uninitialized output storage.
+
+The common XML and HTML document factories keep both the candidate
+`ldomDocument` and parser scope-owned, releasing the document only through the
+legacy raw-return API after format detection and parsing succeed. OPC packages
+own relation tables in a vector of `unique_ptr`; the hash table contains only
+stable non-owning views and is published together with the complete owner
+candidate. Content-type and core-property parse documents are scoped in the
+same way. An FB3 import context borrows its enclosing package, owns its cached
+description DOM and returns only a non-owning view, while the body parser uses
+automatic storage. The end-to-end in-memory FB3 archive regression covers
+content types, relationships, metadata, cached description, successful import,
+and XML-depth rejection without publishing partial documents.

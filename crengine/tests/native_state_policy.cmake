@@ -10,6 +10,10 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvopc.h" OPC_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvopc.cpp" OPC_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/fb3fmt.h" FB3_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/fb3fmt.cpp" FB3_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstsheet.cpp" STYLESHEET_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
@@ -3660,4 +3664,126 @@ forbid_source_text(
   "${PROPERTIES_SOURCE}"
   "LVPumpStream( targetStream, stream )"
   "property saving must not hide target write failures behind an unchecked pump"
+)
+
+# --- XML/HTML document factories and FB3/OPC ownership ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<ldomDocument> doc(new ldomDocument())"
+  "XML and HTML document factories must retain parse candidates automatically"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LVXMLParser parser(stream, &writer)"
+  "the XML document factory must scope its parser"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LVHTMLParser parser(stream, &writerFilter)"
+  "the HTML document factory must scope its parser"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "return doc.release()"
+  "document factories must transfer ownership only at their legacy raw-return boundary"
+)
+require_source_text(
+  "${OPC_HEADER}"
+  "std::vector<std::unique_ptr<RelationTable> > m_relationOwners"
+  "OPC relation tables must have one explicit owner collection"
+)
+require_source_text(
+  "${OPC_HEADER}"
+  "LVHashTable<lString32, RelationTable *> m_relations"
+  "the OPC relation hash must remain a non-owning lookup index"
+)
+require_source_text(
+  "${OPC_HEADER}"
+  "std::unique_ptr<OpcPart> createPart"
+  "OPC part factories must retain candidates until reference transfer"
+)
+require_source_text(
+  "${OPC_SOURCE}"
+  "std::vector<std::unique_ptr<RelationTable> > relationOwners"
+  "OPC relation parsing must build a scoped ownership candidate"
+)
+require_source_text(
+  "${OPC_SOURCE}"
+  "m_relationOwners.swap(relationOwners)"
+  "OPC relation owners must publish only after complete parsing"
+)
+require_source_text(
+  "${OPC_SOURCE}"
+  "m_relations.swap(relations)"
+  "OPC relation lookup views must publish with their owners"
+)
+require_source_text(
+  "${OPC_SOURCE}"
+  "std::unique_ptr<ldomDocument> propertiesDoc"
+  "OPC core-property parse documents must remain scope-owned"
+)
+require_source_text(
+  "${FB3_HEADER}"
+  "std::unique_ptr<ldomDocument> m_descDoc"
+  "the FB3 import context must own its cached description document"
+)
+require_source_text(
+  "${FB3_SOURCE}"
+  "m_descDoc.reset(LVParseXMLStream(descStream))"
+  "the FB3 description factory result must enter its owner immediately"
+)
+require_source_text(
+  "${FB3_SOURCE}"
+  "return m_descDoc.get()"
+  "the FB3 description accessor must expose only a non-owning view"
+)
+require_source_text(
+  "${FB3_SOURCE}"
+  "LVXMLParser parser(bookStream, &fb3Writer)"
+  "the FB3 body parser must use automatic lifetime"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testOpcFb3Ownership()"
+  "FB3/OPC ownership must retain end-to-end native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "FB3 parser published a depth-budget failure"
+  "FB3 ownership regression must retain failure cleanup coverage"
+)
+forbid_source_text(
+  "${OPC_HEADER}"
+  "LVHashTable<lString32, LVHashTable<lString32, lString32> *> m_relations"
+  "OPC relation tables must not regress to raw owning hash values"
+)
+forbid_source_text(
+  "${OPC_SOURCE}"
+  "delete relationsTable"
+  "OPC relation teardown must remain automatic"
+)
+forbid_source_text(
+  "${FB3_HEADER}"
+  "ldomDocument *m_descDoc"
+  "the FB3 description cache must not own a raw document pointer"
+)
+forbid_source_text(
+  "${FB3_SOURCE}"
+  "delete  m_descDoc"
+  "FB3 description teardown must remain automatic"
+)
+forbid_source_text(
+  "${FB3_SOURCE}"
+  "LVFileFormatParser * parser = new LVXMLParser"
+  "FB3 parser teardown must remain automatic"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LVFileFormatParser * parser = new LVXMLParser(stream, &writer)"
+  "the XML document factory must not regress to a manually deleted parser"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LVFileFormatParser * parser = new LVHTMLParser(stream, &writerFilter)"
+  "the HTML document factory must not regress to a manually deleted parser"
 )

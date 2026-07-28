@@ -32,6 +32,9 @@
 #include "lvhashtable.h"
 #include "props.h"
 
+#include <memory>
+#include <vector>
+
 /*
  * Open Packaging Conventions (OPC)
  * The OPC is specified in Part 2 of the Office Open XML standards ISO/IEC 29500:2008 and ECMA-376
@@ -43,8 +46,9 @@ class OpcPackage;
 
 class OpcPart : public LVRefCounter
 {
+    typedef LVHashTable<lString32, lString32> RelationTable;
 public:
-    ~OpcPart();
+    ~OpcPart() = default;
     LVStreamRef open();
     lString32 getRelatedPartName(const lChar32 * const relationType, const lString32 id = lString32());
     OpcPartRef getRelatedPart(const lChar32 * const relationType, const lString32 id = lString32());
@@ -55,19 +59,22 @@ protected:
     }
     void readRelations();
     lString32 getTargetPath(const lString32 srcPath, const lString32 targetMode, lString32 target);
-    OpcPart* createPart(OpcPackage* package, lString32 name) {
-        return new OpcPart(package, name);
+    std::unique_ptr<OpcPart> createPart(
+            OpcPackage* package, lString32 name) {
+        return std::unique_ptr<OpcPart>(new OpcPart(package, name));
     }
 private:
-    LVHashTable<lString32, LVHashTable<lString32, lString32> *> m_relations;
+    std::vector<std::unique_ptr<RelationTable> > m_relationOwners;
+    /// Non-owning lookup views into m_relationOwners.
+    LVHashTable<lString32, RelationTable *> m_relations;
+    /// Non-owning package view; every part is package-lifetime scoped.
     OpcPackage* m_package;
     lString32 m_name;
     bool m_relationsValid;
 private:
-    // non copyable
-    OpcPart();
-    OpcPart( const OpcPart& );
-    OpcPart& operator=( const OpcPart& );
+    OpcPart() = delete;
+    OpcPart( const OpcPart& ) = delete;
+    OpcPart& operator=( const OpcPart& ) = delete;
 };
 
 
@@ -78,10 +85,9 @@ private:
     LVContainerRef m_container;
     LVHashTable<lString32, lString32> m_contentTypes;
 private:
-    // non copyable
-    OpcPackage();
-    OpcPackage( const OpcPackage& );
-    OpcPackage& operator=( const OpcPart& );
+    OpcPackage() = delete;
+    OpcPackage( const OpcPackage& ) = delete;
+    OpcPackage& operator=( const OpcPackage& ) = delete;
 public:
     OpcPackage(LVContainerRef container) : OpcPart(this, U"/"),
         m_contentTypesValid(false), m_container(container),

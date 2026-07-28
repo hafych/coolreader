@@ -14325,29 +14325,19 @@ ldomDocument * LVParseXMLStream( LVStreamRef stream,
 {
     if ( stream.isNull() )
         return NULL;
-    bool error = true;
-    ldomDocument * doc;
-    doc = new ldomDocument();
+    std::unique_ptr<ldomDocument> doc(new ldomDocument());
     doc->setDocFlags( 0 );
 
-    ldomDocumentWriter writer(doc);
+    ldomDocumentWriter writer(doc.get());
     doc->setNodeTypes( elem_table );
     doc->setAttributeTypes( attr_table );
     doc->setNameSpaceTypes( ns_table );
 
     /// FB2 format
-    LVFileFormatParser * parser = new LVXMLParser(stream, &writer);
-    if ( parser->CheckFormat() ) {
-        if ( parser->Parse() ) {
-            error = false;
-        }
-    }
-    delete parser;
-    if ( error ) {
-        delete doc;
-        doc = NULL;
-    }
-    return doc;
+    LVXMLParser parser(stream, &writer);
+    if ( parser.CheckFormat() && parser.Parse() )
+        return doc.release();
+    return NULL;
 }
 
 ldomDocument * LVParseHTMLStream( LVStreamRef stream,
@@ -14357,29 +14347,20 @@ ldomDocument * LVParseHTMLStream( LVStreamRef stream,
 {
     if ( stream.isNull() )
         return NULL;
-    bool error = true;
-    ldomDocument * doc;
-    doc = new ldomDocument();
+    std::unique_ptr<ldomDocument> doc(new ldomDocument());
     doc->setDocFlags( 0 );
 
-    ldomDocumentWriterFilter writerFilter(doc, false, HTML_AUTOCLOSE_TABLE);
+    ldomDocumentWriterFilter writerFilter(
+            doc.get(), false, HTML_AUTOCLOSE_TABLE);
     doc->setNodeTypes( elem_table );
     doc->setAttributeTypes( attr_table );
     doc->setNameSpaceTypes( ns_table );
 
     /// FB2 format
-    LVFileFormatParser * parser = new LVHTMLParser(stream, &writerFilter);
-    if ( parser->CheckFormat() ) {
-        if ( parser->Parse() ) {
-            error = false;
-        }
-    }
-    delete parser;
-    if ( error ) {
-        delete doc;
-        doc = NULL;
-    }
-    return doc;
+    LVHTMLParser parser(stream, &writerFilter);
+    if ( parser.CheckFormat() && parser.Parse() )
+        return doc.release();
+    return NULL;
 }
 
 #if 0

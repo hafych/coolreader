@@ -32,6 +32,8 @@
 #include "../include/lvxmlparser.h"
 #include "../include/crlog.h"
 
+#include <memory>
+
 static const lChar32 * const fb3_BodyContentType = U"application/fb3-body+xml";
 static const lChar32 * const fb3_DescriptionContentType = U"application/fb3-description+xml";
 static const lChar32 * const fb3_CoverRelationship = U"http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail";
@@ -120,10 +122,8 @@ bool ImportFb3Document( LVStreamRef stream, ldomDocument * doc, LVDocViewCallbac
 
     ldomDocumentWriter writer(doc);
     fb3DomWriter fb3Writer(&writer, &context);
-    LVFileFormatParser * parser = new LVXMLParser(bookStream, &fb3Writer);
-
-    bool ret = parser->Parse();
-    delete parser;
+    LVXMLParser parser(bookStream, &fb3Writer);
+    bool ret = parser.Parse();
 
     if ( !ret ) {
         CRLog::error("Couldn't parse a book");
@@ -138,14 +138,8 @@ bool ImportFb3Document( LVStreamRef stream, ldomDocument * doc, LVDocViewCallbac
     return ret;
 }
 
-fb3ImportContext::fb3ImportContext(OpcPackage *package) : m_package(package), m_descDoc(NULL)
+fb3ImportContext::fb3ImportContext(OpcPackage *package) : m_package(package)
 {
-}
-
-fb3ImportContext::~fb3ImportContext()
-{
-    if(m_descDoc)
-        delete  m_descDoc;
 }
 
 lString32 fb3ImportContext::geImageTarget(const lString32 relationId) {
@@ -164,10 +158,10 @@ ldomDocument *fb3ImportContext::getDescription()
         LVStreamRef descStream = m_package->openContentPart(fb3_DescriptionContentType);
 
         if ( !descStream.isNull() ) {
-            m_descDoc = LVParseXMLStream( descStream );
+            m_descDoc.reset(LVParseXMLStream(descStream));
         }
     }
-    return m_descDoc;
+    return m_descDoc.get();
 }
 
 void fb3DomWriter::writeDescription()

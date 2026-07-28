@@ -26,6 +26,7 @@
 #include "lvxmlparsercallback.h"
 #include "cri18n.h"
 #include "dtddef.h"
+#include "fb3fmt.h"
 #include "lstridmap.h"
 #include "logredactor.h"
 #include "parsebudget.h"
@@ -4295,6 +4296,129 @@ static std::vector<unsigned char> buildStoredZip(
     return bytes;
 }
 
+struct StoredZipEntrySpec {
+    std::string name;
+    std::vector<unsigned char> payload;
+};
+
+static std::vector<unsigned char> byteVector(const std::string &contents) {
+    return std::vector<unsigned char>(contents.begin(), contents.end());
+}
+
+static std::vector<unsigned char> buildStoredZipEntries(
+        const std::vector<StoredZipEntrySpec> &entries) {
+    std::vector<unsigned char> bytes;
+    std::vector<std::uint32_t> offsets;
+    for (const StoredZipEntrySpec &entry : entries) {
+        offsets.push_back(static_cast<std::uint32_t>(bytes.size()));
+        appendLe32(bytes, 0x04034b50);
+        appendLe16(bytes, 20);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(
+                bytes, static_cast<std::uint32_t>(entry.payload.size()));
+        appendLe32(
+                bytes, static_cast<std::uint32_t>(entry.payload.size()));
+        appendLe16(bytes, static_cast<std::uint16_t>(entry.name.size()));
+        appendLe16(bytes, 0);
+        bytes.insert(bytes.end(), entry.name.begin(), entry.name.end());
+        bytes.insert(
+                bytes.end(), entry.payload.begin(), entry.payload.end());
+    }
+
+    const std::uint32_t centralOffset =
+            static_cast<std::uint32_t>(bytes.size());
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        const StoredZipEntrySpec &entry = entries[i];
+        appendLe32(bytes, 0x02014b50);
+        appendLe16(bytes, 20);
+        appendLe16(bytes, 20);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(
+                bytes, static_cast<std::uint32_t>(entry.payload.size()));
+        appendLe32(
+                bytes, static_cast<std::uint32_t>(entry.payload.size()));
+        appendLe16(bytes, static_cast<std::uint16_t>(entry.name.size()));
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe16(bytes, 0);
+        appendLe32(bytes, 0);
+        appendLe32(bytes, offsets[i]);
+        bytes.insert(bytes.end(), entry.name.begin(), entry.name.end());
+    }
+
+    const std::uint32_t centralSize =
+            static_cast<std::uint32_t>(bytes.size()) - centralOffset;
+    appendLe32(bytes, 0x06054b50);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, static_cast<std::uint16_t>(entries.size()));
+    appendLe16(bytes, static_cast<std::uint16_t>(entries.size()));
+    appendLe32(bytes, centralSize);
+    appendLe32(bytes, centralOffset);
+    appendLe16(bytes, 0);
+    return bytes;
+}
+
+static std::vector<unsigned char> buildFb3Fixture(
+        const std::string &body) {
+    const std::string contentTypes =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<Types>"
+            "<Override PartName=\"/body.xml\" "
+            "ContentType=\"application/fb3-body+xml\"/>"
+            "<Override PartName=\"/description.xml\" "
+            "ContentType=\"application/fb3-description+xml\"/>"
+            "<Override PartName=\"/docProps/core.xml\" "
+            "ContentType=\"application/vnd.openxmlformats-package."
+            "core-properties+xml\"/>"
+            "</Types>";
+    const std::string rootRelations =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<Relationships>"
+            "<Relationship Id=\"cover\" "
+            "Type=\"http://schemas.openxmlformats.org/package/2006/"
+            "relationships/metadata/thumbnail\" "
+            "Target=\"images/cover.png\"/>"
+            "</Relationships>";
+    const std::string bodyRelations =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<Relationships>"
+            "<Relationship Id=\"img1\" "
+            "Type=\"http://www.fictionbook.org/FictionBook3/"
+            "relationships/image\" Target=\"images/pic.png\"/>"
+            "</Relationships>";
+    const std::string description =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<fb3-description><lang>en-US</lang></fb3-description>";
+    const std::string coreProperties =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<coreProperties>"
+            "<creator>Fixture Author</creator>"
+            "<title>Fixture Title</title>"
+            "<language>core-lang</language>"
+            "<description>Fixture Description</description>"
+            "</coreProperties>";
+    return buildStoredZipEntries({
+        {"[Content_Types].xml", byteVector(contentTypes)},
+        {"_rels/.rels", byteVector(rootRelations)},
+        {"_rels/body.xml.rels", byteVector(bodyRelations)},
+        {"body.xml", byteVector(body)},
+        {"description.xml", byteVector(description)},
+        {"docProps/core.xml", byteVector(coreProperties)},
+        {"images/cover.png", {}},
+        {"images/pic.png", {}},
+    });
+}
+
 static std::vector<unsigned char> deflateRaw(
         const std::vector<unsigned char> &payload) {
     z_stream stream = {};
@@ -4391,6 +4515,117 @@ static bool verifyStreamRange(LVStreamRef stream,
             return false;
     }
     return true;
+}
+
+static int testOpcFb3Ownership() {
+    class ScopedFontManager {
+        bool _owned;
+    public:
+        explicit ScopedFontManager(bool owned) : _owned(owned) {}
+        ~ScopedFontManager() {
+            if (_owned)
+                ShutdownFontManager();
+        }
+    };
+
+    const bool ownsFontManager = fontMan == NULL;
+    if (ownsFontManager
+            && (!InitFontManager(lString8::empty_str) || !fontMan))
+        return fail("FB3 ownership fixture could not initialize fonts");
+    ScopedFontManager fontManagerScope(ownsFontManager);
+
+    const std::string body =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<fb3-body><section><title><p>Chapter</p></title>"
+            "<p>Hello FB3</p><image src=\"img1\"/>"
+            "</section></fb3-body>";
+    std::vector<unsigned char> archiveBytes = buildFb3Fixture(body);
+    LVStreamRef stream = LVCreateMemoryStream(
+            archiveBytes.data(), static_cast<int>(archiveBytes.size()),
+            true, LVOM_READ);
+    if (stream.isNull() || !DetectFb3Format(stream))
+        return fail("FB3/OPC ownership fixture was not detected");
+    if (stream->SetPos(0) != 0)
+        return fail("FB3/OPC fixture could not rewind");
+
+    LVContainerRef archive = LVOpenArchieve(stream);
+    if (archive.isNull())
+        return fail("FB3/OPC ownership fixture could not open");
+    OpcPackage package(archive);
+    if (package.getContentPartName(U"application/fb3-body+xml")
+                    != U"/body.xml"
+            || !package.partExist(U"/body.xml"))
+        return fail("OPC content-type snapshot was not published");
+
+    CRPropRef properties = LVCreatePropsContainer();
+    package.readCoreProperties(properties);
+    if (properties->getStringDef(DOC_PROP_TITLE) != U"Fixture Title"
+            || properties->getStringDef(DOC_PROP_AUTHORS)
+                    != U"Fixture Author"
+            || properties->getStringDef(DOC_PROP_LANGUAGE) != U"core-lang"
+            || properties->getStringDef(DOC_PROP_DESCRIPTION)
+                    != U"Fixture Description")
+        return fail("OPC core-properties document was not retained");
+
+    fb3ImportContext context(&package);
+    ldomDocument *description = context.getDescription();
+    if (!description
+            || context.getDescription() != description
+            || description->textFromXPath(
+                    cs32("fb3-description/lang")) != U"en-US")
+        return fail("FB3 description owner did not retain its cached view");
+    if (context.openBook().isNull()
+            || context.m_coverImage != U"images/cover.png"
+            || context.geImageTarget(U"img1") != U"images/pic.png")
+        return fail("OPC relation owners did not retain indexed targets");
+
+    if (stream->SetPos(0) != 0)
+        return fail("FB3 import fixture could not rewind");
+    std::unique_ptr<ldomDocument> imported(new ldomDocument());
+    if (!ImportFb3Document(stream, imported.get(), NULL, NULL)
+            || imported->getProps()->getStringDef(DOC_PROP_TITLE)
+                    != U"Fixture Title"
+            || imported->getProps()->getStringDef(DOC_PROP_LANGUAGE)
+                    != U"en-US"
+            || !imported->nodeFromXPath(cs32("FictionBook/body")))
+        return fail("FB3 import did not publish its complete document");
+
+    std::string deepXml = "<root>";
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        deepXml += "<n>";
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        deepXml += "</n>";
+    deepXml += "</root>";
+    std::unique_ptr<ldomDocument> rejected(
+            LVParseXMLStream(memoryStream(deepXml)));
+    if (rejected)
+        return fail("XML document factory published a rejected candidate");
+
+    std::unique_ptr<ldomDocument> html(LVParseHTMLStream(
+            memoryStream("<!doctype html><html><head><title>x</title></head>"
+                         "<body>owned</body></html>")));
+    if (!html)
+        return fail("HTML document factory did not transfer its owner");
+
+    std::string deepBody = "<fb3-body>";
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        deepBody += "<section>";
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        deepBody += "</section>";
+    deepBody += "</fb3-body>";
+    std::vector<unsigned char> rejectedArchive = buildFb3Fixture(deepBody);
+    LVStreamRef rejectedStream = LVCreateMemoryStream(
+            rejectedArchive.data(), static_cast<int>(rejectedArchive.size()),
+            true, LVOM_READ);
+    std::unique_ptr<ldomDocument> rejectedImport(new ldomDocument());
+    if (ImportFb3Document(
+            rejectedStream, rejectedImport.get(), NULL, NULL))
+        return fail("FB3 parser published a depth-budget failure");
+    return 0;
 }
 
 static int testArchiveContainerOwnership() {
@@ -5537,6 +5772,8 @@ int main() {
     if (testTcrStreamOwnership() != 0)
         return 1;
     if (testArchiveContainerOwnership() != 0)
+        return 1;
+    if (testOpcFb3Ownership() != 0)
         return 1;
     if (testStreamBufferOwnership() != 0)
         return 1;
