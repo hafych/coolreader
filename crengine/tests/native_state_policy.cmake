@@ -34,6 +34,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/hist.h" HISTORY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hist.cpp" HISTORY_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/props.cpp" PROPERTIES_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstring8collection.h" STRING8_COLLECTION_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring8collection.cpp" STRING8_COLLECTION_SOURCE)
@@ -3582,4 +3583,81 @@ forbid_source_text(
   "${POCKETBOOK_SOURCE}"
   "delete t"
   "PocketBook translator failure cleanup must remain automatic"
+)
+
+# --- property stream buffer, candidate and output ownership ---
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "std::vector<char> buf"
+  "property input bytes must use scoped container ownership"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "sz > ParseBudgetLimits::defaults().maxInputBytes"
+  "property input allocation must remain bounded"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "bytesRead != sz"
+  "property loading must reject short successful reads"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "CRPropRef candidate = clone()"
+  "property loading must stage updates in a scoped candidate"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "candidate->setString("
+  "property parsing must not mutate the live container incrementally"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "set(candidate)"
+  "property loading must publish only its complete candidate"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "if ( i + 1 >= str.length() )"
+  "property escape decoding must bound a trailing backslash"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "lString8 snapshot("
+  "property saving must stage output in owned string storage"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "bytesWritten == static_cast<lvsize_t>(snapshot.length())"
+  "property saving must require an exact target write"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testPropertyStreamOwnership()"
+  "property stream ownership must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "short property read published a partial snapshot"
+  "property regression must retain input rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "property save accepted a short target write"
+  "property regression must retain exact output coverage"
+)
+forbid_source_text(
+  "${PROPERTIES_SOURCE}"
+  "char * buf = new char"
+  "property input must not regress to manual array ownership"
+)
+forbid_source_text(
+  "${PROPERTIES_SOURCE}"
+  "delete[] buf"
+  "property input cleanup must remain automatic"
+)
+forbid_source_text(
+  "${PROPERTIES_SOURCE}"
+  "LVPumpStream( targetStream, stream )"
+  "property saving must not hide target write failures behind an unchecked pump"
 )

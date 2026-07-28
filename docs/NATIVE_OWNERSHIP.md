@@ -40,6 +40,15 @@ than duplicating ownership. Every GUI producer keeps a `.mo` translator in a
 scoped candidate until loading succeeds and publication releases it to the
 selected slot; failed candidates now clean up without a manual `delete`.
 
+Property-file loading owns its bounded input through `std::vector`, requires an
+exact stream read and applies decoded values to a cloned candidate before
+publishing the complete merged snapshot. Short reads, oversized input and
+invalid stream modes preserve the prior properties. Escape decoding bounds a
+trailing backslash and comment lines cannot become settings. Saving stages the
+complete UTF-8 representation in an owned `lString8` and reports both target
+errors and short successful writes instead of hiding them behind an unchecked
+stream pump.
+
 `HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
 transfer boundary, while `getDictList()` returns a non-owning pointer valid only

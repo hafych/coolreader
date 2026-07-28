@@ -27,9 +27,12 @@
  */
 
 #include "../include/props.h"
+#include "../include/parsebudget.h"
 #include "../include/serialbuf.h"
 #include "../include/lvstreamutils.h"
 #include <stdio.h>
+
+#include <vector>
 
 
 //============================================================================
@@ -592,6 +595,10 @@ static lString8 removeBackslashChars( lString8 str )
     for ( i=0; i<str.length(); i++ ) {
         char ch = str[i];
         if ( ch=='\\' ) {
+            if ( i + 1 >= str.length() ) {
+                out << '\\';
+                break;
+            }
             ch = str[++i];
             switch ( ch ) {
             case 'r':
@@ -616,20 +623,30 @@ static lString8 removeBackslashChars( lString8 str )
 /// read from stream
 bool CRPropAccessor::loadFromStream( LVStream * stream )
 {
-    if ( !stream || stream->GetMode()!=LVOM_READ )
+    if ( !stream || (stream->GetMode()!=LVOM_READ
+            && stream->GetMode()!=LVOM_READWRITE) )
         return false;
-    lvsize_t sz = stream->GetSize() - stream->GetPos();
-    if ( sz<=0 )
+    lvpos_t pos = stream->GetPos();
+    lvsize_t size = stream->GetSize();
+    if ( pos == LV_INVALID_SIZE || size == LV_INVALID_SIZE || pos >= size )
         return false;
-    char * buf = new char[sz + 3];
+    lvsize_t sz = size - pos;
+    if ( sz > ParseBudgetLimits::defaults().maxInputBytes )
+        return false;
+    std::vector<char> buf(static_cast<std::size_t>(sz) + 1, '\0');
     lvsize_t bytesRead = 0;
-    if ( stream->Read( buf, sz, &bytesRead )!=LVERR_OK ) {
-        delete[] buf;
+    if ( stream->Read( buf.data(), sz, &bytesRead )!=LVERR_OK
+            || bytesRead != sz )
         return false;
-    }
-    buf[sz] = 0;
-    char * p = buf;
-    if( (unsigned char)buf[0] == 0xEF && (unsigned char)buf[1]==0xBB && (unsigned char)buf[2]==0xBF )
+
+    CRPropRef candidate = clone();
+    if ( candidate.isNull() )
+        return false;
+    char * p = buf.data();
+    if ( sz >= 3
+            && static_cast<unsigned char>(buf[0]) == 0xEF
+            && static_cast<unsigned char>(buf[1]) == 0xBB
+            && static_cast<unsigned char>(buf[2]) == 0xBF )
         p += 3;
     // read lines from buffer
     while (*p) {
@@ -640,10 +657,12 @@ bool CRPropAccessor::loadFromStream( LVStream * stream )
                 eqpos = elp;
             elp++;
         }
-        if ( eqpos!=NULL && eqpos>p && *elp!='#' ) {
+        if ( eqpos!=NULL && eqpos>p && *p!='#' ) {
             lString8 name( p, (int)(eqpos - p) );
             lString8 value( eqpos+1, (int)(elp - eqpos - 1));
-            setString( name.c_str(), Utf8ToUnicode(removeBackslashChars(value)) );
+            candidate->setString(
+                    name.c_str(),
+                    Utf8ToUnicode(removeBackslashChars(value)) );
         }
         for ( ; *elp && *elp!='\r' && *elp!='\n'; elp++)
             ;
@@ -651,25 +670,25 @@ bool CRPropAccessor::loadFromStream( LVStream * stream )
 		while ( *p=='\r' || *p=='\n' )
 			p++;
     }
-    // cleanup
-    delete[] buf;
+    set(candidate);
     return true;
 }
 
 /// save to stream
 bool CRPropAccessor::saveToStream( LVStream * targetStream )
 {
-    if ( !targetStream || targetStream->GetMode()!=LVOM_WRITE )
+    if ( !targetStream || (targetStream->GetMode()!=LVOM_WRITE
+            && targetStream->GetMode()!=LVOM_READWRITE) )
         return false;
-    LVStreamRef streamref = LVCreateMemoryStream(NULL, 0, false, LVOM_WRITE);
-    LVStream * stream = streamref.get();
-
-    *stream << "\xEF\xBB\xBF";
+    lString8 snapshot("\xEF\xBB\xBF");
     for ( int i=0; i<getCount(); i++ ) {
-        *stream << getPath() << getName(i) << "=" << addBackslashChars(UnicodeToUtf8(getValue(i))) << "\r\n";
+        snapshot << getPath() << getName(i) << "="
+                 << addBackslashChars(UnicodeToUtf8(getValue(i))) << "\r\n";
     }
-    LVPumpStream( targetStream, stream );
-    return true;
+    lvsize_t bytesWritten = 0;
+    return targetStream->Write(
+                snapshot.c_str(), snapshot.length(), &bytesWritten) == LVERR_OK
+            && bytesWritten == static_cast<lvsize_t>(snapshot.length());
 }
 
 //============================================================================
@@ -951,4 +970,3 @@ bool CRPropAccessor::deserialize( SerialBuf & buf )
     buf.checkCRC( buf.pos() - pos );
     return !buf.error();
 }
-

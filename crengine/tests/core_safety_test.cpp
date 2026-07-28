@@ -30,6 +30,7 @@
 #include "logredactor.h"
 #include "parsebudget.h"
 #include "pdbfmt.h"
+#include "props.h"
 #include "rtfimp.h"
 #include "serialbuf.h"
 #include "textlang.h"
@@ -1709,6 +1710,198 @@ static LVStreamRef memoryStream(const std::string &contents) {
     return LVCreateMemoryStream(
             const_cast<char *>(contents.data()),
             static_cast<int>(contents.size()), true, LVOM_READ);
+}
+
+class MisreportingPropertyStream : public LVMemoryStream {
+    bool _valid;
+
+public:
+    explicit MisreportingPropertyStream(const std::string &contents)
+        : _valid(CreateCopy(
+                reinterpret_cast<const lUInt8 *>(contents.data()),
+                contents.size(), LVOM_READ) == LVERR_OK)
+    {
+    }
+
+    bool valid() const {
+        return _valid;
+    }
+
+    lverror_t Read(
+            void *buf, lvsize_t count, lvsize_t *bytesRead) override
+    {
+        lvsize_t actual = 0;
+        lverror_t result = LVMemoryStream::Read(buf, count, &actual);
+        if (bytesRead)
+            *bytesRead = actual > 0 ? actual - 1 : 0;
+        return result;
+    }
+};
+
+class OversizedPropertyStream : public LVStream {
+    int _readCalls;
+
+public:
+    OversizedPropertyStream() : _readCalls(0) {
+    }
+
+    lvopen_mode_t GetMode() override { return LVOM_READ; }
+
+    lverror_t Seek(lvoffset_t offset, lvseek_origin_t origin,
+            lvpos_t *newPos) override
+    {
+        if (offset != 0 || origin != LVSEEK_CUR)
+            return LVERR_FAIL;
+        if (newPos)
+            *newPos = 0;
+        return LVERR_OK;
+    }
+
+    lvsize_t GetSize() override {
+        return ParseBudgetLimits::defaults().maxInputBytes + 1;
+    }
+
+    lverror_t SetSize(lvsize_t) override { return LVERR_FAIL; }
+
+    lverror_t Read(void *, lvsize_t, lvsize_t *bytesRead) override {
+        ++_readCalls;
+        if (bytesRead)
+            *bytesRead = 0;
+        return LVERR_FAIL;
+    }
+
+    lverror_t Write(
+            const void *, lvsize_t, lvsize_t *bytesWritten) override
+    {
+        if (bytesWritten)
+            *bytesWritten = 0;
+        return LVERR_FAIL;
+    }
+
+    bool Eof() override { return false; }
+
+    int readCalls() const {
+        return _readCalls;
+    }
+};
+
+class RejectingPropertyWriteStream : public LVStream {
+    int _writeCalls;
+    bool _shortSuccess;
+
+public:
+    explicit RejectingPropertyWriteStream(bool shortSuccess = false)
+        : _writeCalls(0), _shortSuccess(shortSuccess)
+    {
+    }
+
+    lvopen_mode_t GetMode() override { return LVOM_WRITE; }
+
+    lverror_t Seek(
+            lvoffset_t, lvseek_origin_t, lvpos_t *) override
+    {
+        return LVERR_FAIL;
+    }
+
+    lverror_t SetSize(lvsize_t) override { return LVERR_FAIL; }
+
+    lverror_t Read(void *, lvsize_t, lvsize_t *bytesRead) override {
+        if (bytesRead)
+            *bytesRead = 0;
+        return LVERR_FAIL;
+    }
+
+    lverror_t Write(
+            const void *, lvsize_t count, lvsize_t *bytesWritten) override
+    {
+        ++_writeCalls;
+        if (_shortSuccess) {
+            if (bytesWritten)
+                *bytesWritten = count > 0 ? count - 1 : 0;
+            return LVERR_OK;
+        }
+        if (bytesWritten)
+            *bytesWritten = 0;
+        return LVERR_FAIL;
+    }
+
+    bool Eof() override { return false; }
+
+    int writeCalls() const {
+        return _writeCalls;
+    }
+};
+
+static int testPropertyStreamOwnership() {
+    CRPropRef properties = LVCreatePropsContainer();
+    properties->setString("stable", "old");
+    properties->setString("untouched", "keep");
+    const std::string input =
+            "\xEF\xBB\xBF"
+            "#ignored=value\n"
+            "stable=new\n"
+            "escaped=line\\nnext\\\\slash\\rreturn\n"
+            "trailing=value\\";
+    LVStreamRef inputStream = memoryStream(input);
+    if (inputStream.isNull()
+            || !properties->loadFromStream(inputStream.get()))
+        return fail("property loader rejected a valid scoped buffer");
+    if (properties->getStringDef("stable") != U"new"
+            || properties->getStringDef("untouched") != U"keep"
+            || properties->getStringDef("escaped")
+                    != U"line\nnext\\slash\rreturn"
+            || properties->getStringDef("trailing") != U"value\\"
+            || properties->hasProperty("#ignored"))
+        return fail("property loader did not publish the parsed snapshot");
+
+    lString32 largeValue;
+    largeValue.append(12000, U'x');
+    properties->setString("large", largeValue);
+    LVStreamRef output =
+            LVCreateMemoryStream(NULL, 0, false, LVOM_WRITE);
+    if (output.isNull() || !properties->saveToStream(output.get())
+            || output->GetSize() <= 10000
+            || output->SetPos(0) != 0)
+        return fail("property saver did not write its complete snapshot");
+    CRPropRef roundTrip = LVCreatePropsContainer();
+    if (!roundTrip->loadFromStream(output.get())
+            || roundTrip->getStringDef("escaped")
+                    != U"line\nnext\\slash\rreturn"
+            || roundTrip->getStringDef("trailing") != U"value\\"
+            || roundTrip->getStringDef("large") != largeValue)
+        return fail("property stream snapshot did not round-trip");
+
+    CRPropRef preserved = LVCreatePropsContainer();
+    preserved->setString("stable", "original");
+    const std::string replacement =
+            "stable=replaced\ncandidate=published\n";
+    MisreportingPropertyStream shortRead(replacement);
+    if (!shortRead.valid())
+        return fail("property short-read fixture could not initialize");
+    if (preserved->loadFromStream(&shortRead)
+            || preserved->getStringDef("stable") != U"original"
+            || preserved->hasProperty("candidate"))
+        return fail("short property read published a partial snapshot");
+
+    OversizedPropertyStream oversized;
+    if (preserved->loadFromStream(&oversized)
+            || oversized.readCalls() != 0
+            || preserved->getStringDef("stable") != U"original")
+        return fail("oversized property input reached allocation or publication");
+
+    RejectingPropertyWriteStream rejecting;
+    if (properties->saveToStream(&rejecting)
+            || rejecting.writeCalls() != 1)
+        return fail("property save reported success after target write failure");
+    RejectingPropertyWriteStream shortWrite(true);
+    if (properties->saveToStream(&shortWrite)
+            || shortWrite.writeCalls() != 1)
+        return fail("property save accepted a short target write");
+    if (properties->loadFromStream(NULL)
+            || properties->saveToStream(NULL)
+            || properties->saveToStream(inputStream.get()))
+        return fail("property streams accepted null or incompatible modes");
+    return 0;
 }
 
 static std::string historyDocument(const char *fileName,
@@ -5272,6 +5465,8 @@ int main() {
     if (testParserOwnedBuffers() != 0)
         return 1;
     if (testHistoryOwnership() != 0)
+        return 1;
+    if (testPropertyStreamOwnership() != 0)
         return 1;
     if (testStringCollectionOwnership() != 0)
         return 1;

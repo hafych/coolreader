@@ -141,7 +141,8 @@ DRM или ограничений доступа, подбор/получени�
   JPEG pool/error lifecycle, draw mark list, history XML/file/bookmark parse
   candidates, transactional snapshot publication и synchronization-record
   bookmark ownership, global i18n translator slots и GUI-side translation
-  candidates. Остальные участки мигрируются отдельными bounded-пакетами.
+  candidates, bounded properties input/candidate snapshots и exact-write
+  settings output. Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для
