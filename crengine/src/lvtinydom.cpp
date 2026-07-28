@@ -4892,72 +4892,50 @@ void ldomTextStorageChunk::ensureUnpacked()
 class ldomAttributeCollection
 {
 private:
-    lUInt16 _len;
-    lUInt16 _size;
-    lxmlAttribute * _list;
+    std::vector<lxmlAttribute> _list;
 public:
-    ldomAttributeCollection()
-    : _len(0), _size(0), _list(NULL)
-    {
-    }
-    ~ldomAttributeCollection()
-    {
-        if (_list)
-            free(_list);
-    }
+    ldomAttributeCollection() = default;
+    ~ldomAttributeCollection() = default;
     lxmlAttribute * operator [] (int index) { return &_list[index]; }
     const lxmlAttribute * operator [] (int index) const { return &_list[index]; }
     lUInt16 length() const
     {
-        return _len;
+        return static_cast<lUInt16>(_list.size());
     }
     lUInt32 get( lUInt16 nsId, lUInt16 attrId ) const
     {
-        for (lUInt16 i=0; i<_len; i++)
+        for (const lxmlAttribute &attribute : _list)
         {
-            if (_list[i].compare( nsId, attrId ))
-                return _list[i].index;
+            if (attribute.compare( nsId, attrId ))
+                return attribute.index;
         }
         return LXML_ATTR_VALUE_NONE;
     }
     void set( lUInt16 nsId, lUInt16 attrId, lUInt32 valueIndex )
     {
         // find existing
-        for (lUInt16 i=0; i<_len; i++)
+        for (lxmlAttribute &attribute : _list)
         {
-            if (_list[i].compare( nsId, attrId ))
+            if (attribute.compare( nsId, attrId ))
             {
-                _list[i].index = valueIndex;
+                attribute.index = valueIndex;
                 return;
             }
         }
         // add
-        if (_len>=_size)
-        {
-            _size += 4;
-            _list = cr_realloc( _list, _size );
-        }
-        _list[ _len++ ].setData(nsId, attrId, valueIndex);
+        lxmlAttribute candidate;
+        candidate.setData(nsId, attrId, valueIndex);
+        _list.push_back(candidate);
     }
     void add( lUInt16 nsId, lUInt16 attrId, lUInt32 valueIndex )
     {
-        // find existing
-        if (_len>=_size)
-        {
-            _size += 4;
-            _list = cr_realloc( _list, _size );
-        }
-        _list[ _len++ ].setData(nsId, attrId, valueIndex);
+        lxmlAttribute candidate;
+        candidate.setData(nsId, attrId, valueIndex);
+        _list.push_back(candidate);
     }
     void add( const lxmlAttribute * v )
     {
-        // find existing
-        if (_len>=_size)
-        {
-            _size += 4;
-            _list = cr_realloc( _list, _size );
-        }
-        _list[ _len++ ] = *v;
+        _list.push_back(*v);
     }
 };
 

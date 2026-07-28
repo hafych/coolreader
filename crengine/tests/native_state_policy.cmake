@@ -6218,3 +6218,70 @@ forbid_source_text(
   "delete pstyle->pseudo_elem_after_style"
   "CSS after-pseudo teardown must remain automatic"
 )
+
+# --- DOM mutable attribute collection ownership ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<lxmlAttribute> _list"
+  "DOM mutable attributes must use container-backed storage"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "compare( lUInt16 nsId, lUInt16 attrId ) const"
+  "DOM attribute lookup must use const borrowed entries"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "for (const lxmlAttribute &attribute : _list)"
+  "DOM attribute lookup must borrow vector-owned entries"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "lxmlAttribute candidate"
+  "DOM attribute append must stage a complete value"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_list.push_back(candidate)"
+  "DOM attribute append must publish through its owning vector"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "~ldomAttributeCollection() = default"
+  "DOM attribute teardown must remain container-managed"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM attribute owners did not preserve parsed values"
+  "DOM attribute ownership must retain parsed-value coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM attribute replacement appended a duplicate owner"
+  "DOM attribute ownership must retain replacement coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM attribute owners changed in persistent storage"
+  "DOM attribute ownership must retain persistence coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM attribute owners changed after mutable restore"
+  "DOM attribute ownership must retain mutable-restore coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "lxmlAttribute * _list"
+  "DOM mutable attributes must not own a raw backing array"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "cr_realloc( _list"
+  "DOM mutable attribute growth must not use realloc"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "free(_list)"
+  "DOM mutable attribute teardown must remain automatic"
+)

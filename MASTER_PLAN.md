@@ -167,7 +167,8 @@ DRM или ограничений доступа, подбор/получени�
   transactional TOC/page-map graph deserialization и whole-snapshot DOM
   name/attribute/value/ID-node map publication, плюс RAII legacy HTML
   autoclose-rule tables, lazy FreeType glyph-metric page ownership и shared
-  XPointer state ownership, а также scoped CSS pseudo-element style owners.
+  XPointer state ownership, scoped CSS pseudo-element style owners и
+  vector-backed mutable DOM attributes.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

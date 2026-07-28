@@ -1423,7 +1423,7 @@ struct lxmlAttribute
     lUInt16 nsid;
     lUInt16 id;
     lUInt32 index;
-    inline bool compare( lUInt16 nsId, lUInt16 attrId )
+    inline bool compare( lUInt16 nsId, lUInt16 attrId ) const
     {
         return (nsId == nsid || nsId == LXML_NS_ANY) && (id == attrId);
     }

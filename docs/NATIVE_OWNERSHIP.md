@@ -701,3 +701,9 @@ styles with `unique_ptr`. Selector application borrows those scoped owners;
 temporary slots before publishing the computed style to the shared cache.
 Rendered CSS coverage verifies one before/after node, clean cached styles and
 stable ownership across a repeated render.
+
+Mutable DOM elements store attributes in `vector<lxmlAttribute>`. Lookup and
+replacement borrow entries from that owner, while append stages a complete
+attribute before vector publication; collection teardown no longer pairs
+`realloc` with `free`. Document coverage verifies parsed values, replacement
+without duplication, append, and a mutable-to-persistent-to-mutable round trip.

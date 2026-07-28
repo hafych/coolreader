@@ -30,7 +30,12 @@ static std::unique_ptr<ldomDocument> parseFixture() {
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             "<FictionBook>"
             "<body><section><title><p>Regression chapter</p></title>"
-            "<p id=\"needle-paragraph\">"
+            "<p id=\"needle-paragraph\""
+            " data-owner-0=\"zero\" data-owner-1=\"one\""
+            " data-owner-2=\"two\" data-owner-3=\"three\""
+            " data-owner-4=\"four\" data-owner-5=\"five\""
+            " data-owner-6=\"six\" data-owner-7=\"seven\""
+            " data-owner-8=\"eight\">"
             "Alpha Needle middle needle omega.</p>"
             "</section></body>"
             "</FictionBook>";
@@ -125,6 +130,49 @@ static int snapshotDocument(
     snapshot.selectionText = selection.getRangeText(' ', 1000);
     if (snapshot.selectionText != U"Needle middle needle")
         return fail("selection range text changed");
+    return 0;
+}
+
+static int testDomAttributeCollectionOwnership(ldomDocument *document) {
+    ldomNode *paragraph =
+            document->getElementById(U"needle-paragraph");
+    if (!paragraph
+            || paragraph->getAttrCount() != 10
+            || paragraph->getAttributeValue("data-owner-0") != U"zero"
+            || paragraph->getAttributeValue("data-owner-8") != U"eight")
+        return fail("DOM attribute owners did not preserve parsed values");
+
+    const lUInt16 replaceId =
+            document->getAttrNameIndex("data-owner-4");
+    paragraph->setAttributeValue(
+            LXML_NS_NONE, replaceId, U"replaced-four");
+    if (paragraph->getAttrCount() != 10
+            || paragraph->getAttributeValue("data-owner-4")
+                    != U"replaced-four")
+        return fail("DOM attribute replacement appended a duplicate owner");
+
+    const lUInt16 appendId =
+            document->getAttrNameIndex("data-owner-9");
+    paragraph->setAttributeValue(
+            LXML_NS_NONE, appendId, U"nine");
+    if (paragraph->getAttrCount() != 11
+            || paragraph->getAttributeValue("data-owner-9") != U"nine")
+        return fail("DOM attribute append lost its owned value");
+
+    paragraph->persist();
+    if (!paragraph->isPersistent()
+            || paragraph->getAttrCount() != 11
+            || paragraph->getAttributeValue("data-owner-4")
+                    != U"replaced-four"
+            || paragraph->getAttributeValue("data-owner-9") != U"nine")
+        return fail("DOM attribute owners changed in persistent storage");
+
+    paragraph->modify();
+    if (paragraph->isPersistent()
+            || paragraph->getAttrCount() != 11
+            || paragraph->getAttributeValue("data-owner-0") != U"zero"
+            || paragraph->getAttributeValue("data-owner-9") != U"nine")
+        return fail("DOM attribute owners changed after mutable restore");
     return 0;
 }
 
@@ -1042,6 +1090,8 @@ int main() {
     if (testNavigationGraphOwnership(first.get()) != 0)
         return 1;
     if (testDocumentMapOwnership(first.get()) != 0)
+        return 1;
+    if (testDomAttributeCollectionOwnership(first.get()) != 0)
         return 1;
     if (testLegacyAutoCloseRuleOwnership() != 0)
         return 1;
