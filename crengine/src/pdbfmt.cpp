@@ -32,13 +32,77 @@
 #include "../include/lvxmlutils.h"
 #include "../include/lvhtmlparser.h"
 #include "../include/lvtextparser.h"
+#include "pdbfmt_internal.h"
 #include <ctype.h>
 
+#include <climits>
+#include <limits>
+#include <memory>
+#include <vector>
 #include <zlib.h>
 #define UNPACK_BUF_SIZE 0x40000
 
 // uncomment following line to save PDB content streams to /tmp
 //#define DUMP_PDB_CONTENTS
+
+namespace {
+
+class PDBInflateGuard {
+    z_stream *_stream;
+
+public:
+    explicit PDBInflateGuard(z_stream *stream)
+        : _stream(stream) {
+    }
+
+    PDBInflateGuard(const PDBInflateGuard &) = delete;
+    PDBInflateGuard &operator=(const PDBInflateGuard &) = delete;
+
+    ~PDBInflateGuard() {
+        inflateEnd(_stream);
+    }
+};
+
+}
+
+bool LVInflatePDBBuffer(const lUInt8 *compressed,
+        size_t compressedSize,
+        std::vector<lUInt8> &uncompressed) {
+    if ((!compressed && compressedSize > 0)
+            || compressedSize > std::numeric_limits<uInt>::max())
+        return false;
+
+    z_stream stream = {};
+    stream.zalloc = Z_NULL;
+    stream.zfree = Z_NULL;
+    stream.opaque = Z_NULL;
+    if (inflateInit(&stream) != Z_OK)
+        return false;
+    PDBInflateGuard streamGuard(&stream);
+
+    stream.avail_in = static_cast<uInt>(compressedSize);
+    stream.next_in = const_cast<Bytef *>(
+            reinterpret_cast<const Bytef *>(compressed));
+    std::vector<lUInt8> chunk(UNPACK_BUF_SIZE);
+    std::vector<lUInt8> candidate;
+    int result;
+    do {
+        stream.avail_out = static_cast<uInt>(chunk.size());
+        stream.next_out = chunk.data();
+        result = inflate(&stream, Z_SYNC_FLUSH);
+        if (result != Z_OK && result != Z_STREAM_END)
+            return false;
+        const size_t produced = chunk.size() - stream.avail_out;
+        if (produced > static_cast<size_t>(INT_MAX)
+                        - candidate.size())
+            return false;
+        candidate.insert(candidate.end(),
+                chunk.begin(), chunk.begin() + produced);
+    } while (result != Z_STREAM_END);
+
+    uncompressed.swap(candidate);
+    return true;
+}
 
 struct PDBHdr
 {
@@ -446,47 +510,6 @@ private:
     lUInt16 _mobiExtraDataFlags;
     CRPropRef m_doc_props;
 
-    // c.f., lvtinydom.cpp's legacy ldomUnpack
-    bool zlibUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize  ) {
-        lUInt8 tmp[UNPACK_BUF_SIZE]; // 256K buffer for uncompressed data
-        int ret;
-        z_stream z = {};
-        z.zalloc = Z_NULL;
-        z.zfree = Z_NULL;
-        z.opaque = Z_NULL;
-        ret = inflateInit( &z );
-        if ( ret != Z_OK )
-            return false;
-        z.avail_in = compsize;
-        z.next_in = (unsigned char *)compbuf;
-        lUInt32 uncompressed_size = 0;
-        lUInt8 *uncompressed_buf = NULL;
-        do {
-            z.avail_out = UNPACK_BUF_SIZE;
-            z.next_out = tmp;
-            ret = inflate( &z, Z_SYNC_FLUSH );
-            if (ret != Z_OK && ret != Z_STREAM_END) { // some error occured while unpacking
-                inflateEnd(&z);
-                if (uncompressed_buf)
-                    free(uncompressed_buf);
-                dstbuf = NULL;
-                dstsize = 0;
-                // printf("inflate() error: %d (%d > %d)\n", ret, compsize, uncompressed_size);
-                return false;
-            }
-            lUInt32 have = UNPACK_BUF_SIZE - z.avail_out;
-            uncompressed_buf = cr_realloc(uncompressed_buf, uncompressed_size + have);
-            memcpy(uncompressed_buf + uncompressed_size, tmp, have );
-            uncompressed_size += have;
-            // printf("inflate() additional call needed (%d > %d)\n", compsize, uncompressed_size);
-        } while (ret != Z_STREAM_END);
-        inflateEnd(&z);
-        dstsize = uncompressed_size;
-        dstbuf = uncompressed_buf;
-        // printf("inflate() done %d > %d\n", compsize, uncompressed_size);
-        return true;
-    }
-
     //LVPDBContainer * _container;
     bool unpack( LVArray<lUInt8> & dst, LVArray<lUInt8> & src ) {
         int srclen = src.length();
@@ -531,25 +554,19 @@ private:
                     }
                 }
             }
-        } else if ( _compression==10 ) {
-            // zlib
-            /// unpack data from src to dst
-            lUInt8 * dstbuf;
-            lUInt32 dstsize;
-            if ( !zlibUnpack( src.get(), src.size(), dstbuf, dstsize ) )
-                return false;
-            dst.add(dstbuf, dstsize);
-            free(dstbuf);
-        } else if ( _compression==17480 ) {
+        } else if (_compression == 10
+                || _compression == 17480) {
             // zlib
             // TODO: shouldn't it be HUFFMAN unpacker?
-            /// unpack data from src to dst
-            lUInt8 * dstbuf;
-            lUInt32 dstsize;
-            if ( !zlibUnpack( src.get(), src.size(), dstbuf, dstsize ) )
+            std::vector<lUInt8> uncompressed;
+            if (!LVInflatePDBBuffer(
+                        src.get(),
+                        static_cast<size_t>(src.length()),
+                        uncompressed))
                 return false;
-            dst.add(dstbuf, dstsize);
-            free(dstbuf);
+            if (!uncompressed.empty())
+                dst.add(uncompressed.data(),
+                        static_cast<int>(uncompressed.size()));
         }
         return true;
     }
@@ -1209,33 +1226,34 @@ bool isCorrectUtf8Text(LVStreamRef & stream) {
         sz = stream->GetSize();
     if (sz < 8)
         return false;
-    unsigned char * buf = new unsigned char[ sz ];
+    std::vector<unsigned char> buf(sz);
     lvsize_t bytesRead = 0;
-    if ( stream->Read( buf, sz, &bytesRead )!=LVERR_OK ) {
-        delete[] buf;
+    if (stream->Read(buf.data(), sz, &bytesRead) != LVERR_OK
+            || bytesRead != sz) {
         stream->SetPos( oldpos );
         return false;
     }
 
-    int res = 0;
-    res = AutodetectCodePageUtf(buf, sz, enc_name, lang_name);
-    delete[] buf;
+    int res = AutodetectCodePageUtf(
+            buf.data(), sz, enc_name, lang_name);
     return res != 0;
 }
 
 LVStreamRef GetPDBCoverpage(LVStreamRef stream)
 {
     doc_format_t contentFormat = doc_format_none;
-    PDBFile * pdb = new PDBFile();
-    LVPDBContainer * container = new LVPDBContainer();
+    std::unique_ptr<PDBFile> pdbOwner =
+            std::make_unique<PDBFile>();
+    std::unique_ptr<LVPDBContainer> containerOwner =
+            std::make_unique<LVPDBContainer>();
+    PDBFile *pdb = pdbOwner.get();
+    LVPDBContainer *container = containerOwner.get();
     if (!pdb->open(stream, container, false, contentFormat)) {
-        delete container;
-        delete pdb;
         return LVStreamRef();
     }
-    stream = LVStreamRef(pdb);
-    LVContainerRef cnt(container);
+    stream = LVStreamRef(pdbOwner.release());
     container->setStream(stream);
+    LVContainerRef cnt(containerOwner.release());
     LVStreamRef coverStream;
     lString32 coverName = pdb->getDocProps()->getStringDef(DOC_PROP_COVER_FILE);
     if (!coverName.empty()) {
@@ -1251,17 +1269,19 @@ LVStreamRef GetPDBCoverpage(LVStreamRef stream)
 bool ImportPDBDocument( LVStreamRef & stream, ldomDocument * doc, LVDocViewCallback * progressCallback, CacheLoadingCallback * formatCallback, doc_format_t & contentFormat )
 {
     contentFormat = doc_format_none;
-    PDBFile * pdb = new PDBFile();
-    LVPDBContainer * container = new LVPDBContainer();
+    std::unique_ptr<PDBFile> pdbOwner =
+            std::make_unique<PDBFile>();
+    std::unique_ptr<LVPDBContainer> containerOwner =
+            std::make_unique<LVPDBContainer>();
+    PDBFile *pdb = pdbOwner.get();
+    LVPDBContainer *container = containerOwner.get();
     if ( !pdb->open(stream, container, true, contentFormat) ) {
-        delete container;
-        delete pdb;
         return false;
     }
     pdb->getDocProps()->set(doc->getProps());
-    stream = LVStreamRef(pdb);
+    stream = LVStreamRef(pdbOwner.release());
     container->setStream(stream);
-    doc->setContainer(LVContainerRef(container));
+    doc->setContainer(LVContainerRef(containerOwner.release()));
 
 #if BUILD_LITE!=1
     if ( doc->openFromCache(formatCallback) ) {

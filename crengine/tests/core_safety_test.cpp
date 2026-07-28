@@ -28,6 +28,7 @@
 #include "lstridmap.h"
 #include "logredactor.h"
 #include "parsebudget.h"
+#include "pdbfmt.h"
 #include "rtfimp.h"
 #include "serialbuf.h"
 #include "textlang.h"
@@ -36,6 +37,7 @@
 #include "../src/lvstream/lvfilestream.h"
 #include "../src/lvstream/lvfilemappedstream.h"
 #include "../src/lvstream/lvmemorystream.h"
+#include "../src/pdbfmt_internal.h"
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
 #endif
@@ -2522,6 +2524,66 @@ static int testPaginationAuxiliaryOwnership() {
     return 0;
 }
 
+static int testImporterTransientOwnership() {
+    std::vector<lUInt8> payload(600000);
+    for (size_t index = 0; index < payload.size(); ++index) {
+        payload[index] = static_cast<lUInt8>(
+                (index * 31 + index / 257) & 0xFF);
+    }
+    uLongf compressedSize =
+            compressBound(static_cast<uLong>(payload.size()));
+    std::vector<lUInt8> compressed(compressedSize);
+    if (compress2(
+                compressed.data(),
+                &compressedSize,
+                payload.data(),
+                static_cast<uLong>(payload.size()),
+                Z_BEST_SPEED) != Z_OK)
+        return fail("PDB inflate fixture compression failed");
+    compressed.resize(static_cast<size_t>(compressedSize));
+
+    std::vector<lUInt8> uncompressed(3, 0xFF);
+    if (!LVInflatePDBBuffer(
+                compressed.data(), compressed.size(), uncompressed)
+            || uncompressed != payload)
+        return fail("PDB inflate lost a multi-chunk payload");
+
+    std::vector<lUInt8> truncated(
+            compressed.begin(), compressed.end() - 4);
+    std::vector<lUInt8> sentinel = { 7, 8, 9 };
+    if (LVInflatePDBBuffer(
+                truncated.data(), truncated.size(), sentinel)
+            || sentinel != std::vector<lUInt8>({ 7, 8, 9 }))
+        return fail("failed PDB inflate published partial output");
+    if (LVInflatePDBBuffer(NULL, 1, sentinel)
+            || sentinel != std::vector<lUInt8>({ 7, 8, 9 }))
+        return fail("invalid PDB inflate input changed output");
+
+    lUInt8 invalidPdb[96] = {};
+    LVStreamRef detectionStream = LVCreateMemoryStream(
+            invalidPdb, sizeof(invalidPdb), true);
+    doc_format_t contentFormat = doc_format_none;
+    if (DetectPDBFormat(detectionStream, contentFormat))
+        return fail("invalid PDB unexpectedly passed detection");
+
+    LVStreamRef coverStream = LVCreateMemoryStream(
+            invalidPdb, sizeof(invalidPdb), true);
+    if (!GetPDBCoverpage(coverStream).isNull())
+        return fail("invalid PDB unexpectedly returned a cover");
+
+    LVStreamRef importStream = LVCreateMemoryStream(
+            invalidPdb, sizeof(invalidPdb), true);
+    std::unique_ptr<ldomDocument> document(new ldomDocument());
+    if (ImportPDBDocument(
+                importStream,
+                document.get(),
+                NULL,
+                NULL,
+                contentFormat))
+        return fail("invalid PDB unexpectedly imported");
+    return 0;
+}
+
 static int testReferenceCacheOwnership() {
     if (RefCacheTestValue::liveCount() != 0)
         return fail("reference cache fixture started with live values");
@@ -4500,6 +4562,8 @@ int main() {
     if (testMatrixOwnership() != 0)
         return 1;
     if (testPaginationAuxiliaryOwnership() != 0)
+        return 1;
+    if (testImporterTransientOwnership() != 0)
         return 1;
     if (testReferenceCacheOwnership() != 0)
         return 1;

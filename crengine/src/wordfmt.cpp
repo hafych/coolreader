@@ -26,6 +26,7 @@
 #include "../include/lvtinydom.h"
 #include "../include/crlog.h"
 #include <mutex>
+#include <vector>
 
 //#ifndef ENABLE_ANTIWORD
 //#define ENABLE_ANTIWORD 1
@@ -790,18 +791,13 @@ bTranslateImage(diagram_type *pDiag, FILE *pFile, BOOL bMinimalInformation,
                 return FALSE;
             }
 
-            lUInt8 *pucJpeg, *pucTmp;
-            size_t  tLen;
-            int     iByte;
-
-            pucJpeg = (lUInt8*)malloc(len);
-            for (pucTmp = pucJpeg, tLen = 0; tLen < len; pucTmp++, tLen++) {
-                iByte = iNextByte(pFile);
+            std::vector<lUInt8> image(len);
+            for (size_t index = 0; index < len; ++index) {
+                int iByte = iNextByte(pFile);
                 if (iByte == EOF) {
-                    free(pucJpeg);
                     return FALSE;
                 }
-                *pucTmp = (UCHAR)iByte;
+                image[index] = static_cast<UCHAR>(iByte);
             }
 
             // add Image BLOB
@@ -809,14 +805,13 @@ bTranslateImage(diagram_type *pDiag, FILE *pFile, BOOL bMinimalInformation,
             name << "image";
             name << fmt::decimal(context.imageIndex++);
             name << (pImg->eImageType==imagetype_is_jpeg ? ".jpg" : ".png");
-            context.writer->OnBlob(name, pucJpeg, len);
+            context.writer->OnBlob(name, image.data(), len);
             context.writer->OnTagOpen(LXML_NS_NONE, U"img");
             context.writer->OnAttribute(
                     LXML_NS_NONE, U"src", name.c_str());
             context.writer->OnTagClose(
                     LXML_NS_NONE, U"img", true);
 
-            free(pucJpeg);
             return TRUE;
         }
      case imagetype_is_dib:

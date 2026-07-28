@@ -71,6 +71,14 @@ destinations are owned in LIFO order by `std::unique_ptr`; property-stack raw
 pointers are non-owning restoration views. Truncated groups are unwound before
 `OnStop()`, so deferred image callbacks remain inside the parser lifecycle.
 
+Word image callbacks now borrow bytes from an operation-scoped `vector`
+instead of a manually freed blob. PDB zlib decoding likewise accumulates
+multi-chunk output in a bounded vector under an inflate-state guard and swaps
+it into the caller only after `Z_STREAM_END`; corrupt input leaves prior output
+unchanged. PDB encoding detection uses vector scratch storage, while stream and
+container factory candidates remain in `unique_ptr` until their respective
+`LVStreamRef` and `LVContainerRef` ownership boundaries accept them.
+
 Cache-file serialization buffers, temporary draw mark lists and SVG decoder
 input/output buffers also use standard RAII containers. These operation-scoped
 resources cannot outlive their call and no longer rely on matching cleanup at

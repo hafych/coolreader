@@ -35,6 +35,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvptrvec.h" PTR_VECTOR_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvpagesplitter.h" PAGE_SPLITTER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrefcache.h" REF_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/pdbfmt.cpp" PDB_FORMAT_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/pdbfmt_internal.h" PDB_FORMAT_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
@@ -515,6 +517,118 @@ forbid_source_text(
   "${WORD_FORMAT_SOURCE}"
   "static int image_index"
   "Word image numbering must remain operation-local"
+)
+
+# --- Word/PDB transient import buffers and factory candidates ---
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "std::vector<lUInt8> image(len)"
+  "Word image blobs must use operation-scoped storage"
+)
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "context.writer->OnBlob(name, image.data(), len)"
+  "Word image callbacks must receive a view of scoped storage"
+)
+require_source_text(
+  "${PDB_FORMAT_INTERNAL_HEADER}"
+  "std::vector<lUInt8> &uncompressed"
+  "PDB inflate output must publish through RAII storage"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "PDBInflateGuard streamGuard(&stream)"
+  "PDB zlib state must use scoped teardown"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "std::vector<lUInt8> candidate"
+  "PDB inflate must build candidate output before publication"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "uncompressed.swap(candidate)"
+  "PDB inflate must publish only complete output"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "std::vector<unsigned char> buf(sz)"
+  "PDB encoding detection must use scoped scratch storage"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "std::unique_ptr<PDBFile> pdbOwner"
+  "PDB stream candidates must start with explicit ownership"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "std::unique_ptr<LVPDBContainer> containerOwner"
+  "PDB container candidates must start with explicit ownership"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "LVStreamRef(pdbOwner.release())"
+  "PDB stream ownership must transfer only at the reference boundary"
+)
+require_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "LVContainerRef(containerOwner.release())"
+  "PDB container ownership must transfer only at the reference boundary"
+)
+forbid_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "lUInt8 *pucJpeg"
+  "Word image blobs must not use raw owning pointers"
+)
+forbid_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "malloc(len)"
+  "Word image blob allocation must remain container-managed"
+)
+forbid_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "free(pucJpeg)"
+  "Word image blob teardown must remain automatic"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "cr_realloc(uncompressed_buf"
+  "PDB inflate growth must not use realloc"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "free(uncompressed_buf)"
+  "PDB inflate failure must not require manual cleanup"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "unsigned char * buf = new unsigned char"
+  "PDB detection scratch storage must not use raw arrays"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "delete[] buf"
+  "PDB detection scratch teardown must remain automatic"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "PDBFile * pdb = new PDBFile"
+  "PDB factories must not start with implicit raw ownership"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "LVPDBContainer * container = new LVPDBContainer"
+  "PDB container factories must not start with implicit raw ownership"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "delete pdb"
+  "PDB factory failure must not require manual stream deletion"
+)
+forbid_source_text(
+  "${PDB_FORMAT_SOURCE}"
+  "delete container"
+  "PDB factory failure must not require manual container deletion"
 )
 
 # --- legacy engine locks: fallback, RAII ownership and quiescent lifecycle ---

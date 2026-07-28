@@ -242,6 +242,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   bounded vector payloads, alias-safe batch append and deep copy semantics.
   Rendered lines also scope optional footnote-link lists with `unique_ptr`
   while preserving the lists' non-owning note references and ordering.
+- Word/PDB import paths now keep image, encoding-detection and multi-chunk zlib
+  buffers in scoped vectors. PDB inflate publishes only complete output, zlib
+  teardown is guarded, and PDB stream/container candidates transfer from
+  `unique_ptr` only at their reference-counted ownership boundaries.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is
