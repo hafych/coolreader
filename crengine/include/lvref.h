@@ -33,6 +33,7 @@
 #include "crlocks.h"
 #include "lvautoptr.h"
 
+#include <atomic>
 #include <climits>
 #include <memory>
 #include <stdexcept>
@@ -48,18 +49,34 @@ public:
     void * _obj;
     static ref_count_rec_t null_ref;
     static ref_count_rec_t protected_null_ref;
+    static std::atomic<bool> fail_next_allocation_for_regression;
 
     ref_count_rec_t( void * obj ) : _refcount(1), _obj(obj) { }
-#if (LDOM_USE_OWN_MEM_MAN==1)
-    void * operator new( size_t )
+    static void failNextAllocationForRegression()
     {
+        fail_next_allocation_for_regression.store(
+                true, std::memory_order_release);
+    }
+    void * operator new( size_t size )
+    {
+        if (fail_next_allocation_for_regression.exchange(
+                    false, std::memory_order_acq_rel))
+            throw std::bad_alloc();
+#if (LDOM_USE_OWN_MEM_MAN==1)
+        (void)size;
         return ldomRefStorage().alloc();
+#else
+        return ::operator new(size);
+#endif
     }
     void operator delete( void * p )
     {
+#if (LDOM_USE_OWN_MEM_MAN==1)
         ldomRefStorage().free((ldomMemBlock *)p);
-    }
+#else
+        ::operator delete(p);
 #endif
+    }
 };
 
 /// sample ref counter implementation for LVFastRef
@@ -390,11 +407,11 @@ private:
 public:
 
 	/// creates reference to copy
-	LVRef & clone()
+	LVRef clone() const
 	{
 		if ( isNull() )
 			return LVRef(NULL);
-		return LVRef( new T( *_ptr ) );
+		return LVRef(new T(*get()));
 	}
 
     /// Default constructor.
@@ -408,7 +425,9 @@ public:
     explicit LVRef( T * ptr ) {
         if (ptr)
         {
+            std::unique_ptr<T> candidate(ptr);
             _ptr = new ref_count_rec_t(ptr);
+            candidate.release();
         }
         else
         {
@@ -468,8 +487,12 @@ public:
         {
             if (_ptr->_obj!=obj)
             {
+                std::unique_ptr<T> candidate(obj);
+                std::unique_ptr<ref_count_rec_t> record(
+                        new ref_count_rec_t(obj));
                 Release();
-                _ptr = new ref_count_rec_t(obj);
+                candidate.release();
+                _ptr = record.release();
             }
         }
         return *this;

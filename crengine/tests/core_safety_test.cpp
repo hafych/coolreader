@@ -3552,6 +3552,75 @@ static int testValueArrayOwnership() {
     return 0;
 }
 
+class RefAdoptionTestValue {
+    int _value;
+    static int _liveCount;
+
+public:
+    explicit RefAdoptionTestValue(int value)
+        : _value(value)
+    {
+        ++_liveCount;
+    }
+
+    RefAdoptionTestValue(const RefAdoptionTestValue &value)
+        : _value(value._value)
+    {
+        ++_liveCount;
+    }
+
+    ~RefAdoptionTestValue()
+    {
+        --_liveCount;
+    }
+
+    int value() const { return _value; }
+    void setValue(int value) { _value = value; }
+    static int liveCount() { return _liveCount; }
+};
+
+int RefAdoptionTestValue::_liveCount = 0;
+
+static int testReferenceAdoptionOwnership() {
+    bool constructorFailed = false;
+    ref_count_rec_t::failNextAllocationForRegression();
+    try {
+        LVRef<RefAdoptionTestValue> rejected(
+                new RefAdoptionTestValue(7));
+    } catch (const std::bad_alloc &) {
+        constructorFailed = true;
+    }
+    if (!constructorFailed
+            || RefAdoptionTestValue::liveCount() != 0)
+        return fail("LVRef constructor leaked a rejected adoption candidate");
+
+    {
+        LVRef<RefAdoptionTestValue> current(
+                new RefAdoptionTestValue(11));
+        bool assignmentFailed = false;
+        ref_count_rec_t::failNextAllocationForRegression();
+        try {
+            current = new RefAdoptionTestValue(22);
+        } catch (const std::bad_alloc &) {
+            assignmentFailed = true;
+        }
+        if (!assignmentFailed
+                || current->value() != 11
+                || RefAdoptionTestValue::liveCount() != 1)
+            return fail("LVRef assignment lost committed state on rejection");
+
+        LVRef<RefAdoptionTestValue> cloned = current.clone();
+        cloned->setValue(33);
+        if (current->value() != 11
+                || cloned->value() != 33
+                || RefAdoptionTestValue::liveCount() != 2)
+            return fail("LVRef clone did not publish an independent object");
+    }
+    if (RefAdoptionTestValue::liveCount() != 0)
+        return fail("LVRef adoption owners survived final teardown");
+    return 0;
+}
+
 static int testReferenceVectorOwnership() {
     if (RefCacheTestValue::liveCount() != 0)
         return fail("reference vector fixture started with live values");
@@ -6984,6 +7053,8 @@ int main() {
     if (testHashTableOwnership() != 0)
         return 1;
     if (testValueArrayOwnership() != 0)
+        return 1;
+    if (testReferenceAdoptionOwnership() != 0)
         return 1;
     if (testReferenceVectorOwnership() != 0)
         return 1;

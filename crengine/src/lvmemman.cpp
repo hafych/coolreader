@@ -182,6 +182,8 @@ void crSetFatalErrorHandler( lv_FatalErrorHandler_t * handler )
 
 ref_count_rec_t ref_count_rec_t::null_ref(NULL);
 ref_count_rec_t ref_count_rec_t::protected_null_ref(NULL);
+std::atomic<bool>
+        ref_count_rec_t::fail_next_allocation_for_regression(false);
 
 
 #if (LDOM_USE_OWN_MEM_MAN==1)

@@ -3089,6 +3089,58 @@ forbid_source_text(
   "value-array teardown must not use manual delete[]"
 )
 
+# --- generic reference adoption and clone ownership ---
+require_source_text(
+  "${REF_HEADER}"
+  "std::unique_ptr<T> candidate(ptr)"
+  "reference construction must scope an adopted object until record publication"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "std::unique_ptr<ref_count_rec_t> record("
+  "reference assignment must stage its replacement record before publication"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "LVRef clone() const"
+  "reference clone must return an owning value"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "return LVRef(new T(*get()))"
+  "reference clone must copy the referenced object instead of its control record"
+)
+require_source_text(
+  "${REF_HEADER}"
+  "failNextAllocationForRegression()"
+  "reference adoption must retain a deterministic allocation-failure seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "LVRef constructor leaked a rejected adoption candidate"
+  "reference construction must regress rejected-adoption cleanup"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "LVRef assignment lost committed state on rejection"
+  "reference assignment must regress transactional publication"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "LVRef clone did not publish an independent object"
+  "reference clone must regress independent object ownership"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "LVRef adoption owners survived final teardown"
+  "reference adoption must regress final owner teardown"
+)
+forbid_source_text(
+  "${REF_HEADER}"
+  "LVRef & clone()"
+  "reference clone must not return a dangling reference"
+)
+
 # --- reference-vector backing storage and alias safety ---
 require_source_text(
   "${REF_HEADER}"

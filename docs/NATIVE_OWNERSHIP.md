@@ -340,6 +340,15 @@ growth, sparse `set()` value-initializes gaps, and erase/reset clear inactive
 slots so reference-counted values are released while retained capacity remains
 reusable.
 
+Generic `LVRef` raw-pointer adoption keeps the candidate object in a local
+`unique_ptr` until its reference record has been allocated. Raw assignment
+stages both the candidate object and replacement record before releasing the
+committed reference, so allocation failure deletes the rejected candidate and
+leaves the old value intact. `clone()` returns an owning value and copies the
+referenced object rather than the control record. A fail-once record-allocation
+regression covers constructor cleanup, assignment rollback, clone independence
+and final teardown.
+
 `LVRefVec` owns its contiguous slots through `unique_ptr<LVRef<T>[]>`.
 Copy/assignment and reserve publish only complete candidate arrays, while
 append snapshots aliased ranges so self-add remains finite across growth.
