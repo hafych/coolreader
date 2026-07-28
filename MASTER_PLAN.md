@@ -127,7 +127,8 @@ DRM или ограничений доступа, подбор/получени�
   buckets, DOM name/id owner/index storage, generic hash-table buckets/chains,
   generic value-array, reference-vector, owning/borrowed pointer-vector and
   contiguous matrix-cell storage, pagination compact arrays/line-link lists,
-  Word/PDB transient import buffers/factory candidates, reference-cache
+  Word/PDB transient import buffers/factory candidates, cache-file ZSTD/zlib
+  contexts/chunk output/block scratch, reference-cache
   buckets/index exports and bounded map slots, longjmp-safe PNG rows/pixels,
   JPEG pool/error lifecycle, а также draw mark list. Остальные участки
   мигрируются отдельными bounded-пакетами.

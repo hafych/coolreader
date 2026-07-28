@@ -56,6 +56,20 @@ void SerialBuf::set( lUInt8 * buf, int size )
     _size = _pos = _error ? 0 : size;
 }
 
+void SerialBuf::set( std::vector<lUInt8> &&storage )
+{
+    _storage = std::move(storage);
+    _buf = _storage.empty() ? NULL : _storage.data();
+    _error = _storage.size()
+            > static_cast<std::size_t>(std::numeric_limits<int>::max());
+    _autoresize = true;
+    _size = _pos = _error ? 0 : static_cast<int>(_storage.size());
+    if (_error) {
+        std::vector<lUInt8>().swap(_storage);
+        _buf = NULL;
+    }
+}
+
 bool SerialBuf::copyTo( lUInt8 * buf, int maxSize )
 {
     if ( _pos==0 )

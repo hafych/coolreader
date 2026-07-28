@@ -265,8 +265,12 @@ enum CacheFileBlockType {
 
 #include <stddef.h>
 #include <math.h>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <new>
+#include <stdexcept>
+#include <vector>
 #if (USE_ZSTD == 1)
 #include <zstd.h>
 #endif
@@ -627,25 +631,136 @@ struct CacheFileHeader : public SimpleCacheFileHeader
  * Cache file implementation.
  */
 #if (USE_ZSTD == 1)
-typedef struct {
-    void* buffOut;
-    size_t buffOutSize;
-    ZSTD_CCtx* cctx;
-} zstd_comp_res_t;
-typedef struct {
-    void* buffOut;
-    size_t buffOutSize;
-    ZSTD_DCtx* dctx;
-} zstd_decomp_res_t;
+struct ZstdCCtxDeleter {
+    void operator()(ZSTD_CCtx *context) const {
+        ZSTD_freeCCtx(context);
+    }
+};
+
+struct ZstdDCtxDeleter {
+    void operator()(ZSTD_DCtx *context) const {
+        ZSTD_freeDCtx(context);
+    }
+};
+
+struct zstd_comp_res_t {
+    std::vector<lUInt8> output;
+    std::unique_ptr<ZSTD_CCtx, ZstdCCtxDeleter> context;
+
+    zstd_comp_res_t()
+        : output(ZSTD_CStreamOutSize()), context(ZSTD_createCCtx()) {
+    }
+
+    bool valid() const {
+        return !output.empty() && context != nullptr;
+    }
+};
+
+struct zstd_decomp_res_t {
+    std::vector<lUInt8> output;
+    std::unique_ptr<ZSTD_DCtx, ZstdDCtxDeleter> context;
+
+    zstd_decomp_res_t()
+        : output(ZSTD_DStreamOutSize()), context(ZSTD_createDCtx()) {
+    }
+
+    bool valid() const {
+        return !output.empty() && context != nullptr;
+    }
+};
 #endif
 
 #if (USE_ZLIB == 1)
-typedef struct {
-    size_t buffSize;
-    z_stream zstream;
-    Bytef buff[1];
-} zlib_res_t;
+struct zlib_comp_res_t {
+    std::vector<lUInt8> output;
+    z_stream stream;
+    bool initialized;
+
+    zlib_comp_res_t()
+        : output(PACK_BUF_SIZE), stream(), initialized(false) {
+        stream.zalloc = Z_NULL;
+        stream.zfree = Z_NULL;
+        stream.opaque = Z_NULL;
+    }
+
+    ~zlib_comp_res_t() {
+        if (initialized)
+            deflateEnd(&stream);
+    }
+
+    bool initialize() {
+        if (deflateInit(&stream, DOC_DATA_COMPRESSION_LEVEL) != Z_OK)
+            return false;
+        initialized = true;
+        return true;
+    }
+
+    zlib_comp_res_t(const zlib_comp_res_t &) = delete;
+    zlib_comp_res_t &operator=(const zlib_comp_res_t &) = delete;
+};
+
+struct zlib_decomp_res_t {
+    std::vector<lUInt8> output;
+    z_stream stream;
+    bool initialized;
+
+    zlib_decomp_res_t()
+        : output(UNPACK_BUF_SIZE), stream(), initialized(false) {
+        stream.zalloc = Z_NULL;
+        stream.zfree = Z_NULL;
+        stream.opaque = Z_NULL;
+    }
+
+    ~zlib_decomp_res_t() {
+        if (initialized)
+            inflateEnd(&stream);
+    }
+
+    bool initialize() {
+        if (inflateInit(&stream) != Z_OK)
+            return false;
+        initialized = true;
+        return true;
+    }
+
+    zlib_decomp_res_t(const zlib_decomp_res_t &) = delete;
+    zlib_decomp_res_t &operator=(const zlib_decomp_res_t &) = delete;
+};
 #endif
+
+static bool appendCacheCodecOutput(
+        std::vector<lUInt8> &destination,
+        const lUInt8 *source, size_t size,
+        size_t maximumSize)
+{
+    const size_t formatMax =
+            static_cast<size_t>(std::numeric_limits<lUInt32>::max());
+    const size_t maxSize =
+            maximumSize < formatMax ? maximumSize : formatMax;
+    if (size > maxSize || destination.size() > maxSize - size)
+        return false;
+    try {
+        destination.insert(destination.end(), source, source + size);
+    } catch (const std::bad_alloc &) {
+        return false;
+    } catch (const std::length_error &) {
+        return false;
+    }
+    return true;
+}
+
+static bool resizeCacheBuffer(
+        std::vector<lUInt8> &buffer, size_t size)
+{
+    try {
+        buffer.resize(size);
+    } catch (const std::bad_alloc &) {
+        return false;
+    } catch (const std::length_error &) {
+        return false;
+    }
+    return true;
+}
 
 class CacheFile
 {
@@ -661,12 +776,12 @@ class CacheFile
     LVPtrVector<CacheFileItem, false> _freeIndex; // free file block index
     LVHashTable<lUInt32, CacheFileItem*> _map; // hash map for fast search
 #if (USE_ZSTD == 1)
-    zstd_comp_res_t* _zstd_comp_res;
-    zstd_decomp_res_t* _zstd_decomp_res;
+    std::unique_ptr<zstd_comp_res_t> _zstd_comp_res;
+    std::unique_ptr<zstd_decomp_res_t> _zstd_decomp_res;
 #endif
 #if (USE_ZLIB == 1)
-    zlib_res_t* _zlib_comp_res;
-    zlib_res_t* _zlib_uncomp_res;
+    std::unique_ptr<zlib_comp_res_t> _zlib_comp_res;
+    std::unique_ptr<zlib_decomp_res_t> _zlib_uncomp_res;
 #endif
     // searches for existing block
     CacheFileItem * findBlock( lUInt16 type, lUInt16 index );
@@ -682,6 +797,10 @@ class CacheFile
     bool readIndex();
     // reads all blocks of index and checks CRCs
     bool validateContents();
+    // reads a block into operation-scoped storage
+    bool readBlock(
+            lUInt16 type, lUInt16 dataIndex,
+            std::vector<lUInt8> &data);
     
 #if (USE_ZSTD == 1)
     bool zstdAllocComp();
@@ -689,9 +808,13 @@ class CacheFile
     bool zstdAllocDecomp();
     void zstdCleanDecomp();
     /// pack data from buf to dstbuf (using zstd)
-    bool zstdPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, lUInt32 & dstsize );
+    bool zstdPack(
+            const lUInt8 *buf, size_t bufsize,
+            std::vector<lUInt8> &dstbuf);
     /// unpack data from compbuf to dstbuf (using zstd)
-    bool zstdUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize );
+    bool zstdUnpack(
+            const lUInt8 *compbuf, size_t compsize,
+            std::vector<lUInt8> &dstbuf, size_t maximumSize);
 #endif
 #if (USE_ZLIB == 1)
     bool zlibAllocCompRes();
@@ -699,9 +822,13 @@ class CacheFile
     bool zlibAllocUncompRes();
     void zlibUncompCleanup();
     /// pack data from buf to dstbuf (using zlib)
-    bool zlibPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, lUInt32 & dstsize );
+    bool zlibPack(
+            const lUInt8 *buf, size_t bufsize,
+            std::vector<lUInt8> &dstbuf);
     /// unpack data from compbuf to dstbuf (using zlib)
-    bool zlibUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize );
+    bool zlibUnpack(
+            const lUInt8 *compbuf, size_t compsize,
+            std::vector<lUInt8> &dstbuf, size_t maximumSize);
 #endif
 public:
     // return current file size
@@ -746,9 +873,13 @@ public:
     /// cleanup resources used by the decompressor
     void cleanupUncompressor();
     /// pack data from buf to dstbuf
-    bool ldomPack(const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, lUInt32 & dstsize);
+    bool ldomPack(
+            const lUInt8 *buf, size_t bufsize,
+            std::vector<lUInt8> &dstbuf);
     /// unpack data from compbuf to dstbuf
-    bool ldomUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize );
+    bool ldomUnpack(
+            const lUInt8 *compbuf, size_t compsize,
+            std::vector<lUInt8> &dstbuf, size_t maximumSize);
 
     /// sets dirty flag value, returns true if value is changed
     bool setDirtyFlag( bool dirty );
@@ -1096,41 +1227,41 @@ CacheFileItem * CacheFile::allocBlock( lUInt16 type, lUInt16 index, int size )
 /// reads and validates block
 bool CacheFile::validate( CacheFileItem * block )
 {
-    lUInt8 * buf = NULL;
-    unsigned size = 0;
+    if (!block || block->_dataSize < 0)
+        return false;
+    const int size = block->_dataSize;
 
     if ( (int)_stream->SetPos( block->_blockFilePos )!=block->_blockFilePos ) {
-        CRLog::error("CacheFile::validate: Cannot set position for block %d:%d of size %d", block->_dataType, block->_dataIndex, (int)size);
+        CRLog::error("CacheFile::validate: Cannot set position for block %d:%d of size %d", block->_dataType, block->_dataIndex, size);
         return false;
     }
 
     // read block from file
-    size = block->_dataSize;
-    buf = (lUInt8 *)malloc(size);
+    std::vector<lUInt8> storage;
+    if (!resizeCacheBuffer(
+                storage, static_cast<size_t>(size)))
+        return false;
     lvsize_t bytesRead = 0;
-    _stream->Read(buf, size, &bytesRead );
-    if ( bytesRead!=size ) {
-        CRLog::error("CacheFile::validate: Cannot read block %d:%d of size %d", block->_dataType, block->_dataIndex, (int)size);
-        free(buf);
+    _stream->Read(storage.data(), size, &bytesRead );
+    if (bytesRead != static_cast<lvsize_t>(size)) {
+        CRLog::error("CacheFile::validate: Cannot read block %d:%d of size %d", block->_dataType, block->_dataIndex, size);
         return false;
     }
 
     // check CRC for file block
-    lUInt32 packedhash = calcHash( buf, size );
+    lUInt32 packedhash = calcHash( storage.data(), size );
     if ( packedhash!=block->_packedHash ) {
-        CRLog::error("CacheFile::validate: packed data CRC doesn't match for block %d:%d of size %d", block->_dataType, block->_dataIndex, (int)size);
-        free(buf);
+        CRLog::error("CacheFile::validate: packed data CRC doesn't match for block %d:%d of size %d", block->_dataType, block->_dataIndex, size);
         return false;
     }
-    free(buf);
     return true;
 }
 
-// reads and allocates block in memory
-bool CacheFile::read( lUInt16 type, lUInt16 dataIndex, lUInt8 * &buf, int &size )
+// reads a block into operation-scoped storage
+bool CacheFile::readBlock(
+        lUInt16 type, lUInt16 dataIndex,
+        std::vector<lUInt8> &data)
 {
-    buf = NULL;
-    size = 0;
     CacheFileItem * block = findBlock( type, dataIndex );
     if ( !block ) {
         CRLog::error("CacheFile::read: Block %d:%d not found in file", type, dataIndex);
@@ -1140,15 +1271,20 @@ bool CacheFile::read( lUInt16 type, lUInt16 dataIndex, lUInt8 * &buf, int &size 
         return false;
 
     // read block from file
-    size = block->_dataSize;
-    buf = (lUInt8 *)malloc(size);
+    const int storedSize = block->_dataSize;
+    if (storedSize < 0
+            || block->_uncompressedSize
+                    > static_cast<lUInt32>(
+                            std::numeric_limits<int>::max()))
+        return false;
+    std::vector<lUInt8> candidate;
+    if (!resizeCacheBuffer(
+                candidate, static_cast<size_t>(storedSize)))
+        return false;
     lvsize_t bytesRead = 0;
-    _stream->Read(buf, size, &bytesRead );
-    if ( (int)bytesRead!=size ) {
-        CRLog::error("CacheFile::read: Cannot read block %d:%d of size %d, bytesRead=%d", type, dataIndex, (int)size, (int)bytesRead);
-        free(buf);
-        buf = NULL;
-        size = 0;
+    _stream->Read(candidate.data(), storedSize, &bytesRead );
+    if ( (int)bytesRead!=storedSize ) {
+        CRLog::error("CacheFile::read: Cannot read block %d:%d of size %d, bytesRead=%d", type, dataIndex, storedSize, (int)bytesRead);
         return false;
     }
 
@@ -1158,47 +1294,67 @@ bool CacheFile::read( lUInt16 type, lUInt16 dataIndex, lUInt8 * &buf, int &size 
         // block is compressed
 
         // check crc separately only for compressed data
-        lUInt32 packedhash = calcHash( buf, size );
+        lUInt32 packedhash =
+                calcHash(candidate.data(), storedSize);
         if ( packedhash!=block->_packedHash ) {
-            CRLog::error("CacheFile::read: packed data CRC doesn't match for block %d:%d of size %d", type, dataIndex, (int)size);
-            free(buf);
-            buf = NULL;
-            size = 0;
+            CRLog::error("CacheFile::read: packed data CRC doesn't match for block %d:%d of size %d", type, dataIndex, storedSize);
             return false;
         }
 
         // uncompress block data
-        lUInt8 * uncomp_buf = NULL;
-        lUInt32 uncomp_size = 0;
-        if ( ldomUnpack(buf, size, uncomp_buf, uncomp_size) && uncomp_size==block->_uncompressedSize ) {
-            free( buf );
-            buf = uncomp_buf;
-            size = uncomp_size;
-        } else {
-            CRLog::error("CacheFile::read: error while uncompressing data for block %d:%d of size %d", type, dataIndex, (int)size);
-            free(buf);
-            buf = NULL;
-            size = 0;
+        std::vector<lUInt8> unpacked;
+        if (!ldomUnpack(
+                    candidate.data(), candidate.size(), unpacked,
+                    block->_uncompressedSize)
+                || unpacked.size() != block->_uncompressedSize) {
+            CRLog::error("CacheFile::read: error while uncompressing data for block %d:%d of size %d", type, dataIndex, storedSize);
             return false;
         }
+        candidate.swap(unpacked);
     }
 
     // check CRC
-    lUInt32 hash = calcHash( buf, size );
+    lUInt32 hash = calcHash(
+            candidate.data(), static_cast<int>(candidate.size()));
     if (hash != block->_dataHash) {
-        CRLog::error("CacheFile::read: CRC doesn't match for block %d:%d of size %d", type, dataIndex, (int)size);
-        free(buf);
-        buf = NULL;
-        size = 0;
+        CRLog::error("CacheFile::read: CRC doesn't match for block %d:%d of size %d", type, dataIndex, (int)candidate.size());
         return false;
     }
-    // Success. Don't forget to free allocated block externally
+    data.swap(candidate);
+    return true;
+}
+
+// reads and allocates a malloc-compatible block for legacy storage owners
+bool CacheFile::read(
+        lUInt16 type, lUInt16 dataIndex,
+        lUInt8 * &buf, int &size)
+{
+    buf = NULL;
+    size = 0;
+    std::vector<lUInt8> data;
+    if (!readBlock(type, dataIndex, data)
+            || data.size()
+                    > static_cast<size_t>(
+                            std::numeric_limits<int>::max()))
+        return false;
+    if (data.empty())
+        return true;
+
+    std::unique_ptr<lUInt8, decltype(&free)> storage(
+            static_cast<lUInt8 *>(malloc(data.size())), &free);
+    if (!storage)
+        return false;
+    memcpy(storage.get(), data.data(), data.size());
+    size = static_cast<int>(data.size());
+    buf = storage.release();
     return true;
 }
 
 // writes block to file
 bool CacheFile::write( lUInt16 type, lUInt16 dataIndex, const lUInt8 * buf, int size, bool compress )
 {
+    if (size < 0 || (size > 0 && !buf))
+        return false;
     // check whether data is changed
     lUInt32 newhash = calcHash( buf, size );
     CacheFileItem * existingblock = findBlock( type, dataIndex );
@@ -1219,18 +1375,22 @@ bool CacheFile::write( lUInt16 type, lUInt16 dataIndex, const lUInt8 * buf, int 
 
     lUInt32 uncompressedSize = 0;
     lUInt64 newpackedhash = newhash;
+    std::vector<lUInt8> packed;
+    const lUInt8 *writeBuf = buf;
+    int writeSize = size;
     if (_compType == CacheCompressionNone)
         compress = false;
     if ( compress ) {
-        lUInt8 * dstbuf = NULL;
-        lUInt32 dstsize = 0;
-        if ( !ldomPack( buf, size, dstbuf, dstsize ) ) {
+        if (!ldomPack(buf, size, packed)
+                || packed.size()
+                        > static_cast<size_t>(
+                                std::numeric_limits<int>::max())) {
             compress = false;
         } else {
             uncompressedSize = size;
-            size = dstsize;
-            buf = dstbuf;
-            newpackedhash = calcHash( buf, size );
+            writeSize = static_cast<int>(packed.size());
+            writeBuf = packed.data();
+            newpackedhash = calcHash(writeBuf, writeSize);
 #if DEBUG_DOM_STORAGE==1
             //CRLog::trace("packed block %d:%d : %d to %d bytes (%d%%)", type, dataIndex, srcsize, dstsize, srcsize>0?(100*dstsize/srcsize):0 );
 #endif
@@ -1238,52 +1398,34 @@ bool CacheFile::write( lUInt16 type, lUInt16 dataIndex, const lUInt8 * buf, int 
     }
 
     CacheFileItem * block = NULL;
-    if ( existingblock && existingblock->_dataSize>=size ) {
+    if ( existingblock && existingblock->_dataSize>=writeSize ) {
         // reuse existing block
         block = existingblock;
     } else {
         // allocate new block
         if ( existingblock )
             freeBlock( existingblock );
-        block = allocBlock( type, dataIndex, size );
+        block = allocBlock( type, dataIndex, writeSize );
     }
-    if ( !block )
-    {
-#if DOC_DATA_COMPRESSION_LEVEL!=0
-        if ( compress ) {
-            free( (void*)buf );
-        }
-#endif
+    if ( !block ) {
         return false;
     }
-    if ( (int)_stream->SetPos( block->_blockFilePos )!=block->_blockFilePos )
-    {
-#if DOC_DATA_COMPRESSION_LEVEL!=0
-        if ( compress ) {
-            free( (void*)buf );
-        }
-#endif
+    if ( (int)_stream->SetPos( block->_blockFilePos )!=block->_blockFilePos ) {
         return false;
     }
     // assert: size == block->_dataSize
     // actual writing of data
-    block->_dataSize = size;
+    block->_dataSize = writeSize;
     lvsize_t bytesWritten = 0;
-    _stream->Write(buf, size, &bytesWritten );
-    if ( (int)bytesWritten!=size )
-    {
-#if DOC_DATA_COMPRESSION_LEVEL!=0
-        if ( compress ) {
-            free( (void*)buf );
-        }
-#endif
+    _stream->Write(writeBuf, writeSize, &bytesWritten );
+    if ( (int)bytesWritten!=writeSize ) {
         return false;
     }
 #if CACHE_FILE_WRITE_BLOCK_PADDING==1
-    int paddingSize = block->_blockSize - size; //roundSector( size ) - size
+    int paddingSize = block->_blockSize - writeSize;
     if ( paddingSize ) {
         if ((int)block->_blockFilePos + (int)block->_dataSize >= (int)_stream->GetSize() - _sectorSize) {
-            LASSERT(size + paddingSize == block->_blockSize );
+            LASSERT(writeSize + paddingSize == block->_blockSize );
 //            if (paddingSize > 16384) {
 //                CRLog::error("paddingSize > 16384");
 //            }
@@ -1304,9 +1446,6 @@ bool CacheFile::write( lUInt16 type, lUInt16 dataIndex, const lUInt8 * buf, int 
     block->_packedHash = newpackedhash;
     block->_uncompressedSize = uncompressedSize;
 
-    if ( compress ) {
-        free( (void*)buf );
-    }
     _indexChanged = true;
 
     //CRLog::error("CacheFile::write: block %d:%d (pos %ds, size %ds) is written (crc=%08x)", type, dataIndex, (int)block->_blockFilePos/_sectorSize, (int)(size+_sectorSize-1)/_sectorSize, block->_dataCRC);
@@ -1323,12 +1462,10 @@ bool CacheFile::write( lUInt16 type, lUInt16 index, SerialBuf & buf, bool compre
 /// reads content of serial buffer
 bool CacheFile::read( lUInt16 type, lUInt16 index, SerialBuf & buf )
 {
-    lUInt8 * tmp = NULL;
-    int size = 0;
-    bool res = read( type, index, tmp, size );
-    if ( res ) {
-        buf.set( tmp, size );
-    }
+    std::vector<lUInt8> storage;
+    bool res = readBlock(type, index, storage);
+    if (res)
+        buf.set(std::move(storage));
     buf.setPos(0);
     return res;
 }
@@ -1403,29 +1540,26 @@ bool CacheFile::create( LVStreamRef stream )
 #if (USE_ZSTD == 1)
 bool CacheFile::zstdAllocComp()
 {
-    // printf("zstdtag: CacheFile::zstdAllocComp\n");
-    _zstd_comp_res = (zstd_comp_res_t*)malloc(sizeof(zstd_comp_res_t));
-    if (!_zstd_comp_res)
+    if (_zstd_comp_res)
+        return true;
+    std::unique_ptr<zstd_comp_res_t> candidate;
+    try {
+        candidate = std::make_unique<zstd_comp_res_t>();
+    } catch (const std::bad_alloc &) {
         return false;
-
-    _zstd_comp_res->buffOutSize = ZSTD_CStreamOutSize();
-    _zstd_comp_res->buffOut = malloc(_zstd_comp_res->buffOutSize);
-    if (!_zstd_comp_res->buffOut) {
-        free(_zstd_comp_res);
-        _zstd_comp_res = nullptr;
+    } catch (const std::length_error &) {
         return false;
     }
-    _zstd_comp_res->cctx = ZSTD_createCCtx();
-    if (_zstd_comp_res->cctx == nullptr) {
-        free(_zstd_comp_res->buffOut);
-        free(_zstd_comp_res);
-        _zstd_comp_res = nullptr;
+    if (!candidate->valid())
         return false;
-    }
 
     // Parameters are sticky
     // NOTE: ZSTD_CLEVEL_DEFAULT is currently 3, sane range is 1-19
-    ZSTD_CCtx_setParameter(_zstd_comp_res->cctx, ZSTD_c_compressionLevel, ZSTD_CLEVEL_DEFAULT);
+    size_t result = ZSTD_CCtx_setParameter(
+            candidate->context.get(), ZSTD_c_compressionLevel,
+            ZSTD_CLEVEL_DEFAULT);
+    if (ZSTD_isError(result))
+        return false;
     // This would be redundant with CRe's own calcHash, AFAICT?
     //ZSTD_CCtx_setParameter(_comp_ress->cctx, ZSTD_c_checksumFlag, 1);
 
@@ -1434,27 +1568,22 @@ bool CacheFile::zstdAllocComp()
     //       it'll still block.
     //ZSTD_CCtx_setParameter(_comp_ress->cctx, ZSTD_c_nbWorkers, 4);
 
+    _zstd_comp_res = std::move(candidate);
     return true;
 }
 
 void CacheFile::zstdCleanComp()
 {
-    // printf("zstdtag: CacheFile::zstdCleanComp\n");
-    if (_zstd_comp_res) {
-        if (_zstd_comp_res->cctx)
-            ZSTD_freeCCtx(_zstd_comp_res->cctx);
-        if (_zstd_comp_res->buffOut)
-            free(_zstd_comp_res->buffOut);
-        free(_zstd_comp_res);
-        _zstd_comp_res = nullptr;
-    }
+    _zstd_comp_res.reset();
 }
 
 /// pack data from buf to dstbuf (using zstd)
-bool CacheFile::zstdPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, lUInt32 & dstsize )
+bool CacheFile::zstdPack(
+        const lUInt8 *buf, size_t bufsize,
+        std::vector<lUInt8> &dstbuf)
 {
-    // printf("zstdtag: zstdPack() <- %p (%zu)\n", buf, bufsize);
-
+    if (bufsize > 0 && !buf)
+        return false;
     // Lazy init our resources, and keep 'em around
     if (!_zstd_comp_res) {
         if(!zstdAllocComp()) {
@@ -1465,9 +1594,8 @@ bool CacheFile::zstdPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, 
 
     // c.f., ZSTD's examples/streaming_compression.c
     // NOTE: We could probably gain much by training zstd and using a dictionary, here ;).
-    size_t const buffOutSize = _zstd_comp_res->buffOutSize;
-    void*  const buffOut = _zstd_comp_res->buffOut;
-    ZSTD_CCtx* const cctx = _zstd_comp_res->cctx;
+    std::vector<lUInt8> &chunk = _zstd_comp_res->output;
+    ZSTD_CCtx* const cctx = _zstd_comp_res->context.get();
 
     // Reset the context
     size_t const err = ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
@@ -1477,13 +1605,18 @@ bool CacheFile::zstdPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, 
     }
 
     // Tell the compressor just how much data we need to compress
-    ZSTD_CCtx_setPledgedSrcSize(cctx, bufsize);
+    size_t const pledged = ZSTD_CCtx_setPledgedSrcSize(cctx, bufsize);
+    if (ZSTD_isError(pledged)) {
+        CRLog::error(
+                "ZSTD_CCtx_setPledgedSrcSize() error: %s",
+                ZSTD_getErrorName(pledged));
+        return false;
+    }
 
     // Debug: compare current buffOutSize against the worst-case
     // printf("zstdtag: ZSTD_compressBound(): %zu\n", ZSTD_compressBound(bufsize));
 
-    size_t compressed_size = 0;
-    lUInt8 *compressed_buf = NULL;
+    std::vector<lUInt8> candidate;
 
     ZSTD_EndDirective const mode = ZSTD_e_end;
     ZSTD_inBuffer input;
@@ -1493,75 +1626,58 @@ bool CacheFile::zstdPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, 
     input.pos = 0;
     int finished = 0;
     do {
-        output.dst = buffOut;
-        output.size = buffOutSize;
+        output.dst = chunk.data();
+        output.size = chunk.size();
         output.pos = 0;
         size_t const remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
         if (ZSTD_isError(remaining)) {
-            CRLog::error("zstdtag: ZSTD_compressStream2() error: %s (%zu -> %zu)", ZSTD_getErrorName(remaining), bufsize, compressed_size);
-            if (compressed_buf) {
-                free(compressed_buf);
-            }
+            CRLog::error("zstdtag: ZSTD_compressStream2() error: %s (%zu -> %zu)", ZSTD_getErrorName(remaining), bufsize, candidate.size());
             return false;
         }
-
-        compressed_buf = cr_realloc(compressed_buf, compressed_size + output.pos);
-        memcpy(compressed_buf + compressed_size, buffOut, output.pos);
-        compressed_size += output.pos;
+        if (!appendCacheCodecOutput(
+                    candidate, chunk.data(), output.pos,
+                    std::numeric_limits<lUInt32>::max()))
+            return false;
 
         finished = (remaining == 0);
-        // printf("zstdtag: zstdPack(): finished? %d (current chunk: %zu/%zu; total in: %zu; total out: %zu)\n", finished, output.pos, output.size, bufsize, compressed_size);
+        // printf("zstdtag: zstdPack(): finished? %d (current chunk: %zu/%zu; total in: %zu; total out: %zu)\n", finished, output.pos, output.size, bufsize, candidate.size());
     } while (!finished);
 
-    dstsize = compressed_size;
-    dstbuf = compressed_buf;
-    // printf("zstdtag: zstdPack() done: %zu -> %zu\n", bufsize, compressed_size);
+    dstbuf.swap(candidate);
     return true;
 }
 
 bool CacheFile::zstdAllocDecomp()
 {
-    // printf("zstdtag: CacheFile::zstdAllocDecomp\n");
-    _zstd_decomp_res = (zstd_decomp_res_t*)malloc(sizeof(zstd_decomp_res_t));
-    if (!_zstd_decomp_res)
+    if (_zstd_decomp_res)
+        return true;
+    std::unique_ptr<zstd_decomp_res_t> candidate;
+    try {
+        candidate = std::make_unique<zstd_decomp_res_t>();
+    } catch (const std::bad_alloc &) {
         return false;
-
-    _zstd_decomp_res->buffOutSize = ZSTD_DStreamOutSize();
-    _zstd_decomp_res->buffOut = malloc(_zstd_decomp_res->buffOutSize);
-    if (!_zstd_decomp_res->buffOut) {
-        free(_zstd_decomp_res);
-        _zstd_decomp_res = nullptr;
+    } catch (const std::length_error &) {
         return false;
     }
-    _zstd_decomp_res->dctx = ZSTD_createDCtx();
-    if (_zstd_decomp_res->dctx == nullptr) {
-        free(_zstd_decomp_res->buffOut);
-        free(_zstd_decomp_res);
-        _zstd_decomp_res = nullptr;
+    if (!candidate->valid())
         return false;
-    }
 
+    _zstd_decomp_res = std::move(candidate);
     return true;
 }
 
 void CacheFile::zstdCleanDecomp()
 {
-    // printf("zstdtag: CacheFile::zstdCleanDecomp\n");
-    if (_zstd_decomp_res) {
-        if (_zstd_decomp_res->dctx)
-            ZSTD_freeDCtx(_zstd_decomp_res->dctx);
-        if (_zstd_decomp_res->buffOut)
-            free(_zstd_decomp_res->buffOut);
-        free(_zstd_decomp_res);
-        _zstd_decomp_res = nullptr;
-    }
+    _zstd_decomp_res.reset();
 }
 
 /// unpack data from compbuf to dstbuf (using zstd)
-bool CacheFile::zstdUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize  )
+bool CacheFile::zstdUnpack(
+        const lUInt8 *compbuf, size_t compsize,
+        std::vector<lUInt8> &dstbuf, size_t maximumSize)
 {
-    // printf("zstdtag: zstdUnpack() <- %p (%zu)\n", compbuf, compsize);
-
+    if (compsize == 0 || !compbuf)
+        return false;
     // Lazy init our resources, and keep 'em around
     if (!_zstd_decomp_res) {
         if(!zstdAllocDecomp()) {
@@ -1571,9 +1687,8 @@ bool CacheFile::zstdUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &d
     }
 
     // c.f., ZSTD's examples/streaming_decompression.c
-    size_t const buffOutSize = _zstd_decomp_res->buffOutSize;
-    void*  const buffOut = _zstd_decomp_res->buffOut;
-    ZSTD_DCtx* const dctx = _zstd_decomp_res->dctx;
+    std::vector<lUInt8> &chunk = _zstd_decomp_res->output;
+    ZSTD_DCtx* const dctx = _zstd_decomp_res->context.get();
 
     // Reset the context
     size_t const err = ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only);
@@ -1582,8 +1697,7 @@ bool CacheFile::zstdUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &d
         return false;
     }
 
-    size_t uncompressed_size = 0;
-    lUInt8 *uncompressed_buf = NULL;
+    std::vector<lUInt8> candidate;
 
     size_t lastRet = 0;
     ZSTD_inBuffer input;
@@ -1592,21 +1706,18 @@ bool CacheFile::zstdUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &d
     input.size = compsize;
     input.pos = 0;
     while (input.pos < input.size) {
-        output.dst = buffOut;
-        output.size = buffOutSize;
+        output.dst = chunk.data();
+        output.size = chunk.size();
         output.pos = 0;
         size_t const ret = ZSTD_decompressStream(dctx, &output , &input);
         if (ZSTD_isError(ret)) {
-            CRLog::error("zstdtag: ZSTD_decompressStream() error: %s (%zu -> %zu)", ZSTD_getErrorName(ret), compsize, uncompressed_size);
-            if (uncompressed_buf) {
-                free(uncompressed_buf);
-            }
+            CRLog::error("zstdtag: ZSTD_decompressStream() error: %s (%zu -> %zu)", ZSTD_getErrorName(ret), compsize, candidate.size());
             return false;
         }
-
-        uncompressed_buf = cr_realloc(uncompressed_buf, uncompressed_size + output.pos);
-        memcpy(uncompressed_buf + uncompressed_size, buffOut, output.pos);
-        uncompressed_size += output.pos;
+        if (!appendCacheCodecOutput(
+                    candidate, chunk.data(), output.pos,
+                    maximumSize))
+            return false;
 
         lastRet = ret;
         // printf("zstdtag: zstdUnpack(): ret: %zu (current chunk: %zu/%zu)\n", ret, output.pos, output.size);
@@ -1614,86 +1725,64 @@ bool CacheFile::zstdUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &d
 
     if (lastRet != 0) {
         CRLog::error("zstdtag: zstdUnpack(): EOF before end of stream: %zu", lastRet);
-        if (uncompressed_buf) {
-            free(uncompressed_buf);
-        }
         return false;
     }
 
-    dstsize = uncompressed_size;
-    dstbuf = uncompressed_buf;
-    // printf("zstdtag: zstdUnpack() done: %zu -> %zu\n", compsize, uncompressed_size);
+    dstbuf.swap(candidate);
     return true;
 }
 #endif  // (USE_ZSTD==1)
 
 #if (USE_ZLIB == 1)
 bool CacheFile::zlibAllocCompRes() {
-    // printf("zlibtag: CacheFile::zlibAllocCompRes\n");
     if (_zlib_comp_res)
         return true;
-    _zlib_comp_res = (zlib_res_t*)malloc(sizeof(zlib_res_t) + PACK_BUF_SIZE - 1);
-    if (!_zlib_comp_res)
+    std::unique_ptr<zlib_comp_res_t> candidate;
+    try {
+        candidate = std::make_unique<zlib_comp_res_t>();
+    } catch (const std::bad_alloc &) {
         return false;
-    _zlib_comp_res->buffSize = PACK_BUF_SIZE;
-    z_streamp z = &_zlib_comp_res->zstream;
-    z->zalloc = Z_NULL;
-    z->zfree = Z_NULL;
-    z->opaque = Z_NULL;
-    int ret = deflateInit( z, DOC_DATA_COMPRESSION_LEVEL );
-    if ( ret != Z_OK ) {
-        free(_zlib_comp_res);
-        _zlib_comp_res = NULL;
+    } catch (const std::length_error &) {
         return false;
     }
+    if (!candidate->initialize())
+        return false;
+    _zlib_comp_res = std::move(candidate);
     return true;
 }
 
 void CacheFile::zlibCompCleanup() {
-    // printf("zlibtag: CacheFile::zlibCompCleanup\n");
-    if (_zlib_comp_res) {
-        zlib_res_t* res = (zlib_res_t*)_zlib_comp_res;
-        deflateEnd(&res->zstream);
-        free(_zlib_comp_res);
-        _zlib_comp_res = NULL;
-    }
+    _zlib_comp_res.reset();
 }
 
 bool CacheFile::zlibAllocUncompRes() {
-    // printf("zlibtag: CacheFile::zlibAllocUncompRes\n");
     if (_zlib_uncomp_res)
         return true;
-    _zlib_uncomp_res = (zlib_res_t*)malloc(sizeof(zlib_res_t) + UNPACK_BUF_SIZE - 1);
-    if (!_zlib_uncomp_res)
+    std::unique_ptr<zlib_decomp_res_t> candidate;
+    try {
+        candidate = std::make_unique<zlib_decomp_res_t>();
+    } catch (const std::bad_alloc &) {
         return false;
-    _zlib_uncomp_res->buffSize = UNPACK_BUF_SIZE;
-    z_streamp z = &_zlib_uncomp_res->zstream;
-    z->zalloc = Z_NULL;
-    z->zfree = Z_NULL;
-    z->opaque = Z_NULL;
-    int ret = inflateInit( z );
-    if ( ret != Z_OK ) {
-        free(_zlib_uncomp_res);
-        _zlib_uncomp_res = NULL;
+    } catch (const std::length_error &) {
         return false;
     }
+    if (!candidate->initialize())
+        return false;
+    _zlib_uncomp_res = std::move(candidate);
     return true;
 }
 
 void CacheFile::zlibUncompCleanup() {
-    // printf("zlibtag: CacheFile::zlibUncompCleanup\n");
-    if (_zlib_uncomp_res) {
-        zlib_res_t* res = (zlib_res_t*)_zlib_uncomp_res;
-        inflateEnd(&res->zstream);
-        free(_zlib_uncomp_res);
-        _zlib_uncomp_res = NULL;
-    }
+    _zlib_uncomp_res.reset();
 }
 
 /// pack data from buf to dstbuf (using zlib)
-bool CacheFile::zlibPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, lUInt32 & dstsize ) {
-    // printf("zlibtag: zlibPack() <- %p (%zu)\n", buf, bufsize);
-
+bool CacheFile::zlibPack(
+        const lUInt8 *buf, size_t bufsize,
+        std::vector<lUInt8> &dstbuf) {
+    if ((bufsize > 0 && !buf)
+            || bufsize > std::numeric_limits<uInt>::max())
+        return false;
     // Lazy init our resources, and keep 'em around
     if (!_zlib_comp_res) {
         if(!zlibAllocCompRes()) {
@@ -1703,43 +1792,40 @@ bool CacheFile::zlibPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, 
     }
 
     int ret;
-    z_streamp z = &_zlib_comp_res->zstream;
+    z_streamp z = &_zlib_comp_res->stream;
     ret = deflateReset(z);
     if (ret != Z_OK) {
         CRLog::error("zlibtag: deflateReset() error: %d", ret);
         return false;
     }
-    z->avail_in = bufsize;
-    z->next_in = (unsigned char *)buf;
-    int compressed_size = 0;
-    lUInt8 *compressed_buf = NULL;
+    z->avail_in = static_cast<uInt>(bufsize);
+    z->next_in = const_cast<Bytef *>(buf);
+    std::vector<lUInt8> candidate;
     do {
-        z->avail_out = _zlib_comp_res->buffSize;
-        z->next_out = &_zlib_comp_res->buff[0];
+        z->avail_out =
+                static_cast<uInt>(_zlib_comp_res->output.size());
+        z->next_out = _zlib_comp_res->output.data();
         ret = deflate( z, Z_FINISH );
-        if (ret == Z_STREAM_ERROR) { // some error occured while packing
-            deflateEnd(z);
-            if (compressed_buf)
-                free(compressed_buf);
-            // printf("zlibtag: deflate() error: %d (%d > %d)\n", ret, bufsize, compressed_size);
+        if (ret != Z_OK && ret != Z_STREAM_END)
             return false;
-        }
-        int have = _zlib_comp_res->buffSize - z->avail_out;
-        compressed_buf = cr_realloc(compressed_buf, compressed_size + have);
-        memcpy(compressed_buf + compressed_size, &_zlib_comp_res->buff[0], have );
-        compressed_size += have;
-        // printf("zlibtag: deflate() additional call needed (%d > %d)\n", bufsize, compressed_size);
-    } while (z->avail_out == 0);     // buffer fully filled => deflate in progress
-    dstsize = compressed_size;
-    dstbuf = compressed_buf;
-    // printf("zlibtag: deflate() done: %d > %d\n", bufsize, compressed_size);
+        const size_t have =
+                _zlib_comp_res->output.size() - z->avail_out;
+        if (!appendCacheCodecOutput(
+                    candidate, _zlib_comp_res->output.data(), have,
+                    std::numeric_limits<lUInt32>::max()))
+            return false;
+    } while (ret != Z_STREAM_END);
+    dstbuf.swap(candidate);
     return true;
 }
 
 /// unpack data from compbuf to dstbuf (using zlib)
-bool CacheFile::zlibUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize  ) {
-    // printf("zlibtag: zlibUnpack() <- %p (%zu)\n", compbuf, compsize);
-
+bool CacheFile::zlibUnpack(
+        const lUInt8 *compbuf, size_t compsize,
+        std::vector<lUInt8> &dstbuf, size_t maximumSize) {
+    if (compsize == 0 || !compbuf
+            || compsize > std::numeric_limits<uInt>::max())
+        return false;
     // Lazy init our resources, and keep 'em around
     if (!_zlib_uncomp_res) {
         if(!zlibAllocUncompRes()) {
@@ -1749,39 +1835,32 @@ bool CacheFile::zlibUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &d
     }
 
     int ret;
-    z_streamp z = &_zlib_uncomp_res->zstream;
+    z_streamp z = &_zlib_uncomp_res->stream;
     ret = inflateReset(z);
     if (ret != Z_OK) {
         CRLog::error("zlibtag: inflateReset() error: %d", ret);
         return false;
     }
 
-    z->avail_in = compsize;
-    z->next_in = (unsigned char *)compbuf;
-    lUInt32 uncompressed_size = 0;
-    lUInt8 *uncompressed_buf = NULL;
+    z->avail_in = static_cast<uInt>(compsize);
+    z->next_in = const_cast<Bytef *>(compbuf);
+    std::vector<lUInt8> candidate;
     do {
-        z->avail_out = _zlib_uncomp_res->buffSize;
-        z->next_out = &_zlib_uncomp_res->buff[0];
+        z->avail_out =
+                static_cast<uInt>(_zlib_uncomp_res->output.size());
+        z->next_out = _zlib_uncomp_res->output.data();
         ret = inflate( z, Z_SYNC_FLUSH );
         if (ret != Z_OK && ret != Z_STREAM_END) { // some error occured while unpacking
-            inflateEnd(z);
-            if (uncompressed_buf)
-                free(uncompressed_buf);
-            dstbuf = NULL;
-            dstsize = 0;
-            // printf("zlibtag: inflate() error: %d (%d > %d)\n", ret, compsize, uncompressed_size);
             return false;
         }
-        lUInt32 have = _zlib_uncomp_res->buffSize - z->avail_out;
-        uncompressed_buf = cr_realloc(uncompressed_buf, uncompressed_size + have);
-        memcpy(uncompressed_buf + uncompressed_size, &_zlib_uncomp_res->buff[0], have );
-        uncompressed_size += have;
-        // printf("zlibtag: inflate() additional call needed (%d > %d)\n", compsize, uncompressed_size);
+        const size_t have =
+                _zlib_uncomp_res->output.size() - z->avail_out;
+        if (!appendCacheCodecOutput(
+                    candidate, _zlib_uncomp_res->output.data(), have,
+                    maximumSize))
+            return false;
     } while (ret != Z_STREAM_END);
-    dstsize = uncompressed_size;
-    dstbuf = uncompressed_buf;
-    // printf("zlibtag: inflate() done %d > %d\n", compsize, uncompressed_size);
+    dstbuf.swap(candidate);
     return true;
 }
 #endif  // (USE_ZLIB==1)
@@ -1821,16 +1900,18 @@ void CacheFile::cleanupUncompressor() {
 }
 
 /// pack data from buf to dstbuf
-bool CacheFile::ldomPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, lUInt32 & dstsize ) {
+bool CacheFile::ldomPack(
+        const lUInt8 *buf, size_t bufsize,
+        std::vector<lUInt8> &dstbuf) {
     switch (_compType) {
     case CacheCompressionZSTD:
 #if (USE_ZSTD==1)
-        return zstdPack(buf, bufsize, dstbuf, dstsize);
+        return zstdPack(buf, bufsize, dstbuf);
 #endif
         break;
     case CacheCompressionZlib:
 #if (USE_ZLIB==1)
-        return zlibPack(buf, bufsize, dstbuf, dstsize);
+        return zlibPack(buf, bufsize, dstbuf);
 #endif
         break;
     case CacheCompressionNone:
@@ -1841,22 +1922,139 @@ bool CacheFile::ldomPack( const lUInt8 * buf, size_t bufsize, lUInt8 * &dstbuf, 
 }
 
 /// unpack data from compbuf to dstbuf
-bool CacheFile::ldomUnpack( const lUInt8 * compbuf, size_t compsize, lUInt8 * &dstbuf, lUInt32 & dstsize ) {
+bool CacheFile::ldomUnpack(
+        const lUInt8 *compbuf, size_t compsize,
+        std::vector<lUInt8> &dstbuf, size_t maximumSize) {
     switch (_compType) {
     case CacheCompressionZSTD:
 #if (USE_ZSTD==1)
-        return zstdUnpack(compbuf, compsize, dstbuf, dstsize);
+        return zstdUnpack(
+                compbuf, compsize, dstbuf, maximumSize);
 #endif
         break;
     case CacheCompressionZlib:
 #if (USE_ZLIB==1)
-        return zlibUnpack(compbuf, compsize, dstbuf, dstsize);
+        return zlibUnpack(
+                compbuf, compsize, dstbuf, maximumSize);
 #endif
         break;
     default:
         break;
     }
     return false;
+}
+
+bool LVRunCacheFileCodecRegression(
+        CacheCompressionType type,
+        const std::vector<lUInt8> &input)
+{
+    if (input.empty()
+            || input.size()
+                    > static_cast<size_t>(
+                            std::numeric_limits<int>::max()))
+        return false;
+    switch (type) {
+    case CacheCompressionZSTD:
+#if (USE_ZSTD != 1)
+        return false;
+#else
+        break;
+#endif
+    case CacheCompressionZlib:
+#if (USE_ZLIB != 1)
+        return false;
+#else
+        break;
+#endif
+    case CacheCompressionNone:
+    default:
+        return false;
+    }
+
+    CacheFile codec(1, type);
+    std::vector<lUInt8> firstPacked;
+    std::vector<lUInt8> secondPacked(1, 0xC3);
+    if (!codec.ldomPack(input.data(), input.size(), firstPacked)
+            || firstPacked.empty()
+            || !codec.ldomPack(
+                    input.data(), input.size(), secondPacked)
+            || firstPacked != secondPacked)
+        return false;
+
+    std::vector<lUInt8> decoded(1, 0xD4);
+    if (!codec.ldomUnpack(
+                firstPacked.data(), firstPacked.size(), decoded,
+                input.size())
+            || decoded != input)
+        return false;
+
+    std::vector<lUInt8> oversized(2, 0xB2);
+    const std::vector<lUInt8> oversizedBefore(oversized);
+    if (codec.ldomUnpack(
+                firstPacked.data(), firstPacked.size(), oversized,
+                input.size() - 1)
+            || oversized != oversizedBefore)
+        return false;
+
+    std::vector<lUInt8> corrupted(firstPacked);
+    corrupted[0] ^= 0xFF;
+    std::vector<lUInt8> rejected(3, 0xE5);
+    const std::vector<lUInt8> rejectedBefore(rejected);
+    if (codec.ldomUnpack(
+                corrupted.data(), corrupted.size(), rejected,
+                input.size())
+            || rejected != rejectedBefore)
+        return false;
+
+    std::vector<lUInt8> recovered;
+    if (!codec.ldomUnpack(
+                firstPacked.data(), firstPacked.size(), recovered,
+                input.size())
+            || recovered != input)
+        return false;
+
+    codec.cleanupCompressor();
+    codec.cleanupUncompressor();
+    std::vector<lUInt8> packedAfterCleanup;
+    std::vector<lUInt8> decodedAfterCleanup;
+    if (!codec.ldomPack(
+                input.data(), input.size(), packedAfterCleanup)
+            || packedAfterCleanup != firstPacked
+            || !codec.ldomUnpack(
+                    packedAfterCleanup.data(),
+                    packedAfterCleanup.size(), decodedAfterCleanup,
+                    input.size())
+            || decodedAfterCleanup != input)
+        return false;
+
+    LVStreamRef stream = LVCreateMemoryStream();
+    CacheFile file(1, type);
+    if (stream.isNull() || !file.create(stream)
+            || !file.write(
+                    CBT_TEXT_DATA, 1, input.data(),
+                    static_cast<int>(input.size()), true))
+        return false;
+
+    SerialBuf serial(0, true);
+    if (!file.read(CBT_TEXT_DATA, 1, serial)
+            || serial.size() != static_cast<int>(input.size())
+            || memcmp(serial.buf(), input.data(), input.size()) != 0)
+        return false;
+
+    file.cleanupCompressor();
+    file.cleanupUncompressor();
+    if (!file.write(
+                CBT_TEXT_DATA, 2, input.data(),
+                static_cast<int>(input.size()), true))
+        return false;
+    lUInt8 *legacy = NULL;
+    int legacySize = 0;
+    if (!file.read(CBT_TEXT_DATA, 2, legacy, legacySize))
+        return false;
+    std::unique_ptr<lUInt8, decltype(&free)> legacyOwner(
+            legacy, &free);
+    return legacySize == static_cast<int>(input.size())
+            && memcmp(legacyOwner.get(), input.data(), input.size()) == 0;
 }
 
 // BLOB storage

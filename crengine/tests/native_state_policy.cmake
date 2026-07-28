@@ -2292,6 +2292,73 @@ forbid_source_text(
   "serialization-buffer teardown must remain automatic"
 )
 
+# --- cache-file codec state and operation buffers ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<zstd_comp_res_t> _zstd_comp_res"
+  "cache-file ZSTD compression state must use RAII ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<zstd_decomp_res_t> _zstd_decomp_res"
+  "cache-file ZSTD decompression state must use RAII ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<zlib_comp_res_t> _zlib_comp_res"
+  "cache-file zlib compression state must use RAII ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<zlib_decomp_res_t> _zlib_uncomp_res"
+  "cache-file zlib decompression state must use RAII ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "bool CacheFile::readBlock("
+  "cache-file block reads must use operation-scoped storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "dstbuf.swap(candidate)"
+  "cache-file codec results must publish transactionally"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "buf.set(std::move(storage))"
+  "cache-file serialization reads must move RAII storage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "zstd_comp_res_t* _zstd_comp_res"
+  "cache-file ZSTD state must not use an owning raw pointer"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "zlib_res_t* _zlib_comp_res"
+  "cache-file zlib state must not use an owning raw pointer"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "compressed_buf = cr_realloc"
+  "cache-file compression output must not use manual reallocation"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "uncompressed_buf = cr_realloc"
+  "cache-file decompression output must not use manual reallocation"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "deflateEnd(z);"
+  "cache-file operations must not invalidate reusable zlib state"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "inflateEnd(z);"
+  "cache-file operations must not invalidate reusable zlib state"
+)
+
 # --- file-stream owned and borrowed OS resources ---
 require_source_text(
   "${FILE_STREAM_HEADER}"

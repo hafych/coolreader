@@ -47,6 +47,8 @@ public:
 
     /// replace contents, taking ownership of a malloc-allocated legacy buffer
     void set( lUInt8 * buf, int size );
+    /// replace contents by moving operation-scoped storage
+    void set( std::vector<lUInt8> &&storage );
     bool copyTo( lUInt8 * buf, int maxSize );
     inline lUInt8 * buf() { return _buf; }
     inline void setPos( int pos ) { _pos = pos; }

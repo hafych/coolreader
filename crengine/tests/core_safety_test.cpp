@@ -37,6 +37,7 @@
 #include "../src/lvstream/lvfilestream.h"
 #include "../src/lvstream/lvfilemappedstream.h"
 #include "../src/lvstream/lvmemorystream.h"
+#include "../src/lvtinydom_internal.h"
 #include "../src/pdbfmt_internal.h"
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
@@ -1700,6 +1701,33 @@ static int testSerialBufOwnership() {
             || swapped.buf()[1] != 0x22
             || adopted.pos() != 0)
         return fail("SerialBuf swap lost its owned-storage view");
+
+    std::vector<lUInt8> movedStorage = {0x55, 0x66, 0x77};
+    SerialBuf moved(0, true);
+    moved.set(std::move(movedStorage));
+    if (moved.error() || moved.size() != 3 || moved.pos() != 3
+            || moved.buf()[0] != 0x55 || moved.buf()[2] != 0x77)
+        return fail("SerialBuf did not accept moved storage");
+    return 0;
+}
+
+static int testCacheFileCodecOwnership() {
+    std::vector<lUInt8> input(400000);
+    lUInt32 state = 0x12345678U;
+    for (std::size_t index = 0; index < input.size(); index++) {
+        state = state * 1664525U + 1013904223U;
+        input[index] = static_cast<lUInt8>(state >> 24);
+    }
+#if (USE_ZLIB == 1)
+    if (!LVRunCacheFileCodecRegression(
+                CacheCompressionZlib, input))
+        return fail("zlib cache codec ownership regression failed");
+#endif
+#if (USE_ZSTD == 1)
+    if (!LVRunCacheFileCodecRegression(
+                CacheCompressionZSTD, input))
+        return fail("zstd cache codec ownership regression failed");
+#endif
     return 0;
 }
 
@@ -4568,6 +4596,8 @@ int main() {
     if (testReferenceCacheOwnership() != 0)
         return 1;
     if (testSerialBufOwnership() != 0)
+        return 1;
+    if (testCacheFileCodecOwnership() != 0)
         return 1;
     if (testRtfTextBufferOwnership() != 0)
         return 1;

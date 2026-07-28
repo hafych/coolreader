@@ -246,6 +246,12 @@ The historical Debian changelog remains in [`changelog`](changelog).
   buffers in scoped vectors. PDB inflate publishes only complete output, zlib
   teardown is guarded, and PDB stream/container candidates transfer from
   `unique_ptr` only at their reference-counted ownership boundaries.
+- Cache-file ZSTD/zlib contexts and reusable codec chunks now have explicit
+  RAII ownership. Pack, unpack, validation and block I/O use bounded
+  transactional vectors; corrupt frames preserve prior results, codec errors
+  do not invalidate reusable state, and completed blocks move directly into
+  serialization buffers while legacy DOM storage keeps an explicit
+  malloc-compatible transfer boundary.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is

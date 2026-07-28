@@ -79,10 +79,21 @@ unchanged. PDB encoding detection uses vector scratch storage, while stream and
 container factory candidates remain in `unique_ptr` until their respective
 `LVStreamRef` and `LVContainerRef` ownership boundaries accept them.
 
-Cache-file serialization buffers, temporary draw mark lists and SVG decoder
-input/output buffers also use standard RAII containers. These operation-scoped
-resources cannot outlive their call and no longer rely on matching cleanup at
-each return.
+Cache-file ZSTD and zlib compressor/decompressor contexts are lazy
+`unique_ptr` resources whose destructors pair the matching codec teardown with
+their vector-backed output chunks. Pack, unpack, validation and block I/O build
+operation-scoped vectors and publish results only after a complete codec frame,
+size check and CRC check succeed. A corrupt frame leaves the caller's previous
+result intact, and a later reset can safely reuse the same context because
+error paths no longer call `deflateEnd()` or `inflateEnd()`. `SerialBuf` accepts
+completed cache blocks by moving their vector storage; the two persistent DOM
+storage consumers retain an explicit malloc-compatible ownership boundary.
+Regression coverage exercises multi-chunk ZSTD/zlib round trips, reuse,
+corruption recovery, cleanup/recreation and both cache read boundaries.
+
+Temporary draw mark lists and SVG decoder input/output buffers also use
+standard RAII containers. These operation-scoped resources cannot outlive
+their call and no longer rely on matching cleanup at each return.
 
 The GIF decoder owns input, color-table, compressed-stream, decoded-frame and
 output-row storage through `std::vector`. A decoded frame has automatic
