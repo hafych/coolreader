@@ -266,6 +266,7 @@ enum CacheFileBlockType {
 
 #include <stddef.h>
 #include <algorithm>
+#include <climits>
 #include <math.h>
 #include <limits>
 #include <memory>
@@ -16722,6 +16723,126 @@ bool tinyNodeCollection::saveStylesData()
     return !stylebuf.error();
 }
 
+static const lInt32 maximumSerializedStyleCount =
+        static_cast<lInt32>(USHRT_MAX) + 1;
+
+static std::unique_ptr<LVArray<css_style_ref_t> >
+deserializeStyleIndex(SerialBuf &stylebuf)
+{
+    if (!stylebuf.checkMagic(styles_magic))
+        return std::unique_ptr<LVArray<css_style_ref_t> >();
+    lUInt32 stylesheetHash = 0;
+    lInt32 length = 0;
+    stylebuf >> stylesheetHash >> length;
+    if (stylebuf.error()
+            || length <= 0
+            || length > maximumSerializedStyleCount) {
+        stylebuf.seterror();
+        return std::unique_ptr<LVArray<css_style_ref_t> >();
+    }
+    (void)stylesheetHash;
+
+    std::unique_ptr<LVArray<css_style_ref_t> > list =
+            std::make_unique<LVArray<css_style_ref_t> >(
+                    length, css_style_ref_t());
+    bool foundTerminator = false;
+    for (int recordCount = 0; recordCount < length; ++recordCount) {
+        lUInt32 index = 0;
+        stylebuf >> index;
+        if (stylebuf.error())
+            return std::unique_ptr<LVArray<css_style_ref_t> >();
+        if (index == 0) {
+            foundTerminator = true;
+            break;
+        }
+        if (index >= static_cast<lUInt32>(length)
+                || !list->get(static_cast<int>(index)).isNull()) {
+            stylebuf.seterror();
+            return std::unique_ptr<LVArray<css_style_ref_t> >();
+        }
+        std::unique_ptr<css_style_rec_t> recordCandidate =
+                std::make_unique<css_style_rec_t>();
+        css_style_ref_t record(recordCandidate.get());
+        recordCandidate.release();
+        if (!record->deserialize(stylebuf))
+            return std::unique_ptr<LVArray<css_style_ref_t> >();
+        list->set(static_cast<int>(index), record);
+    }
+    if (!foundTerminator || !stylebuf.checkMagic(styles_magic)) {
+        stylebuf.seterror();
+        return std::unique_ptr<LVArray<css_style_ref_t> >();
+    }
+    return list;
+}
+
+bool LVRunStyleIndexRestoreRegression()
+{
+    css_style_rec_t source;
+    source.display = css_d_block;
+    source.font_name = "Style Index Owner";
+
+    SerialBuf valid(1, true);
+    valid.putMagic(styles_magic);
+    valid << static_cast<lUInt32>(0x10203040);
+    valid << static_cast<lInt32>(3);
+    valid << static_cast<lUInt32>(1);
+    if (!source.serialize(valid))
+        return false;
+    valid << static_cast<lUInt32>(0);
+    valid.putMagic(styles_magic);
+    if (valid.error())
+        return false;
+    std::vector<lUInt8> validBytes(
+            valid.buf(), valid.buf() + valid.pos());
+
+    SerialBuf validInput(
+            validBytes.data(), static_cast<int>(validBytes.size()));
+    std::unique_ptr<LVArray<css_style_ref_t> > restored =
+            deserializeStyleIndex(validInput);
+    if (!restored
+            || restored->length() != 3
+            || restored->get(1).isNull()
+            || !(*restored->get(1).get() == source)
+            || !restored->get(2).isNull())
+        return false;
+
+    SerialBuf oversized(1, true);
+    oversized.putMagic(styles_magic);
+    oversized << static_cast<lUInt32>(0);
+    oversized << maximumSerializedStyleCount + 1;
+    oversized << static_cast<lUInt32>(0);
+    oversized.putMagic(styles_magic);
+    SerialBuf oversizedInput(oversized.buf(), oversized.pos());
+    if (deserializeStyleIndex(oversizedInput)
+            || !oversizedInput.error())
+        return false;
+
+    SerialBuf duplicate(1, true);
+    duplicate.putMagic(styles_magic);
+    duplicate << static_cast<lUInt32>(0);
+    duplicate << static_cast<lInt32>(3);
+    duplicate << static_cast<lUInt32>(1);
+    if (!source.serialize(duplicate))
+        return false;
+    duplicate << static_cast<lUInt32>(1);
+    if (!source.serialize(duplicate))
+        return false;
+    duplicate << static_cast<lUInt32>(0);
+    duplicate.putMagic(styles_magic);
+    SerialBuf duplicateInput(duplicate.buf(), duplicate.pos());
+    if (deserializeStyleIndex(duplicateInput)
+            || !duplicateInput.error())
+        return false;
+
+    std::vector<lUInt8> corruptFooter(validBytes);
+    corruptFooter.back() ^= 0x20;
+    SerialBuf corruptFooterInput(
+            corruptFooter.data(),
+            static_cast<int>(corruptFooter.size()));
+    return !deserializeStyleIndex(corruptFooterInput)
+            && corruptFooterInput.error();
+}
+
 bool tinyNodeCollection::loadStylesData()
 {
     SerialBuf stylebuf(0, true);
@@ -16729,47 +16850,13 @@ bool tinyNodeCollection::loadStylesData()
         CRLog::error("Error while reading style data");
         return false;
     }
-    lUInt32 stHash = 0;
-    lInt32 len = 0;
-
-    // lUInt32 myHash = _stylesheet.getHash();
-    // When loading from cache, this stylesheet was built with the
-    // initial element name ids, which may have been replaced by
-    // the one restored from the cache. So, its hash may be different
-    // from the one we're going to load from cache.
-    // This is not a failure, but a sign the stylesheet will have
-    // to be regenerated (later, no need for it currently as we're
-    // loading previously applied style data): this will be checked
-    // in checkRenderContext() when comparing a combo hash
-    // against _hdr.stylesheet_hash fetched from the cache.
-
-    stylebuf.checkMagic(styles_magic);
-    stylebuf >> stHash;
-    // Don't check for this:
-    // if ( stHash != myHash ) {
-    //     CRLog::info("tinyNodeCollection::loadStylesData() - stylesheet hash is changed: skip loading styles");
-    //     return false;
-    // }
-    stylebuf >> len; // index
-    if ( stylebuf.error() )
-        return false;
-    LVArray<css_style_ref_t> list(len, css_style_ref_t());
-    for ( int i=0; i<list.length(); i++ ) {
-        lUInt32 index = 0;
-        stylebuf >> index; // index
-        if ( index<=0 || (int)index>=len || stylebuf.error() )
-            break;
-        css_style_ref_t rec( new css_style_rec_t() );
-        if ( !rec->deserialize(stylebuf) )
-            break;
-        list.set( index, rec );
-    }
-    stylebuf.checkMagic(styles_magic);
-    if ( stylebuf.error() )
+    std::unique_ptr<LVArray<css_style_ref_t> > list =
+            deserializeStyleIndex(stylebuf);
+    if (!list)
         return false;
 
     CRLog::trace("Setting style data: %d bytes", stylebuf.size());
-    _styles.setIndex( list );
+    _styles.setIndex(*list);
 
     return !stylebuf.error();
 }

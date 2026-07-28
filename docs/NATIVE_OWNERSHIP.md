@@ -59,7 +59,10 @@ Serialized CSS style records validate their input magic without mutating the
 buffer, decode into isolated record state, and publish only after the stored
 style hash matches. Publication preserves the live intrusive reference count,
 runtime flags and exclusive before/after pseudo-style owners because these
-fields are intentionally absent from the cache format.
+fields are intentionally absent from the cache format. The surrounding sparse
+style index is capped by its `lUInt16` consumers, rejects duplicate slots, owns
+each decoded record before intrusive adoption, and reaches the live reference
+cache only after its terminator and trailing magic have both been validated.
 
 `HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership

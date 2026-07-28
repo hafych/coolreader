@@ -3392,6 +3392,12 @@ static int testStyleRecordSerializationOwnership() {
     return 0;
 }
 
+static int testStyleIndexRestoreOwnership() {
+    if (!LVRunStyleIndexRestoreRegression())
+        return fail("DOM style-index restore regression failed");
+    return 0;
+}
+
 #if (LDOM_USE_OWN_MEM_MAN == 1)
 static int testStringChunkStorageOwnership() {
     if (!LVRunStringChunkStorageOwnershipRegression())
@@ -7302,6 +7308,8 @@ int main() {
     if (testStringCollectionOwnership() != 0)
         return 1;
     if (testStyleRecordSerializationOwnership() != 0)
+        return 1;
+    if (testStyleIndexRestoreOwnership() != 0)
         return 1;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
     if (testStringChunkStorageOwnership() != 0)

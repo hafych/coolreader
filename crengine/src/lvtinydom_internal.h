@@ -22,4 +22,7 @@ bool LVRunDomChunkStorageRegression();
 /// Native regression seam for DOM node-part ownership and load rollback.
 bool LVRunDomNodePartOwnershipRegression();
 
+/// Native regression seam for bounded transactional style-index restore.
+bool LVRunStyleIndexRestoreRegression();
+
 #endif

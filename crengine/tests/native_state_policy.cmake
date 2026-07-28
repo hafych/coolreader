@@ -14,6 +14,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/crgui.cpp" GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom_internal.h" DOM_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvopc.h" OPC_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvopc.cpp" OPC_SOURCE)
@@ -3542,6 +3543,46 @@ require_source_text(
   "std::unique_ptr<LVArray<css_style_ref_t> > list = _styles.getIndex()"
   "DOM style-index exports must retain scoped ownership"
 )
+require_source_text(
+  "${DOM_SOURCE}"
+  "maximumSerializedStyleCount =\n        static_cast<lInt32>(USHRT_MAX) + 1"
+  "DOM style-index allocation must remain bounded by its lUInt16 consumers"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "deserializeStyleIndex(SerialBuf &stylebuf)"
+  "DOM style-index restore must remain isolated in a candidate decoder"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<css_style_rec_t> recordCandidate"
+  "DOM style records must enter scoped ownership before intrusive adoption"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "|| !list->get(static_cast<int>(index)).isNull()"
+  "DOM style-index restore must reject duplicate slots"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "if (!foundTerminator || !stylebuf.checkMagic(styles_magic))"
+  "DOM style-index restore must validate its terminator and footer before publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_styles.setIndex(*list)"
+  "DOM style-index restore must publish only its complete candidate"
+)
+require_source_text(
+  "${DOM_INTERNAL_HEADER}"
+  "bool LVRunStyleIndexRestoreRegression()"
+  "DOM style-index restore must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "DOM style-index restore regression failed"
+  "DOM style-index restore must retain native regression coverage"
+)
 forbid_source_text(
   "${REF_CACHE_HEADER}"
   "LVRefCacheRec ** table"
@@ -3576,6 +3617,16 @@ forbid_source_text(
   "${REF_CACHE_HEADER}"
   "delete[] buf"
   "bounded cache-map teardown must not use manual delete[]"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LVArray<css_style_ref_t> list(len, css_style_ref_t())"
+  "DOM style-index restore must not allocate directly from an unchecked count"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "css_style_ref_t rec( new css_style_rec_t() )"
+  "DOM style-index restore candidates must not begin as raw owners"
 )
 forbid_source_text(
   "${DOM_SOURCE}"
