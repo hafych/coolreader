@@ -383,8 +383,14 @@ append snapshots its input before growth so self-appends are safe, and
 copy/assignment duplicate storage instead of sharing a raw owner.
 `LVRendLineInfo` likewise owns its optional footnote-link list with
 `unique_ptr`; copies duplicate the non-owning pointer list, moves transfer it,
-and `clear()` releases the list without manual deletion. The page splitter's
-existing indexing, serialization and link-order contracts remain unchanged.
+and `clear()` releases the list without manual deletion. Rendered page
+deserialization stages scalar fields and compact footnotes before publication.
+Page-list counts are bounded by the bytes remaining ahead of the magic/CRC
+footer, each page enters a `unique_ptr`, and the complete candidate list swaps
+into place only after nested decoding and the late CRC succeed. Failed or
+oversized snapshots preserve both the committed pages and nonlinear-flow
+state; a successful linear snapshot clears stale derived state. The page
+splitter's indexing, serialization and link-order contracts remain unchanged.
 
 Compiled CSS declarations own instruction words in `std::vector` and swap a
 candidate into place only after the complete declaration and closing brace

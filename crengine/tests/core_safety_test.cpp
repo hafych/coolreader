@@ -4063,6 +4063,113 @@ static int testPaginationAuxiliaryOwnership() {
     }
 
     {
+        LVRendPageInfo serializedPage(100, 200, 3);
+        serializedPage.flags = RN_PAGE_TYPE_COVER;
+        serializedPage.flow = 2;
+        serializedPage.footnotes.add(
+                LVPageFootNoteInfo(10, 20));
+        SerialBuf serialized(1, true);
+        if (!serializedPage.serialize(serialized)
+                || serialized.error())
+            return fail("rendered page fixture could not serialize");
+
+        LVRendPageInfo committed(700, 80, 9);
+        committed.flags = RN_PAGE_TYPE_NORMAL;
+        committed.flow = 7;
+        committed.footnotes.add(
+                LVPageFootNoteInfo(30, 40));
+        SerialBuf truncated(
+                serialized.buf(), serialized.pos() - 1);
+        if (committed.deserialize(truncated)
+                || !truncated.error()
+                || committed.start != 700
+                || committed.height != 80
+                || committed.index != 9
+                || committed.flow != 7
+                || committed.footnotes.length() != 1
+                || committed.footnotes[0].start != 30)
+            return fail(
+                    "rendered page truncation replaced committed state");
+    }
+
+    {
+        LVRendPageList source;
+        source.add(new LVRendPageInfo(100, 200, 0));
+        source[0]->footnotes.add(
+                LVPageFootNoteInfo(10, 20));
+        source.add(new LVRendPageInfo(300, 150, 1));
+        source[1]->flow = 2;
+
+        SerialBuf serialized(1, true);
+        if (!source.serialize(serialized)
+                || serialized.error())
+            return fail("rendered page-list fixture could not serialize");
+        const int serializedSize = serialized.pos();
+        std::vector<lUInt8> serializedBytes(
+                serialized.buf(),
+                serialized.buf() + serializedSize);
+
+        LVRendPageList restored;
+        restored.add(new LVRendPageInfo(900, 90, 0));
+        SerialBuf input(
+                serializedBytes.data(), serializedSize);
+        if (!restored.deserialize(input)
+                || restored.length() != 2
+                || restored[0]->start != 100
+                || restored[0]->index != 0
+                || restored[0]->footnotes.length() != 1
+                || restored[1]->start != 300
+                || restored[1]->index != 1
+                || restored[1]->flow != 2
+                || !restored.hasNonLinearFlows())
+            return fail(
+                    "rendered page-list round-trip lost owned state");
+
+        std::vector<lUInt8> corrupted(serializedBytes);
+        corrupted.back() ^= 0x80;
+        SerialBuf corruptedInput(
+                corrupted.data(),
+                static_cast<int>(corrupted.size()));
+        if (restored.deserialize(corruptedInput)
+                || restored.length() != 2
+                || restored[0]->start != 100
+                || restored[1]->start != 300
+                || !restored.hasNonLinearFlows())
+            return fail(
+                    "rendered page-list CRC failure replaced committed state");
+
+        std::vector<lUInt8> oversizedCount(serializedBytes);
+        for (int index = 8; index < 12; ++index)
+            oversizedCount[static_cast<size_t>(index)] = 0xFF;
+        SerialBuf oversizedInput(
+                oversizedCount.data(),
+                static_cast<int>(oversizedCount.size()));
+        if (restored.deserialize(oversizedInput)
+                || !oversizedInput.error()
+                || restored.length() != 2
+                || restored[0]->start != 100
+                || restored[1]->start != 300)
+            return fail(
+                    "rendered page-list accepted an oversized count");
+
+        LVRendPageList linearSource;
+        linearSource.add(new LVRendPageInfo(500, 100, 0));
+        SerialBuf linearSerialized(1, true);
+        if (!linearSource.serialize(linearSerialized)
+                || linearSerialized.error())
+            return fail(
+                    "linear rendered page-list fixture could not serialize");
+        SerialBuf linearInput(
+                linearSerialized.buf(), linearSerialized.pos());
+        if (!restored.deserialize(linearInput)
+                || restored.length() != 1
+                || restored[0]->start != 500
+                || restored.hasNonLinearFlows())
+            return fail(
+                    "rendered page-list retained stale nonlinear-flow state");
+    }
+
+    {
         LVFootNoteRef first(
                 new LVFootNote(lString32(U"first")));
         LVFootNoteRef second(

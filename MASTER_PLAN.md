@@ -134,7 +134,8 @@ DRM или ограничений доступа, подбор/получени�
   generic value-array, transactional reference adoption/clone, reference-vector,
   transactional owning/borrowed pointer-vector adoption/storage and
   contiguous matrix-cell storage,
-  pagination compact arrays/line-link lists,
+  pagination compact arrays/line-link lists and bounded transactional
+  page/page-list snapshots,
   Word/PDB transient import buffers/factory candidates, cache-file ZSTD/zlib
   contexts/chunk output/block scratch, scoped live-block candidates and
   bounded transactional index snapshots/publication, DOM blob

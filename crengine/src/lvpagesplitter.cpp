@@ -868,24 +868,40 @@ bool LVRendPageList::deserialize( SerialBuf & buf )
         return false;
     if ( !buf.checkMagic( pagelist_magic ) )
         return false;
-    clear();
     int pos = buf.pos();
-    lUInt32 len;
+    lUInt32 len = 0;
     buf >> len;
-    clear();
-    reserve(len);
+    static const int minimumSerializedPageSize = 11;
+    static const int serializedFooterSize = 12;
+    if (buf.error()
+            || len > static_cast<lUInt32>(INT_MAX)
+            || buf.space() < serializedFooterSize
+            || len > static_cast<lUInt32>(
+                    (buf.space() - serializedFooterSize)
+                            / minimumSerializedPageSize)) {
+        buf.seterror();
+        return false;
+    }
+    LVRendPageList candidate;
+    candidate.reserve(static_cast<int>(len));
+    bool candidateHasNonLinearFlows = false;
     for (lUInt32 i = 0; i < len; i++) {
-        LVRendPageInfo * item = new LVRendPageInfo();
-        item->deserialize( buf );
-        item->index = i;
-        add( item );
+        std::unique_ptr<LVRendPageInfo> item(
+                new LVRendPageInfo());
+        if (!item->deserialize(buf))
+            return false;
+        item->index = static_cast<int>(i);
         if (item->flow > 0)
-            has_nonlinear_flows = true;
+            candidateHasNonLinearFlows = true;
+        candidate.add(item.release());
     }
     if ( !buf.checkMagic( pagelist_magic ) )
         return false;
-    buf.checkCRC( buf.pos() - pos );
-    return !buf.error();
+    if (!buf.checkCRC(buf.pos() - pos))
+        return false;
+    swap(candidate);
+    has_nonlinear_flows = candidateHasNonLinearFlows;
+    return true;
 }
 
 bool LVRendPageInfo::serialize( SerialBuf & buf )
@@ -909,30 +925,35 @@ bool LVRendPageInfo::deserialize( SerialBuf & buf )
 {
     if ( buf.error() )
         return false;
-    lUInt32 n1;
-    lUInt16 n2;
-    lUInt8 n3;
-    lUInt16 n4;
-
-    buf >> n1 >> n2 >> n3 >> n4; /// start of page
-
-    start = n1;
-    height = n2;
-    flags = n3;
-    flow = n4;
-
-    lUInt16 len;
-    buf >> len;
-    footnotes.clear();
-    if ( len ) {
-        footnotes.reserve(len);
-        for ( int i=0; i<len; i++ ) {
-            lUInt32 n1;
-            lUInt32 n2;
-            buf >> n1;
-            buf >> n2;
-            footnotes.add( LVPageFootNoteInfo( n1, n2 ) );
-        }
+    lUInt32 candidateStart = 0;
+    lUInt16 candidateHeight = 0;
+    lUInt8 candidateFlags = 0;
+    lUInt16 candidateFlow = 0;
+    lUInt16 len = 0;
+    buf >> candidateStart >> candidateHeight
+            >> candidateFlags >> candidateFlow >> len;
+    static const int serializedFootnoteSize = 8;
+    if (buf.error()
+            || static_cast<int>(len)
+                    > buf.space() / serializedFootnoteSize) {
+        buf.seterror();
+        return false;
     }
-    return !buf.error();
+    CompactArray<LVPageFootNoteInfo, 1, 4> candidateFootnotes;
+    candidateFootnotes.reserve(len);
+    for ( int i=0; i<len; i++ ) {
+        lUInt32 candidateFootnoteStart = 0;
+        lUInt32 candidateFootnoteHeight = 0;
+        buf >> candidateFootnoteStart >> candidateFootnoteHeight;
+        if (buf.error())
+            return false;
+        candidateFootnotes.add(LVPageFootNoteInfo(
+                candidateFootnoteStart, candidateFootnoteHeight));
+    }
+    start = static_cast<int>(candidateStart);
+    height = candidateHeight;
+    flags = candidateFlags;
+    flow = candidateFlow;
+    footnotes = std::move(candidateFootnotes);
+    return true;
 }

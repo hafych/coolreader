@@ -88,6 +88,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvarray.h" VALUE_ARRAY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvref.h" REF_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvptrvec.h" PTR_VECTOR_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvpagesplitter.h" PAGE_SPLITTER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvpagesplitter.cpp" PAGE_SPLITTER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrefcache.h" REF_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvqueue.h" QUEUE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
@@ -3432,6 +3433,71 @@ forbid_source_text(
   "${PAGE_SPLITTER_HEADER}"
   "delete links"
   "rendered-line link teardown must remain automatic"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "static const int minimumSerializedPageSize = 11"
+  "rendered page-list counts must remain bounded by serialized bytes"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "buf.space() < serializedFooterSize"
+  "rendered page-list bounds must retain its magic and CRC footer"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "LVRendPageList candidate"
+  "rendered page-list deserialization must build a candidate owner graph"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "std::unique_ptr<LVRendPageInfo> item("
+  "rendered page candidates must enter scoped ownership"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "if (!item->deserialize(buf))"
+  "rendered page-list deserialization must propagate nested failure"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "swap(candidate)"
+  "rendered page-list publication must be a no-throw owner swap"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "candidateFootnotes"
+  "rendered page deserialization must stage compact footnotes"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "footnotes = std::move(candidateFootnotes)"
+  "rendered page footnotes must publish only after complete decoding"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "rendered page truncation replaced committed state"
+  "rendered page deserialization must retain truncation rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "rendered page-list CRC failure replaced committed state"
+  "rendered page-list deserialization must retain late-failure rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "rendered page-list accepted an oversized count"
+  "rendered page-list deserialization must retain count-bound coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "rendered page-list retained stale nonlinear-flow state"
+  "rendered page-list publication must retain derived-state coverage"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "LVRendPageInfo * item = new LVRendPageInfo()"
+  "rendered page-list candidates must not begin as raw owners"
 )
 
 # --- reference-cache bucket, index and export ownership ---
