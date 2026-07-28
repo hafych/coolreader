@@ -55,6 +55,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.h" FREETYPE_FACE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfnt.cpp" BITMAP_FONT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfnt.h" BITMAP_FONT_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvwin32font.cpp" WIN32_FONT_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvwin32font.h" WIN32_FONT_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.h" FONT_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.cpp" FONT_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.cpp" FREETYPE_FONT_MANAGER_SOURCE)
@@ -6206,6 +6208,73 @@ forbid_source_text(
   "${BITMAP_FONT_SOURCE}"
   "fclose(f)"
   "bitmap-font input teardown must remain automatic"
+)
+
+# --- Win32 glyph-cache graph ownership ---
+require_source_text(
+  "${WIN32_FONT_HEADER}"
+  "std::vector<std::unique_ptr<glyph_t> > _buckets"
+  "Win32 glyph cache buckets must use container-backed ownership"
+)
+require_source_text(
+  "${WIN32_FONT_HEADER}"
+  "std::unique_ptr<glyph_t> next"
+  "Win32 glyph cache chains must use exclusive ownership"
+)
+require_source_text(
+  "${WIN32_FONT_HEADER}"
+  "std::vector<lUInt8> glyph"
+  "Win32 glyph bytes must use container-backed ownership"
+)
+require_source_text(
+  "${WIN32_FONT_HEADER}"
+  "std::unique_ptr<glyph_t> candidate"
+  "Win32 glyph entries must remain scoped until publication"
+)
+require_source_text(
+  "${WIN32_FONT_HEADER}"
+  "slot->reset()"
+  "Win32 glyph eviction must release through the owner link"
+)
+require_source_text(
+  "${WIN32_FONT_SOURCE}"
+  "std::vector<lUInt8> packedGlyph("
+  "Win32 packed glyph workspaces must use scoped storage"
+)
+require_source_text(
+  "${WIN32_FONT_SOURCE}"
+  "p->glyph = std::move(decodedGlyph)"
+  "Win32 decoded glyph publication must transfer complete storage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "Win32 glyph cache eviction changed surviving owners"
+  "Win32 glyph ownership must retain portable eviction coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "Win32 glyph cache did not release its owner graph"
+  "Win32 glyph ownership must retain repeated-clear coverage"
+)
+forbid_source_text(
+  "${WIN32_FONT_HEADER}"
+  "glyph_t * * _hashtable"
+  "Win32 glyph cache must not own a raw bucket table"
+)
+forbid_source_text(
+  "${WIN32_FONT_HEADER}"
+  "new glyph_t"
+  "Win32 glyph entry publication must remain automatic"
+)
+forbid_source_text(
+  "${WIN32_FONT_SOURCE}"
+  "new unsigned char["
+  "Win32 glyph bytes must not use manual array ownership"
+)
+forbid_source_text(
+  "${WIN32_FONT_SOURCE}"
+  "delete[] glyph"
+  "Win32 packed glyph teardown must remain automatic"
 )
 
 # --- XPointer shared-state ownership ---

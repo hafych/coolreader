@@ -35,6 +35,92 @@
 #include "lvcolordrawbuf.h"
 #include "lvbasefont.h"
 
+#include <memory>
+#include <utility>
+#include <vector>
+
+struct glyph_t {
+    std::vector<lUInt8> glyph;
+    lChar32 ch;
+    bool flgNotExists;
+    bool flgValid;
+    LVFont::glyph_info_t gi;
+    std::unique_ptr<glyph_t> next;
+
+    explicit glyph_t(lChar32 c)
+        : ch(c), flgNotExists(false), flgValid(false), gi(), next()
+    {
+    }
+};
+
+class GlyphCache
+{
+private:
+    static const int MAX_CHAIN_LENGTH = 3;
+    std::vector<std::unique_ptr<glyph_t> > _buckets;
+
+    std::unique_ptr<glyph_t> &bucket(lChar32 ch)
+    {
+        const lUInt32 hash = static_cast<lUInt32>(ch) * 113U;
+        return _buckets[hash % _buckets.size()];
+    }
+
+public:
+    explicit GlyphCache(lUInt32 size)
+        : _buckets(size == 0 ? 1 : size)
+    {
+    }
+
+    GlyphCache(const GlyphCache &) = delete;
+    GlyphCache &operator=(const GlyphCache &) = delete;
+    ~GlyphCache() = default;
+
+    void clear()
+    {
+        for (std::unique_ptr<glyph_t> &entry : _buckets)
+            entry.reset();
+    }
+
+    glyph_t *find(lChar32 ch)
+    {
+        glyph_t *entry = bucket(ch).get();
+        for (int depth = 0;
+                entry != NULL && depth < MAX_CHAIN_LENGTH;
+                depth++, entry = entry->next.get()) {
+            if (entry->ch == ch)
+                return entry;
+        }
+        return NULL;
+    }
+
+    glyph_t *get(lChar32 ch)
+    {
+        std::unique_ptr<glyph_t> &head = bucket(ch);
+        std::unique_ptr<glyph_t> *slot = &head;
+        for (int depth = 0; depth < MAX_CHAIN_LENGTH; depth++) {
+            if (!*slot) {
+                std::unique_ptr<glyph_t> candidate =
+                        std::make_unique<glyph_t>(ch);
+                glyph_t *result = candidate.get();
+                *slot = std::move(candidate);
+                return result;
+            }
+            if ((*slot)->ch == ch)
+                return slot->get();
+            if (depth + 1 < MAX_CHAIN_LENGTH)
+                slot = &(*slot)->next;
+        }
+
+        std::unique_ptr<glyph_t> candidate =
+                std::make_unique<glyph_t>(ch);
+        glyph_t *result = candidate.get();
+        slot->reset();
+        candidate->next = std::move(head);
+        head = std::move(candidate);
+        return result;
+    }
+};
+
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
 extern "C" {
 #include <windows.h>
@@ -212,125 +298,6 @@ public:
         \return true if glyph was found
     */
     virtual bool getGlyphImage(lUInt32 code, lUInt8 * buf, lChar32 def_char=0);
-
-};
-
-struct glyph_t {
-    lUInt8 *     glyph;
-    lChar32      ch;
-    bool         flgNotExists;
-    bool         flgValid;
-    LVFont::glyph_info_t gi;
-    glyph_t *    next;
-    glyph_t(lChar32 c)
-    : glyph(NULL), ch(c), flgNotExists(false), flgValid(false), next(NULL)
-    {
-        memset( &gi, 0, sizeof(gi) );
-    }
-    ~glyph_t()
-    {
-        if (glyph)
-            delete glyph;
-    }
-};
-
-class GlyphCache
-{
-private:
-    lUInt32 _size;
-    glyph_t * * _hashtable;
-public:
-    GlyphCache( lUInt32 size )
-    : _size(size)
-    {
-        _hashtable = new glyph_t * [_size];
-        for (lUInt32 i=0; i<_size; i++)
-            _hashtable[i] = NULL;
-    }
-    void clear()
-    {
-        for (lUInt32 i=0; i<_size; i++)
-        {
-            glyph_t * p = _hashtable[i];
-            while (p)
-            {
-                glyph_t * next = p->next;
-                delete p;
-                p = next;
-            }
-            _hashtable[i] = NULL;
-        }
-    }
-    ~GlyphCache()
-    {
-        if (_hashtable)
-        {
-            clear();
-            delete _hashtable;
-        }
-    }
-    glyph_t * find( lChar32 ch )
-    {
-        lUInt32 index = (((lUInt32)ch)*113) % _size;
-        glyph_t * p = _hashtable[index];
-        // 3 levels
-        if (!p)
-            return NULL;
-        if (p->ch == ch)
-            return p;
-        p = p->next;
-        if (!p)
-            return NULL;
-        if (p->ch == ch)
-            return p;
-        p = p->next;
-        if (!p)
-            return NULL;
-        if (p->ch == ch)
-            return p;
-        return NULL;
-    }
-    /// returns found or creates new
-    glyph_t * get( lChar32 ch )
-    {
-        lUInt32 index = (((lUInt32)ch)*113) % _size;
-        glyph_t * * p = &_hashtable[index];
-        // 3 levels
-        if (!*p)
-        {
-            return (*p = new glyph_t(ch));
-        }
-        if ((*p)->ch == ch)
-        {
-            return *p;
-        }
-        p = &(*p)->next;
-        if (!*p)
-        {
-            return (*p = new glyph_t(ch));
-        }
-        if ((*p)->ch == ch)
-        {
-            return *p;
-        }
-        p = &(*p)->next;
-        if (!*p)
-        {
-            return (*p = new glyph_t(ch));
-        }
-        if ((*p)->ch == ch)
-        {
-            return *p;
-        }
-
-        delete (*p);
-        *p = NULL;
-
-        glyph_t * pp = new glyph_t(ch);
-        pp->next = _hashtable[index];
-        _hashtable[index] = pp;
-        return pp;
-    }
 
 };
 

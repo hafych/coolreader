@@ -432,7 +432,7 @@ glyph_t * LVWin32Font::GetGlyphRec( lChar32 ch )
         return NULL;
     }
     GLYPHMETRICS metrics;
-    p->glyph = NULL;
+    p->glyph.clear();
     
     MAT2 identity = { {0,1}, {0,0}, {0,0}, {0,1} };
     lUInt32 res;
@@ -465,11 +465,15 @@ glyph_t * LVWin32Font::GetGlyphRec( lChar32 ch )
     
     if (p->gi.blackBoxX>0 && p->gi.blackBoxY>0)
     {
-        p->glyph = new unsigned char[p->gi.blackBoxX * p->gi.blackBoxY];
+        std::vector<lUInt8> decodedGlyph(
+                static_cast<std::size_t>(p->gi.blackBoxX)
+                        * static_cast<std::size_t>(p->gi.blackBoxY),
+                0);
         if (gs>0)
         {
-            lUInt8 * glyph = new unsigned char[gs];
-             res = GetGlyphOutlineW( _drawbuf.GetDC(), ch,
+            std::vector<lUInt8> packedGlyph(
+                    static_cast<std::size_t>(gs));
+            res = GetGlyphOutlineW( _drawbuf.GetDC(), ch,
 #ifdef USE_BITMAP_FONT
         GGO_BITMAP, //GGO_METRICS
 #else
@@ -477,20 +481,17 @@ glyph_t * LVWin32Font::GetGlyphRec( lChar32 ch )
 #endif
                &metrics,
                gs,
-               glyph,
+               packedGlyph.data(),
                &identity );
             if (res==GDI_ERROR)
-            {
-                delete[] glyph;
                 return NULL;
-            }
 #ifdef USE_BITMAP_FONT
             int glyph_row_size = (p->gi.blackBoxX + 31) / 8 / 4 * 4;
 #else
             int glyph_row_size = (p->gi.blackBoxX + 3)/ 4 * 4;
 #endif
-            lUInt8 * src = glyph;
-            lUInt8 * dst = p->glyph;
+            lUInt8 * src = packedGlyph.data();
+            lUInt8 * dst = decodedGlyph.data();
             for (int y=0; y<p->gi.blackBoxY; y++)
             {
                 for (int x = 0; x<p->gi.blackBoxX; x++)
@@ -508,15 +509,9 @@ glyph_t * LVWin32Font::GetGlyphRec( lChar32 ch )
                 src += glyph_row_size;
                 dst += p->gi.blackBoxX;
             }
-            delete[] glyph;
             //*(dst-1) = 0xFF;
         }
-        else
-        {
-            // empty glyph
-            for (int i=p->gi.blackBoxX * p->gi.blackBoxY-1; i>=0; i--)
-                p->glyph[i] = 0;
-        }
+        p->glyph = std::move(decodedGlyph);
     }
     // found!
     p->flgValid = true;
@@ -656,7 +651,7 @@ bool LVWin32Font::getGlyphImage(lUInt32 code, lUInt8 * buf, lChar32 def_char)
         return false;
     int gs = p->gi.blackBoxX*p->gi.blackBoxY;
     if (gs>0)
-        memcpy( buf, p->glyph, gs );
+        memcpy( buf, p->glyph.data(), gs );
     return true;
 }
 

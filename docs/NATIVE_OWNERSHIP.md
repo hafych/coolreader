@@ -708,6 +708,15 @@ remains the documented caller-side transfer boundary. Native coverage opens
 the same minimal valid LFNT image twice and rejects a corrupt-header candidate
 without publishing or leaking it.
 
+The Win32 glyph cache keeps its hash buckets and bounded three-entry chains as
+`unique_ptr` owner links; lookups return borrowed entries whose addresses stay
+stable while unrelated entries are inserted. Each entry owns decoded glyph
+bytes in a vector, and the GDI packed bitmap remains a scoped vector until a
+complete decode moves into that entry. Third-entry eviction releases through
+the owner link before a scoped candidate becomes the new head. A portable
+native regression exercises this WinAPI-independent graph directly, including
+surviving borrows, bounded eviction, repeated clear and reuse.
+
 `ldomXPointer` stores its shared mutable state in `shared_ptr<XPointerData>`.
 Ordinary copies intentionally retain alias semantics, while `clear()` publishes
 a fresh null state and leaves aliases alive. The protected clone boundary,

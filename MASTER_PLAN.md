@@ -162,8 +162,8 @@ DRM или ограничений доступа, подбор/получени�
   page-context ownership, draw-time bookmark-range filters и full CCRTable
   row-group/row/column/cell graph publication, включая MathML table expansion,
   FreeType face load-candidates, color-glyph scaling workspace, transactional
-  legacy bitmap-font file candidates и language-compatibility cache owners, а
-  также bounded NanoSVG
+  legacy bitmap-font file candidates, portable RAII Win32 glyph-cache graph и
+  language-compatibility cache owners, а также bounded NanoSVG
   image/rasterizer/RGBA workspace ownership и transactional
   selection-range split/draw/text owner publication, включая batched
   word/filter/crop/extended-word owner-list factories, а также bounded

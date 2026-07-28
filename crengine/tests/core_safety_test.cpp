@@ -47,6 +47,7 @@
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontcache.h"
 #include "../src/lvfont/lvfontglyphcache.h"
+#include "../src/lvfont/lvwin32font.h"
 #if (USE_FREETYPE==1)
 #include "../src/lvfont/lvfreetypeface.h"
 #endif
@@ -1111,6 +1112,45 @@ static int testBitmapFontFileOwnership() {
     unlink(path);
     if (accepted != 0 || rejected != NULL)
         return fail("invalid bitmap font candidate was published");
+    return 0;
+}
+
+static int testWin32GlyphCacheOwnership() {
+    static_assert(
+            !std::is_copy_constructible<GlyphCache>::value,
+            "Win32 glyph cache ownership must not be copied");
+    GlyphCache cache(1);
+    glyph_t *first = cache.get(U'a');
+    glyph_t *second = cache.get(U'b');
+    glyph_t *third = cache.get(U'c');
+    if (first == NULL || second == NULL || third == NULL
+            || cache.find(U'a') != first
+            || cache.find(U'b') != second
+            || cache.find(U'c') != third)
+        return fail("Win32 glyph cache did not publish three owners");
+    first->glyph.assign(8, 17);
+    second->glyph.assign(4, 23);
+
+    glyph_t *fourth = cache.get(U'd');
+    if (fourth == NULL
+            || cache.find(U'd') != fourth
+            || cache.find(U'a') != first
+            || cache.find(U'b') != second
+            || cache.find(U'c') != NULL
+            || first->glyph.size() != 8 || first->glyph[0] != 17
+            || second->glyph.size() != 4 || second->glyph[0] != 23) {
+        return fail("Win32 glyph cache eviction changed surviving owners");
+    }
+
+    cache.clear();
+    cache.clear();
+    if (cache.find(U'a') != NULL
+            || cache.find(U'b') != NULL
+            || cache.find(U'd') != NULL)
+        return fail("Win32 glyph cache did not release its owner graph");
+    glyph_t *replacement = cache.get(U'z');
+    if (replacement == NULL || cache.find(U'z') != replacement)
+        return fail("Win32 glyph cache could not publish after clear");
     return 0;
 }
 
@@ -6820,6 +6860,8 @@ int main() {
         return 1;
 #endif
     if (testBitmapFontFileOwnership() != 0)
+        return 1;
+    if (testWin32GlyphCacheOwnership() != 0)
         return 1;
     if (testBoundedObservableDecodedImageCache() != 0)
         return 1;
