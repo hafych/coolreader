@@ -293,6 +293,18 @@ outlives that string's static teardown. A local regression instance forces
 slice growth, verifies freelist reuse, performs repeated clear, and reinitializes
 8-, 16- and 32-bit chunk paths under sanitizers.
 
+The desktop DOM block allocator likewise owns each malloc-backed slice through
+an allocator-matched `unique_ptr`, and its bounded slice and size-class tables
+hold exclusive owners rather than raw process-lifetime pointers. Free-list
+cursors remain borrows. Block sizes are rounded up to pointer alignment before
+links are stored, requests from 1 through 64 bytes map to all 16 local classes,
+and larger allocations retain the original requested byte count when falling
+back to `malloc`. The reference-count and class-specific pools use
+first-dependent-use storage; the direct size-class and reference-count pools
+can be cleared and reinitialized at a quiescent lifecycle boundary. Native
+coverage forces slice growth and reuse, repeated clear, every size-class
+boundary, and the 64-to-65-byte fallback transition under sanitizers.
+
 `LDOMNameIdMap` owns every name/id item exactly once through a vector of
 `unique_ptr`; its sorted name vector is a non-owning lookup index into those
 stable items. Per-element CSS defaults are also private `unique_ptr` copies.

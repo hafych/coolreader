@@ -72,6 +72,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/hist.h" HISTORY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hist.cpp" HISTORY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/props.cpp" PROPERTIES_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvmemman.h" MEMORY_MANAGER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvmemman.cpp" MEMORY_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstring8collection.h" STRING8_COLLECTION_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring8collection.cpp" STRING8_COLLECTION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstring32collection.h" STRING32_COLLECTION_HEADER)
@@ -4373,6 +4375,98 @@ forbid_source_text(
   "${LVSTRING_SOURCE}"
   "free( pChunks )"
   "string chunk backing arrays must remain allocator-managed"
+)
+
+# --- ldom: custom block-pool ownership and size classes ---
+require_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "std::unique_ptr<ldomMemSlice>,"
+  "DOM block-pool slices must use bounded exclusive ownership"
+)
+require_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "ldomMemBlockArrayDeleter> blocks"
+  "DOM block slices must own malloc storage through a matching deleter"
+)
+require_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "std::unique_ptr<ldomMemSlice> candidate"
+  "new DOM block slices must remain scoped until publication"
+)
+require_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "slices[slice_count++] = std::move(candidate)"
+  "DOM block slice publication must transfer ownership"
+)
+require_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "normalizeBlockSize(size_t blockSize)"
+  "DOM freelist blocks must retain pointer-safe size normalization"
+)
+require_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "using ldomBlockStorageOwners = std::array<"
+  "DOM size-class pools must have one bounded owner table"
+)
+require_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "storage = std::make_unique<ldomMemManStorage>"
+  "DOM size-class pools must publish scoped candidates"
+)
+require_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "(byteCount - 1) >> BLOCK_SIZE_GRANULARITY"
+  "DOM size-class lookup must map the full 1..64 byte boundary"
+)
+require_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "return std::malloc(byteCount)"
+  "large DOM allocations must retain their original byte count"
+)
+require_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "static ldomMemManStorage storage(sizeof(ref_count_rec_t))"
+  "reference-count records must use first-dependent-use pool lifetime"
+)
+require_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "bool LVRunDomBlockStorageOwnershipRegression()"
+  "DOM block ownership must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "DOM block storage ownership regression failed"
+  "DOM block ownership must retain growth and boundary coverage"
+)
+forbid_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "ldomMemSlice * slices["
+  "DOM block slices must not use a raw owner table"
+)
+forbid_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "delete slices[i]"
+  "DOM block slice teardown must remain automatic"
+)
+forbid_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "free( pBlocks )"
+  "DOM block backing arrays must remain allocator-managed"
+)
+forbid_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "ldomMemManStorage * block_storages["
+  "DOM size-class pools must not use a raw global owner table"
+)
+forbid_source_text(
+  "${MEMORY_MANAGER_SOURCE}"
+  "pmsREF"
+  "reference-count pool lifetime must not use a raw global owner"
+)
+forbid_source_text(
+  "${MEMORY_MANAGER_HEADER}"
+  "static ldomMemManStorage * pms"
+  "class allocator pools must not use raw process-lifetime owners"
 )
 
 # --- lvtinydom: per-document first-body flag ---

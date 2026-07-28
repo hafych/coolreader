@@ -38,14 +38,6 @@
 #include <stdexcept>
 #include <utility>
 
-/// Memory manager pool for ref counting
-/**
-    For fast and efficient allocation of ref counter structures
-*/
-#if (LDOM_USE_OWN_MEM_MAN==1)
-extern ldomMemManStorage * pmsREF;
-#endif
-
 /// Reference counter structure
 /**
     For internal usage in LVRef<> class
@@ -61,15 +53,11 @@ public:
 #if (LDOM_USE_OWN_MEM_MAN==1)
     void * operator new( size_t )
     {
-        if (pmsREF == NULL)
-        {
-            pmsREF = new ldomMemManStorage(sizeof(ref_count_rec_t));
-        }
-        return pmsREF->alloc();
+        return ldomRefStorage().alloc();
     }
     void operator delete( void * p )
     {
-        pmsREF->free((ldomMemBlock *)p);
+        ldomRefStorage().free((ldomMemBlock *)p);
     }
 #endif
 };

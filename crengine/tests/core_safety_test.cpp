@@ -4,6 +4,7 @@
 #include "lvstreamfragment.h"
 #include "lvarray.h"
 #include "lvhashtable.h"
+#include "lvmemman.h"
 #include "lvpagesplitter.h"
 #include "lvptrvec.h"
 #include "lvrefcache.h"
@@ -3217,6 +3218,12 @@ static int testStringCollectionOwnership() {
 static int testStringChunkStorageOwnership() {
     if (!LVRunStringChunkStorageOwnershipRegression())
         return fail("string chunk slice ownership regression failed");
+    return 0;
+}
+
+static int testDomBlockStorageOwnership() {
+    if (!LVRunDomBlockStorageOwnershipRegression())
+        return fail("DOM block storage ownership regression failed");
     return 0;
 }
 #endif
@@ -6909,6 +6916,8 @@ int main() {
         return 1;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
     if (testStringChunkStorageOwnership() != 0)
+        return 1;
+    if (testDomBlockStorageOwnership() != 0)
         return 1;
 #endif
     if (testNameIdMapOwnership() != 0)

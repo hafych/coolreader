@@ -25,6 +25,7 @@
  * \brief memory manager implementation
  */
 
+#include <cstring>
 #include <stdlib.h>
 #include "../include/lvmemman.h"
 #include "../include/lvref.h"
@@ -184,52 +185,155 @@ ref_count_rec_t ref_count_rec_t::protected_null_ref(NULL);
 
 
 #if (LDOM_USE_OWN_MEM_MAN==1)
-ldomMemManStorage * pmsREF = NULL;
+namespace {
 
-ldomMemManStorage * block_storages[LOCAL_STORAGE_COUNT] =
-{
-    NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL,
-};
+using ldomBlockStorageOwners = std::array<
+        std::unique_ptr<ldomMemManStorage>,
+        LOCAL_STORAGE_COUNT>;
 
-inline int blockSizeToStorageIndex( size_t n )
+ldomBlockStorageOwners &blockStorageOwners()
 {
-    return (n + ((1<<BLOCK_SIZE_GRANULARITY)-1))>>BLOCK_SIZE_GRANULARITY;
+    static ldomBlockStorageOwners owners;
+    return owners;
 }
 
-void * ldomAlloc( size_t n )
+size_t blockSizeToStorageIndex(size_t byteCount)
 {
-    n = blockSizeToStorageIndex( n );
-    if (n<LOCAL_STORAGE_COUNT)
-    {
-        if ( block_storages[n] == NULL )
-        {
-            block_storages[n] = new ldomMemManStorage((n+1)*BLOCK_SIZE_GRANULARITY);
-        }
-        return block_storages[n]->alloc();
-    }
-    else
-    {
-        return malloc( n );
-    }
+    if (byteCount == 0)
+        return 0;
+    return (byteCount - 1) >> BLOCK_SIZE_GRANULARITY;
 }
 
-void   ldomFree( void * p, size_t n )
+size_t storageIndexToBlockSize(size_t storageIndex)
 {
-    n = blockSizeToStorageIndex( n );
-    if (n<LOCAL_STORAGE_COUNT)
+    return (storageIndex + 1) << BLOCK_SIZE_GRANULARITY;
+}
+
+void clearBlockStorageOwners()
+{
+    ldomBlockStorageOwners &owners = blockStorageOwners();
+    for (std::unique_ptr<ldomMemManStorage> &owner : owners)
+        owner.reset();
+}
+
+} // namespace
+
+ldomMemManStorage &ldomRefStorage()
+{
+    static ldomMemManStorage storage(sizeof(ref_count_rec_t));
+    return storage;
+}
+
+void * ldomAlloc( size_t byteCount )
+{
+    const size_t storageIndex = blockSizeToStorageIndex(byteCount);
+    if (storageIndex < LOCAL_STORAGE_COUNT)
     {
-        if ( block_storages[n] == NULL )
-        {
+        std::unique_ptr<ldomMemManStorage> &storage =
+                blockStorageOwners()[storageIndex];
+        if (!storage)
+            storage = std::make_unique<ldomMemManStorage>(
+                    storageIndexToBlockSize(storageIndex));
+        return storage->alloc();
+    }
+    return std::malloc(byteCount);
+}
+
+void ldomFree( void * p, size_t byteCount )
+{
+    if (p == NULL)
+        return;
+    const size_t storageIndex = blockSizeToStorageIndex(byteCount);
+    if (storageIndex < LOCAL_STORAGE_COUNT)
+    {
+        std::unique_ptr<ldomMemManStorage> &storage =
+                blockStorageOwners()[storageIndex];
+        if (!storage)
             crFatalError();
-        }
-        block_storages[n]->free( (ldomMemBlock *)p );
+        storage->free(static_cast<ldomMemBlock *>(p));
     }
     else
-    {
-        free( p );
+        std::free(p);
+}
+
+void ldomFreeStorage()
+{
+    clearBlockStorageOwners();
+    ldomRefStorage().clear();
+}
+
+bool LVRunDomBlockStorageOwnershipRegression()
+{
+    clearBlockStorageOwners();
+    try {
+        ldomMemManStorage localStorage(5);
+        if (localStorage.block_size < 5
+                || localStorage.block_size % alignof(ldomMemBlock) != 0
+                || localStorage.slice_count != 1)
+            return false;
+
+        std::array<void *, FIRST_SLICE_SIZE + 1> blocks;
+        for (void *&block : blocks) {
+            block = localStorage.alloc();
+            if (block == NULL)
+                return false;
+            std::memset(block, 0xA5, 5);
+        }
+        if (localStorage.slice_count != 2)
+            return false;
+        for (void *block : blocks)
+            localStorage.free(static_cast<ldomMemBlock *>(block));
+        for (size_t i = 0; i < localStorage.slice_count; ++i) {
+            if (localStorage.slices[i]->blocks_used != 0)
+                return false;
+        }
+
+        void *reused = localStorage.alloc();
+        if (reused != blocks.back())
+            return false;
+        localStorage.free(static_cast<ldomMemBlock *>(reused));
+
+        localStorage.clear();
+        localStorage.clear();
+        if (localStorage.slice_count != 0)
+            return false;
+        void *reinitialized = localStorage.alloc();
+        if (reinitialized == NULL || localStorage.slice_count != 1)
+            return false;
+        localStorage.free(static_cast<ldomMemBlock *>(reinitialized));
+
+        const std::array<size_t, 11> requestSizes = {
+            0, 1, 4, 5, 8, 9, 60, 61, 64, 65, 128
+        };
+        for (size_t requestSize : requestSizes) {
+            void *allocation = ldomAlloc(requestSize);
+            if (allocation == NULL)
+                return false;
+            if (requestSize != 0)
+                std::memset(allocation, 0x5A, requestSize);
+            ldomFree(allocation, requestSize);
+        }
+
+        void *first = ldomAlloc(5);
+        if (first == NULL)
+            return false;
+        ldomFree(first, 5);
+        void *second = ldomAlloc(5);
+        if (second != first)
+            return false;
+        ldomFree(second, 5);
+
+        clearBlockStorageOwners();
+        void *afterClear = ldomAlloc(64);
+        if (afterClear == NULL)
+            return false;
+        std::memset(afterClear, 0x3C, 64);
+        ldomFree(afterClear, 64);
+        clearBlockStorageOwners();
+        return true;
+    } catch (const std::bad_alloc &) {
+        clearBlockStorageOwners();
+        return false;
     }
 }
 #endif
