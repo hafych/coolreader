@@ -28,4 +28,7 @@ bool LVRunStyleIndexRestoreRegression();
 /// Native regression seam for document-cache directory index rollback.
 bool LVRunDocumentCacheIndexRestoreRegression();
 
+/// Native regression seam for document render-header rollback.
+bool LVRunDocumentHeaderRestoreRegression();
+
 #endif

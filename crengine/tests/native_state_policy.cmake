@@ -3705,6 +3705,38 @@ forbid_source_text(
   "FileItem * item = new FileItem()"
   "document-cache directory entries must not begin as raw owners"
 )
+
+# --- document render-header restore ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "lUInt32 candidateRenderDx = 0"
+  "document render-header restore must stage its scalar fields"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "if ( !hdrbuf.checkCRC( hdrbuf.pos() - start ) )"
+  "document render-header restore must validate CRC before publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "render_dx = candidateRenderDx"
+  "document render-header restore must publish only validated fields"
+)
+require_source_text(
+  "${DOM_INTERNAL_HEADER}"
+  "bool LVRunDocumentHeaderRestoreRegression()"
+  "document render-header restore must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "document render-header restore regression failed"
+  "document render-header restore must retain native rollback coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "hdrbuf >> render_dx >> render_dy >> render_docflags"
+  "document render-header restore must not mutate live fields before CRC"
+)
 forbid_source_text(
   "${DOM_SOURCE}"
   "delete list;"

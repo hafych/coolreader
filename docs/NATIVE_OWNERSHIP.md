@@ -70,6 +70,10 @@ into live MRU state only after CRC validation. Both restore and new-MRU paths
 stage `FileItem` values in `unique_ptr` before transferring them to the owning
 pointer vector.
 
+The cached document render header stages all six scalar fields and publishes
+them only after magic and CRC validation, so a late checksum failure cannot
+leave dimensions, flags or style hashes partially replaced.
+
 `HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
 transfer boundary, while `getDictList()` returns a non-owning pointer valid only

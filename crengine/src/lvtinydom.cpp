@@ -16179,19 +16179,91 @@ bool lxmlDocBase::DocFileHeader::serialize( SerialBuf & hdrbuf )
 bool lxmlDocBase::DocFileHeader::deserialize( SerialBuf & hdrbuf )
 {
     int start = hdrbuf.pos();
-    hdrbuf.checkMagic( doc_file_magic );
-    if ( hdrbuf.error() ) {
+    if ( !hdrbuf.checkMagic( doc_file_magic ) ) {
         CRLog::error("Swap file Magic signature doesn't match");
         return false;
     }
-    hdrbuf >> render_dx >> render_dy >> render_docflags >> render_style_hash >> stylesheet_hash >> node_displaystyle_hash;
+    lUInt32 candidateRenderDx = 0;
+    lUInt32 candidateRenderDy = 0;
+    lUInt32 candidateRenderDocflags = 0;
+    lUInt32 candidateRenderStyleHash = 0;
+    lUInt32 candidateStylesheetHash = 0;
+    lUInt32 candidateNodeDisplaystyleHash = 0;
+    hdrbuf >> candidateRenderDx
+            >> candidateRenderDy
+            >> candidateRenderDocflags
+            >> candidateRenderStyleHash
+            >> candidateStylesheetHash
+            >> candidateNodeDisplaystyleHash;
     //CRLog::trace("Deserialized render data: %d %d %d %d", render_dx, render_dy, render_docflags, render_style_hash);
-    hdrbuf.checkCRC( hdrbuf.pos() - start );
-    if ( hdrbuf.error() ) {
+    if ( !hdrbuf.checkCRC( hdrbuf.pos() - start ) ) {
         CRLog::error("Swap file - header unpack error");
         return false;
     }
+    render_dx = candidateRenderDx;
+    render_dy = candidateRenderDy;
+    render_docflags = candidateRenderDocflags;
+    render_style_hash = candidateRenderStyleHash;
+    stylesheet_hash = candidateStylesheetHash;
+    node_displaystyle_hash = candidateNodeDisplaystyleHash;
     return true;
+}
+
+class DocFileHeaderRegressionProbe : public lxmlDocBase
+{
+public:
+    static bool run()
+    {
+        DocFileHeader source;
+        source.render_dx = 600;
+        source.render_dy = 800;
+        source.render_docflags = 0x10203040;
+        source.render_style_hash = 0x11223344;
+        source.stylesheet_hash = 0x55667788;
+        source.node_displaystyle_hash = 0x99AABBCC;
+        SerialBuf serialized(1, true);
+        if (!source.serialize(serialized) || serialized.error())
+            return false;
+        std::vector<lUInt8> serializedBytes(
+                serialized.buf(), serialized.buf() + serialized.pos());
+
+        DocFileHeader committed;
+        committed.render_dx = 17;
+        committed.render_dy = 19;
+        committed.render_docflags = 23;
+        committed.render_style_hash = 29;
+        committed.stylesheet_hash = 31;
+        committed.node_displaystyle_hash = 37;
+        std::vector<lUInt8> corrupted(serializedBytes);
+        corrupted.back() ^= 0x80;
+        SerialBuf corruptedInput(
+                corrupted.data(), static_cast<int>(corrupted.size()));
+        if (committed.deserialize(corruptedInput)
+                || committed.render_dx != 17
+                || committed.render_dy != 19
+                || committed.render_docflags != 23
+                || committed.render_style_hash != 29
+                || committed.stylesheet_hash != 31
+                || committed.node_displaystyle_hash != 37)
+            return false;
+
+        SerialBuf validInput(
+                serializedBytes.data(),
+                static_cast<int>(serializedBytes.size()));
+        return committed.deserialize(validInput)
+                && committed.render_dx == source.render_dx
+                && committed.render_dy == source.render_dy
+                && committed.render_docflags == source.render_docflags
+                && committed.render_style_hash == source.render_style_hash
+                && committed.stylesheet_hash == source.stylesheet_hash
+                && committed.node_displaystyle_hash
+                        == source.node_displaystyle_hash;
+    }
+};
+
+bool LVRunDocumentHeaderRestoreRegression()
+{
+    return DocFileHeaderRegressionProbe::run();
 }
 #endif
 
