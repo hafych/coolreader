@@ -51,6 +51,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/textlang.h" TEXTLANG_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfntman.h" FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.h" FREETYPE_FACE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.h" FONT_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.cpp" FONT_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.cpp" FREETYPE_FONT_MANAGER_SOURCE)
@@ -6004,4 +6005,71 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "delete[] _rules[i]"
   "legacy autoclose rule teardown must remain automatic"
+)
+
+# --- FreeType glyph metric page ownership ---
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "std::array<std::unique_ptr<MetricPage>, COUNT> _pages"
+  "FreeType metric pages must use bounded RAII ownership"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "const lUInt32 inx = static_cast<lUInt32>(ch) >> 9"
+  "FreeType metric page lookup must reject unsupported codepoints"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "std::unique_ptr<MetricPage> candidate"
+  "FreeType metric page allocation must remain scoped"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "candidate->fill(CACHED_UNSIGNED_METRIC_NOT_SET)"
+  "FreeType metric pages must initialize before publication"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "page = std::move(candidate)"
+  "FreeType metric page publication must transfer ownership"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "const LVFontGlyphUnsignedMetricCache &) = delete"
+  "FreeType metric cache must not duplicate page ownership"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "FreeType metric cache aliased an unsupported codepoint"
+  "FreeType metric ownership must retain high-codepoint coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "FreeType metric cache did not release its lazy pages"
+  "FreeType metric ownership must retain clear coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "FreeType signed metric cache changed its encoding"
+  "FreeType metric ownership must retain signed-cache coverage"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "lUInt16 * ptrs[COUNT]"
+  "FreeType metric pages must not use a raw owner array"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "new lUInt16[512]"
+  "FreeType metric page allocation must remain automatic"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "delete [] ptrs[i]"
+  "FreeType metric page teardown must remain automatic"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "(ch>>9) & 0x1ff"
+  "FreeType metric page lookup must not alias high codepoints"
 )

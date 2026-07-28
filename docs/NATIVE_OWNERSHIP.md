@@ -680,3 +680,10 @@ Construction stages each rule in a local vector and swaps duplicate tag entries,
 while modern DOM versions simply retain an empty table with automatic teardown.
 The legacy parser regression processes two malformed HTML lifecycles and verifies
 that unclosed paragraphs and list items still become the same sibling nodes.
+
+FreeType glyph metrics use 360 lazily allocated pages owned by a bounded array
+of `unique_ptr<array<...>>`. Each page is fully initialized in a scoped
+candidate before publication; `clear()` and cache destruction release pages
+without manual array teardown. Direct unsigned and signed cache coverage checks
+page boundaries, repeated clear, the last supported codepoint, and verifies
+that unsupported high codepoints cannot alias a lower page.

@@ -41,6 +41,9 @@
 #include "lvfontcache.h"
 #include "lvarray.h"
 
+#include <array>
+#include <memory>
+
 // define to filter out all fonts except .ttf
 //#define LOAD_TTF_FONTS_ONLY
 // DEBUG ONLY
@@ -70,48 +73,48 @@ class LVFontGlyphUnsignedMetricCache
 {
 private:
     static const int COUNT = 360;
-    lUInt16 * ptrs[COUNT]; //support up to 0X2CFFF=360*512-1
+    static const int PAGE_SIZE = 512;
+    typedef std::array<lUInt16, PAGE_SIZE> MetricPage;
+    std::array<std::unique_ptr<MetricPage>, COUNT> _pages;
 public:
     lUInt16 get( lChar32 ch )
     {
         FONT_GLYPH_CACHE_GUARD
-        int inx = (ch>>9) & 0x1ff;
-        if (inx >= COUNT) return CACHED_UNSIGNED_METRIC_NOT_SET;
-        lUInt16 * ptr = ptrs[inx];
-        if ( !ptr )
+        const lUInt32 inx = static_cast<lUInt32>(ch) >> 9;
+        if (inx >= _pages.size())
             return CACHED_UNSIGNED_METRIC_NOT_SET;
-        return ptr[ch & 0x1FF ];
+        const std::unique_ptr<MetricPage> &page = _pages[inx];
+        if (!page)
+            return CACHED_UNSIGNED_METRIC_NOT_SET;
+        return (*page)[static_cast<lUInt32>(ch) & 0x1FF];
     }
     void put( lChar32 ch, lUInt16 m )
     {
         FONT_GLYPH_CACHE_GUARD
-        int inx = (ch>>9) & 0x1ff;
-        if (inx >= COUNT) return;
-        lUInt16 * ptr = ptrs[inx];
-        if ( !ptr ) {
-            ptr = new lUInt16[512];
-            ptrs[inx] = ptr;
-            memset( ptr, CACHED_UNSIGNED_METRIC_NOT_SET, sizeof(lUInt16) * 512 );
+        const lUInt32 inx = static_cast<lUInt32>(ch) >> 9;
+        if (inx >= _pages.size())
+            return;
+        std::unique_ptr<MetricPage> &page = _pages[inx];
+        if (!page) {
+            std::unique_ptr<MetricPage> candidate =
+                    std::make_unique<MetricPage>();
+            candidate->fill(CACHED_UNSIGNED_METRIC_NOT_SET);
+            page = std::move(candidate);
         }
-        ptr[ ch & 0x1FF ] = m;
+        (*page)[static_cast<lUInt32>(ch) & 0x1FF] = m;
     }
     void clear()
     {
         FONT_GLYPH_CACHE_GUARD
-        for ( int i=0; i<360; i++ ) {
-            if ( ptrs[i] )
-                delete [] ptrs[i];
-            ptrs[i] = NULL;
-        }
+        for (std::unique_ptr<MetricPage> &page : _pages)
+            page.reset();
     }
-    LVFontGlyphUnsignedMetricCache()
-    {
-        memset( ptrs, 0, 360*sizeof(lUInt16*) );
-    }
-    ~LVFontGlyphUnsignedMetricCache()
-    {
-        clear();
-    }
+    LVFontGlyphUnsignedMetricCache() = default;
+    ~LVFontGlyphUnsignedMetricCache() = default;
+    LVFontGlyphUnsignedMetricCache(
+            const LVFontGlyphUnsignedMetricCache &) = delete;
+    LVFontGlyphUnsignedMetricCache &operator=(
+            const LVFontGlyphUnsignedMetricCache &) = delete;
 };
 
 #define CACHED_SIGNED_METRIC_NOT_SET 0x7FFF

@@ -45,6 +45,9 @@
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontcache.h"
 #include "../src/lvfont/lvfontglyphcache.h"
+#if (USE_FREETYPE==1)
+#include "../src/lvfont/lvfreetypeface.h"
+#endif
 #include "../src/lvstream/lvfilestream.h"
 #include "../src/lvstream/lvfilemappedstream.h"
 #include "../src/lvstream/lvmemorystream.h"
@@ -1008,6 +1011,49 @@ static int testFontCacheOwnership() {
         return fail("font cache clear retained owned entries");
     return 0;
 }
+
+#if (USE_FREETYPE==1)
+static int testFreeTypeMetricCacheOwnership() {
+    LVFontGlyphUnsignedMetricCache cache;
+    if (cache.get(0) != CACHED_UNSIGNED_METRIC_NOT_SET
+            || cache.get(0x2CFFF) != CACHED_UNSIGNED_METRIC_NOT_SET)
+        return fail("FreeType metric cache did not start empty");
+
+    cache.put(0, 123);
+    cache.put(0x1FF, 456);
+    cache.put(0x200, 789);
+    cache.put(0x2CFFF, 321);
+    if (cache.get(0) != 123
+            || cache.get(0x1FF) != 456
+            || cache.get(0x200) != 789
+            || cache.get(0x2CFFF) != 321)
+        return fail("FreeType metric cache lost a page boundary value");
+
+    cache.put(0x40000, 999);
+    cache.put(0x2D000, 888);
+    if (cache.get(0) != 123
+            || cache.get(0x40000) != CACHED_UNSIGNED_METRIC_NOT_SET
+            || cache.get(0x2D000) != CACHED_UNSIGNED_METRIC_NOT_SET)
+        return fail("FreeType metric cache aliased an unsupported codepoint");
+
+    cache.clear();
+    cache.clear();
+    if (cache.get(0) != CACHED_UNSIGNED_METRIC_NOT_SET
+            || cache.get(0x200) != CACHED_UNSIGNED_METRIC_NOT_SET
+            || cache.get(0x2CFFF) != CACHED_UNSIGNED_METRIC_NOT_SET)
+        return fail("FreeType metric cache did not release its lazy pages");
+
+    LVFontGlyphSignedMetricCache signedCache;
+    signedCache.put(0x41, -321);
+    signedCache.put(0x2CFFF, 1234);
+    if (signedCache.get(0x41) != -321
+            || signedCache.get(0x2CFFF) != 1234
+            || signedCache.get(0x40000)
+                    != CACHED_SIGNED_METRIC_NOT_SET)
+        return fail("FreeType signed metric cache changed its encoding");
+    return 0;
+}
+#endif
 
 static int testBoundedObservableDecodedImageCache() {
     LVCacheMap<int, int> cache(2);
@@ -6631,6 +6677,10 @@ int main() {
         return 1;
     if (testFontCacheOwnership() != 0)
         return 1;
+#if (USE_FREETYPE==1)
+    if (testFreeTypeMetricCacheOwnership() != 0)
+        return 1;
+#endif
     if (testBoundedObservableDecodedImageCache() != 0)
         return 1;
     if (testSkinOwnership() != 0)
