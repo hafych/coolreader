@@ -23,12 +23,13 @@
 #define __LVXPMIMAGESOURCE_H_INCLUDED__
 
 #include "lvimagesource.h"
+#include <vector>
 
 class LVXPMImageSource : public LVImageSource
 {
 protected:
-    char ** _rows;
-    lUInt32 * _palette;
+    std::vector<std::vector<char>> _rows;
+    std::vector<lUInt32> _palette;
     lUInt8 _pchars[128];
     int _width;
     int _height;

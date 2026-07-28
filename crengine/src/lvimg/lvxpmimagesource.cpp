@@ -26,20 +26,19 @@
 #include <string.h>
 
 LVXPMImageSource::LVXPMImageSource(const char **data)
-    : _rows(NULL), _palette(NULL), _width(0), _height(0), _ncolors(0)
+    : _width(0), _height(0), _ncolors(0)
 {
     bool err = false;
     int charsperpixel;
     if ( sscanf( data[0], "%d %d %d %d", &_width, &_height, &_ncolors, &charsperpixel )!=4 ) {
         err = true;
     } else if ( _width>0 && _width<255 && _height>0 && _height<255 && _ncolors>=2 && _ncolors<255 && charsperpixel == 1 ) {
-        _rows = new char * [_height];
+        _rows.resize(_height, std::vector<char>(_width));
         for ( int i=0; i<_height; i++ ) {
-            _rows[i] = new char[_width];
-            memcpy( _rows[i], data[i+1+_ncolors], _width );
+            memcpy( _rows[i].data(), data[i+1+_ncolors], _width );
         }
         
-        _palette = new lUInt32[_ncolors];
+        _palette.resize(_ncolors);
         memset( _pchars, 0, 128 );
         for ( int cl=0; cl<_ncolors; cl++ ) {
             const char * src = data[1+cl];
@@ -69,37 +68,28 @@ LVXPMImageSource::LVXPMImageSource(const char **data)
         err = true;
     }
     if ( err ) {
+        _rows.clear();
+        _palette.clear();
         _width = _height = 0;
     }
 }
 
-LVXPMImageSource::~LVXPMImageSource()
-{
-    if ( _rows ) {
-        for ( int i=0; i<_height; i++ ) {
-            delete[]( _rows[i] );
-        }
-        delete[] _rows;
-    }
-    if ( _palette )
-        delete[] _palette;
-}
+LVXPMImageSource::~LVXPMImageSource() = default;
 
 bool LVXPMImageSource::Decode(LVImageDecoderCallback *callback)
 {
     if ( callback )
     {
         callback->OnStartDecode(this);
-        lUInt32 * row = new lUInt32[ _width ];
+        std::vector<lUInt32> row(_width);
         for (int i=0; i<_height; i++)
         {
-            const char * src = _rows[i];
+            const char * src = _rows[i].data();
             for ( int x=0; x<_width; x++ ) {
                 row[x] = _palette[_pchars[(unsigned)src[x]]];
             }
-            callback->OnLineDecoded(this, i, row);
+            callback->OnLineDecoded(this, i, row.data());
         }
-        delete[] row;
         callback->OnEndDecode(this, false);
     }
     return true;

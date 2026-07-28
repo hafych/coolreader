@@ -1,6 +1,7 @@
 #include "lvstreamutils.h"
 #include "lvthread.h"
 #include "hyphman.h"
+#include "lvcolordrawbuf.h"
 #include "lvfntman.h"
 #include "lvgraydrawbuf.h"
 #include "lvimg.h"
@@ -1030,7 +1031,6 @@ static int testParserFormatDetectionBuffers() {
     return 0;
 }
 
-#if (USE_GIF==1)
 class CountingImageDecodeCallback : public LVImageDecoderCallback {
 public:
     int starts = 0;
@@ -1056,6 +1056,7 @@ public:
     }
 };
 
+#if (USE_GIF==1)
 static int testGifDecoderOwnership() {
     static const unsigned char validGif[] = {
         'G', 'I', 'F', '8', '9', 'a',
@@ -1094,6 +1095,76 @@ static int testGifDecoderOwnership() {
     return 0;
 }
 #endif
+
+class CountingColorDrawBuf : public LVColorDrawBuf {
+private:
+    int &m_destroyed;
+
+public:
+    explicit CountingColorDrawBuf(int &destroyed)
+        : LVColorDrawBuf(2, 2, 16), m_destroyed(destroyed)
+    {
+    }
+
+    ~CountingColorDrawBuf() override
+    {
+        ++m_destroyed;
+    }
+};
+
+static int testImageSourceOwnership() {
+    static const char *validXpm[] = {
+        "2 2 2 1",
+        "a c #000000",
+        "b c #ffffff",
+        "ab",
+        "ba"
+    };
+    LVImageSourceRef xpm = LVCreateXPMImageSource(validXpm);
+    if (xpm.isNull() || xpm->GetWidth() != 2 || xpm->GetHeight() != 2)
+        return fail("XPM source rejected a valid fixture");
+    CountingImageDecodeCallback xpmCallback;
+    if (!xpm->Decode(&xpmCallback) || !xpm->Decode(&xpmCallback))
+        return fail("XPM source could not reuse its RAII buffers");
+    if (xpmCallback.starts != 2 || xpmCallback.lines != 4
+            || xpmCallback.ends != 2)
+        return fail("XPM source callback lifecycle is incomplete");
+
+    static const char *invalidXpm[] = {
+        "2 2 2 1",
+        "a invalid",
+        "b c #ffffff",
+        "ab",
+        "ba"
+    };
+    if (!LVCreateXPMImageSource(invalidXpm).isNull())
+        return fail("XPM source accepted an invalid palette");
+
+    LVImageSourceRef dummy = LVCreateDummyImageSource(NULL, 3, 3);
+    CountingImageDecodeCallback dummyCallback;
+    if (!dummy->Decode(&dummyCallback) || !dummy->Decode(&dummyCallback))
+        return fail("dummy image source could not reuse its row buffer");
+    if (dummyCallback.starts != 2 || dummyCallback.lines != 6
+            || dummyCallback.ends != 2)
+        return fail("dummy image callback lifecycle is incomplete");
+    if (LVCreateDummyImageSource(NULL, 0, 3)->Decode(NULL))
+        return fail("dummy image source accepted zero width");
+
+    int destroyed = 0;
+    LVImageSourceRef drawBufferImage = LVCreateDrawBufImageSource(
+            new CountingColorDrawBuf(destroyed), true);
+    CountingImageDecodeCallback drawBufferCallback;
+    if (!drawBufferImage->Decode(&drawBufferCallback)
+            || drawBufferCallback.starts != 1
+            || drawBufferCallback.lines != 2
+            || drawBufferCallback.ends != 1)
+        return fail("16-bit draw-buffer image did not decode");
+    drawBufferImage.Clear();
+    if (destroyed != 1)
+        return fail("owned draw buffer was not released exactly once");
+
+    return 0;
+}
 
 static void appendLe16(std::vector<unsigned char> &bytes, std::uint16_t value) {
     bytes.push_back(static_cast<unsigned char>(value));
@@ -1487,6 +1558,8 @@ int main() {
     if (testGifDecoderOwnership() != 0)
         return 1;
 #endif
+    if (testImageSourceOwnership() != 0)
+        return 1;
     if (testZipArchiveBudgets() != 0)
         return 1;
     if (testParseBudgetCodes() != 0)

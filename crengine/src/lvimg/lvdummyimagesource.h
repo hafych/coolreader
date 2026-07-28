@@ -24,6 +24,7 @@
 
 #include "lvimagesource.h"
 #include "lvimagedecodercallback.h"
+#include <vector>
 
 /// dummy image source to show invalid image
 class LVDummyImageSource : public LVImageSource
@@ -44,10 +45,12 @@ public:
     virtual int    GetHeight() const { return _height; }
     virtual bool   Decode( LVImageDecoderCallback * callback )
     {
+        if (_width <= 0 || _height <= 0)
+            return false;
         if ( callback )
         {
             callback->OnStartDecode(this);
-            lUInt32 * row = new lUInt32[ _width ];
+            std::vector<lUInt32> row(_width);
             for (int i=0; i<_height; i++)
             {
                 if ( i==0 || i==_height-1 )
@@ -62,9 +65,8 @@ public:
                     row[ 0 ] = 0x000000;
                     row[ _width-1 ] = 0x000000;
                 }
-                callback->OnLineDecoded(this, i, row);
+                callback->OnLineDecoded(this, i, row.data());
             }
-            delete[] row;
             callback->OnEndDecode(this, false);
         }
         return true;

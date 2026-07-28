@@ -29,6 +29,11 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOU
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.h" GIF_FRAME_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.cpp" DRAWBUF_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.h" DRAWBUF_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdummyimagesource.h" DUMMY_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.cpp" XPM_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.h" XPM_IMAGE_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -479,6 +484,68 @@ forbid_source_text(
   "${GIF_FRAME_SOURCE}"
   "new unsigned char"
   "GIF frame decoder must not use owning byte arrays"
+)
+
+# --- synthetic/draw-buffer/XPM image sources ---
+require_source_text(
+  "${DRAWBUF_IMAGE_HEADER}"
+  "std::unique_ptr<LVColorDrawBuf> _ownedBuf"
+  "draw-buffer image ownership must be explicit"
+)
+require_source_text(
+  "${DRAWBUF_IMAGE_SOURCE}"
+  "std::vector<lUInt32> row"
+  "draw-buffer image conversion row must use RAII ownership"
+)
+forbid_source_text(
+  "${DRAWBUF_IMAGE_HEADER}"
+  "bool _own"
+  "draw-buffer image must not encode ownership as a boolean"
+)
+forbid_source_text(
+  "${DRAWBUF_IMAGE_SOURCE}"
+  "delete _buf"
+  "draw-buffer image teardown must use RAII ownership"
+)
+require_source_text(
+  "${DUMMY_IMAGE_HEADER}"
+  "std::vector<lUInt32> row"
+  "dummy image row must use RAII ownership"
+)
+forbid_source_text(
+  "${DUMMY_IMAGE_HEADER}"
+  "new lUInt32"
+  "dummy image must not use an owning row array"
+)
+require_source_text(
+  "${XPM_IMAGE_HEADER}"
+  "std::vector<std::vector<char>> _rows"
+  "XPM rows must use nested RAII ownership"
+)
+require_source_text(
+  "${XPM_IMAGE_HEADER}"
+  "std::vector<lUInt32> _palette"
+  "XPM palette must use RAII ownership"
+)
+require_source_text(
+  "${XPM_IMAGE_SOURCE}"
+  "std::vector<lUInt32> row"
+  "XPM output row must use RAII ownership"
+)
+require_source_text(
+  "${XPM_IMAGE_SOURCE}"
+  "_rows.clear();"
+  "invalid XPM construction must release parsed rows"
+)
+forbid_source_text(
+  "${XPM_IMAGE_SOURCE}"
+  "new char"
+  "XPM source must not use owning row arrays"
+)
+forbid_source_text(
+  "${XPM_IMAGE_SOURCE}"
+  "new lUInt32"
+  "XPM source must not use owning palette/output arrays"
 )
 
 # --- lvstring: string literal interning tables ---

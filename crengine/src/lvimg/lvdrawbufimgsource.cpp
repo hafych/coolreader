@@ -24,20 +24,17 @@
 
 // lvdrawbuff private stuff
 #include "../lvdrawbuf/lvdrawbuf_utils.h"
+#include <vector>
 
 LVDrawBufImgSource::LVDrawBufImgSource(LVColorDrawBuf *buf, bool own)
-    : _buf(buf)
-    , _own(own)
+    : _ownedBuf(own ? buf : NULL)
+    , _buf(buf)
     , _dx( buf->GetWidth() )
     , _dy( buf->GetHeight() )
 {
 }
 
-LVDrawBufImgSource::~LVDrawBufImgSource()
-{
-    if ( _own )
-        delete _buf;
-}
+LVDrawBufImgSource::~LVDrawBufImgSource() = default;
 
 bool LVDrawBufImgSource::Decode(LVImageDecoderCallback *callback)
 {
@@ -50,14 +47,13 @@ bool LVDrawBufImgSource::Decode(LVImageDecoderCallback *callback)
         }
     } else {
         // 16 bpp
-        lUInt32 * row = new lUInt32[_dx];
+        std::vector<lUInt32> row(_dx);
         for ( int y=0; y<_dy; y++ ) {
             lUInt16 * src = (lUInt16 *)_buf->GetScanLine(y);
             for ( int x=0; x<_dx; x++ )
                 row[x] = rgb565to888(src[x]);
-            callback->OnLineDecoded( this, y, row );
+            callback->OnLineDecoded( this, y, row.data() );
         }
-        delete[] row;
     }
     callback->OnEndDecode( this, false );
     return true;

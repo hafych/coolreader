@@ -67,3 +67,9 @@ output-row storage through `std::vector`. A decoded frame has automatic
 operation scope; the unused raw frame array and its mismatched scalar deletion
 were removed. Repeated decode and invalid-dimension paths are covered by the
 native ownership regression.
+
+XPM parsed rows, palettes and decode rows, plus dummy and draw-buffer conversion
+rows, use standard containers. `LVDrawBufImgSource` keeps a non-owning
+compatibility view and, only when requested by its legacy factory, a
+`std::unique_ptr` owner. Invalid XPM construction releases partially parsed
+rows without depending on dimensions that were reset after the error.

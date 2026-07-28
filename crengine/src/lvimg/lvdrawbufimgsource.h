@@ -23,6 +23,7 @@
 #define __LVDRAWBUFIMGSOURCE_H_INCLUDED__
 
 #include "lvimagesource.h"
+#include <memory>
 
 class LVImageDecoderCallback;
 class LVColorDrawBuf;
@@ -30,8 +31,8 @@ class LVColorDrawBuf;
 class LVDrawBufImgSource : public LVImageSource
 {
 protected:
+    std::unique_ptr<LVColorDrawBuf> _ownedBuf;
     LVColorDrawBuf * _buf;
-    bool _own;
     int _dx;
     int _dy;
 public:
