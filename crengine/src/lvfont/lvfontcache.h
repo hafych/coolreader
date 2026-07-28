@@ -31,9 +31,11 @@
 
 #include "crsetup.h"
 #include "lvfont.h"
-#include "lvptrvec.h"
 #include "lvstring32collection.h"
 #include "lvfontdef.h"
+
+#include <memory>
+#include <vector>
 
 /// font cache item
 class LVFontCacheItem {
@@ -52,10 +54,13 @@ public:
             : _def(def) {}
 };
 
+typedef std::vector<std::unique_ptr<LVFontCacheItem> >
+        LVFontCacheItemList;
+
 /// font cache
 class LVFontCache {
-    LVPtrVector<LVFontCacheItem> _registered_list;
-    LVPtrVector<LVFontCacheItem> _instance_list;
+    LVFontCacheItemList _registered_list;
+    LVFontCacheItemList _instance_list;
 public:
     void clear() {
         _registered_list.clear();
@@ -69,13 +74,17 @@ public:
 
     void removeDocumentFonts(int documentId);
 
-    int length() { return _registered_list.length(); }
+    int length() const {
+        return static_cast<int>(_registered_list.size());
+    }
 
     void addInstance(const LVFontDef *def, LVFontRef ref);
 
     bool setAsPreferredFontWithBias( lString8 face, int bias, bool clearOthersBias );
 
-    LVPtrVector<LVFontCacheItem> *getInstances() { return &_instance_list; }
+    const LVFontCacheItemList &getInstances() const {
+        return _instance_list;
+    }
 
     LVFontCacheItem *find(const LVFontDef *def, bool useBias=false);
 
@@ -88,20 +97,21 @@ public:
     /// get hash of installed fonts and fallback font
     virtual lUInt32 GetFontListHash(int documentId) {
         lUInt32 hash = 0;
-        for (int i = 0; i < _registered_list.length(); i++) {
-            int doc = _registered_list[i]->getDef()->getDocumentId();
+        for (const auto &item : _registered_list) {
+            int doc = item->getDef()->getDocumentId();
             if (doc == -1 || doc == documentId) // skip document fonts
-                hash = hash + _registered_list[i]->getDef()->getHash();
+                hash = hash + item->getDef()->getHash();
         }
         return 0;
     }
 
     virtual void getFaceList(lString32Collection &list) {
         list.clear();
-        for (int i = 0; i < _registered_list.length(); i++) {
-            if (_registered_list[i]->getDef()->getDocumentId() != -1)
+        for (const auto &item : _registered_list) {
+            if (item->getDef()->getDocumentId() != -1)
                 continue;
-            lString32 name = Utf8ToUnicode(_registered_list[i]->getDef()->getTypeFace());
+            lString32 name =
+                    Utf8ToUnicode(item->getDef()->getTypeFace());
             if (!list.contains(name))
                 list.add(name);
         }
@@ -110,9 +120,10 @@ public:
 
     virtual void getFontFileNameList(lString32Collection &list) {
         list.clear();
-        for (int i = 0; i < _registered_list.length(); i++) {
-            if (_registered_list[i]->getDef()->getDocumentId() == -1) {
-                lString32 name = Utf8ToUnicode(_registered_list[i]->getDef()->getName());
+        for (const auto &item : _registered_list) {
+            if (item->getDef()->getDocumentId() == -1) {
+                lString32 name =
+                        Utf8ToUnicode(item->getDef()->getName());
                 if (!list.contains(name))
                     list.add(name);
             }
@@ -123,16 +134,17 @@ public:
     virtual void getAvailableFontWeights(LVArray<int>& weights, lString8 faceName);
 
     virtual void clearFallbackFonts() {
-        for (int i = 0; i < _registered_list.length(); i++) {
-            LVFontRef fontRef = _registered_list[i]->getFont();
+        for (const auto &item : _registered_list) {
+            LVFontRef fontRef = item->getFont();
             if (!fontRef.isNull())
                 fontRef->setFallbackFont(LVFontRef());
         }
     }
 
-    LVFontCache() {}
-
-    virtual ~LVFontCache() {}
+    LVFontCache() = default;
+    LVFontCache(const LVFontCache &) = delete;
+    LVFontCache &operator=(const LVFontCache &) = delete;
+    virtual ~LVFontCache() = default;
 };
 
 #endif  // __LV_FONTCACHE_H_INCLUDED__

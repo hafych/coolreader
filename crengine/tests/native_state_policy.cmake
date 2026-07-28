@@ -38,6 +38,9 @@ file(READ "${SOURCE_ROOT}/crengine/include/textlang.h" TEXTLANG_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfntman.h" FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.h" FONT_CACHE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.cpp" FONT_CACHE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.cpp" FREETYPE_FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
@@ -460,6 +463,61 @@ require_source_text(
   "font render setting changes must be serialized"
 )
 require_source_text(
+  "${FONT_CACHE_HEADER}"
+  "typedef std::vector<std::unique_ptr<LVFontCacheItem> >"
+  "font-cache entries must have explicit scoped owners"
+)
+require_source_text(
+  "${FONT_CACHE_HEADER}"
+  "const LVFontCacheItemList &getInstances() const"
+  "font-cache instances must expose only a borrowed collection view"
+)
+require_source_text(
+  "${FONT_CACHE_HEADER}"
+  "LVFontCache(const LVFontCache &) = delete"
+  "font-cache ownership must not be shallow-copied"
+)
+require_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "std::unique_ptr<LVFontCacheItem> item("
+  "font-cache instance candidates must enter an owner immediately"
+)
+require_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "_instance_list.push_back(std::move(item));"
+  "font-cache instance publication must transfer scoped ownership"
+)
+require_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "std::remove_if(_instance_list.begin(),"
+  "font-cache instance removal must destroy every matching owner"
+)
+require_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "std::remove_if(_registered_list.begin(),"
+  "font-cache registration removal must destroy every matching owner"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "const LVFontCacheItemList &fonts = _cache.getInstances();"
+  "FreeType settings updates must borrow the font-cache instance view"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testFontCacheOwnership()"
+  "font-cache ownership must retain native lifecycle regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "font cache document removal retained owned entries"
+  "font-cache regression must retain document-owner removal coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "font cache typeface removal skipped adjacent owners"
+  "font-cache regression must retain adjacent-owner removal coverage"
+)
+require_source_text(
   "${GLYPH_CACHE_HEADER}"
   "std::atomic<lUInt64> hit_count"
   "glyph cache hits must be observable"
@@ -639,6 +697,46 @@ forbid_source_text(
   "${FREETYPE_FACE_SOURCE}"
   "extern int gammaIndex"
   "glyph rendering must use the synchronized font gamma API"
+)
+forbid_source_text(
+  "${FONT_CACHE_HEADER}"
+  "LVPtrVector<LVFontCacheItem> _registered_list"
+  "font-cache registrations must not regress to implicit raw ownership"
+)
+forbid_source_text(
+  "${FONT_CACHE_HEADER}"
+  "LVPtrVector<LVFontCacheItem> _instance_list"
+  "font-cache instances must not regress to implicit raw ownership"
+)
+forbid_source_text(
+  "${FONT_CACHE_HEADER}"
+  "LVPtrVector<LVFontCacheItem> *getInstances()"
+  "font-cache must not expose its mutable owner container"
+)
+forbid_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "LVFontCacheItem *item = new"
+  "font-cache candidates must not use raw transitional ownership"
+)
+forbid_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "delete _instance_list.remove"
+  "font-cache instance teardown must remain automatic"
+)
+forbid_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "delete _registered_list.remove"
+  "font-cache registration teardown must remain automatic"
+)
+forbid_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "_instance_list.remove(i)"
+  "font-cache instance removal must not leak or skip adjacent owners"
+)
+forbid_source_text(
+  "${FONT_CACHE_SOURCE}"
+  "_registered_list.remove(i)"
+  "font-cache registration removal must not leak or skip adjacent owners"
 )
 
 # --- Antiword bridge: serialized library and operation-local callback state ---

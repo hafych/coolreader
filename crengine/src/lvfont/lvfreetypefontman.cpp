@@ -405,9 +405,9 @@ void LVFreeTypeFontManager::SetAntialiasMode(font_antialiasing_t mode) {
 #endif
     gc();
     clearGlyphCache();
-    LVPtrVector<LVFontCacheItem> *fonts = _cache.getInstances();
-    for (int i = 0; i < fonts->length(); i++) {
-        LVFontRef font = fonts->get(i)->getFont();
+    const LVFontCacheItemList &fonts = _cache.getInstances();
+    for (const auto &item : fonts) {
+        LVFontRef font = item->getFont();
         font->SetAntialiasMode(mode);
         font->setBitmapMode(isBitmapModeForSize(font->getHeight()));
     }
@@ -420,9 +420,9 @@ void LVFreeTypeFontManager::SetHintingMode(hinting_mode_t mode) {
     _hintingMode.store(mode, std::memory_order_relaxed);
     gc();
     clearGlyphCache();
-    LVPtrVector<LVFontCacheItem> *fonts = _cache.getInstances();
-    for (int i = 0; i < fonts->length(); i++) {
-        fonts->get(i)->getFont()->setHintingMode(mode);
+    const LVFontCacheItemList &fonts = _cache.getInstances();
+    for (const auto &item : fonts) {
+        item->getFont()->setHintingMode(mode);
     }
 }
 
@@ -434,9 +434,9 @@ void LVFreeTypeFontManager::SetKerning(bool kerningEnabled)
     _allowKerning.store(kerningEnabled, std::memory_order_relaxed);
     gc();
     clearGlyphCache();
-    LVPtrVector<LVFontCacheItem> *fonts = _cache.getInstances();
-    for (int i = 0; i < fonts->length(); i++) {
-        fonts->get(i)->getFont()->setKerning(kerningEnabled);
+    const LVFontCacheItemList &fonts = _cache.getInstances();
+    for (const auto &item : fonts) {
+        item->getFont()->setKerning(kerningEnabled);
     }
 }
 
@@ -448,9 +448,9 @@ void LVFreeTypeFontManager::SetShapingMode( shaping_mode_t mode )
     _shapingMode.store(mode, std::memory_order_relaxed);
     gc();
     clearGlyphCache();
-    LVPtrVector< LVFontCacheItem > * fonts = _cache.getInstances();
-    for ( int i=0; i<fonts->length(); i++ ) {
-        fonts->get(i)->getFont()->setShapingMode( mode );
+    const LVFontCacheItemList &fonts = _cache.getInstances();
+    for (const auto &item : fonts) {
+        item->getFont()->setShapingMode(mode);
     }
 }
 
@@ -460,9 +460,9 @@ void LVFreeTypeFontManager::clearGlyphCache() {
     #if USE_HARFBUZZ==1
     // needs to clear each font _glyph_cache2 (for Gamma change, which
     // does not call any individual font method)
-    LVPtrVector< LVFontCacheItem > * fonts = _cache.getInstances();
-    for ( int i=0; i<fonts->length(); i++ ) {
-        fonts->get(i)->getFont()->clearCache();
+    const LVFontCacheItemList &fonts = _cache.getInstances();
+    for (const auto &item : fonts) {
+        item->getFont()->clearCache();
     }
     #endif
 }

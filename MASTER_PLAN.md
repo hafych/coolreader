@@ -148,8 +148,9 @@ DRM или ограничений доступа, подбор/получени�
   font-key snapshot, manifest-item и OPF/nav/NCX/page-map DOM ownership и
   lifecycle основного документа `LVDocView`, ODT metadata DOM и style/list
   parse-candidates, skin DOM и factory/icon/button parse-candidates, generic
-  queue nodes и thread-executor monitor/thread/task ownership. Остальные участки
-  мигрируются отдельными bounded-пакетами.
+  queue nodes, thread-executor monitor/thread/task ownership и font-cache
+  registered/instance entry ownership. Остальные участки мигрируются отдельными
+  bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

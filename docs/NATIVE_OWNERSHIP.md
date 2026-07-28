@@ -509,3 +509,14 @@ and queued-at-stop tasks are destroyed automatically; stop/join is idempotent.
 The thread regression uses a real worker and condition-variable monitor to
 verify running-task, queued-stop, repeated-stop, post-stop and monitor/thread
 teardown independently.
+
+`LVFontCache` owns every registered definition and live instance in vectors of
+`unique_ptr<LVFontCacheItem>` and cannot be copied. New candidates enter scoped
+ownership before vector publication, so allocation failure cannot strand a raw
+entry. Lookup APIs continue to return borrowed item pointers, while
+`getInstances()` exposes only a const borrowed collection view to FreeType
+settings updates. Typeface and document removal use erase/remove and therefore
+destroy every matching owner without skipping adjacent entries; `clear()` and
+garbage collection release entries through the same container ownership. The
+native regression covers document-scoped removal, adjacent same-typeface
+removal, surviving borrowed views and idempotent empty teardown.

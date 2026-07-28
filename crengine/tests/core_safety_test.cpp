@@ -40,6 +40,7 @@
 #include "textlang.h"
 #include "../src/chmfmt_internal.h"
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
+#include "../src/lvfont/lvfontcache.h"
 #include "../src/lvfont/lvfontglyphcache.h"
 #include "../src/lvstream/lvfilestream.h"
 #include "../src/lvstream/lvfilemappedstream.h"
@@ -933,6 +934,74 @@ static int testBoundedObservableGlyphCache() {
     stats = globalCache.getStats();
     if (stats.hits != 0 || stats.misses != 0 || stats.evictions != 0)
         return fail("glyph cache counters did not reset");
+    return 0;
+}
+
+static int testFontCacheOwnership() {
+    LVFontCache cache;
+    LVFontDef documentRegular(
+            lString8("document-regular.ttf"), -1, 400, 0, 0,
+            css_ff_sans_serif, lString8("Owned Face"), 0, 77);
+    LVFontDef documentBold(
+            lString8("document-bold.ttf"), -1, 700, 0, 0,
+            css_ff_sans_serif, lString8("Owned Face"), 0, 77);
+    LVFontDef otherDocument(
+            lString8("other-document.ttf"), -1, 500, 0, 0,
+            css_ff_sans_serif, lString8("Owned Face"), 0, 88);
+    LVFontDef systemFont(
+            lString8("system.ttf"), -1, 500, 0, 0,
+            css_ff_sans_serif, lString8("System Face"));
+
+    cache.update(&documentRegular, LVFontRef());
+    cache.update(&documentBold, LVFontRef());
+    cache.update(&otherDocument, LVFontRef());
+    cache.update(&systemFont, LVFontRef());
+    if (cache.length() != 4
+            || !cache.getInstances().empty()
+            || !cache.findDocumentFontDuplicate(
+                    77, lString8("document-regular.ttf")))
+        return fail("font cache did not publish owned registrations");
+
+    cache.removeDocumentFonts(77);
+    if (cache.length() != 2
+            || cache.findDocumentFontDuplicate(
+                    77, lString8("document-regular.ttf"))
+            || !cache.findDocumentFontDuplicate(
+                    88, lString8("other-document.ttf"))) {
+        return fail(
+                "font cache document removal retained owned entries");
+    }
+    cache.removeDocumentFonts(-1);
+    if (cache.length() != 2)
+        return fail("font cache removed process-wide registrations");
+
+    cache.update(&documentRegular, LVFontRef());
+    cache.update(&documentBold, LVFontRef());
+    if (cache.length() != 4)
+        return fail("font cache did not accept registrations after removal");
+    cache.removefont(&documentRegular);
+    if (cache.length() != 1
+            || !cache.findDuplicate(&systemFont)
+            || cache.findDocumentFontDuplicate(
+                    88, lString8("other-document.ttf"))) {
+        return fail(
+                "font cache typeface removal skipped adjacent owners");
+    }
+
+    lString32Collection faces;
+    cache.getFaceList(faces);
+    lString32Collection files;
+    cache.getFontFileNameList(files);
+    LVArray<int> weights;
+    cache.getAvailableFontWeights(weights, lString8("System Face"));
+    if (faces.length() != 1 || faces[0] != U"System Face"
+            || files.length() != 1 || files[0] != U"system.ttf"
+            || weights.length() != 1 || weights[0] != 500)
+        return fail("font cache views lost their surviving owner");
+
+    cache.clear();
+    if (cache.length() != 0 || !cache.getInstances().empty())
+        return fail("font cache clear retained owned entries");
     return 0;
 }
 
@@ -6049,6 +6118,8 @@ int main() {
     if (testConcurrentFontRenderSettings() != 0)
         return 1;
     if (testBoundedObservableGlyphCache() != 0)
+        return 1;
+    if (testFontCacheOwnership() != 0)
         return 1;
     if (testBoundedObservableDecodedImageCache() != 0)
         return 1;
