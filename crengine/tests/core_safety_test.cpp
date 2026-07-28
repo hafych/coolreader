@@ -30,6 +30,7 @@
 #include "dtddef.h"
 #include "fb3fmt.h"
 #include "lstridmap.h"
+#include "lvembeddedfont.h"
 #include "logredactor.h"
 #include "odtfmt.h"
 #include "parsebudget.h"
@@ -2351,6 +2352,79 @@ static int testSerialBufOwnership() {
     if (moved.error() || moved.size() != 3 || moved.pos() != 3
             || moved.buf()[0] != 0x55 || moved.buf()[2] != 0x77)
         return fail("SerialBuf did not accept moved storage");
+    return 0;
+}
+
+static int testEmbeddedFontOwnership() {
+    LVEmbeddedFontList source;
+    source.add(
+            lString32(U"fonts/regular.ttf"),
+            lString8("Owned Regular"), false, false);
+    source.add(
+            lString32(U"fonts/bold-italic.ttf"),
+            lString8("Owned Bold Italic"), true, true);
+    if (source.length() != 2)
+        return fail("embedded font owners were not published");
+
+    LVEmbeddedFontDef *sourceRegular =
+            source.findByUrl(lString32(U"fonts/regular.ttf"));
+    LVEmbeddedFontList copied(source);
+    LVEmbeddedFontList replaced;
+    replaced.add(lString32(U"stale.ttf"));
+    replaced.set(source);
+    if (!sourceRegular
+            || copied.length() != 2
+            || replaced.length() != 2
+            || copied.findByUrl(lString32(U"fonts/regular.ttf"))
+                    == sourceRegular
+            || replaced.findByUrl(lString32(U"stale.ttf"))) {
+        return fail("embedded font owners were not deep-copied");
+    }
+    source.clear();
+    if (copied.length() != 2 || replaced.length() != 2)
+        return fail("embedded font copy shared owner state");
+
+    SerialBuf serialized(1, true);
+    if (!copied.serialize(serialized) || serialized.error())
+        return fail("embedded font owners could not serialize");
+    const int serializedSize = serialized.pos();
+
+    SerialBuf input(serialized.buf(), serializedSize);
+    LVEmbeddedFontList restored;
+    restored.add(
+            lString32(U"sentinel.ttf"),
+            lString8("Sentinel"), false, false);
+    if (!restored.deserialize(input)
+            || restored.length() != 3
+            || !restored.findByUrl(lString32(U"sentinel.ttf"))) {
+        return fail("embedded font deserialize lost append semantics");
+    }
+    LVEmbeddedFontDef *restoredBold = restored.findByUrl(
+            lString32(U"fonts/bold-italic.ttf"));
+    if (!restoredBold
+            || restoredBold->getFace() != lString8("Owned Bold Italic")
+            || !restoredBold->getBold()
+            || !restoredBold->getItalic()) {
+        return fail("embedded font round-trip lost definition state");
+    }
+
+    std::vector<lUInt8> truncated(
+            serialized.buf(), serialized.buf() + serializedSize - 1);
+    SerialBuf corruptedInput(
+            truncated.data(), static_cast<int>(truncated.size()));
+    LVEmbeddedFontList rollback;
+    rollback.add(
+            lString32(U"rollback-sentinel.ttf"),
+            lString8("Rollback Sentinel"), false, false);
+    if (rollback.deserialize(corruptedInput)
+            || rollback.length() != 1
+            || !rollback.findByUrl(
+                    lString32(U"rollback-sentinel.ttf"))
+            || rollback.findByUrl(
+                    lString32(U"fonts/regular.ttf"))) {
+        return fail(
+                "embedded font deserialize published a partial list");
+    }
     return 0;
 }
 
@@ -6170,6 +6244,8 @@ int main() {
     if (testReferenceCacheOwnership() != 0)
         return 1;
     if (testSerialBufOwnership() != 0)
+        return 1;
+    if (testEmbeddedFontOwnership() != 0)
         return 1;
     if (testCacheFileCodecOwnership() != 0)
         return 1;

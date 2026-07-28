@@ -520,3 +520,14 @@ destroy every matching owner without skipping adjacent entries; `clear()` and
 garbage collection release entries through the same container ownership. The
 native regression covers document-scoped removal, adjacent same-typeface
 removal, surviving borrowed views and idempotent empty teardown.
+
+`LVEmbeddedFontList` owns definitions in a vector of `unique_ptr` and exposes
+only borrowed `get()`/lookup pointers. The legacy raw `add()` boundary adopts
+its argument immediately, while internal construction keeps every candidate
+scoped until vector publication. The copy constructor clones every owner,
+while `set()` builds its deduplicated replacement completely before swap.
+Deserialization retains the existing append contract and wire format, but
+parses all incoming definitions into a temporary owner-list and reserves the
+destination before moving any item, so malformed input cannot publish a valid
+prefix. The native regression covers independent copy/set owners, a successful
+round trip, append compatibility and truncated-input rollback.

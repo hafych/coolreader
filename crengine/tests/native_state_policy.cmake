@@ -41,6 +41,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.h" FONT_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.cpp" FONT_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.cpp" FREETYPE_FONT_MANAGER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvembeddedfont.h" EMBEDDED_FONT_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvembeddedfont.cpp" EMBEDDED_FONT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
@@ -518,6 +520,67 @@ require_source_text(
   "font-cache regression must retain adjacent-owner removal coverage"
 )
 require_source_text(
+  "${EMBEDDED_FONT_HEADER}"
+  "std::vector<std::unique_ptr<LVEmbeddedFontDef> > _items"
+  "embedded-font definitions must have explicit scoped owners"
+)
+require_source_text(
+  "${EMBEDDED_FONT_HEADER}"
+  "void addOwned(std::unique_ptr<LVEmbeddedFontDef> def)"
+  "embedded-font publication must accept scoped ownership"
+)
+require_source_text(
+  "${EMBEDDED_FONT_HEADER}"
+  "LVEmbeddedFontList(const LVEmbeddedFontList &list)"
+  "embedded-font list copies must retain deep-copy semantics"
+)
+require_source_text(
+  "${EMBEDDED_FONT_HEADER}"
+  "LVEmbeddedFontList &operator=(const LVEmbeddedFontList &) = delete"
+  "embedded-font ownership must not use implicit assignment"
+)
+require_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "std::unique_ptr<LVEmbeddedFontDef> candidate("
+  "embedded-font definitions must enter scoped ownership before publication"
+)
+require_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "LVEmbeddedFontList replacement;
+    replacement.addAll(list);"
+  "embedded-font list replacement must be transactional"
+)
+require_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "LVEmbeddedFontList parsed;"
+  "embedded-font deserialization must stage a complete candidate list"
+)
+require_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "_items.reserve(_items.size() + parsed._items.size());"
+  "embedded-font deserialization must reserve before atomic publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "const LVEmbeddedFontDef *item = _fontList.get(i);"
+  "embedded-font registration must consume a borrowed definition view"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testEmbeddedFontOwnership()"
+  "embedded-font ownership must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "embedded font owners were not deep-copied"
+  "embedded-font regression must retain independent-copy coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "embedded font deserialize published a partial list"
+  "embedded-font regression must retain failed-parse rollback coverage"
+)
+require_source_text(
   "${GLYPH_CACHE_HEADER}"
   "std::atomic<lUInt64> hit_count"
   "glyph cache hits must be observable"
@@ -737,6 +800,26 @@ forbid_source_text(
   "${FONT_CACHE_SOURCE}"
   "_registered_list.remove(i)"
   "font-cache registration removal must not leak or skip adjacent owners"
+)
+forbid_source_text(
+  "${EMBEDDED_FONT_HEADER}"
+  "class LVEmbeddedFontList : public LVPtrVector<LVEmbeddedFontDef>"
+  "embedded-font definitions must not regress to implicit pointer-vector ownership"
+)
+forbid_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "def = new LVEmbeddedFontDef"
+  "embedded-font candidates must not use raw transitional ownership"
+)
+forbid_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "LVEmbeddedFontDef *item = new"
+  "embedded-font parse candidates must not use raw transitional ownership"
+)
+forbid_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "delete item"
+  "embedded-font candidate teardown must remain automatic"
 )
 
 # --- Antiword bridge: serialized library and operation-local callback state ---

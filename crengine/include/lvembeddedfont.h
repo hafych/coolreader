@@ -28,7 +28,9 @@
 
 #include "crsetup.h"
 #include "lvstring.h"
-#include "lvptrvec.h"
+
+#include <memory>
+#include <vector>
 
 class SerialBuf;
 
@@ -45,13 +47,13 @@ public:
     LVEmbeddedFontDef() : _bold(false), _italic(false) {
     }
 
-    const lString32 &getUrl() { return _url; }
+    const lString32 &getUrl() const { return _url; }
 
-    const lString8 &getFace() { return _face; }
+    const lString8 &getFace() const { return _face; }
 
-    bool getBold() { return _bold; }
+    bool getBold() const { return _bold; }
 
-    bool getItalic() { return _italic; }
+    bool getItalic() const { return _italic; }
 
     void setFace(const lString8 &face) { _face = face; }
 
@@ -59,29 +61,60 @@ public:
 
     void setItalic(bool italic) { _italic = italic; }
 
-    bool serialize(SerialBuf &buf);
+    bool serialize(SerialBuf &buf) const;
 
     bool deserialize(SerialBuf &buf);
 };
 
-class LVEmbeddedFontList : public LVPtrVector<LVEmbeddedFontDef> {
-public:
-    LVEmbeddedFontDef *findByUrl(lString32 url);
+class LVEmbeddedFontList {
+    std::vector<std::unique_ptr<LVEmbeddedFontDef> > _items;
 
-    void add(LVEmbeddedFontDef *def) { LVPtrVector<LVEmbeddedFontDef>::add(def); }
+    void addOwned(std::unique_ptr<LVEmbeddedFontDef> def);
+
+public:
+    LVEmbeddedFontList() = default;
+    LVEmbeddedFontList(const LVEmbeddedFontList &list);
+    LVEmbeddedFontList &operator=(const LVEmbeddedFontList &) = delete;
+    ~LVEmbeddedFontList() = default;
+
+    int length() const {
+        return static_cast<int>(_items.size());
+    }
+
+    bool empty() const {
+        return _items.empty();
+    }
+
+    LVEmbeddedFontDef *get(int index) {
+        return _items[static_cast<std::size_t>(index)].get();
+    }
+
+    const LVEmbeddedFontDef *get(int index) const {
+        return _items[static_cast<std::size_t>(index)].get();
+    }
+
+    void clear() {
+        _items.clear();
+    }
+
+    void swap(LVEmbeddedFontList &list) noexcept {
+        _items.swap(list._items);
+    }
+
+    LVEmbeddedFontDef *findByUrl(const lString32 &url);
+
+    /// Legacy raw-pointer boundary transfers ownership to this list.
+    void add(LVEmbeddedFontDef *def);
 
     bool add(lString32 url, lString8 face, bool bold, bool italic);
 
     bool add(lString32 url) { return add(url, lString8::empty_str, false, false); }
 
-    bool addAll(LVEmbeddedFontList &list);
+    bool addAll(const LVEmbeddedFontList &list);
 
-    void set(LVEmbeddedFontList &list) {
-        clear();
-        addAll(list);
-    }
+    void set(const LVEmbeddedFontList &list);
 
-    bool serialize(SerialBuf &buf);
+    bool serialize(SerialBuf &buf) const;
 
     bool deserialize(SerialBuf &buf);
 };

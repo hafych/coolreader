@@ -20083,7 +20083,7 @@ void ldomDocument::registerEmbeddedFonts()
     fontMan->getFaceList(flist);
     int cnt = flist.length();
     for (int i = 0; i < list; i++) {
-        LVEmbeddedFontDef *item = _fontList.get(i);
+        const LVEmbeddedFontDef *item = _fontList.get(i);
         lString32 url = item->getUrl();
         lString8 face = item->getFace();
         if (face.empty()) {
