@@ -210,6 +210,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   an explicit non-owning deserialization view and reject shallow copies.
   Autogrowth, legacy buffer adoption and fixed/borrowed overflow paths have
   native regression coverage.
+- String collections now own reference-counted slots and hashed collision
+  buckets through standard vectors. Copy/assignment no longer share raw
+  storage, clearing a hashed collection removes stale indices, and custom
+  sorting no longer relies on a process-global comparator pointer.
 - The RTF importer now owns its text accumulator through RAII, flushes
   recoverable truncated input before teardown and emits no document callbacks
   after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership

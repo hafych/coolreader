@@ -1,5 +1,7 @@
 #include "lvstreamutils.h"
 #include "lvstreamfragment.h"
+#include "lvstring8collection.h"
+#include "lvstring32hashedcollection.h"
 #include "lvthread.h"
 #include "lvcontaineriteminfo.h"
 #include "hyphman.h"
@@ -1447,6 +1449,117 @@ static int testSerialBufOwnership() {
             || swapped.buf()[1] != 0x22
             || adopted.pos() != 0)
         return fail("SerialBuf swap lost its owned-storage view");
+    return 0;
+}
+
+static int descendingString32Comparator(
+        lString32 &left, lString32 &right) {
+    return right.compare(left);
+}
+
+static int testStringCollectionOwnership() {
+    lString8Collection narrow;
+    narrow.reserve(2);
+    narrow.add("alpha");
+    narrow.add("beta");
+    narrow.add("gamma");
+    lString8Collection narrowCopy(narrow);
+    narrow.erase(1, 2);
+    if (narrow.length() != 1
+            || narrow[0] != lString8("alpha")
+            || narrowCopy.length() != 3
+            || narrowCopy[2] != lString8("gamma"))
+        return fail("8-bit string collection copy/erase lost ownership");
+    lString32Collection wideCopy;
+    {
+        lString32Collection wide;
+        wide.add(U"charlie");
+        wide.add(U"alpha");
+        wide.add(U"bravo");
+        wideCopy = wide;
+        const int previousLength = wide.length();
+        if (wide.insert(1, wide[0]) != previousLength
+                || wide.length() != 4
+                || wide[1] != lString32(U"charlie"))
+            return fail("32-bit string collection aliased insert failed");
+        wide.erase(0, wide.length());
+        if (wide.length() != 0)
+            return fail("32-bit string collection could not erase its tail");
+    }
+    if (wideCopy.length() != 3
+            || wideCopy[0] != lString32(U"charlie")
+            || wideCopy[2] != lString32(U"bravo"))
+        return fail("32-bit string collection copy retained source storage");
+    wideCopy.sort();
+    if (wideCopy[0] != lString32(U"alpha")
+            || wideCopy[2] != lString32(U"charlie"))
+        return fail("32-bit string collection default sort changed order");
+    wideCopy.sort(descendingString32Comparator);
+    if (wideCopy[0] != lString32(U"charlie")
+            || wideCopy[2] != lString32(U"alpha"))
+        return fail("32-bit string collection custom sort changed order");
+
+    static const int collisionBucketCount = 16;
+    std::vector<lString32> firstByBucket(collisionBucketCount);
+    std::vector<bool> bucketUsed(collisionBucketCount, false);
+    lString32 collisionFirst;
+    lString32 collisionSecond;
+    for (int i = 0; i < 256 && collisionSecond.empty(); ++i) {
+        lString32 candidate(U"collision-");
+        candidate += lString32::itoa(i);
+        const int bucket = static_cast<int>(
+                calcStringHash(candidate.c_str()) % collisionBucketCount);
+        if (bucketUsed[bucket]) {
+            collisionFirst = firstByBucket[bucket];
+            collisionSecond = candidate;
+        } else {
+            firstByBucket[bucket] = candidate;
+            bucketUsed[bucket] = true;
+        }
+    }
+    if (collisionSecond.empty())
+        return fail("hashed string collision fixture was not built");
+
+    lString32HashedCollection hashed(collisionBucketCount);
+    const int firstIndex = hashed.add(collisionFirst.c_str());
+    const int secondIndex = hashed.add(collisionSecond.c_str());
+    if (firstIndex == secondIndex
+            || hashed.find(collisionFirst.c_str()) != firstIndex
+            || hashed.find(collisionSecond.c_str()) != secondIndex
+            || hashed.add(collisionFirst.c_str()) != firstIndex)
+        return fail("hashed string collision bucket lost an entry");
+    for (int i = 0; i < 96; ++i) {
+        lString32 value(U"value-");
+        value += lString32::itoa(i);
+        const int index = hashed.add(value.c_str());
+        if (hashed.find(value.c_str()) != index)
+            return fail("hashed string rehash lost an entry");
+    }
+
+    lString32HashedCollection hashedCopy(hashed);
+    lString32HashedCollection hashedAssigned(2);
+    hashedAssigned = hashed;
+    hashed.clear();
+    if (hashed.length() != 0
+            || hashed.find(collisionFirst.c_str()) != -1
+            || hashed.add(U"replacement") != 0
+            || hashed.find(U"replacement") != 0
+            || hashedCopy.find(collisionSecond.c_str()) != secondIndex
+            || hashedAssigned.find(collisionFirst.c_str()) != firstIndex)
+        return fail("hashed string copy/clear shared ownership state");
+
+    SerialBuf serialized(1, true);
+    hashedCopy.serialize(serialized);
+    if (serialized.error())
+        return fail("hashed string collection could not serialize");
+    serialized.reset();
+    lString32HashedCollection restored(4);
+    restored.add(U"stale");
+    if (!restored.deserialize(serialized)
+            || restored.find(U"stale") != -1
+            || restored.find(collisionFirst.c_str()) != firstIndex
+            || restored.find(collisionSecond.c_str()) != secondIndex)
+        return fail("hashed string deserialize retained stale buckets");
     return 0;
 }
 
@@ -3262,6 +3375,8 @@ int main() {
     if (testIniTranslatorOwnership() != 0)
         return 1;
     if (testParserOwnedBuffers() != 0)
+        return 1;
+    if (testStringCollectionOwnership() != 0)
         return 1;
     if (testSerialBufOwnership() != 0)
         return 1;

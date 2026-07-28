@@ -24,22 +24,17 @@
 
 #include "lvstring32collection.h"
 
+#include <vector>
+
 class SerialBuf;
 
 /// hashed wide string collection
 class lString32HashedCollection : public lString32Collection
 {
 private:
-    int hashSize;
-    struct HashPair {
-        int index;
-        HashPair * next;
-        void clear() { index=-1; next=NULL; }
-    };
-    HashPair * hash;
-    void addHashItem( int hashIndex, int storageIndex );
-    void clearHash();
-    void reHash( int newSize );
+    std::vector<std::vector<int>> _hashBuckets;
+    void addHashItem( std::size_t hashIndex, int storageIndex );
+    void reHash( std::size_t newSize );
 public:
 
     /// serialize to byte array (pointer will be incremented by number of bytes written)
@@ -47,9 +42,13 @@ public:
     /// deserialize from byte array (pointer will be incremented by number of bytes read)
     bool deserialize( SerialBuf & buf );
 
-    lString32HashedCollection( lString32HashedCollection & v );
+    lString32HashedCollection(
+            const lString32HashedCollection &) = default;
+    lString32HashedCollection &operator=(
+            const lString32HashedCollection &) = default;
     lString32HashedCollection( lUInt32 hashSize );
-    ~lString32HashedCollection();
+    ~lString32HashedCollection() = default;
+    void clear();
     int add( const lChar32 * s );
     int find( const lChar32 * s );
 };

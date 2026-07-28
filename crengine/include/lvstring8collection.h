@@ -24,22 +24,17 @@
 
 #include "lvstring.h"
 
+#include <vector>
+
 /// collection of strings
 class lString8Collection
 {
 private:
-    lstring8_chunk_t * * chunks;
-    int count;
-    int size;
+    std::vector<lString8> _items;
 public:
-    lString8Collection()
-        : chunks(NULL), count(0), size(0)
-    { }
-    lString8Collection(const lString8Collection & src)
-        : chunks(NULL), count(0), size(0)
-    { reserve(src.size); addAll(src); }
+    lString8Collection() = default;
+    lString8Collection(const lString8Collection &) = default;
     lString8Collection(const lString8 & str, const lString8 & delimiter)
-        : chunks(NULL), count(0), size(0)
     {
         split(str, delimiter);
     }
@@ -57,32 +52,23 @@ public:
     void erase(int offset, int count);
     const lString8 & at(int index)
     {
-        return ((lString8 *)chunks)[index];
+        return _items[index];
     }
     const lString8 & operator [] (int index) const
     {
-        return ((lString8 *)chunks)[index];
+        return _items[index];
     }
     lString8 & operator [] (int index)
     {
-        return ((lString8 *)chunks)[index];
+        return _items[index];
     }
-    lString8Collection& operator=(const lString8Collection& other)
-    {
-        clear();
-        reserve(other.size);
-        addAll(other);
-        return *this;
-    }
+    lString8Collection &operator=(const lString8Collection &) = default;
     bool operator==(const lString8Collection& other) const;
     bool operator!=(const lString8Collection& other) const;
-    int length() const { return count; }
+    int length() const { return static_cast<int>(_items.size()); }
     void clear();
-    ~lString8Collection()
-    {
-        clear();
-    }
-    bool empty() const { return 0 == count; }
+    ~lString8Collection() = default;
+    bool empty() const { return _items.empty(); }
 };
 
 #endif // __LV_STRING8COLLECTION_H_INCLUDED__

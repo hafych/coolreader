@@ -25,17 +25,17 @@
 
 #include "lvstring.h"
 
+#include <vector>
+
 /// collection of wide strings
 class lString32Collection
 {
 private:
-    lstring32_chunk_t * * chunks;
-    int count;
-    int size;
+    std::vector<lString32> _items;
 public:
-    lString32Collection()
-        : chunks(NULL), count(0), size(0)
-    { }
+    lString32Collection() = default;
+    lString32Collection(const lString32Collection &) = default;
+    lString32Collection &operator=(const lString32Collection &) = default;
     /// parse delimiter-separated string
     void parse( lString32 string, lChar32 delimiter, bool flgTrim );
     /// parse delimiter-separated string
@@ -55,31 +55,28 @@ public:
     void split(const lString32 & str, const lString32 & delimiter);
     const lString32 & at(int index)
     {
-        return ((lString32 *)chunks)[index];
+        return _items[index];
     }
     const lString32 & operator [] (int index) const
     {
-        return ((lString32 *)chunks)[index];
+        return _items[index];
     }
     lString32 & operator [] (int index)
     {
-        return ((lString32 *)chunks)[index];
+        return _items[index];
     }
-    int length() const { return count; }
+    int length() const { return static_cast<int>(_items.size()); }
     void clear();
     bool contains( lString32 value )
     {
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < length(); i++)
             if (value.compare(at(i)) == 0)
                 return true;
         return false;
     }
     void sort();
     void sort(int(comparator)(lString32 & s1, lString32 & s2));
-    ~lString32Collection()
-    {
-        clear();
-    }
+    ~lString32Collection() = default;
 };
 
 #endif // __LV_STRING32COLLECTION_H_INCLUDED__

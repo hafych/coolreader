@@ -123,9 +123,9 @@ DRM или ограничений доступа, подбор/получени�
   owned/borrowed memory streams, block write-cache buffers/LRU, mapped-file
   regions/OS handles, file-stream FILE/HANDLE/owned/borrowed descriptor
   lifecycle, directory scan handles/item candidates, archive factory/item
-  candidates и serialization-buffer storage, longjmp-safe PNG
-  rows/pixels, JPEG pool/error lifecycle, а также draw mark list. Остальные
-  участки мигрируются отдельными bounded-пакетами.
+  candidates, serialization-buffer storage и string-collection slots/hashed
+  buckets, longjmp-safe PNG rows/pixels, JPEG pool/error lifecycle, а также
+  draw mark list. Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

@@ -22,98 +22,68 @@
 
 #include "../include/lvstring32collection.h"
 
+#include <algorithm>
+
 void lString32Collection::reserve(int space)
 {
-    if ( count + space > size )
-    {
-        int tmpSize = count + space + 64;
-        void* tmp = realloc( chunks, sizeof(lstring32_chunk_t *) * tmpSize );
-        if (tmp) {
-            size = tmpSize;
-            chunks = (lstring32_chunk_t * *)tmp;
-        }
-        else {
-            // TODO: throw exception or change function prototype & return code
-        }
-    }
-}
-
-static int (str32_comparator)(const void * n1, const void * n2)
-{
-    lstring32_chunk_t ** s1 = (lstring32_chunk_t **)n1;
-    lstring32_chunk_t ** s2 = (lstring32_chunk_t **)n2;
-    return lStr_cmp( (*s1)->data32(), (*s2)->data32() );
-}
-
-static int(*custom_lstr32_comparator_ptr)(lString32 & s1, lString32 & s2);
-static int (str32_custom_comparator)(const void * n1, const void * n2)
-{
-    lString32 s1(*((lstring32_chunk_t **)n1));
-    lString32 s2(*((lstring32_chunk_t **)n2));
-    return custom_lstr32_comparator_ptr(s1, s2);
+    if (space <= 0)
+        return;
+    const std::size_t requested =
+            _items.size() + static_cast<std::size_t>(space);
+    if (requested > _items.capacity())
+        _items.reserve(requested + 64);
 }
 
 void lString32Collection::sort(int(comparator)(lString32 & s1, lString32 & s2))
 {
-    custom_lstr32_comparator_ptr = comparator;
-    qsort(chunks,count,sizeof(lstring32_chunk_t*), str32_custom_comparator);
+    if (!comparator)
+        return;
+    std::sort(
+            _items.begin(), _items.end(),
+            [comparator](const lString32 &left, const lString32 &right) {
+                lString32 leftCopy(left);
+                lString32 rightCopy(right);
+                return comparator(leftCopy, rightCopy) < 0;
+            });
 }
 
 void lString32Collection::sort()
 {
-    qsort(chunks,count,sizeof(lstring32_chunk_t*), str32_comparator);
+    std::sort(
+            _items.begin(), _items.end(),
+            [](const lString32 &left, const lString32 &right) {
+                return left.compare(right) < 0;
+            });
 }
 
 int lString32Collection::add( const lString32 & str )
 {
-    reserve( 1 );
-    chunks[count] = str.pchunk;
-    str.addref();
-    return count++;
+    const int index = length();
+    _items.push_back(str);
+    return index;
 }
 int lString32Collection::insert( int pos, const lString32 & str )
 {
-    if (pos<0 || pos>=count)
+    const int previousLength = length();
+    if (pos < 0 || pos >= previousLength)
         return add(str);
-    reserve( 1 );
-    for (int i=count; i>pos; --i)
-        chunks[i] = chunks[i-1];
-    chunks[pos] = str.pchunk;
-    str.addref();
-    return count++;
+    _items.insert(_items.begin() + pos, str);
+    return previousLength;
 }
 void lString32Collection::clear()
 {
-    if (chunks) {
-        for (int i=0; i<count; i++)
-        {
-            ((lString32 *)chunks)[i].release();
-        }
-        free(chunks);
-        chunks = NULL;
-    }
-    count = 0;
-    size = 0;
+    std::vector<lString32>().swap(_items);
 }
 
 void lString32Collection::erase(int offset, int cnt)
 {
-    if (count<=0)
+    const int itemCount = length();
+    if (itemCount <= 0)
         return;
-    if (offset < 0 || offset + cnt >= count)
+    if (offset < 0 || cnt <= 0
+            || offset > itemCount || cnt > itemCount - offset)
         return;
-    int i;
-    for (i = offset; i < offset + cnt; i++)
-    {
-        ((lString32 *)chunks)[i].release();
-    }
-    for (i = offset + cnt; i < count; i++)
-    {
-        chunks[i-cnt] = chunks[i];
-    }
-    count -= cnt;
-    if (!count)
-        clear();
+    _items.erase(_items.begin() + offset, _items.begin() + offset + cnt);
 }
 
 void lString32Collection::split( const lString32 & str, const lString32 & delimiter )

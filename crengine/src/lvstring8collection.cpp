@@ -36,32 +36,23 @@ void lString8Collection::split( const lString8 & str, const lString8 & delimiter
 
 void lString8Collection::erase(int offset, int cnt)
 {
-    if (count <= 0)
+    const int itemCount = length();
+    if (itemCount <= 0)
         return;
-    if (offset < 0 || offset + cnt > count)
+    if (offset < 0 || cnt <= 0
+            || offset > itemCount || cnt > itemCount - offset)
         return;
-    int i;
-    for (i = offset; i < offset + cnt; i++)
-    {
-        ((lString8 *)chunks)[i].release();
-    }
-    for (i = offset + cnt; i < count; i++)
-    {
-        chunks[i-cnt] = chunks[i];
-    }
-    count -= cnt;
-    if (!count)
-        clear();
+    _items.erase(_items.begin() + offset, _items.begin() + offset + cnt);
 }
 
 bool lString8Collection::operator==(const lString8Collection& other) const
 {
     bool equal = false;
     // Compare <this> with <other> consider items order
-    if (count == other.length()) {
+    if (length() == other.length()) {
         equal = true;
-        for (int i = 0; i < count; i++) {
-            if (((lString8 *)chunks)[i] != other[i]) {
+        for (int i = 0; i < length(); i++) {
+            if (_items[i] != other[i]) {
                 equal = false;
                 break;
             }
@@ -77,45 +68,30 @@ bool lString8Collection::operator!=(const lString8Collection &other) const
 
 void lString8Collection::reserve(int space)
 {
-    if ( count + space > size )
-    {
-        int tmpSize = count + space + 64;
-        void* tmp = realloc( chunks, sizeof(lstring8_chunk_t *) * tmpSize );
-        if (tmp) {
-            size = tmpSize;
-            chunks = (lstring8_chunk_t * *)tmp;
-        }
-        else {
-            // TODO: throw exception or change function prototype & return code
-        }
-    }
+    if (space <= 0)
+        return;
+    const std::size_t requested =
+            _items.size() + static_cast<std::size_t>(space);
+    if (requested > _items.capacity())
+        _items.reserve(requested + 64);
 }
 
 int lString8Collection::add( const lString8 & str )
 {
-    reserve( 1 );
-    chunks[count] = str.pchunk;
-    str.addref();
-    return count++;
+    const int index = length();
+    _items.push_back(str);
+    return index;
 }
 
 lUInt32 lString8Collection::getHash() const
 {
     lUInt32 hash = 0;
-    for (int i = 0; i < count; i++)
-        hash = 31*hash + ((lString8 *)chunks)[i].getHash();
+    for (const lString8 &item : _items)
+        hash = 31 * hash + item.getHash();
     return hash;
 }
 
 void lString8Collection::clear()
 {
-    for (int i=0; i<count; i++)
-    {
-        ((lString8 *)chunks)[i].release();
-    }
-    if (chunks)
-        free(chunks);
-    chunks = NULL;
-    count = 0;
-    size = 0;
+    std::vector<lString8>().swap(_items);
 }

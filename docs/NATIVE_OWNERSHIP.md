@@ -143,6 +143,14 @@ Regression coverage expands a decoded block beyond its initial reserve, seeks
 across packed-block boundaries and rejects a truncated dictionary after
 partially initialized entries have been released automatically.
 
+The 8-bit and 32-bit string collections own their reference-counted string
+slots through `std::vector`, so copy, assignment, insertion, erase and teardown
+cannot share or manually shift one raw pointer array. Typed `std::sort`
+replaces the process-global custom-comparator bridge. The hashed 32-bit
+collection owns collision buckets as nested vectors; copies retain independent
+indices, while `clear()` and deserialize discard stale bucket contents before
+new strings are indexed.
+
 `SerialBuf` owns writable fixed-size and auto-growing storage through
 `std::vector`; its raw `_buf` member is only a compatibility view. The
 deserialization constructor remains explicitly borrowed, while the legacy

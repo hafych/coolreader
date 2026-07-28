@@ -20,6 +20,12 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HE
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvstring8collection.h" STRING8_COLLECTION_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstring8collection.cpp" STRING8_COLLECTION_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvstring32collection.h" STRING32_COLLECTION_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstring32collection.cpp" STRING32_COLLECTION_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvstring32hashedcollection.h" HASHED_STRING_COLLECTION_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstring32hashedcollection.cpp" HASHED_STRING_COLLECTION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
@@ -1221,6 +1227,71 @@ require_source_text(
   "${ZIP_STREAM_SOURCE}"
   "m_originalCRC != 0 && m_CRC != m_originalCRC"
   "ZIP streams with a missing CRC must allow fallback calculation"
+)
+require_source_text(
+  "${STRING8_COLLECTION_HEADER}"
+  "std::vector<lString8> _items"
+  "8-bit string collections must own their references through RAII storage"
+)
+require_source_text(
+  "${STRING32_COLLECTION_HEADER}"
+  "std::vector<lString32> _items"
+  "32-bit string collections must own their references through RAII storage"
+)
+require_source_text(
+  "${STRING32_COLLECTION_SOURCE}"
+  "std::sort("
+  "32-bit string sorting must use typed RAII storage"
+)
+require_source_text(
+  "${HASHED_STRING_COLLECTION_HEADER}"
+  "std::vector<std::vector<int>> _hashBuckets"
+  "hashed string collision buckets must use nested RAII storage"
+)
+require_source_text(
+  "${HASHED_STRING_COLLECTION_SOURCE}"
+  "lString32Collection::clear()"
+  "hashed string clearing must discard owned strings before bucket indices"
+)
+forbid_source_text(
+  "${STRING8_COLLECTION_SOURCE}"
+  "realloc("
+  "8-bit string collection storage must not regress to realloc"
+)
+forbid_source_text(
+  "${STRING8_COLLECTION_SOURCE}"
+  "free("
+  "8-bit string collection storage must not regress to free"
+)
+forbid_source_text(
+  "${STRING32_COLLECTION_SOURCE}"
+  "custom_lstr32_comparator_ptr"
+  "string collection sorting must not publish a process-global comparator"
+)
+forbid_source_text(
+  "${STRING32_COLLECTION_SOURCE}"
+  "realloc("
+  "32-bit string collection storage must not regress to realloc"
+)
+forbid_source_text(
+  "${STRING32_COLLECTION_SOURCE}"
+  "free("
+  "32-bit string collection storage must not regress to free"
+)
+forbid_source_text(
+  "${HASHED_STRING_COLLECTION_HEADER}"
+  "HashPair"
+  "hashed string buckets must not regress to manual collision nodes"
+)
+forbid_source_text(
+  "${HASHED_STRING_COLLECTION_SOURCE}"
+  "malloc("
+  "hashed string collision storage must not regress to malloc"
+)
+forbid_source_text(
+  "${HASHED_STRING_COLLECTION_SOURCE}"
+  "free("
+  "hashed string collision storage must not regress to free"
 )
 require_source_text(
   "${ZIP_STREAM_HEADER}"

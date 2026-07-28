@@ -61,128 +61,73 @@ bool lString32HashedCollection::deserialize( SerialBuf & buf )
     return !buf.error();
 }
 
-lString32HashedCollection::lString32HashedCollection( lString32HashedCollection & v )
-: lString32Collection( v )
-, hashSize( v.hashSize )
-, hash( NULL )
+void lString32HashedCollection::addHashItem(
+        std::size_t hashIndex, int storageIndex)
 {
-    hash = (HashPair *)malloc( sizeof(HashPair) * hashSize );
-    for ( int i=0; i<hashSize; i++ ) {
-        hash[i].clear();
-        hash[i].index = v.hash[i].index;
-        HashPair * next = v.hash[i].next;
-        while ( next ) {
-            addHashItem( i, next->index );
-            next = next->next;
-        }
-    }
+    _hashBuckets[hashIndex].push_back(storageIndex);
 }
 
-void lString32HashedCollection::addHashItem( int hashIndex, int storageIndex )
+void lString32HashedCollection::clear()
 {
-    if ( hash[ hashIndex ].index == -1 ) {
-        hash[hashIndex].index = storageIndex;
-    } else {
-        HashPair * np = (HashPair *)malloc(sizeof(HashPair));
-        np->index = storageIndex;
-        np->next = hash[hashIndex].next;
-        hash[hashIndex].next = np;
-    }
-}
-
-void lString32HashedCollection::clearHash()
-{
-    if ( hash ) {
-        for ( int i=0; i<hashSize; i++) {
-            HashPair * p = hash[i].next;
-            while ( p ) {
-                HashPair * tmp = p->next;
-                free( p );
-                p = tmp;
-            }
-        }
-        free( hash );
-    }
-    hash = NULL;
+    lString32Collection::clear();
+    for (std::vector<int> &bucket : _hashBuckets)
+        bucket.clear();
 }
 
 lString32HashedCollection::lString32HashedCollection( lUInt32 hash_size )
-: hashSize(hash_size), hash(NULL)
+: _hashBuckets(static_cast<std::size_t>(hash_size))
 {
-
-    hash = (HashPair *)malloc( sizeof(HashPair) * hashSize );
-    for ( int i=0; i<hashSize; i++ )
-        hash[i].clear();
-}
-
-lString32HashedCollection::~lString32HashedCollection()
-{
-    clearHash();
 }
 
 int lString32HashedCollection::find( const lChar32 * s )
 {
-    if ( !hash || !length() )
+    if (_hashBuckets.empty() || !length())
         return -1;
-    lUInt32 h = calcStringHash( s );
-    lUInt32 n = h % hashSize;
-    if ( hash[n].index!=-1 )
-    {
-        const lString32 & str = at( hash[n].index );
-        if ( str == s )
-            return hash[n].index;
-        HashPair * p = hash[n].next;
-        for ( ;p ;p = p->next ) {
-            const lString32 & str = at( p->index );
-            if ( str==s )
-                return p->index;
-        }
+    const lUInt32 hash = calcStringHash(s);
+    const std::size_t bucketIndex = hash % _hashBuckets.size();
+    for (int storageIndex : _hashBuckets[bucketIndex]) {
+        if (at(storageIndex) == s)
+            return storageIndex;
     }
     return -1;
 }
 
-void lString32HashedCollection::reHash( int newSize )
+void lString32HashedCollection::reHash( std::size_t newSize )
 {
-    if (hashSize == newSize)
+    if (_hashBuckets.size() == newSize)
         return;
-    clearHash();
-    hashSize = newSize;
-    if (hashSize > 0) {
-        hash = (HashPair *)malloc( sizeof(HashPair) * hashSize );
-        for ( int i=0; i<hashSize; i++ )
-            hash[i].clear();
-    }
+    _hashBuckets.assign(newSize, std::vector<int>());
+    if (_hashBuckets.empty())
+        return;
     for ( int i=0; i<length(); i++ ) {
-        lUInt32 h = calcStringHash( at(i).c_str() );
-        lUInt32 n = h % hashSize;
-        addHashItem( n, i );
+        const lUInt32 hash = calcStringHash(at(i).c_str());
+        const std::size_t bucketIndex = hash % _hashBuckets.size();
+        addHashItem(bucketIndex, i);
     }
 }
 
 int lString32HashedCollection::add( const lChar32 * s )
 {
-    if ( !hash || hashSize < length()*2 ) {
-        int sz = 16;
-        while ( sz<length() )
-            sz <<= 1;
-        sz <<= 1;
-        reHash( sz );
+    const std::size_t itemCount = static_cast<std::size_t>(length());
+    if (_hashBuckets.empty() || _hashBuckets.size() < itemCount * 2) {
+        const std::size_t targetSize = itemCount > 0
+                ? itemCount * 2
+                : 32;
+        std::size_t newSize = 32;
+        while (newSize < targetSize
+                && newSize <= _hashBuckets.max_size() / 2)
+            newSize <<= 1;
+        if (newSize < targetSize)
+            newSize = targetSize;
+        reHash(newSize);
     }
-    lUInt32 h = calcStringHash( s );
-    lUInt32 n = h % hashSize;
-    if ( hash[n].index!=-1 )
-    {
-        const lString32 & str = at( hash[n].index );
-        if ( str == s )
-            return hash[n].index;
-        HashPair * p = hash[n].next;
-        for ( ;p ;p = p->next ) {
-            const lString32 & str = at( p->index );
-            if ( str==s )
-                return p->index;
-        }
+    const lUInt32 hash = calcStringHash(s);
+    const std::size_t bucketIndex = hash % _hashBuckets.size();
+    for (int storageIndex : _hashBuckets[bucketIndex]) {
+        if (at(storageIndex) == s)
+            return storageIndex;
     }
-    lUInt32 i = lString32Collection::add( lString32(s) );
-    addHashItem( n, i );
-    return i;
+    const int storageIndex = lString32Collection::add(lString32(s));
+    addHashItem(bucketIndex, storageIndex);
+    return storageIndex;
 }
