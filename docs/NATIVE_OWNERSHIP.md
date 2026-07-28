@@ -53,7 +53,9 @@ without leaving a dangling published pointer.
 Document format selection owns each candidate parser through
 `std::unique_ptr<LVFileFormatParser>` until parsing completes. XML, HTML, plain
 text and bookmark format probes own their temporary decoded-character buffers
-through `std::vector`, including negative detection paths.
+through `std::vector`, including negative detection paths. Encoding
+autodetection also uses a scoped buffer and a stream-position guard, so success,
+read failure and short-input exits restore the caller's position uniformly.
 
 Cache-file serialization buffers, temporary draw mark lists and SVG decoder
 input/output buffers also use standard RAII containers. These operation-scoped

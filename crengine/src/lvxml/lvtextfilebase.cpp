@@ -47,10 +47,30 @@ typedef unsigned int ucs4_t;
 
 #include "lvxmlutils.h"
 #include "crlog.h"
+#include <vector>
 
 #define MIN_BUF_DATA_SIZE 4096
 #define CP_AUTODETECT_BUF_SIZE 0x20000
 
+class LVStreamPositionGuard {
+private:
+    LVStream *m_stream;
+    lvpos_t m_position;
+
+public:
+    explicit LVStreamPositionGuard(LVStream *stream)
+        : m_stream(stream), m_position(stream->GetPos())
+    {
+    }
+
+    ~LVStreamPositionGuard()
+    {
+        m_stream->SetPos(m_position);
+    }
+
+    LVStreamPositionGuard(const LVStreamPositionGuard &) = delete;
+    LVStreamPositionGuard &operator=(const LVStreamPositionGuard &) = delete;
+};
 
 static int charToHex( lUInt8 ch )
 {
@@ -679,29 +699,24 @@ bool LVTextFileBase::AutodetectEncoding( bool utfOnly )
 {
     char enc_name[32];
     char lang_name[32];
-    lvpos_t oldpos = m_stream->GetPos();
+    LVStreamPositionGuard positionGuard(m_stream.get());
     unsigned sz = CP_AUTODETECT_BUF_SIZE;
     m_stream->SetPos( 0 );
     if ( sz>m_stream->GetSize() )
         sz = m_stream->GetSize();
     if ( sz < 16 )
         return false;
-    unsigned char * buf = new unsigned char[ sz ];
+    std::vector<unsigned char> buf(sz);
     lvsize_t bytesRead = 0;
-    if ( m_stream->Read( buf, sz, &bytesRead )!=LVERR_OK ) {
-        delete[] buf;
-        m_stream->SetPos( oldpos );
+    if ( m_stream->Read( buf.data(), sz, &bytesRead )!=LVERR_OK )
         return false;
-    }
 
     int res = 0;
-    bool hasTags = hasXmlTags(buf, sz);
+    bool hasTags = hasXmlTags(buf.data(), sz);
     if ( utfOnly )
-        res = AutodetectCodePageUtf(buf, sz, enc_name, lang_name);
+        res = AutodetectCodePageUtf(buf.data(), sz, enc_name, lang_name);
     else
-        res = AutodetectCodePage(buf, sz, enc_name, lang_name, hasTags);
-    delete[] buf;
-    m_stream->SetPos( oldpos );
+        res = AutodetectCodePage(buf.data(), sz, enc_name, lang_name, hasTags);
     if ( res) {
         //CRLog::debug("Code page decoding results: encoding=%s, lang=%s", enc_name, lang_name);
         m_lang_name = lString32( lang_name );

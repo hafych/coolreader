@@ -24,6 +24,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURC
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvhtmlparser.cpp" HTML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvxmlparser.cpp" XML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextbookmarkparser.cpp" BOOKMARK_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextfilebase.cpp" TEXT_FILE_BASE_SOURCE)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -408,6 +409,21 @@ foreach(PARSER_SOURCE
     "format detector buffer must not regress to owning new[]"
   )
 endforeach()
+require_source_text(
+  "${TEXT_FILE_BASE_SOURCE}"
+  "LVStreamPositionGuard positionGuard"
+  "encoding detection must restore stream position with a scope guard"
+)
+require_source_text(
+  "${TEXT_FILE_BASE_SOURCE}"
+  "std::vector<unsigned char> buf"
+  "encoding detection buffer must use scoped RAII ownership"
+)
+forbid_source_text(
+  "${TEXT_FILE_BASE_SOURCE}"
+  "new unsigned char[ sz ]"
+  "encoding detection buffer must not regress to owning new[]"
+)
 
 # --- lvstring: string literal interning tables ---
 require_source_text(

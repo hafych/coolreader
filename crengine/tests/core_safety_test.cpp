@@ -996,6 +996,20 @@ static int testParserFormatDetectionBuffers() {
     if (nonTextParser.CheckFormat())
         return fail("text format detector accepted text without separators");
 
+    LVStreamRef autodetectStream = memoryStream(
+            "plain text line one\nplain text line two\n");
+    autodetectStream->SetPos(7);
+    LVTextParser autodetectParser(autodetectStream, &callback, false);
+    if (!autodetectParser.AutodetectEncoding()
+            || autodetectStream->GetPos() != 7)
+        return fail("encoding detector did not restore a valid stream");
+
+    LVStreamRef shortStream = memoryStream("short input");
+    shortStream->SetPos(5);
+    LVTextParser shortParser(shortStream, &callback, false);
+    if (shortParser.AutodetectEncoding() || shortStream->GetPos() != 5)
+        return fail("encoding detector did not restore a short stream");
+
     const std::string bookmark =
             "\xEF\xBB\xBF# Cool Reader 3 - exported bookmarks\r\n"
             "# file name: sample.fb2\r\n";
