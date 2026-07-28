@@ -1335,17 +1335,23 @@ CacheFileItem * CacheFile::allocBlock( lUInt16 type, lUInt16 index, int size )
         return existing;
     }
     // allocate new block
-    CacheFileItem * block = new CacheFileItem( type, index );
-    _map.set( key, block );
-    block->_blockSize = roundSector(size);
-    block->_dataSize = size;
-    block->_blockIndex = _index.length();
-    _index.add(block);
-    block->_blockFilePos = _size;
-    _size += block->_blockSize;
+    if (_index.length() >= CACHE_FILE_MAX_INDEX_ITEMS)
+        return NULL;
+    std::unique_ptr<CacheFileItem> block =
+            std::make_unique<CacheFileItem>(type, index);
+    CacheFileItem *blockView = block.get();
+    blockView->_blockSize = roundSector(size);
+    blockView->_dataSize = size;
+    blockView->_blockIndex = _index.length();
+    blockView->_blockFilePos = _size;
+    _index.reserve(_index.length() + 1);
+    _map.set(key, blockView);
+    _index.add(blockView);
+    block.release();
+    _size += blockView->_blockSize;
     _indexChanged = true;
     // really, file size is not extended
-    return block;
+    return blockView;
 }
 
 /// reads and validates block
@@ -2290,13 +2296,35 @@ bool LVRunCacheFileIndexRegression()
     target._size = static_cast<int>(corruptedBytes.size());
     if (target.readIndex())
         return false;
-    return target._index.length() == originalIndexLength
-            && target._freeIndex.length() == originalFreeLength
-            && target._map.length() == originalMapLength
-            && target.findBlock(CBT_TOC_DATA, 77) == sentinel
-            && !target.findBlock(CBT_ELEM_DATA, 2)
-            && target._dirty == originalDirty
-            && target._indexChanged == originalIndexChanged;
+    if (target._index.length() != originalIndexLength
+            || target._freeIndex.length() != originalFreeLength
+            || target._map.length() != originalMapLength
+            || target.findBlock(CBT_TOC_DATA, 77) != sentinel
+            || target.findBlock(CBT_ELEM_DATA, 2)
+            || target._dirty != originalDirty
+            || target._indexChanged != originalIndexChanged)
+        return false;
+
+    LVStreamRef publicationStream = LVCreateMemoryStream();
+    CacheFile publication(1, CacheCompressionNone);
+    if (publicationStream.isNull()
+            || !publication.create(publicationStream))
+        return false;
+    CacheFileItem *published =
+            publication.allocBlock(CBT_TEXT_DATA, 91, 8);
+    if (!published
+            || publication._index.length() != 1
+            || publication._index[0] != published
+            || publication.findBlock(CBT_TEXT_DATA, 91) != published)
+        return false;
+    publication.freeBlock(published);
+    CacheFileItem *reused =
+            publication.allocBlock(CBT_ELEM_DATA, 92, 4);
+    return reused == published
+            && publication._index.length() == 1
+            && publication._freeIndex.length() == 0
+            && publication._map.length() == 1
+            && publication.findBlock(CBT_ELEM_DATA, 92) == reused;
 }
 
 // BLOB storage

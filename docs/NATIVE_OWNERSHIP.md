@@ -134,8 +134,12 @@ publish through no-throw swaps only after the complete index succeeds, so a
 short read, allocation failure, duplicate key or late invalid record releases
 all candidates and preserves the previous cache state. Index writes likewise
 release their snapshot automatically on every failed write or header update.
-Regression coverage reopens a valid multi-block index and verifies rollback
-after a late record is corrupted while its aggregate CRC remains valid.
+New live block records also remain in a `unique_ptr` while the owning index
+reserves capacity and the lookup map accepts its borrowed view; ownership
+transfers only after both publication steps are non-throwing. Regression
+coverage reopens a valid multi-block index, verifies rollback after a late
+record is corrupted while its aggregate CRC remains valid, and exercises new
+record publication plus free-list reuse.
 
 DOM blob payloads live in `vector` storage, while the blob cache owns items as
 `vector<unique_ptr>`. Index loading builds a bounded candidate list and swaps

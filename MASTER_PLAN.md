@@ -134,8 +134,9 @@ DRM или ограничений доступа, подбор/получени�
   generic value-array, reference-vector, owning/borrowed pointer-vector and
   contiguous matrix-cell storage, pagination compact arrays/line-link lists,
   Word/PDB transient import buffers/factory candidates, cache-file ZSTD/zlib
-  contexts/chunk output/block scratch and bounded transactional index
-  snapshots/publication, DOM blob payload/item/index storage,
+  contexts/chunk output/block scratch, scoped live-block candidates and
+  bounded transactional index snapshots/publication, DOM blob
+  payload/item/index storage,
   DOM text-storage chunk resident buffers/cache transitions and persistent
   node-part catalogs/cache loading, CSS declaration buffers,
   selector/rule chains and stylesheet snapshots,

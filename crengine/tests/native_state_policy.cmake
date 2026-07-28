@@ -3926,6 +3926,26 @@ require_source_text(
   "_map.swap(candidateMap);\n        _freeIndex.swap(candidateFreeIndex);\n        _index.swap(candidateIndex);"
   "cache-file indexes must publish all lookup structures atomically"
 )
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<CacheFileItem> block ="
+  "new cache-file block records must begin in scoped ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_index.reserve(_index.length() + 1)"
+  "cache-file block publication must reserve its owning index first"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_map.set(key, blockView);\n    _index.add(blockView);\n    block.release();"
+  "cache-file block publication must transfer only after both indexes accept the view"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "publication._index[0] != published"
+  "cache-file block candidate ownership must retain publication and reuse coverage"
+)
 forbid_source_text(
   "${DOM_SOURCE}"
   "CacheFileItem * index = new CacheFileItem[count]"
@@ -3935,6 +3955,11 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "delete[] index"
   "cache-file index snapshot teardown must remain automatic"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "CacheFileItem * block = new CacheFileItem"
+  "cache-file block candidates must not begin as raw owners"
 )
 
 # --- persistent DOM node-part ownership and cache loading ---
