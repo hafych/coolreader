@@ -6399,3 +6399,35 @@ forbid_source_text(
   "delete stream"
   "DOM base64 stream candidate teardown must remain automatic"
 )
+
+# --- DOM serialization hyphenation workspace ownership ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<lUInt8> flags("
+  "DOM serialization hyphenation flags must use scoped container storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "flags.data() + start"
+  "DOM serialization must borrow the scoped hyphenation workspace"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM hyphenation flag buffer was not exercised"
+  "DOM hyphenation workspace must retain execution coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "DOM hyphenation flag buffer changed serialization"
+  "DOM hyphenation workspace must retain output-equivalence coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "calloc(txtlen, sizeof(*flags))"
+  "DOM serialization hyphenation flags must not use a raw allocation"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "free(flags)"
+  "DOM serialization hyphenation workspace teardown must remain automatic"
+)

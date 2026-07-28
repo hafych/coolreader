@@ -1,10 +1,12 @@
 #include "fb2def.h"
+#include "hyphman.h"
 #include "lvdocview.h"
 #include "lvfntman.h"
 #include "lvhtmlparser.h"
 #include "lvtinydom.h"
 #include "lvstreamutils.h"
 #include "lvxmlutils.h"
+#include "textlang.h"
 
 #include <algorithm>
 #include <atomic>
@@ -72,6 +74,65 @@ static int testBase64StreamOwnership(ldomDocument *document) {
 
         if (!empty->createBase64Stream().isNull())
             return fail("empty base64 stream candidate was published");
+    }
+    return 0;
+}
+
+class ScopedHyphenationRuntime {
+public:
+    ~ScopedHyphenationRuntime() {
+        TextLangMan::setMainLang(TEXTLANG_DEFAULT_MAIN_LANG_32);
+        TextLangMan::setEmbeddedLangsEnabled(
+                TEXTLANG_DEFAULT_EMBEDDED_LANGS_ENABLED);
+        TextLangMan::setHyphenationEnabled(
+                TEXTLANG_DEFAULT_HYPHENATION_ENABLED);
+        TextLangMan::setHyphenationSoftHyphensOnly(
+                TEXTLANG_DEFAULT_HYPH_SOFT_HYPHENS_ONLY);
+        TextLangMan::setHyphenationForceAlgorithmic(
+                TEXTLANG_DEFAULT_HYPH_FORCE_ALGORITHMIC);
+        HyphMan::uninit();
+    }
+};
+
+static int testDomHyphenationBufferOwnership(
+        ldomDocument *first, ldomDocument *second) {
+    if (!HyphMan::initDictionaries(lString32::empty_str, true))
+        return fail("DOM hyphenation buffer fixture did not initialize");
+    ScopedHyphenationRuntime runtime;
+    TextLangMan::setEmbeddedLangsEnabled(false);
+    TextLangMan::setHyphenationEnabled(true);
+    TextLangMan::setHyphenationSoftHyphensOnly(false);
+    TextLangMan::setHyphenationForceAlgorithmic(true);
+
+    ldomDocument *documents[] = {first, second};
+    static const int writeNodeExTextHyphenate = 0x0001;
+    const std::string softHyphen("\xC2\xAD");
+    for (ldomDocument *document : documents) {
+        ldomNode *paragraph =
+                document->getElementById(U"needle-paragraph");
+        if (paragraph == NULL)
+            return fail("DOM hyphenation buffer fixture did not parse");
+        const lString8 plainHtml =
+                ldomXPointer(paragraph, 0).getHtml();
+        const std::string expected(
+                plainHtml.c_str(), plainHtml.length());
+
+        for (int lifecycle = 0; lifecycle < 2; lifecycle++) {
+            const lString8 markedHtml = ldomXPointer(
+                    paragraph, 0).getHtml(writeNodeExTextHyphenate);
+            std::string normalized(
+                    markedHtml.c_str(), markedHtml.length());
+            std::string::size_type position =
+                    normalized.find(softHyphen);
+            if (position == std::string::npos)
+                return fail("DOM hyphenation flag buffer was not exercised");
+            do {
+                normalized.erase(position, softHyphen.length());
+                position = normalized.find(softHyphen, position);
+            } while (position != std::string::npos);
+            if (normalized != expected)
+                return fail("DOM hyphenation flag buffer changed serialization");
+        }
     }
     return 0;
 }
@@ -1153,6 +1214,10 @@ int main() {
         return 1;
     if (testBase64StreamOwnership(first.get()) != 0
             || testBase64StreamOwnership(second.get()) != 0) {
+        return 1;
+    }
+    if (testDomHyphenationBufferOwnership(
+                first.get(), second.get()) != 0) {
         return 1;
     }
 

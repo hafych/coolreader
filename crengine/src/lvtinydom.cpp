@@ -5449,7 +5449,8 @@ static void writeNodeEx( LVStream * stream, ldomNode * node, lString32Collection
             // for temporary storage of a string with soft-hyphens added.
             const lChar32 * text32 = txt.c_str();
             int txtlen = txt.length();
-            lUInt8 * flags = (lUInt8*)calloc(txtlen, sizeof(*flags));
+            std::vector<lUInt8> flags(
+                    static_cast<std::size_t>(txtlen), 0);
             lUInt16 widths[HYPH_MAX_WORD_SIZE] = { 0 }; // array needed by hyphenate()
             // Lookup words starting from the end, just because lStr_findWordBounds()
             // will ensure the iteration that way.
@@ -5482,7 +5483,9 @@ static void writeNodeEx( LVStream * stream, ldomNode * node, lString32Collection
                 // Have hyphenate() set flags inside 'flags'
                 // (Fetching the lang_cfg for each text node is not really cheap, but
                 // it's easier than having to pass it to each writeNodeEx())
-                TextLangMan::getTextLangCfg(node)->getHyphMethod()->hyphenate(text32+start, len, widths, flags+start, 0, 0xFFFF, 1);
+                TextLangMan::getTextLangCfg(node)->getHyphMethod()->hyphenate(
+                        text32 + start, len, widths,
+                        flags.data() + start, 0, 0xFFFF, 1);
                 // Continue with previous word
                 wordpos = start - 1;
             }
@@ -5494,7 +5497,6 @@ static void writeNodeEx( LVStream * stream, ldomNode * node, lString32Collection
                     *stream << "­";
             }
             *stream << suffix;
-            free(flags);
         }
         else {
             *stream << prefix << UnicodeToUtf8(txt) << suffix;

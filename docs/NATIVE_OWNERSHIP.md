@@ -723,3 +723,10 @@ lifecycle; a zero-length decode returns an empty reference and releases the
 candidate automatically, while a successful candidate is returned through the
 same intrusive owner. Document coverage reads the decoded payload and repeats
 both successful publication and empty-candidate rollback across two documents.
+
+Extended DOM serialization keeps its per-text-node hyphenation flags in a
+scoped vector. The selected `HyphMethod` borrows only the active word slice;
+soft-hyphen emission reads the same container, and every exit releases it
+automatically. Document coverage exercises algorithmic hyphenation repeatedly
+on two equivalent DOMs and verifies that removing emitted soft hyphens restores
+the exact ordinary serialization.
