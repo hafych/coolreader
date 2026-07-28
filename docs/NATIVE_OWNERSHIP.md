@@ -189,6 +189,14 @@ guards before publishing them and preserve null gaps. `ownItems=false` copies
 only borrowed views and never deletes them. Typed `std::sort` replaces the
 erased `qsort` bridge while `get()` retains the legacy contiguous view.
 
+`LVMatrix` owns one contiguous `vector<T>` instead of a manually allocated
+row table. `SetSize()` rejects invalid or oversized dimensions, constructs and
+fills candidate storage before publishing it, and copies only the old/new
+overlap so both row and column shrink are well-defined. Container copy is deep,
+move resets the source dimensions, `Clear()` releases constructed cells, and
+the legacy row-indexing interface remains available for mutable and const
+matrices.
+
 `LVRefCache` and `LVIndexedRefCache` own bucket roots and collision links
 through vectors of `unique_ptr`. Collision teardown unlinks iteratively, while
 the indexed cache keeps only non-owning node views in vector-backed index

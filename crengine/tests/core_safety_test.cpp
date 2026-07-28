@@ -268,6 +268,66 @@ int PointerVectorTestValue::_liveCount = 0;
 int PointerVectorTestValue::_copyCount = 0;
 int PointerVectorTestValue::_copyBudget = -1;
 
+class MatrixTestValue {
+    int _value;
+    static int _liveCount;
+    static int _assignmentBudget;
+
+public:
+    explicit MatrixTestValue(int value)
+        : _value(value) {
+        ++_liveCount;
+    }
+
+    MatrixTestValue(const MatrixTestValue &value)
+        : _value(value._value) {
+        ++_liveCount;
+    }
+
+    MatrixTestValue &operator=(const MatrixTestValue &value) {
+        if (_assignmentBudget == 0)
+            throw std::runtime_error("matrix assignment blocked");
+        if (_assignmentBudget > 0)
+            --_assignmentBudget;
+        _value = value._value;
+        return *this;
+    }
+
+    ~MatrixTestValue() {
+        --_liveCount;
+    }
+
+    int value() const {
+        return _value;
+    }
+
+    static int liveCount() {
+        return _liveCount;
+    }
+
+    static void setAssignmentBudget(int budget) {
+        _assignmentBudget = budget;
+    }
+};
+
+int MatrixTestValue::_liveCount = 0;
+int MatrixTestValue::_assignmentBudget = -1;
+
+class MatrixIntProbe : public LVMatrix<int> {
+public:
+    int rowCount() const {
+        return numrows;
+    }
+
+    int columnCount() const {
+        return numcols;
+    }
+
+    size_t cellCount() const {
+        return cells.size();
+    }
+};
+
 static int pointerVectorValueComparator(
         const PointerVectorTestValue **left,
         const PointerVectorTestValue **right) {
@@ -2226,6 +2286,122 @@ static int testPointerVectorOwnership() {
     }
     if (PointerVectorTestValue::liveCount() != 0)
         return fail("borrowed pointer vector fixture leaked values");
+    return 0;
+}
+
+static int testMatrixOwnership() {
+    {
+        MatrixIntProbe matrix;
+        matrix.SetSize(2, 3, -1);
+        if (matrix.rowCount() != 2 || matrix.columnCount() != 3
+                || matrix.cellCount() != 6)
+            return fail("matrix initial dimensions were not published");
+        for (int row = 0; row < 2; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                if (matrix[row][column] != -1)
+                    return fail("matrix initial fill left an uninitialized cell");
+            }
+        }
+        matrix[0][0] = 1;
+        matrix[0][1] = 2;
+        matrix[0][2] = 3;
+        matrix[1][0] = 4;
+        matrix[1][1] = 5;
+        matrix[1][2] = 6;
+
+        matrix.SetSize(3, 4, 9);
+        const MatrixIntProbe &constMatrix = matrix;
+        if (matrix.rowCount() != 3 || matrix.columnCount() != 4
+                || matrix.cellCount() != 12
+                || constMatrix[0][0] != 1 || constMatrix[0][2] != 3
+                || constMatrix[0][3] != 9 || constMatrix[1][0] != 4
+                || constMatrix[1][2] != 6 || constMatrix[1][3] != 9
+                || constMatrix[2][0] != 9 || constMatrix[2][3] != 9)
+            return fail("matrix growth lost retained or filled cells");
+
+        matrix.SetSize(2, 2, 7);
+        if (matrix.rowCount() != 2 || matrix.columnCount() != 2
+                || matrix.cellCount() != 4
+                || matrix[0][0] != 1 || matrix[0][1] != 2
+                || matrix[1][0] != 4 || matrix[1][1] != 5)
+            return fail("matrix shrink did not retain its overlap");
+
+        MatrixIntProbe copied(matrix);
+        MatrixIntProbe assigned;
+        assigned = matrix;
+        copied[0][0] = 100;
+        assigned[1][1] = 200;
+        if (matrix[0][0] != 1 || matrix[1][1] != 5
+                || copied[0][0] != 100 || assigned[1][1] != 200)
+            return fail("matrix copy shared its backing cells");
+
+        MatrixIntProbe moved(std::move(copied));
+        MatrixIntProbe moveAssigned;
+        moveAssigned = std::move(assigned);
+        if (copied.rowCount() != 0 || copied.columnCount() != 0
+                || copied.cellCount() != 0
+                || assigned.rowCount() != 0 || assigned.columnCount() != 0
+                || assigned.cellCount() != 0
+                || moved[0][0] != 100 || moveAssigned[1][1] != 200)
+            return fail("matrix move left aliased or inconsistent storage");
+        copied.SetSize(1, 1, 8);
+        MatrixIntProbe *moveAssignedAlias = &moveAssigned;
+        moveAssigned = std::move(*moveAssignedAlias);
+        if (copied[0][0] != 8 || moveAssigned[1][1] != 200)
+            return fail("moved-from or self-moved matrix was not reusable");
+
+        bool overflowRejected = false;
+        try {
+            matrix.SetSize(INT_MAX, INT_MAX, 0);
+        } catch (const std::length_error &) {
+            overflowRejected = true;
+        }
+        if (!overflowRejected
+                || matrix.rowCount() != 2 || matrix.columnCount() != 2
+                || matrix[0][0] != 1 || matrix[1][1] != 5)
+            return fail("matrix dimension overflow changed live storage");
+
+        matrix.SetSize(-1, 2, 0);
+        if (matrix.rowCount() != 0 || matrix.columnCount() != 0
+                || matrix.cellCount() != 0)
+            return fail("matrix invalid dimensions did not clear storage");
+    }
+
+    if (MatrixTestValue::liveCount() != 0)
+        return fail("matrix fixture started with live values");
+    {
+        MatrixTestValue initial(7);
+        MatrixTestValue changed(3);
+        MatrixTestValue fill(9);
+        LVMatrix<MatrixTestValue> matrix;
+        matrix.SetSize(2, 2, initial);
+        matrix[0][0] = changed;
+
+        MatrixTestValue::setAssignmentBudget(0);
+        bool resizeThrew = false;
+        try {
+            matrix.SetSize(3, 3, fill);
+        } catch (const std::runtime_error &) {
+            resizeThrew = true;
+        }
+        MatrixTestValue::setAssignmentBudget(-1);
+        if (!resizeThrew || matrix[0][0].value() != 3
+                || matrix[0][1].value() != 7
+                || matrix[1][0].value() != 7
+                || MatrixTestValue::liveCount() != 7)
+            return fail("failed matrix resize changed or leaked live cells");
+
+        matrix.SetSize(3, 3, fill);
+        if (matrix[0][0].value() != 3
+                || matrix[0][1].value() != 7
+                || matrix[2][2].value() != 9)
+            return fail("matrix value resize lost constructed cells");
+        matrix.Clear();
+        if (MatrixTestValue::liveCount() != 3)
+            return fail("matrix clear retained constructed cells");
+    }
+    if (MatrixTestValue::liveCount() != 0)
+        return fail("matrix value lifecycle leaked cells");
     return 0;
 }
 
@@ -4203,6 +4379,8 @@ int main() {
     if (testReferenceVectorOwnership() != 0)
         return 1;
     if (testPointerVectorOwnership() != 0)
+        return 1;
+    if (testMatrixOwnership() != 0)
         return 1;
     if (testReferenceCacheOwnership() != 0)
         return 1;

@@ -38,6 +38,7 @@
 #include <climits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 /** \brief template which implements vector of pointer
@@ -310,52 +311,79 @@ template<class _Ty > class LVMatrix {
 protected:
     int numcols;
     int numrows;
-    _Ty ** rows;
+    std::vector<_Ty> cells;
 public:
-    LVMatrix() : numcols(0), numrows(0), rows(NULL) {}
+    LVMatrix() : numcols(0), numrows(0), cells() {}
+    LVMatrix(const LVMatrix &) = default;
+    LVMatrix &operator=(const LVMatrix &) = default;
+    LVMatrix(LVMatrix &&matrix) noexcept
+        : numcols(matrix.numcols),
+          numrows(matrix.numrows),
+          cells(std::move(matrix.cells))
+    {
+        matrix.cells.clear();
+        matrix.numcols = 0;
+        matrix.numrows = 0;
+    }
+    LVMatrix &operator=(LVMatrix &&matrix) noexcept
+    {
+        if (this == &matrix)
+            return *this;
+        numcols = matrix.numcols;
+        numrows = matrix.numrows;
+        cells = std::move(matrix.cells);
+        matrix.cells.clear();
+        matrix.numcols = 0;
+        matrix.numrows = 0;
+        return *this;
+    }
     void Clear() {
-        if (rows) {
-			if (numrows && numcols) {
-				for (int i=0; i<numrows; i++)
-					free( rows[i] );
-			}
-            free( rows );
-		}
-        rows = NULL;
+        std::vector<_Ty>().swap(cells);
         numrows = 0;
         numcols = 0;
     }
-    ~LVMatrix() {
-        Clear();
-    }   
+    ~LVMatrix() = default;
 
-    _Ty * operator [] (int rowindex) { return rows[rowindex]; }
+    _Ty * operator [] (int rowindex) {
+        return cells.data()
+                + static_cast<size_t>(rowindex)
+                    * static_cast<size_t>(numcols);
+    }
+    const _Ty * operator [] (int rowindex) const {
+        return cells.data()
+                + static_cast<size_t>(rowindex)
+                    * static_cast<size_t>(numcols);
+    }
 
     void SetSize( int nrows, int ncols, _Ty fill_elem ) {
-        if (!nrows || !ncols) {
+        if (nrows <= 0 || ncols <= 0) {
             Clear();
             return;
         }
-        if ( nrows<numrows ) {
-            for (int i=nrows; i<numrows; i++)
-                free( rows[i] );
-            numrows = nrows;
-        } else if (nrows>numrows) {
-            rows = cr_realloc( rows, nrows );
-            for (int i=numrows; i<nrows; i++) {
-                rows[i] = (_Ty*)malloc( sizeof(_Ty*) * ncols );
-                for (int j=0; j<numcols; j++)
-                    rows[i][j]=fill_elem;
-            }
+        const size_t rowCount = static_cast<size_t>(nrows);
+        const size_t columnCount = static_cast<size_t>(ncols);
+        const size_t maxCellCount = std::min(
+                cells.max_size(), static_cast<size_t>(INT_MAX));
+        if (rowCount > maxCellCount / columnCount)
+            throw std::length_error("LVMatrix dimensions overflow");
+
+        std::vector<_Ty> replacement(
+                rowCount * columnCount, fill_elem);
+        const int retainedRows = std::min(numrows, nrows);
+        const int retainedColumns = std::min(numcols, ncols);
+        for (int row = 0; row < retainedRows; ++row) {
+            const size_t oldOffset =
+                    static_cast<size_t>(row)
+                    * static_cast<size_t>(numcols);
+            const size_t newOffset =
+                    static_cast<size_t>(row) * columnCount;
+            std::copy_n(cells.begin() + oldOffset,
+                    retainedColumns,
+                    replacement.begin() + newOffset);
         }
-        if (ncols>numcols) {
-            for (int i=0; i<numrows; i++) {
-                rows[i] = cr_realloc( rows[i], ncols );
-                for (int j=numcols; j<ncols; j++)
-                    rows[i][j]=fill_elem;
-            }
-            numcols = ncols;
-        }
+        cells.swap(replacement);
+        numrows = nrows;
+        numcols = ncols;
     }
 };
 

@@ -1557,6 +1557,58 @@ forbid_source_text(
   "pointer-vector sorting must not use an erased comparator"
 )
 
+# --- generic matrix cell storage and resize lifecycle ---
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "std::vector<_Ty> cells"
+  "matrix cells must use contiguous container-backed storage"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "LVMatrix(const LVMatrix &) = default"
+  "matrix copies must deep-copy their backing storage"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "const size_t maxCellCount = std::min"
+  "matrix dimensions must be bounded before allocation"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "std::vector<_Ty> replacement("
+  "matrix resize must build scoped candidate storage"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "std::copy_n(cells.begin() + oldOffset"
+  "matrix resize must retain only the overlapping cells"
+)
+require_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "cells.swap(replacement)"
+  "matrix resize must publish only complete candidate storage"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "_Ty ** rows"
+  "matrices must not own raw row arrays"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "free( rows"
+  "matrix teardown must not manually free rows"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "cr_realloc( rows"
+  "matrix resize must not reallocate raw row arrays"
+)
+forbid_source_text(
+  "${PTR_VECTOR_HEADER}"
+  "malloc( sizeof(_Ty*)"
+  "matrix rows must not allocate pointer-sized cell storage"
+)
+
 # --- reference-cache bucket, index and export ownership ---
 require_source_text(
   "${REF_CACHE_HEADER}"

@@ -234,6 +234,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   disposal with `unique_ptr`, roll back partial deep copies and shallow-copy
   borrowed views. Remove/pop transfers clear inactive slots, null gaps survive
   copies, and typed sorting replaces the erased `qsort` bridge.
+- Native generic matrices now own contiguous `std::vector` cell storage.
+  Bounded transactional resize preserves the old/new overlap across growth and
+  shrink, deep copy and reset-source moves replace shallow raw-row aliases, and
+  constructed cells are released automatically.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is
