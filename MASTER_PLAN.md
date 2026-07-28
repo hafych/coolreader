@@ -163,7 +163,8 @@ DRM или ограничений доступа, подбор/получени�
   FreeType face load-candidates и language-compatibility cache owners, а также
   bounded NanoSVG image/rasterizer/RGBA workspace ownership и transactional
   selection-range split/draw/text owner publication, включая batched
-  word/filter/crop/extended-word owner-list factories.
+  word/filter/crop/extended-word owner-list factories, а также bounded
+  transactional TOC/page-map graph deserialization.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

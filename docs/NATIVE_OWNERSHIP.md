@@ -655,3 +655,12 @@ list size, reserve it once and release the batch without further allocation.
 The append contracts used for a two-page word selector remain intact. Rendered
 coverage verifies independent clones, stable existing owners, translated crop
 coordinates and repeated extended-word publication.
+
+TOC and page-map nodes enter their owning child vectors through explicit
+`unique_ptr` transfer boundaries. Deserialization reads scalar state and a
+complete temporary owner graph before swapping it into the live object, so a
+repeated load replaces rather than appends and truncated input preserves the
+previous graph. TOC recursion is capped by the parser depth budget, and both
+child counts are bounded by the minimum serialized item size before reserve.
+Native coverage exercises nested parent links, independent replacement,
+truncated-input rollback and oversized-count rejection for both graph types.

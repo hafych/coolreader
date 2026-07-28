@@ -5749,3 +5749,90 @@ forbid_source_text(
   "add( new ldomWordEx"
   "extended word construction must not publish raw candidates"
 )
+
+# --- TOC and page-map graph ownership and bounded deserialization ---
+require_source_text(
+  "${DOM_HEADER}"
+  "void addChild( std::unique_ptr<LVTocItem> item )"
+  "TOC creation must adopt child candidates before publication"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "void addPage( std::unique_ptr<LVPageMapItem> item )"
+  "page-map creation must adopt item candidates before publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "depth >= ParseBudgetLimits::defaults().maxXmlDepth"
+  "TOC deserialization must retain a recursion-depth bound"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "minimumSerializedChildSize = 24"
+  "TOC child counts must remain bounded by serialized input"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LVPtrVector<LVTocItem> children"
+  "TOC deserialization must build a candidate owner graph"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "minimumSerializedPageSize = 16"
+  "page-map item counts must remain bounded by serialized input"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LVPtrVector<LVPageMapItem> children"
+  "page-map deserialization must build a candidate owner graph"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_children.swap(children)"
+  "navigation owner graphs must publish with a no-throw swap"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "truncated TOC published a partial owner graph"
+  "TOC ownership must retain truncated-input rollback coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "TOC owner graph accepted an oversized child count"
+  "TOC ownership must retain count-bound coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "TOC owner graph accepted an oversized depth"
+  "TOC ownership must retain recursion-depth coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "truncated page-map published a partial owner graph"
+  "page-map ownership must retain truncated-input rollback coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "page-map owner graph accepted an oversized child count"
+  "page-map ownership must retain count-bound coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LVTocItem * item = new LVTocItem"
+  "TOC deserialization must not publish raw child candidates"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LVPageMapItem * item = new LVPageMapItem"
+  "page-map deserialization must not publish raw item candidates"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "void addChild( LVTocItem * item )"
+  "TOC creation must not accept implicit raw ownership"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "void addPage( LVPageMapItem * item )"
+  "page-map creation must not accept implicit raw ownership"
+)

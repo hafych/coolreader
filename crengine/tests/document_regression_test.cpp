@@ -125,6 +125,143 @@ static int snapshotDocument(
     return 0;
 }
 
+static int testNavigationGraphOwnership(ldomDocument *document) {
+    ldomXPointer position = document->createXPointer(
+            U"/FictionBook/body[1]/section[1]/p[1]/text()[1]");
+    if (position.isNull())
+        return fail("navigation owner fixture XPointer did not resolve");
+
+    LVTocItem tocSource(document);
+    LVTocItem *chapter = tocSource.addChild(
+            U"Chapter", position, lString32::empty_str);
+    chapter->addChild(
+            U"Nested", position, lString32::empty_str);
+    SerialBuf tocBytes(1, true);
+    if (!tocSource.serialize(tocBytes) || tocBytes.error())
+        return fail("TOC owner graph did not serialize");
+    const int tocSize = tocBytes.pos();
+
+    LVTocItem restoredToc(document);
+    SerialBuf firstTocInput(tocBytes.buf(), tocSize);
+    if (!restoredToc.deserialize(document, firstTocInput)
+            || restoredToc.getChildCount() != 1
+            || restoredToc.getChild(0)->getChildCount() != 1
+            || restoredToc.getChild(0)->getParent() != &restoredToc
+            || restoredToc.getChild(0)->getChild(0)->getParent()
+                != restoredToc.getChild(0)
+            || restoredToc.getChild(0)->getName() != U"Chapter"
+            || restoredToc.getChild(0)->getChild(0)->getName()
+                != U"Nested")
+        return fail("TOC owner graph did not deserialize completely");
+    LVTocItem *firstTocOwner = restoredToc.getChild(0);
+    SerialBuf secondTocInput(tocBytes.buf(), tocSize);
+    if (!restoredToc.deserialize(document, secondTocInput)
+            || restoredToc.getChildCount() != 1
+            || restoredToc.getChild(0) == firstTocOwner)
+        return fail("TOC owner graph replacement appended or shared");
+    LVTocItem *retainedTocOwner = restoredToc.getChild(0);
+    SerialBuf truncatedTocInput(tocBytes.buf(), tocSize - 1);
+    if (restoredToc.deserialize(document, truncatedTocInput)
+            || !truncatedTocInput.error()
+            || restoredToc.getChildCount() != 1
+            || restoredToc.getChild(0) != retainedTocOwner)
+        return fail("truncated TOC published a partial owner graph");
+
+    SerialBuf oversizedTocBytes(1, true);
+    oversizedTocBytes
+            << static_cast<lInt32>(0)
+            << static_cast<lInt32>(0)
+            << static_cast<lInt32>(0)
+            << static_cast<lInt32>(0)
+            << static_cast<lInt32>(INT_MAX)
+            << lString32::empty_str
+            << lString32::empty_str;
+    SerialBuf oversizedTocInput(
+            oversizedTocBytes.buf(), oversizedTocBytes.pos());
+    LVTocItem boundedToc(document);
+    if (boundedToc.deserialize(document, oversizedTocInput)
+            || !oversizedTocInput.error())
+        return fail("TOC owner graph accepted an oversized child count");
+
+    LVTocItem deepTocSource(document);
+    LVTocItem *deepTocItem = &deepTocSource;
+    for (int depth = 0; depth < 257; ++depth) {
+        deepTocItem = deepTocItem->addChild(
+                U"", position, lString32::empty_str);
+    }
+    SerialBuf deepTocBytes(1, true);
+    if (!deepTocSource.serialize(deepTocBytes)
+            || deepTocBytes.error())
+        return fail("deep TOC owner graph did not serialize");
+    SerialBuf deepTocInput(
+            deepTocBytes.buf(), deepTocBytes.pos());
+    LVTocItem depthBoundedToc(document);
+    if (depthBoundedToc.deserialize(document, deepTocInput)
+            || !deepTocInput.error()
+            || depthBoundedToc.getChildCount() != 0)
+        return fail("TOC owner graph accepted an oversized depth");
+
+    LVPageMap pageMapSource(document);
+    pageMapSource.setSource(U"Print fixture");
+    pageMapSource.addPage(
+            U"i", position, lString32::empty_str);
+    pageMapSource.addPage(
+            U"1", position, position.toString());
+    SerialBuf pageMapBytes(1, true);
+    if (!pageMapSource.serialize(pageMapBytes)
+            || pageMapBytes.error())
+        return fail("page-map owner graph did not serialize");
+    const int pageMapSize = pageMapBytes.pos();
+
+    LVPageMap restoredPageMap(document);
+    SerialBuf firstPageMapInput(
+            pageMapBytes.buf(), pageMapSize);
+    if (!restoredPageMap.deserialize(document, firstPageMapInput)
+            || restoredPageMap.getChildCount() != 2
+            || restoredPageMap.getSource() != U"Print fixture"
+            || restoredPageMap.getChild(0)->getLabel() != U"i"
+            || restoredPageMap.getChild(1)->getLabel() != U"1"
+            || restoredPageMap.getChild(0)->getIndex() != 0
+            || restoredPageMap.getChild(1)->getIndex() != 1)
+        return fail("page-map owner graph did not deserialize completely");
+    LVPageMapItem *firstPageMapOwner =
+            restoredPageMap.getChild(0);
+    SerialBuf secondPageMapInput(
+            pageMapBytes.buf(), pageMapSize);
+    if (!restoredPageMap.deserialize(
+                document, secondPageMapInput)
+            || restoredPageMap.getChildCount() != 2
+            || restoredPageMap.getChild(0) == firstPageMapOwner)
+        return fail("page-map owner graph replacement appended or shared");
+    LVPageMapItem *retainedPageMapOwner =
+            restoredPageMap.getChild(0);
+    SerialBuf truncatedPageMapInput(
+            pageMapBytes.buf(), pageMapSize - 1);
+    if (restoredPageMap.deserialize(
+                document, truncatedPageMapInput)
+            || !truncatedPageMapInput.error()
+            || restoredPageMap.getChildCount() != 2
+            || restoredPageMap.getChild(0)
+                != retainedPageMapOwner)
+        return fail("truncated page-map published a partial owner graph");
+
+    SerialBuf oversizedPageMapBytes(1, true);
+    oversizedPageMapBytes
+            << static_cast<lUInt32>(0)
+            << static_cast<lUInt32>(UINT_MAX)
+            << lString32::empty_str;
+    SerialBuf oversizedPageMapInput(
+            oversizedPageMapBytes.buf(),
+            oversizedPageMapBytes.pos());
+    LVPageMap boundedPageMap(document);
+    if (boundedPageMap.deserialize(
+                document, oversizedPageMapInput)
+            || !oversizedPageMapInput.error())
+        return fail(
+                "page-map owner graph accepted an oversized child count");
+    return 0;
+}
+
 static std::string createRenderedFixture() {
     std::string fixture =
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -753,6 +890,8 @@ int main() {
                     != secondSnapshot.selectionText) {
         return fail("document results changed between equivalent parses");
     }
+    if (testNavigationGraphOwnership(first.get()) != 0)
+        return 1;
     first.reset();
     second.reset();
     if (testRenderedDocumentBehavior() != 0)

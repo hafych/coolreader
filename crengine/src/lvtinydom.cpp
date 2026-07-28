@@ -256,6 +256,7 @@ enum CacheFileBlockType {
 #include "../include/lvcontaineriteminfo.h"
 #include "../include/lvstreambuffer.h"
 #include "../include/lvstreamutils.h"
+#include "../include/parsebudget.h"
 #include "../include/streamproxy.h"
 #include "../include/lvbase64stream.h"
 #include "../include/lvxmlutils.h"
@@ -20646,13 +20647,35 @@ bool LVTocItem::serialize( SerialBuf & buf )
 /// deserialize from byte array (pointer will be incremented by number of bytes read)
 bool LVTocItem::deserialize( ldomDocument * doc, SerialBuf & buf )
 {
+    return deserialize(doc, buf, 0);
+}
+
+bool LVTocItem::deserialize(
+        ldomDocument *doc, SerialBuf &buf, unsigned depth)
+{
     if ( buf.error() )
         return false;
+    if (depth >= ParseBudgetLimits::defaults().maxXmlDepth) {
+        buf.seterror();
+        return false;
+    }
+    lInt32 level = 0;
+    lInt32 index = 0;
+    lInt32 page = 0;
+    lInt32 percent = 0;
     lInt32 childCount = 0;
-    buf >> _level >> _index >> _page >> _percent >> childCount >> _name >> _path;
+    lString32 name;
+    lString32 path;
+    buf >> level >> index >> page >> percent
+            >> childCount >> name >> path;
 //    CRLog::trace("[%d] %05d  %s  %s", _level, _page, LCSTR(_name), LCSTR(_path));
-    if ( buf.error() )
+    static const int minimumSerializedChildSize = 24;
+    if (buf.error() || childCount < 0
+            || childCount
+                > buf.space() / minimumSerializedChildSize) {
+        buf.seterror();
         return false;
+    }
 //    if ( _level>0 ) {
 //        _position = doc->createXPointer( _path );
 //        if ( _position.isNull() ) {
@@ -20661,17 +20684,25 @@ bool LVTocItem::deserialize( ldomDocument * doc, SerialBuf & buf )
 //            return false;
 //        }
 //    }
+    LVPtrVector<LVTocItem> children;
+    children.reserve(childCount);
     for ( int i=0; i<childCount; i++ ) {
-        LVTocItem * item = new LVTocItem(doc);
-        if ( !item->deserialize( doc, buf ) ) {
-            delete item;
+        std::unique_ptr<LVTocItem> item =
+                std::make_unique<LVTocItem>(doc);
+        if (!item->deserialize(doc, buf, depth + 1))
             return false;
-        }
         item->_parent = this;
-        _children.add( item );
-        if ( buf.error() )
-            return false;
+        children.add(item.release());
     }
+    _doc = doc;
+    _level = level;
+    _index = index;
+    _page = page;
+    _percent = percent;
+    _name = name;
+    _path = path;
+    _position = ldomXPointer();
+    _children.swap(children);
     return true;
 }
 
@@ -20838,12 +20869,26 @@ bool LVPageMapItem::serialize( SerialBuf & buf )
 }
 
 /// deserialize from byte array (pointer will be incremented by number of bytes read)
-bool LVPageMapItem::deserialize( ldomDocument * /*doc*/, SerialBuf & buf )
+bool LVPageMapItem::deserialize( ldomDocument *doc, SerialBuf &buf )
 {
     if ( buf.error() )
         return false;
-    buf >> _index >> _page >> _doc_y >> _label >> _path;
-    return !buf.error();
+    lInt32 index = 0;
+    lInt32 page = 0;
+    lInt32 docY = -1;
+    lString32 label;
+    lString32 path;
+    buf >> index >> page >> docY >> label >> path;
+    if (buf.error())
+        return false;
+    _doc = doc;
+    _index = index;
+    _page = page;
+    _doc_y = docY;
+    _label = label;
+    _path = path;
+    _position = ldomXPointer();
+    return true;
 
 }
 /// serialize to byte array (pointer will be incremented by number of bytes written)
@@ -20867,20 +20912,30 @@ bool LVPageMap::deserialize( ldomDocument * doc, SerialBuf & buf )
         return false;
     lUInt32 childCount = 0;
     lUInt32 pageInfoValid = 0;
-    buf >> pageInfoValid >> childCount >> _source;
-    if ( buf.error() )
+    lString32 source;
+    buf >> pageInfoValid >> childCount >> source;
+    static const int minimumSerializedPageSize = 16;
+    if (buf.error()
+            || childCount > static_cast<lUInt32>(INT_MAX)
+            || childCount
+                > static_cast<lUInt32>(
+                        buf.space() / minimumSerializedPageSize)) {
+        buf.seterror();
         return false;
-    _page_info_valid = (bool)pageInfoValid;
-    for ( lUInt32 i=0; i<childCount; i++ ) {
-        LVPageMapItem * item = new LVPageMapItem(doc);
-        if ( !item->deserialize( doc, buf ) ) {
-            delete item;
-            return false;
-        }
-        _children.add( item );
-        if ( buf.error() )
-            return false;
     }
+    LVPtrVector<LVPageMapItem> children;
+    children.reserve(static_cast<int>(childCount));
+    for ( lUInt32 i=0; i<childCount; i++ ) {
+        std::unique_ptr<LVPageMapItem> item =
+                std::make_unique<LVPageMapItem>(doc);
+        if (!item->deserialize(doc, buf))
+            return false;
+        children.add(item.release());
+    }
+    _doc = doc;
+    _page_info_valid = static_cast<bool>(pageInfoValid);
+    _source = source;
+    _children.swap(children);
     return true;
 }
 

@@ -2219,8 +2219,22 @@ private:
     LVPtrVector<LVTocItem> _children;
     //====================================================
     //LVTocItem( ldomXPointer pos, const lString32 & name ) : _parent(NULL), _level(0), _index(0), _page(0), _percent(0), _name(name), _path(pos.toString()), _position(pos) { }
-    LVTocItem( ldomXPointer pos, lString32 path, const lString32 & name ) : _parent(NULL), _level(0), _index(0), _page(0), _percent(0), _name(name), _path(path), _position(pos) { }
-    void addChild( LVTocItem * item ) { item->_level=_level+1; item->_parent=this; item->_index=_children.length(), item->_doc=_doc; _children.add(item); }
+    LVTocItem( ldomXPointer pos, lString32 path, const lString32 & name ) : _parent(NULL), _doc(NULL), _level(0), _index(0), _page(0), _percent(0), _name(name), _path(path), _position(pos) { }
+    void addChild( std::unique_ptr<LVTocItem> item )
+    {
+        if (!item)
+            return;
+        if (_children.length() == INT_MAX)
+            throw std::length_error("TOC child limit exceeded");
+        _children.reserve(_children.length() + 1);
+        item->_level = _level + 1;
+        item->_parent = this;
+        item->_index = _children.length();
+        item->_doc = _doc;
+        _children.add(item.release());
+    }
+    bool deserialize(
+            ldomDocument *doc, SerialBuf &buf, unsigned depth);
     //====================================================
     void setPage( int n ) { _page = n; }
     void setPercent( int n ) { _percent = n; }
@@ -2259,13 +2273,15 @@ public:
     /// add child TOC node
     LVTocItem * addChild( const lString32 & name, ldomXPointer ptr, lString32 path )
     {
-        LVTocItem * item = new LVTocItem( ptr, path, name );
-        addChild( item );
-        return item;
+        std::unique_ptr<LVTocItem> item(
+                new LVTocItem(ptr, path, name));
+        LVTocItem *borrowed = item.get();
+        addChild(std::move(item));
+        return borrowed;
     }
     void clear() { _children.clear(); }
     // root node constructor
-    LVTocItem( ldomDocument * doc ) : _parent(NULL), _doc(doc), _level(0), _index(0), _page(0) { }
+    LVTocItem( ldomDocument * doc ) : _parent(NULL), _doc(doc), _level(0), _index(0), _page(0), _percent(0) { }
     ~LVTocItem() { clear(); }
 
     /// For use on the root toc item only (_page, otherwise unused, can be used to store this flag)
@@ -2292,7 +2308,7 @@ private:
     lString32       _path;
     ldomXPointer    _position;
     LVPageMapItem( ldomXPointer pos, lString32 path, const lString32 & label )
-        : _index(0), _page(0), _doc_y(-1), _label(label), _path(path), _position(pos)
+        : _doc(NULL), _index(0), _page(0), _doc_y(-1), _label(label), _path(path), _position(pos)
         { }
     void setPage( int n ) { _page = n; }
     void setDocY( int y ) { _doc_y = y; }
@@ -2325,10 +2341,15 @@ private:
     bool            _page_info_valid;
     lString32       _source;
     LVPtrVector<LVPageMapItem> _children;
-    void addPage( LVPageMapItem * item ) {
+    void addPage( std::unique_ptr<LVPageMapItem> item ) {
+        if (!item)
+            return;
+        if (_children.length() == INT_MAX)
+            throw std::length_error("page-map item limit exceeded");
+        _children.reserve(_children.length() + 1);
         item->_doc = _doc;
         item->_index = _children.length();
-        _children.add(item);
+        _children.add(item.release());
     }
 public:
     /// serialize to byte array (pointer will be incremented by number of bytes written)
@@ -2342,9 +2363,11 @@ public:
     /// add page item
     LVPageMapItem * addPage( const lString32 & label, ldomXPointer ptr, lString32 path )
     {
-        LVPageMapItem * item = new LVPageMapItem( ptr, path, label );
-        addPage( item );
-        return item;
+        std::unique_ptr<LVPageMapItem> item(
+                new LVPageMapItem(ptr, path, label));
+        LVPageMapItem *borrowed = item.get();
+        addPage(std::move(item));
+        return borrowed;
     }
     void clear() { _children.clear(); }
     bool hasValidPageInfo() { return _page_info_valid; }
