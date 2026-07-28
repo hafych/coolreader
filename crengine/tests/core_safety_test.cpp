@@ -1766,6 +1766,21 @@ static int testWolBufferOwnership() {
 static int testFormatterWorkspaceOwnership() {
     if (!LVRunFormatterWorkspaceOwnershipRegression())
         return fail("formatter workspace ownership regression failed");
+    if (!LVRunFormattedTextOwnershipRegression())
+        return fail("formatted text graph ownership regression failed");
+    formatted_text_fragment_t * cApiBuffer =
+            lvtextAllocFormatter(123);
+    lvtextAddSourceObject(
+            cApiBuffer, NULL, 17, 19, 0,
+            11, 0, 0, NULL, 0);
+    const bool cApiValid = cApiBuffer
+            && cApiBuffer->width == 123
+            && cApiBuffer->srctextlen == 1
+            && cApiBuffer->srctext[0].o.width == 17
+            && cApiBuffer->srctext[0].o.height == 19;
+    lvtextFreeFormatter(cApiBuffer);
+    if (!cApiValid)
+        return fail("formatted text C ownership boundary failed");
     return 0;
 }
 

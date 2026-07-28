@@ -4,6 +4,7 @@ endif()
 
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm_internal.h" FORMATTER_INTERNAL_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvtextfm.h" FORMATTER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvrend.cpp" RENDER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
@@ -165,6 +166,76 @@ require_source_text(
   "${FORMATTER_INTERNAL_HEADER}"
   "bool LVRunFormatterWorkspaceOwnershipRegression()"
   "formatter workspace ownership must retain native regression coverage"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "class FormattedTextOwner : public formatted_text_fragment_t"
+  "formatted text ownership must extend the stable C view without changing it"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "std::vector<std::unique_ptr<FormattedLineOwner> > m_lines"
+  "formatted lines must have scoped owners"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "std::vector<std::unique_ptr<EmbeddedFloatOwner> > m_floats"
+  "embedded floats must have scoped owners"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "std::vector<std::unique_ptr<lChar32[]> > m_sourceTexts"
+  "owned source text must have scoped owners"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "m_links.reset(new lString32Collection())"
+  "embedded float links must cross into a scoped owner"
+)
+require_source_text(
+  "${FORMATTER_HEADER}"
+  "BufferOwner m_pbuffer"
+  "the C++ formatted text wrapper must own its C view explicitly"
+)
+require_source_text(
+  "${FORMATTER_HEADER}"
+  "LFormattedText(const LFormattedText &) = delete"
+  "formatted text wrappers must not shallow-copy ownership"
+)
+require_source_text(
+  "${FORMATTER_INTERNAL_HEADER}"
+  "bool LVRunFormattedTextOwnershipRegression()"
+  "formatted text graph ownership must retain native regression coverage"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "malloc("
+  "formatter graph storage must not regress to manual allocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "calloc("
+  "formatter graph storage must not regress to manual allocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "cr_realloc("
+  "formatter graph storage must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "free("
+  "formatter graph teardown must remain scope-bound"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "delete "
+  "formatter graph teardown must remain scope-bound"
+)
+forbid_source_text(
+  "${FORMATTER_HEADER}"
+  "formatted_text_fragment_t * m_pbuffer;"
+  "the C++ formatter wrapper must not own its buffer through a raw pointer"
 )
 forbid_source_text(
   "${FORMATTER_SOURCE}"

@@ -42,6 +42,7 @@
 #include "textlang.h"
 
 #ifdef __cplusplus
+#include <memory>
 extern "C" {
 #endif
 
@@ -392,9 +393,16 @@ class LFormattedText
 {
     friend class LGrayDrawBuf;
 private:
-    formatted_text_fragment_t * m_pbuffer;
+    struct BufferDeleter {
+        void operator()(formatted_text_fragment_t * buffer) const noexcept {
+            lvtextFreeFormatter(buffer);
+        }
+    };
+    typedef std::unique_ptr<
+            formatted_text_fragment_t, BufferDeleter> BufferOwner;
+    BufferOwner m_pbuffer;
 public:
-    formatted_text_fragment_t * GetBuffer() { return m_pbuffer; }
+    formatted_text_fragment_t * GetBuffer() { return m_pbuffer.get(); }
 
     /// set strut height and baseline (line boxes starting minimal values)
     void setStrut(lUInt16 height, lUInt16 baseline) {
@@ -423,10 +431,10 @@ public:
     void setHighlightOptions(text_highlight_options_t * options);
 
     void Clear()
-    { 
+    {
         lUInt16 width = m_pbuffer->width;
-        lvtextFreeFormatter( m_pbuffer );
-        m_pbuffer = lvtextAllocFormatter( width );
+        BufferOwner replacement(lvtextAllocFormatter(width));
+        m_pbuffer.swap(replacement);
     }
 
     void AddSourceObject(
@@ -455,7 +463,7 @@ public:
            lInt16          letter_spacing=0
         )
     {
-        lvtextAddSourceLine(m_pbuffer, 
+        lvtextAddSourceLine(m_pbuffer.get(),
             font,  //font->GetHandle()
             lang_cfg,
             text, len, color, bgcolor, 
@@ -508,9 +516,14 @@ public:
     bool isReusable() { return m_pbuffer->is_reusable; }
     void requestLightFormatting() { m_pbuffer->light_formatting = true; }
 
-    LFormattedText() { m_pbuffer = lvtextAllocFormatter( 0 ); }
+    LFormattedText()
+        : m_pbuffer(lvtextAllocFormatter(0)) {}
+    ~LFormattedText() = default;
 
-    ~LFormattedText() { lvtextFreeFormatter( m_pbuffer ); }
+    LFormattedText(const LFormattedText &) = delete;
+    LFormattedText & operator=(const LFormattedText &) = delete;
+    LFormattedText(LFormattedText &&) = default;
+    LFormattedText & operator=(LFormattedText &&) = default;
 };
 
 #endif

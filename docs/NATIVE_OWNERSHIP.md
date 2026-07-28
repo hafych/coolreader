@@ -372,3 +372,15 @@ cleanup or the destructor. Nested formatters fall back to dynamic storage,
 while growth constructs every candidate array before publishing any new view.
 The public `formatted_text_fragment_t` C layout and render-facing views remain
 unchanged.
+
+Formatted source, line, word and float graphs use private C++ owner extensions
+whose base subobjects are the unchanged public C structs. Source records live
+in a vector with copied text held by parallel `unique_ptr` slots; formatted
+lines and embedded floats live in vectors of `unique_ptr`, with separate
+contiguous raw-pointer views for existing draw and debug consumers. Word arrays
+and float link collections are likewise container-owned. Growth reserves every
+owner/view pair before publishing a new element, formatted-data clear destroys
+the owned graph while retaining sources, and the public alloc/free functions
+remain the explicit raw ownership boundary. `LFormattedText` now holds that
+boundary in a `unique_ptr`, disables shallow copies and swaps a complete
+replacement during `Clear()`.

@@ -47,8 +47,10 @@
 
 #ifdef __cplusplus
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 #include "../include/lvtinydom.h"
 #include "../include/lvrend.h"
@@ -96,82 +98,292 @@
 extern bool isHBScriptCursive( hb_script_t script );
 #endif
 
+namespace {
+
+static std::size_t roundedOwnerCapacity(
+        std::size_t required, std::size_t chunk)
+{
+    if (required > std::numeric_limits<std::size_t>::max()
+            - (chunk - 1))
+        throw std::length_error("formatter owner capacity overflow");
+    return ((required + chunk - 1) / chunk) * chunk;
+}
+
+class FormattedLineOwner : public formatted_line_t {
+    std::vector<formatted_word_t> m_words;
+
+    void syncWords()
+    {
+        words = m_words.empty() ? NULL : m_words.data();
+        word_count = static_cast<lInt32>(m_words.size());
+    }
+
+    void reserveWords(std::size_t required)
+    {
+        if (required <= m_words.capacity())
+            return;
+        m_words.reserve(roundedOwnerCapacity(
+                required, FRM_ALLOC_SIZE));
+        syncWords();
+    }
+
+public:
+    FormattedLineOwner()
+        : formatted_line_t()
+    {
+    }
+
+    FormattedLineOwner(
+            const formatted_word_t * sourceWords, int sourceWordCount)
+        : formatted_line_t()
+    {
+        if (sourceWordCount < 0
+                || (sourceWordCount > 0 && sourceWords == NULL))
+            throw std::invalid_argument(
+                    "invalid formatted word copy");
+        reserveWords(static_cast<std::size_t>(sourceWordCount));
+        if (sourceWordCount > 0) {
+            m_words.insert(
+                    m_words.end(),
+                    sourceWords,
+                    sourceWords + sourceWordCount);
+        }
+        syncWords();
+    }
+
+    formatted_word_t * addWord()
+    {
+        if (m_words.size()
+                >= static_cast<std::size_t>(
+                        std::numeric_limits<lInt32>::max()))
+            throw std::length_error("too many formatted words");
+        reserveWords(m_words.size() + 1);
+        m_words.push_back(formatted_word_t());
+        syncWords();
+        return &m_words.back();
+    }
+
+    FormattedLineOwner(const FormattedLineOwner &) = delete;
+    FormattedLineOwner & operator=(const FormattedLineOwner &) = delete;
+};
+
+class EmbeddedFloatOwner : public embedded_float_t {
+    std::unique_ptr<lString32Collection> m_links;
+
+public:
+    EmbeddedFloatOwner()
+        : embedded_float_t()
+    {
+    }
+
+    lString32Collection * ensureLinks()
+    {
+        if (!m_links)
+            m_links.reset(new lString32Collection());
+        links = m_links.get();
+        return links;
+    }
+
+    EmbeddedFloatOwner(const EmbeddedFloatOwner &) = delete;
+    EmbeddedFloatOwner & operator=(const EmbeddedFloatOwner &) = delete;
+};
+
+class FormattedTextOwner : public formatted_text_fragment_t {
+    std::vector<src_text_fragment_t> m_sources;
+    std::vector<std::unique_ptr<lChar32[]> > m_sourceTexts;
+    std::vector<std::unique_ptr<FormattedLineOwner> > m_lines;
+    std::vector<formatted_line_t *> m_lineViews;
+    std::vector<std::unique_ptr<EmbeddedFloatOwner> > m_floats;
+    std::vector<embedded_float_t *> m_floatViews;
+
+    void syncSources()
+    {
+        srctext = m_sources.empty() ? NULL : m_sources.data();
+        srctextlen = static_cast<lInt32>(m_sources.size());
+    }
+
+    void syncLines()
+    {
+        frmlines = m_lineViews.empty() ? NULL : m_lineViews.data();
+        frmlinecount = static_cast<lInt32>(m_lineViews.size());
+    }
+
+    void syncFloats()
+    {
+        floats = m_floatViews.empty() ? NULL : m_floatViews.data();
+        floatcount = static_cast<lInt32>(m_floatViews.size());
+    }
+
+    void reserveSourceSlots(std::size_t required)
+    {
+        if (required <= m_sources.capacity())
+            return;
+        const std::size_t capacity = roundedOwnerCapacity(
+                required, FRM_ALLOC_SIZE);
+        m_sourceTexts.reserve(capacity);
+        m_sources.reserve(capacity);
+        syncSources();
+    }
+
+    void reserveLineSlots(std::size_t required)
+    {
+        if (required <= m_lineViews.capacity())
+            return;
+        const std::size_t capacity = roundedOwnerCapacity(
+                required, FRM_ALLOC_SIZE);
+        m_lines.reserve(capacity);
+        m_lineViews.reserve(capacity);
+        syncLines();
+    }
+
+    void reserveFloatSlots(std::size_t required)
+    {
+        if (required <= m_floatViews.capacity())
+            return;
+        const std::size_t capacity = roundedOwnerCapacity(
+                required, FLT_ALLOC_SIZE);
+        m_floats.reserve(capacity);
+        m_floatViews.reserve(capacity);
+        syncFloats();
+    }
+
+public:
+    FormattedTextOwner()
+        : formatted_text_fragment_t()
+    {
+    }
+
+    src_text_fragment_t * addSource(
+            const src_text_fragment_t & source,
+            std::unique_ptr<lChar32[]> ownedText)
+    {
+        reserveSourceSlots(m_sources.size() + 1);
+        m_sourceTexts.push_back(std::move(ownedText));
+        m_sources.push_back(source);
+        syncSources();
+        return &m_sources.back();
+    }
+
+    formatted_line_t * addLine(
+            std::unique_ptr<FormattedLineOwner> line)
+    {
+        if (m_lineViews.size()
+                >= static_cast<std::size_t>(
+                        std::numeric_limits<lInt32>::max()))
+            throw std::length_error("too many formatted lines");
+        reserveLineSlots(m_lineViews.size() + 1);
+        formatted_line_t * view = line.get();
+        m_lines.push_back(std::move(line));
+        m_lineViews.push_back(view);
+        syncLines();
+        return view;
+    }
+
+    embedded_float_t * addFloat(
+            std::unique_ptr<EmbeddedFloatOwner> value)
+    {
+        if (m_floatViews.size()
+                >= static_cast<std::size_t>(
+                        std::numeric_limits<lInt32>::max()))
+            throw std::length_error("too many embedded floats");
+        reserveFloatSlots(m_floatViews.size() + 1);
+        embedded_float_t * view = value.get();
+        m_floats.push_back(std::move(value));
+        m_floatViews.push_back(view);
+        syncFloats();
+        return view;
+    }
+
+    void clearFormattedData()
+    {
+        m_lineViews.clear();
+        m_lines.clear();
+        syncLines();
+        m_floatViews.clear();
+        m_floats.clear();
+        syncFloats();
+    }
+
+    FormattedTextOwner(const FormattedTextOwner &) = delete;
+    FormattedTextOwner & operator=(const FormattedTextOwner &) = delete;
+};
+
+static FormattedLineOwner * formattedLineOwner(formatted_line_t * line)
+{
+    return static_cast<FormattedLineOwner *>(line);
+}
+
+static EmbeddedFloatOwner * embeddedFloatOwner(embedded_float_t * value)
+{
+    return static_cast<EmbeddedFloatOwner *>(value);
+}
+
+static FormattedTextOwner * formattedTextOwner(
+        formatted_text_fragment_t * buffer)
+{
+    return static_cast<FormattedTextOwner *>(buffer);
+}
+
+static lString32Collection * ensureEmbeddedFloatLinks(
+        embedded_float_t * value)
+{
+    return embeddedFloatOwner(value)->ensureLinks();
+}
+
+} // namespace
+
 formatted_line_t * lvtextAllocFormattedLine( )
 {
-    formatted_line_t * pline = (formatted_line_t *)calloc(1, sizeof(*pline));
-    return pline;
+    std::unique_ptr<FormattedLineOwner> line(
+            new FormattedLineOwner());
+    return line.release();
 }
 
 formatted_line_t * lvtextAllocFormattedLineCopy( formatted_word_t * words, int word_count )
 {
-    formatted_line_t * pline = (formatted_line_t *)calloc(1, sizeof(*pline));
-    lUInt32 size = (word_count + FRM_ALLOC_SIZE-1) / FRM_ALLOC_SIZE * FRM_ALLOC_SIZE;
-    pline->words = (formatted_word_t*)malloc( sizeof(formatted_word_t)*(size) );
-    memcpy( pline->words, words, word_count * sizeof(formatted_word_t) );
-    return pline;
+    std::unique_ptr<FormattedLineOwner> line(
+            new FormattedLineOwner(words, word_count));
+    return line.release();
 }
 
 void lvtextFreeFormattedLine( formatted_line_t * pline )
 {
-    if (pline->words)
-        free( pline->words );
-    free(pline);
+    std::unique_ptr<FormattedLineOwner> owner(
+            formattedLineOwner(pline));
 }
 
 formatted_word_t * lvtextAddFormattedWord( formatted_line_t * pline )
 {
-    int size = (pline->word_count + FRM_ALLOC_SIZE-1) / FRM_ALLOC_SIZE * FRM_ALLOC_SIZE;
-    if ( pline->word_count >= size)
-    {
-        size += FRM_ALLOC_SIZE;
-        pline->words = cr_realloc( pline->words, size );
-    }
-    return &pline->words[ pline->word_count++ ];
+    return formattedLineOwner(pline)->addWord();
 }
 
 formatted_line_t * lvtextAddFormattedLine( formatted_text_fragment_t * pbuffer )
 {
-    int size = (pbuffer->frmlinecount + FRM_ALLOC_SIZE-1) / FRM_ALLOC_SIZE * FRM_ALLOC_SIZE;
-    if (pbuffer->frmlinecount >= size)
-    {
-        size += FRM_ALLOC_SIZE;
-        pbuffer->frmlines = cr_realloc( pbuffer->frmlines, size );
-    }
-    return (pbuffer->frmlines[ pbuffer->frmlinecount++ ] = lvtextAllocFormattedLine());
+    std::unique_ptr<FormattedLineOwner> line(
+            new FormattedLineOwner());
+    return formattedTextOwner(pbuffer)->addLine(std::move(line));
 }
 
 formatted_line_t * lvtextAddFormattedLineCopy( formatted_text_fragment_t * pbuffer, formatted_word_t * words, int words_count )
 {
-    int size = (pbuffer->frmlinecount + FRM_ALLOC_SIZE-1) / FRM_ALLOC_SIZE * FRM_ALLOC_SIZE;
-    if ( pbuffer->frmlinecount >= size)
-    {
-        size += FRM_ALLOC_SIZE;
-        pbuffer->frmlines = cr_realloc( pbuffer->frmlines, size );
-    }
-    return (pbuffer->frmlines[ pbuffer->frmlinecount++ ] = lvtextAllocFormattedLineCopy(words, words_count));
-}
-
-embedded_float_t * lvtextAllocEmbeddedFloat( )
-{
-    embedded_float_t * flt = (embedded_float_t *)calloc(1, sizeof(*flt));
-    return flt;
+    std::unique_ptr<FormattedLineOwner> line(
+            new FormattedLineOwner(words, words_count));
+    return formattedTextOwner(pbuffer)->addLine(std::move(line));
 }
 
 embedded_float_t * lvtextAddEmbeddedFloat( formatted_text_fragment_t * pbuffer )
 {
-    int size = (pbuffer->floatcount + FLT_ALLOC_SIZE-1) / FLT_ALLOC_SIZE * FLT_ALLOC_SIZE;
-    if (pbuffer->floatcount >= size)
-    {
-        size += FLT_ALLOC_SIZE;
-        pbuffer->floats = cr_realloc( pbuffer->floats, size );
-    }
-    return (pbuffer->floats[ pbuffer->floatcount++ ] = lvtextAllocEmbeddedFloat());
+    std::unique_ptr<EmbeddedFloatOwner> value(
+            new EmbeddedFloatOwner());
+    return formattedTextOwner(pbuffer)->addFloat(std::move(value));
 }
 
 
 formatted_text_fragment_t * lvtextAllocFormatter( lUInt16 width )
 {
-    formatted_text_fragment_t * pbuffer = (formatted_text_fragment_t*)calloc(1, sizeof(*pbuffer));
+    std::unique_ptr<FormattedTextOwner> owner(
+            new FormattedTextOwner());
+    formatted_text_fragment_t * pbuffer = owner.get();
     pbuffer->width = width;
     pbuffer->strut_height = 0;
     pbuffer->strut_baseline = 0;
@@ -194,40 +406,13 @@ formatted_text_fragment_t * lvtextAllocFormatter( lUInt16 width )
     pbuffer->unused_space_threshold_percent = UNUSED_SPACE_THRESHOLD_PERCENT; // 5%
     pbuffer->max_added_letter_spacing_percent = MAX_ADDED_LETTER_SPACING_PERCENT; // 0%
 
-    return pbuffer;
+    return owner.release();
 }
 
 void lvtextFreeFormatter( formatted_text_fragment_t * pbuffer )
 {
-    if (pbuffer->srctext)
-    {
-        for (int i=0; i<pbuffer->srctextlen; i++)
-        {
-            if (pbuffer->srctext[i].flags & LTEXT_FLAG_OWNTEXT)
-                free( (void*)pbuffer->srctext[i].t.text );
-        }
-        free( pbuffer->srctext );
-    }
-    if (pbuffer->frmlines)
-    {
-        for (int i=0; i<pbuffer->frmlinecount; i++)
-        {
-            lvtextFreeFormattedLine( pbuffer->frmlines[i] );
-        }
-        free( pbuffer->frmlines );
-    }
-    if (pbuffer->floats)
-    {
-        for (int i=0; i<pbuffer->floatcount; i++)
-        {
-            if (pbuffer->floats[i]->links) {
-                delete pbuffer->floats[i]->links;
-            }
-            free(pbuffer->floats[i]);
-        }
-        free( pbuffer->floats );
-    }
-    free(pbuffer);
+    std::unique_ptr<FormattedTextOwner> owner(
+            formattedTextOwner(pbuffer));
 }
 
 
@@ -247,14 +432,18 @@ void lvtextAddSourceLine( formatted_text_fragment_t * pbuffer,
    lInt16          letter_spacing
                          )
 {
-    int srctextsize = (pbuffer->srctextlen + FRM_ALLOC_SIZE-1) / FRM_ALLOC_SIZE * FRM_ALLOC_SIZE;
-    if ( pbuffer->srctextlen >= srctextsize)
-    {
-        srctextsize += FRM_ALLOC_SIZE;
-        pbuffer->srctext = cr_realloc( pbuffer->srctext, srctextsize );
-    }
-    src_text_fragment_t * pline = &pbuffer->srctext[ pbuffer->srctextlen++ ];
-    pline->t.font = font;
+    if (text == NULL)
+        throw std::invalid_argument("source text is null");
+    if (!len)
+        while (text[len])
+            len++;
+    if (len > std::numeric_limits<lUInt16>::max()
+            || pbuffer->srctextlen
+                    > std::numeric_limits<lUInt16>::max())
+        throw std::length_error("source text fragment is too large");
+
+    src_text_fragment_t source = {};
+    source.t.font = font;
 //    if (font) {
 //        // DEBUG: check for crash
 //        CRLog::trace("c font = %08x  txt = %08x", (lUInt32)font, (lUInt32)text);
@@ -265,37 +454,38 @@ void lvtextAddSourceLine( formatted_text_fragment_t * pbuffer,
 //    }
     if ( !lang_cfg )
         lang_cfg = TextLangMan::getTextLangCfg(); // use main_lang
-    pline->lang_cfg = lang_cfg;
-    if (!len) for (len=0; text[len]; len++) ;
+    source.lang_cfg = lang_cfg;
+
+    std::unique_ptr<lChar32[]> ownedText;
     if (flags & LTEXT_FLAG_OWNTEXT)
     {
-        /* make own copy of text */
-        // We do a bit ugly to avoid clang-tidy warning "call to 'malloc' has an
-        // allocation size of 0 bytes" without having to add checks for NULL pointer
-        // (in lvrend.cpp, we're normalling not adding empty text with LTEXT_FLAG_OWNTEXT)
-        lUInt32 alloc_len = len > 0 ? len : 1;
-        pline->t.text = (lChar32*)malloc( alloc_len * sizeof(lChar32) );
-        memcpy((void*)pline->t.text, text, len * sizeof(lChar32));
+        const lUInt32 allocLen = len > 0 ? len : 1;
+        ownedText.reset(new lChar32[allocLen]);
+        memcpy(ownedText.get(), text, len * sizeof(lChar32));
+        source.t.text = ownedText.get();
     }
     else
     {
-        pline->t.text = text;
+        source.t.text = text;
     }
-    pline->index = (lUInt16)(pbuffer->srctextlen-1);
-    pline->object = object;
-    pline->t.len = (lUInt16)len;
-    pline->indent = indent;
-    pline->flags = flags;
-    pline->interval = interval;
-    pline->valign_dy = valign_dy;
-    pline->t.offset = offset;
-    pline->color = color;
-    pline->bgcolor = bgcolor;
-    pline->letter_spacing = letter_spacing;
+    source.index = static_cast<lUInt16>(pbuffer->srctextlen);
+    source.object = object;
+    source.t.len = static_cast<lUInt16>(len);
+    source.indent = indent;
+    source.flags = flags;
+    source.interval = interval;
+    source.valign_dy = valign_dy;
+    source.t.offset = offset;
+    source.color = color;
+    source.bgcolor = bgcolor;
+    source.letter_spacing = letter_spacing;
+    formattedTextOwner(pbuffer)->addSource(
+            source, std::move(ownedText));
 }
 
 void lvtextAddSourceObject(
    formatted_text_fragment_t * pbuffer,
+   TextLangCfg *   lang_cfg,
    lInt16         width,
    lInt16         height,
    lUInt32         flags,     /* flags */
@@ -303,29 +493,28 @@ void lvtextAddSourceObject(
    lInt16          valign_dy, /* drift y from baseline */
    lInt16          indent,    /* first line indent (or all but first, when negative) */
    void *          object,    /* pointer to custom object */
-   TextLangCfg *   lang_cfg,
    lInt16          letter_spacing
                          )
 {
-    int srctextsize = (pbuffer->srctextlen + FRM_ALLOC_SIZE-1) / FRM_ALLOC_SIZE * FRM_ALLOC_SIZE;
-    if ( pbuffer->srctextlen >= srctextsize)
-    {
-        srctextsize += FRM_ALLOC_SIZE;
-        pbuffer->srctext = cr_realloc( pbuffer->srctext, srctextsize );
-    }
-    src_text_fragment_t * pline = &pbuffer->srctext[ pbuffer->srctextlen++ ];
-    pline->index = (lUInt16)(pbuffer->srctextlen-1);
-    pline->o.width = width;
-    pline->o.height = height;
-    pline->object = object;
-    pline->indent = indent;
-    pline->flags = flags | LTEXT_SRC_IS_OBJECT;
-    pline->interval = interval;
-    pline->valign_dy = valign_dy;
-    pline->letter_spacing = letter_spacing;
+    if (pbuffer->srctextlen
+            > std::numeric_limits<lUInt16>::max())
+        throw std::length_error("too many source fragments");
+
+    src_text_fragment_t source = {};
+    source.index = static_cast<lUInt16>(pbuffer->srctextlen);
+    source.o.width = width;
+    source.o.height = height;
+    source.object = object;
+    source.indent = indent;
+    source.flags = flags | LTEXT_SRC_IS_OBJECT;
+    source.interval = interval;
+    source.valign_dy = valign_dy;
+    source.letter_spacing = letter_spacing;
     if ( !lang_cfg )
         lang_cfg = TextLangMan::getTextLangCfg(); // use main_lang
-    pline->lang_cfg = lang_cfg;
+    source.lang_cfg = lang_cfg;
+    formattedTextOwner(pbuffer)->addSource(
+            source, std::unique_ptr<lChar32[]>());
 }
 
 
@@ -380,8 +569,8 @@ void LFormattedText::AddSourceObject(
     // nothing much to do with it at this point: we add it with
     // 0-width/height, they will be computed later.
     // (lvtextAddSourceObject will itself add to flags: | LTEXT_SRC_IS_OBJECT)
-    lvtextAddSourceObject(m_pbuffer, 0, 0,
-        flags, interval, valign_dy, indent, object, lang_cfg, letter_spacing );
+    lvtextAddSourceObject(m_pbuffer.get(), lang_cfg, 0, 0,
+        flags, interval, valign_dy, indent, object, letter_spacing );
 
     // Notes about the 3 cases:
     // if (flags & LTEXT_SRC_IS_FLOAT):
@@ -656,9 +845,10 @@ public:
             // page splitting, so no worry if we don't when already_rendered)
             lString32Collection * link_ids = alt_context.getLinkIds();
             if (link_ids->length() > 0) {
-                flt->links = new lString32Collection();
+                lString32Collection * floatLinks =
+                        ensureEmbeddedFloatLinks(flt);
                 for ( int n=0; n<link_ids->length(); n++ ) {
-                    flt->links->add( link_ids->at(n) );
+                    floatLinks->add( link_ids->at(n) );
                 }
             }
         }
@@ -4695,34 +4885,184 @@ bool LVRunFormatterWorkspaceOwnershipRegression()
     return !LVFormatter::m_staticBufs_inUse;
 }
 
+bool LVRunFormattedTextOwnershipRegression()
+{
+    typedef std::unique_ptr<
+            formatted_text_fragment_t,
+            void (*)(formatted_text_fragment_t *)> BufferGuard;
+    BufferGuard buffer(
+            lvtextAllocFormatter(320), lvtextFreeFormatter);
+    if (!buffer
+            || buffer->width != 320
+            || buffer->srctext != NULL
+            || buffer->frmlines != NULL
+            || buffer->floats != NULL)
+        return false;
+
+    const lChar32 borrowedText[] = U"borrowed";
+    const lChar32 ownedText[] = U"owned";
+    lvtextAddSourceLine(
+            buffer.get(), NULL, NULL,
+            borrowedText, 8, 1, 2,
+            LTEXT_ALIGN_LEFT, 12, 0, 0,
+            NULL, 0, 0);
+    lvtextAddSourceLine(
+            buffer.get(), NULL, NULL,
+            ownedText, 5, 3, 4,
+            LTEXT_ALIGN_LEFT | LTEXT_FLAG_OWNTEXT,
+            14, 1, 2, NULL, 3, 1);
+    const lChar32 * firstOwnedText =
+            buffer->srctext[1].t.text;
+    if (buffer->srctextlen != 2
+            || buffer->srctext[0].t.text != borrowedText
+            || firstOwnedText == ownedText
+            || memcmp(firstOwnedText, ownedText,
+                    5 * sizeof(lChar32)) != 0)
+        return false;
+
+    for (int index = 0; index < 40; ++index) {
+        lvtextAddSourceLine(
+                buffer.get(), NULL, NULL,
+                ownedText, 5, 0, 0,
+                LTEXT_ALIGN_LEFT | LTEXT_FLAG_OWNTEXT,
+                10, 0, 0, NULL, 0, 0);
+    }
+    int objectMarker = 7;
+    lvtextAddSourceObject(
+            buffer.get(), NULL, 20, 30, 0,
+            10, 0, 0, &objectMarker, 0);
+    if (buffer->srctextlen != 43
+            || buffer->srctext[1].t.text != firstOwnedText
+            || buffer->srctext[42].object != &objectMarker
+            || !(buffer->srctext[42].flags
+                    & LTEXT_SRC_IS_OBJECT))
+        return false;
+
+    const int sourceCount = buffer->srctextlen;
+    bool longSourceRejected = false;
+    try {
+        lvtextAddSourceLine(
+                buffer.get(), NULL, NULL,
+                ownedText,
+                static_cast<lUInt32>(
+                        std::numeric_limits<lUInt16>::max()) + 1U,
+                0, 0,
+                LTEXT_ALIGN_LEFT | LTEXT_FLAG_OWNTEXT,
+                10, 0, 0, NULL, 0, 0);
+    }
+    catch (const std::length_error &) {
+        longSourceRejected = true;
+    }
+    if (!longSourceRejected
+            || buffer->srctextlen != sourceCount
+            || buffer->srctext[1].t.text != firstOwnedText)
+        return false;
+
+    formatted_word_t copiedWords[2] = {};
+    copiedWords[0].width = 11;
+    copiedWords[1].width = 22;
+    typedef std::unique_ptr<
+            formatted_line_t,
+            void (*)(formatted_line_t *)> LineGuard;
+    LineGuard copiedLine(
+            lvtextAllocFormattedLineCopy(copiedWords, 2),
+            lvtextFreeFormattedLine);
+    copiedWords[0].width = 99;
+    if (!copiedLine
+            || copiedLine->word_count != 2
+            || copiedLine->words[0].width != 11
+            || copiedLine->words[1].width != 22)
+        return false;
+    formatted_word_t * appendedWord =
+            lvtextAddFormattedWord(copiedLine.get());
+    appendedWord->width = 33;
+    if (copiedLine->word_count != 3
+            || copiedLine->words[2].width != 33)
+        return false;
+
+    formatted_line_t * firstLine = NULL;
+    for (int lineIndex = 0; lineIndex < 24; ++lineIndex) {
+        formatted_line_t * line =
+                lvtextAddFormattedLine(buffer.get());
+        if (lineIndex == 0)
+            firstLine = line;
+        line->y = static_cast<lUInt32>(lineIndex);
+        formatted_word_t * word = lvtextAddFormattedWord(line);
+        word->width = static_cast<lUInt16>(lineIndex + 1);
+    }
+    formatted_word_t lineCopyWords[2] = {};
+    lineCopyWords[0].width = 41;
+    lineCopyWords[1].width = 42;
+    formatted_line_t * copiedGraphLine =
+            lvtextAddFormattedLineCopy(
+                    buffer.get(), lineCopyWords, 2);
+    if (buffer->frmlinecount != 25
+            || buffer->frmlines[0] != firstLine
+            || firstLine->words[0].width != 1
+            || copiedGraphLine->word_count != 2
+            || copiedGraphLine->words[1].width != 42)
+        return false;
+
+    const int lineCount = buffer->frmlinecount;
+    bool invalidLineRejected = false;
+    try {
+        lvtextAddFormattedLineCopy(buffer.get(), NULL, 1);
+    }
+    catch (const std::invalid_argument &) {
+        invalidLineRejected = true;
+    }
+    if (!invalidLineRejected
+            || buffer->frmlinecount != lineCount)
+        return false;
+
+    embedded_float_t * firstFloat = NULL;
+    for (int floatIndex = 0; floatIndex < 10; ++floatIndex) {
+        embedded_float_t * value =
+                lvtextAddEmbeddedFloat(buffer.get());
+        if (floatIndex == 0)
+            firstFloat = value;
+        value->y = static_cast<lInt32>(floatIndex);
+    }
+    lString32Collection * links =
+            ensureEmbeddedFloatLinks(firstFloat);
+    links->add(U"note");
+    if (buffer->floatcount != 10
+            || buffer->floats[0] != firstFloat
+            || firstFloat->links != links
+            || firstFloat->links->length() != 1
+            || firstFloat->links->at(0) != lString32(U"note"))
+        return false;
+
+    formattedTextOwner(buffer.get())->clearFormattedData();
+    if (buffer->frmlinecount != 0
+            || buffer->frmlines != NULL
+            || buffer->floatcount != 0
+            || buffer->floats != NULL
+            || buffer->srctextlen != sourceCount
+            || buffer->srctext[1].t.text != firstOwnedText)
+        return false;
+    if (!lvtextAddFormattedLine(buffer.get())
+            || !lvtextAddEmbeddedFloat(buffer.get())
+            || buffer->frmlinecount != 1
+            || buffer->floatcount != 1)
+        return false;
+
+    LFormattedText wrapper;
+    wrapper.GetBuffer()->width = 777;
+    wrapper.AddSourceLine(
+            ownedText, 5, 0, 0, NULL, NULL,
+            LTEXT_ALIGN_LEFT | LTEXT_FLAG_OWNTEXT, 10);
+    if (wrapper.GetSrcCount() != 1)
+        return false;
+    wrapper.Clear();
+    return wrapper.GetBuffer() != NULL
+            && wrapper.GetWidth() == 777
+            && wrapper.GetSrcCount() == 0;
+}
+
 static void freeFrmLines( formatted_text_fragment_t * m_pbuffer )
 {
-    // clear existing formatted data, if any
-    if (m_pbuffer->frmlines)
-    {
-        for (int i=0; i<m_pbuffer->frmlinecount; i++)
-        {
-            lvtextFreeFormattedLine( m_pbuffer->frmlines[i] );
-        }
-        free( m_pbuffer->frmlines );
-    }
-    m_pbuffer->frmlines = NULL;
-    m_pbuffer->frmlinecount = 0;
-
-    // Also clear floats
-    if (m_pbuffer->floats)
-    {
-        for (int i=0; i<m_pbuffer->floatcount; i++)
-        {
-            if (m_pbuffer->floats[i]->links) {
-                delete m_pbuffer->floats[i]->links;
-            }
-            free( m_pbuffer->floats[i] );
-        }
-        free( m_pbuffer->floats );
-    }
-    m_pbuffer->floats = NULL;
-    m_pbuffer->floatcount = 0;
+    formattedTextOwner(m_pbuffer)->clearFormattedData();
 }
 
 // experimental formatter
@@ -4731,14 +5071,14 @@ lUInt32 LFormattedText::Format(lUInt16 width, lUInt16 page_height, int para_dire
                 BlockFloatFootprint * float_footprint)
 {
     // clear existing formatted data, if any
-    freeFrmLines( m_pbuffer );
+    freeFrmLines( m_pbuffer.get() );
     // setup new page size
     m_pbuffer->width = width;
     m_pbuffer->height = 0;
     m_pbuffer->page_height = page_height;
     m_pbuffer->is_reusable = !m_pbuffer->light_formatting;
     // format text
-    LVFormatter formatter( m_pbuffer );
+    LVFormatter formatter( m_pbuffer.get() );
 
     // Set (as properties of the whole final block) the text-indent computed
     // values for the first line and for the next lines, by taking it
@@ -4775,7 +5115,8 @@ lUInt32 LFormattedText::Format(lUInt16 width, lUInt16 page_height, int para_dire
         // a scrtext as they are not ours) to the buffer so our
         // positioning code can handle them.
         for (int i=0; i<float_footprint->floats_cnt; i++) {
-            embedded_float_t * flt =  lvtextAddEmbeddedFloat( m_pbuffer );
+            embedded_float_t * flt =
+                    lvtextAddEmbeddedFloat(m_pbuffer.get());
             flt->srctext = NULL; // not our own float
             flt->x = float_footprint->floats[i][0];
             flt->y = float_footprint->floats[i][1];
