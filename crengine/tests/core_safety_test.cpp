@@ -2992,6 +2992,143 @@ public:
     }
 };
 
+class AbortedImageSource : public LVImageSource {
+public:
+    ldomNode *GetSourceNode() override { return NULL; }
+    LVStream *GetSourceStream() override { return NULL; }
+    void Compact() override {}
+    int GetWidth() const override { return 2; }
+    int GetHeight() const override { return 2; }
+
+    bool Decode(LVImageDecoderCallback *callback) override
+    {
+        if (callback) {
+            lUInt32 row[] = {0x000000, 0xffffff};
+            callback->OnStartDecode(this);
+            callback->OnLineDecoded(this, 0, row);
+        }
+        return false;
+    }
+};
+
+class NinePatchFixtureImageSource : public LVImageSource {
+private:
+    bool _markers;
+    bool _decodeResult;
+    int _decodeCalls;
+
+public:
+    NinePatchFixtureImageSource(bool markers, bool decodeResult)
+        : _markers(markers), _decodeResult(decodeResult), _decodeCalls(0)
+    {
+    }
+
+    int decodeCalls() const { return _decodeCalls; }
+    ldomNode *GetSourceNode() override { return NULL; }
+    LVStream *GetSourceStream() override { return NULL; }
+    void Compact() override {}
+    int GetWidth() const override { return 6; }
+    int GetHeight() const override { return 6; }
+
+    bool Decode(LVImageDecoderCallback *callback) override
+    {
+        ++_decodeCalls;
+        if (!callback)
+            return false;
+        callback->OnStartDecode(this);
+        for (int y = 0; y < 6; ++y) {
+            lUInt32 row[] = {
+                0xffffff, 0xffffff, 0xffffff,
+                0xffffff, 0xffffff, 0xffffff
+            };
+            if (_markers) {
+                if (y == 0)
+                    row[2] = row[3] = 0x000000;
+                if (y == 5)
+                    row[1] = row[2] = row[3] = row[4] = 0x000000;
+                if (y == 2 || y == 3)
+                    row[0] = 0x000000;
+                if (y >= 1 && y <= 4)
+                    row[5] = 0x000000;
+            }
+            if (!callback->OnLineDecoded(this, y, row)) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
+        }
+        callback->OnEndDecode(this, !_decodeResult);
+        return _decodeResult;
+    }
+};
+
+class CapturingImageDecodeCallback : public LVImageDecoderCallback {
+private:
+    LVImageSource *_expectedLifecycleSource;
+    LVImageSource *_expectedLineSource;
+    int _width;
+
+public:
+    int starts = 0;
+    int lines = 0;
+    int ends = 0;
+    int errorEnds = 0;
+    bool sourceMismatch = false;
+    std::vector<lUInt32> pixels;
+
+    CapturingImageDecodeCallback(
+            LVImageSource *expectedLifecycleSource,
+            LVImageSource *expectedLineSource, int width)
+        : _expectedLifecycleSource(expectedLifecycleSource)
+        , _expectedLineSource(expectedLineSource), _width(width)
+    {
+    }
+
+    void OnStartDecode(LVImageSource *source) override
+    {
+        ++starts;
+        sourceMismatch =
+                sourceMismatch || source != _expectedLifecycleSource;
+    }
+
+    bool OnLineDecoded(
+            LVImageSource *source, int, lUInt32 *data) override
+    {
+        ++lines;
+        sourceMismatch = sourceMismatch || source != _expectedLineSource;
+        if (!data)
+            return false;
+        pixels.insert(pixels.end(), data, data + _width);
+        return true;
+    }
+
+    void OnEndDecode(LVImageSource *source, bool errors) override
+    {
+        sourceMismatch =
+                sourceMismatch || source != _expectedLifecycleSource;
+        if (errors)
+            ++errorEnds;
+        else
+            ++ends;
+    }
+};
+
+class ThrowingImageDecodeCallback : public LVImageDecoderCallback {
+public:
+    void OnStartDecode(LVImageSource *) override
+    {
+        throw std::runtime_error("blocked image callback");
+    }
+
+    bool OnLineDecoded(LVImageSource *, int, lUInt32 *) override
+    {
+        return true;
+    }
+
+    void OnEndDecode(LVImageSource *, bool) override
+    {
+    }
+};
+
 #if (USE_LIBJPEG==1)
 static std::vector<unsigned char> buildJpegFixture() {
     static const int width = 128;
@@ -3401,6 +3538,104 @@ static int testImageSourceOwnership() {
     if (xpmCallback.starts != 2 || xpmCallback.lines != 4
             || xpmCallback.ends != 2)
         return fail("XPM source callback lifecycle is incomplete");
+
+    NinePatchFixtureImageSource validNinePatch(true, true);
+    CR9PatchInfo *ninePatch = validNinePatch.DetectNinePatch();
+    if (!ninePatch
+            || validNinePatch.GetNinePatchInfo() != ninePatch
+            || validNinePatch.DetectNinePatch() != ninePatch
+            || validNinePatch.decodeCalls() != 1
+            || ninePatch->frame.left != 1
+            || ninePatch->frame.top != 1
+            || ninePatch->frame.right != 1
+            || ninePatch->frame.bottom != 1)
+        return fail("valid nine-patch metadata was not cached");
+    NinePatchFixtureImageSource failedNinePatch(true, false);
+    if (failedNinePatch.DetectNinePatch() != NULL
+            || failedNinePatch.GetNinePatchInfo() != NULL
+            || failedNinePatch.decodeCalls() != 1)
+        return fail("failed nine-patch decode published partial metadata");
+    NinePatchFixtureImageSource invalidNinePatch(false, true);
+    if (invalidNinePatch.DetectNinePatch() != NULL
+            || invalidNinePatch.DetectNinePatch() != NULL
+            || invalidNinePatch.decodeCalls() != 2)
+        return fail("invalid nine-patch metadata was retained");
+
+    CapturingImageDecodeCallback sourceCapture(
+            xpm.get(), xpm.get(), 2);
+    if (!xpm->Decode(&sourceCapture)
+            || sourceCapture.sourceMismatch
+            || sourceCapture.starts != 1
+            || sourceCapture.lines != 2
+            || sourceCapture.ends != 1
+            || sourceCapture.errorEnds != 0)
+        return fail("color-transform source fixture did not decode");
+    LVImageSourceRef colorTransform =
+            LVCreateColorTransformImageSource(
+                    xpm, 0x808080, 0x202020);
+    CapturingImageDecodeCallback transformedCapture(
+            colorTransform.get(), xpm.get(), 2);
+    if (colorTransform.isNull()
+            || !colorTransform->Decode(&transformedCapture)
+            || !colorTransform->Decode(&transformedCapture)
+            || transformedCapture.sourceMismatch
+            || transformedCapture.starts != 2
+            || transformedCapture.lines != 4
+            || transformedCapture.ends != 2
+            || transformedCapture.errorEnds != 0)
+        return fail("color-transform workspace could not be reused");
+    std::vector<lUInt32> expectedTransformed = sourceCapture.pixels;
+    expectedTransformed.insert(
+            expectedTransformed.end(),
+            sourceCapture.pixels.begin(), sourceCapture.pixels.end());
+    if (transformedCapture.pixels != expectedTransformed)
+        return fail("neutral color transform changed decoded pixels");
+    ThrowingImageDecodeCallback throwingTransformCallback;
+    bool transformCallbackThrew = false;
+    try {
+        colorTransform->Decode(&throwingTransformCallback);
+    } catch (const std::runtime_error &) {
+        transformCallbackThrew = true;
+    }
+    CapturingImageDecodeCallback recoveredTransformCapture(
+            colorTransform.get(), xpm.get(), 2);
+    if (!transformCallbackThrew
+            || !colorTransform->Decode(&recoveredTransformCapture)
+            || recoveredTransformCapture.sourceMismatch
+            || recoveredTransformCapture.starts != 1
+            || recoveredTransformCapture.lines != 2
+            || recoveredTransformCapture.ends != 1)
+        return fail("color-transform workspace survived callback exception");
+    if (!LVCreateColorTransformImageSource(
+                LVImageSourceRef(), 0x808080, 0x202020).isNull())
+        return fail("color-transform factory wrapped a null source");
+
+    int failedTransformCalls = 0;
+    LVImageSourceRef failedTransform =
+            LVCreateColorTransformImageSource(
+                    LVImageSourceRef(
+                            new FailingImageSource(failedTransformCalls)),
+                    0x808080, 0x202020);
+    CountingImageDecodeCallback failedTransformCallback;
+    if (failedTransform->Decode(&failedTransformCallback)
+            || failedTransform->Decode(&failedTransformCallback)
+            || failedTransformCalls != 2
+            || failedTransformCallback.starts != 2
+            || failedTransformCallback.lines != 0
+            || failedTransformCallback.ends != 0
+            || failedTransformCallback.errorEnds != 2)
+        return fail("failed color transform published partial rows");
+    LVImageSourceRef abortedTransform =
+            LVCreateColorTransformImageSource(
+                    LVImageSourceRef(new AbortedImageSource()),
+                    0x808080, 0x202020);
+    CountingImageDecodeCallback abortedTransformCallback;
+    if (abortedTransform->Decode(&abortedTransformCallback)
+            || abortedTransformCallback.starts != 1
+            || abortedTransformCallback.lines != 0
+            || abortedTransformCallback.ends != 0
+            || abortedTransformCallback.errorEnds != 1)
+        return fail("aborted color transform retained its workspace");
 
     const std::vector<int> ninePatchMap =
             LVImageScaledDrawCallback::GenNinePatchMap(6, 8, 1, 1);

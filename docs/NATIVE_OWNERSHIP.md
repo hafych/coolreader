@@ -163,6 +163,16 @@ compatibility view and, only when requested by its legacy factory, a
 `std::unique_ptr` owner. Invalid XPM construction releases partially parsed
 rows without depending on dimensions that were reset after the error.
 
+`LVImageSource` owns cached nine-patch metadata through `std::unique_ptr`; its
+public raw pointers are non-owning views into that cache. Detection decodes
+into a scoped candidate and publishes it only after the source reports success
+and the complete frame validates, so failed or invalid probes retain no
+partial metadata. `LVColorTransformImgSource` likewise owns its full-image
+workspace with `std::unique_ptr`, while its downstream callback is borrowed
+only during synchronous `Decode()`. Decoder errors discard buffered rows, and
+a source that omits `OnEndDecode()` is closed with an error callback before the
+workspace and borrowed callback view are cleared.
+
 `LVUnpackedImgSource` owns grayscale, RGB565 and 32-bit pixel snapshots through
 separate `std::vector` buffers and uses a scoped vector for conversion rows.
 Only the buffer selected by the requested bit depth is populated. Automatic

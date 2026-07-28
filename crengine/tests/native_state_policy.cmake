@@ -57,6 +57,10 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextfilebase.cpp" TEXT_FILE_BASE_
 file(READ "${SOURCE_ROOT}/crengine/include/rtfimp.h" RTF_PARSER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/rtfimp.cpp" RTF_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvimg.cpp" IMAGE_FACTORY_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvimagesource.h" IMAGE_SOURCE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvimagesource.cpp" IMAGE_SOURCE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvcolortransformimgsource.h" COLOR_TRANSFORM_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvcolortransformimgsource.cpp" COLOR_TRANSFORM_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
@@ -1161,6 +1165,91 @@ forbid_source_text(
 )
 
 # --- synthetic/draw-buffer/XPM image sources ---
+require_source_text(
+  "${IMAGE_SOURCE_HEADER}"
+  "std::unique_ptr<CR9PatchInfo> _ninePatch"
+  "nine-patch metadata cache must have scoped ownership"
+)
+require_source_text(
+  "${IMAGE_SOURCE_HEADER}"
+  "LVImageSource(const LVImageSource &) = delete"
+  "image-source cache ownership must not be shallow-copied"
+)
+require_source_text(
+  "${IMAGE_SOURCE_SOURCE}"
+  "std::unique_ptr<CR9PatchInfo> candidate"
+  "nine-patch detection must stage candidate metadata"
+)
+require_source_text(
+  "${IMAGE_SOURCE_SOURCE}"
+  "if (!Decode(&decoder))"
+  "failed nine-patch decodes must not publish partial metadata"
+)
+forbid_source_text(
+  "${IMAGE_SOURCE_SOURCE}"
+  "delete _ninePatch"
+  "nine-patch metadata teardown must remain automatic"
+)
+forbid_source_text(
+  "${IMAGE_SOURCE_SOURCE}"
+  "_ninePatch = new"
+  "nine-patch metadata must not regress to raw ownership"
+)
+require_source_text(
+  "${COLOR_TRANSFORM_IMAGE_HEADER}"
+  "std::unique_ptr<LVColorDrawBuf> _drawbuf"
+  "color-transform workspace must have scoped ownership"
+)
+require_source_text(
+  "${COLOR_TRANSFORM_IMAGE_HEADER}"
+  "non-owning view valid only during Decode()"
+  "color-transform callback borrowing must stay explicit"
+)
+require_source_text(
+  "${COLOR_TRANSFORM_IMAGE_SOURCE}"
+  "if (_decodeStarted)"
+  "aborted color transforms must close their callback lifecycle"
+)
+require_source_text(
+  "${COLOR_TRANSFORM_IMAGE_SOURCE}"
+  "_drawbuf.reset();"
+  "color-transform workspace cleanup must be scope-independent"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "LVCreateColorTransformImageSource(LVImageSourceRef srcImage"
+  "color-transform construction must stay behind its checked factory"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "if (srcImage.isNull())"
+  "color-transform factory must reject a missing source"
+)
+forbid_source_text(
+  "${COLOR_TRANSFORM_IMAGE_HEADER}"
+  "LVColorDrawBuf * _drawbuf"
+  "color-transform workspace must not use a raw owner"
+)
+forbid_source_text(
+  "${COLOR_TRANSFORM_IMAGE_SOURCE}"
+  "delete _drawbuf"
+  "color-transform workspace teardown must remain automatic"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "failed nine-patch decode published partial metadata"
+  "nine-patch candidate rollback must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "aborted color transform retained its workspace"
+  "color-transform abort cleanup must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "color-transform workspace survived callback exception"
+  "color-transform exception cleanup must retain native regression coverage"
+)
 require_source_text(
   "${DRAWBUF_IMAGE_HEADER}"
   "std::unique_ptr<LVColorDrawBuf> _ownedBuf"

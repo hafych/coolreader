@@ -101,38 +101,37 @@ void CR9PatchInfo::calcRectangles(const lvRect &dst, const lvRect &src, lvRect d
 
 CR9PatchInfo *LVImageSource::DetectNinePatch() {
     if (_ninePatch)
-        return _ninePatch;
-    _ninePatch = new CR9PatchInfo();
-    CRNinePatchDecoder decoder(GetWidth(), GetHeight(), _ninePatch);
-    Decode(&decoder);
-    if (_ninePatch->frame.left > 0 && _ninePatch->frame.top > 0
-        && _ninePatch->frame.left < _ninePatch->frame.right
-        && _ninePatch->frame.top < _ninePatch->frame.bottom) {
+        return _ninePatch.get();
+    std::unique_ptr<CR9PatchInfo> candidate(new CR9PatchInfo());
+    CR9PatchInfo * info = candidate.get();
+    CRNinePatchDecoder decoder(GetWidth(), GetHeight(), info);
+    if (!Decode(&decoder))
+        return NULL;
+    if (info->frame.left > 0 && info->frame.top > 0
+        && info->frame.left < info->frame.right
+        && info->frame.top < info->frame.bottom) {
         // remove 1 pixel frame
-        _ninePatch->padding.left--;
-        _ninePatch->padding.top--;
-        _ninePatch->padding.right = GetWidth() - _ninePatch->padding.right - 1;
-        _ninePatch->padding.bottom = GetHeight() - _ninePatch->padding.bottom - 1;
-        fixNegative(_ninePatch->padding.left);
-        fixNegative(_ninePatch->padding.top);
-        fixNegative(_ninePatch->padding.right);
-        fixNegative(_ninePatch->padding.bottom);
-        _ninePatch->frame.left--;
-        _ninePatch->frame.top--;
-        _ninePatch->frame.right = GetWidth() - _ninePatch->frame.right - 1;
-        _ninePatch->frame.bottom = GetHeight() - _ninePatch->frame.bottom - 1;
-        fixNegative(_ninePatch->frame.left);
-        fixNegative(_ninePatch->frame.top);
-        fixNegative(_ninePatch->frame.right);
-        fixNegative(_ninePatch->frame.bottom);
+        info->padding.left--;
+        info->padding.top--;
+        info->padding.right = GetWidth() - info->padding.right - 1;
+        info->padding.bottom = GetHeight() - info->padding.bottom - 1;
+        fixNegative(info->padding.left);
+        fixNegative(info->padding.top);
+        fixNegative(info->padding.right);
+        fixNegative(info->padding.bottom);
+        info->frame.left--;
+        info->frame.top--;
+        info->frame.right = GetWidth() - info->frame.right - 1;
+        info->frame.bottom = GetHeight() - info->frame.bottom - 1;
+        fixNegative(info->frame.left);
+        fixNegative(info->frame.top);
+        fixNegative(info->frame.right);
+        fixNegative(info->frame.bottom);
     } else {
-        delete _ninePatch;
-        _ninePatch = NULL;
+        return NULL;
     }
-    return _ninePatch;
+    _ninePatch.swap(candidate);
+    return _ninePatch.get();
 }
 
-LVImageSource::~LVImageSource() {
-    if (_ninePatch)
-        delete _ninePatch;
-}
+LVImageSource::~LVImageSource() = default;

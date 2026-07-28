@@ -36,7 +36,7 @@ LVColorTransformImgSource::LVColorTransformImgSource(LVImageSourceRef src, lUInt
     , _add(addRGB)
     , _multiply(multiplyRGB)
     , _callback(NULL)
-    , _drawbuf(NULL)
+    , _decodeStarted(false)
     , _sumR(0)
     , _sumG(0)
     , _sumB(0)
@@ -44,22 +44,24 @@ LVColorTransformImgSource::LVColorTransformImgSource(LVImageSourceRef src, lUInt
 {
 }
 
-LVColorTransformImgSource::~LVColorTransformImgSource() {
-    if (_drawbuf)
-        delete _drawbuf;
-}
+LVColorTransformImgSource::~LVColorTransformImgSource() = default;
 
 void LVColorTransformImgSource::OnStartDecode(LVImageSource *)
 {
-    _callback->OnStartDecode(this);
+    std::unique_ptr<LVColorDrawBuf> candidate(
+            new LVColorDrawBuf(
+                    _src->GetWidth(), _src->GetHeight(), 32));
+    _drawbuf.swap(candidate);
     _sumR = _sumG = _sumB = _countPixels = 0;
-    if (_drawbuf)
-        delete _drawbuf;
-    _drawbuf = new LVColorDrawBuf(_src->GetWidth(), _src->GetHeight(), 32);
+    _decodeStarted = true;
+    _callback->OnStartDecode(this);
 }
 
 bool LVColorTransformImgSource::OnLineDecoded(LVImageSource *obj, int y, lUInt32 *data) {
     CR_UNUSED(obj);
+    if (!_decodeStarted || !_drawbuf || !data
+            || y < 0 || y >= _src->GetHeight())
+        return false;
     int dx = _src->GetWidth();
     
     lUInt32 * row = (lUInt32*)_drawbuf->GetScanLine(y);
@@ -77,8 +79,20 @@ bool LVColorTransformImgSource::OnLineDecoded(LVImageSource *obj, int y, lUInt32
     
 }
 
-void LVColorTransformImgSource::OnEndDecode(LVImageSource *obj, bool res)
+void LVColorTransformImgSource::OnEndDecode(
+        LVImageSource *obj, bool errors)
 {
+    if (!_decodeStarted || !_callback) {
+        _drawbuf.reset();
+        _decodeStarted = false;
+        return;
+    }
+    if (errors || !_drawbuf) {
+        _drawbuf.reset();
+        _decodeStarted = false;
+        _callback->OnEndDecode(this, true);
+        return;
+    }
     int dx = _src->GetWidth();
     int dy = _src->GetHeight();
     // simple add
@@ -111,14 +125,33 @@ void LVColorTransformImgSource::OnEndDecode(LVImageSource *obj, bool res)
         }
         _callback->OnLineDecoded(obj, y, row);
     }
-    if (_drawbuf)
-        delete _drawbuf;
-    _drawbuf = NULL;
-    _callback->OnEndDecode(this, res);
+    _drawbuf.reset();
+    _decodeStarted = false;
+    _callback->OnEndDecode(this, false);
 }
 
 bool LVColorTransformImgSource::Decode(LVImageDecoderCallback *callback)
 {
+    if (!callback || _src.isNull())
+        return false;
     _callback = callback;
-    return _src->Decode( this );
+    _decodeStarted = false;
+    bool result = false;
+    try {
+        result = _src->Decode(this);
+        if (_decodeStarted) {
+            _drawbuf.reset();
+            _decodeStarted = false;
+            _callback->OnEndDecode(this, true);
+            result = false;
+        }
+    } catch (...) {
+        _drawbuf.reset();
+        _decodeStarted = false;
+        _callback = NULL;
+        throw;
+    }
+    _drawbuf.reset();
+    _callback = NULL;
+    return result;
 }

@@ -173,6 +173,8 @@ LVImageSourceRef LVCreateTileTransform( LVImageSourceRef src, int newWidth, int 
 
 /// creates image source which transforms colors of another image source (add RGB components (c - 0x80) * 2 from addedRGB first, then multiplyed by multiplyRGB fixed point components (0x20 is 1.0f)
 LVImageSourceRef LVCreateColorTransformImageSource(LVImageSourceRef srcImage, lUInt32 addRGB, lUInt32 multiplyRGB) {
+    if (srcImage.isNull())
+        return srcImage;
     return LVImageSourceRef(new LVColorTransformImgSource(srcImage, addRGB, multiplyRGB));
 }
 

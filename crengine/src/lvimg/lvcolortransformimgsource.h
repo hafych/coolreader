@@ -24,6 +24,7 @@
 
 #include "lvimagesource.h"
 #include "lvimagedecodercallback.h"
+#include <memory>
 
 class LVColorDrawBuf;
 
@@ -33,8 +34,10 @@ protected:
     LVImageSourceRef _src;
     lUInt32 _add;
     lUInt32 _multiply;
+    /// non-owning view valid only during Decode()
     LVImageDecoderCallback * _callback;
-    LVColorDrawBuf * _drawbuf;
+    std::unique_ptr<LVColorDrawBuf> _drawbuf;
+    bool _decodeStarted;
     int _sumR;
     int _sumG;
     int _sumB;
@@ -44,7 +47,7 @@ public:
     virtual ~LVColorTransformImgSource();
     virtual void OnStartDecode( LVImageSource * );
     virtual bool OnLineDecoded( LVImageSource * obj, int y, lUInt32 * data );
-    virtual void OnEndDecode( LVImageSource * obj, bool res);
+    virtual void OnEndDecode( LVImageSource * obj, bool errors);
     virtual ldomNode * GetSourceNode() { return NULL; }
     virtual LVStream * GetSourceStream() { return NULL; }
     virtual void   Compact() { }

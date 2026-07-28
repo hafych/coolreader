@@ -23,6 +23,7 @@
 
 #include "lvcacheableobject.h"
 #include "lvref.h"
+#include <memory>
 
 struct ldomNode;
 class LVStream;
@@ -39,9 +40,9 @@ struct CR9PatchInfo {
 
 class LVImageSource : public CacheableObject
 {
-	CR9PatchInfo * _ninePatch;
+	std::unique_ptr<CR9PatchInfo> _ninePatch;
 public:
-	virtual const CR9PatchInfo * GetNinePatchInfo() { return _ninePatch; }
+	virtual const CR9PatchInfo * GetNinePatchInfo() { return _ninePatch.get(); }
 	virtual CR9PatchInfo *  DetectNinePatch();
     virtual ldomNode * GetSourceNode() = 0;
     virtual LVStream * GetSourceStream() = 0;
@@ -49,8 +50,12 @@ public:
     virtual int    GetWidth() const = 0;
     virtual int    GetHeight() const = 0;
     virtual bool   Decode( LVImageDecoderCallback * callback ) = 0;
-    LVImageSource() : _ninePatch(NULL) {}
+    LVImageSource() = default;
     virtual ~LVImageSource();
+    LVImageSource(const LVImageSource &) = delete;
+    LVImageSource & operator=(const LVImageSource &) = delete;
+    LVImageSource(LVImageSource &&) = delete;
+    LVImageSource & operator=(LVImageSource &&) = delete;
 };
 
 typedef LVRef< LVImageSource > LVImageSourceRef;
