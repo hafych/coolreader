@@ -5155,6 +5155,26 @@ require_source_text(
 )
 require_source_text(
   "${PROPERTIES_SOURCE}"
+  "minimumSerializedPropertySize = 8"
+  "serialized property counts must remain bounded by minimum item size"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "serializedFooterSize = 4"
+  "serialized property counts must preserve room for their CRC"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "CRPropRef candidate = LVCreatePropsContainer()"
+  "serialized properties must decode into an isolated candidate"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "if ( !buf.checkCRC( buf.pos() - pos ) )"
+  "serialized properties must validate CRC before publication"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
   "if ( i + 1 >= str.length() )"
   "property escape decoding must bound a trailing backslash"
 )
@@ -5223,6 +5243,21 @@ require_source_text(
   "property container clone lost independent revision state"
   "property ownership must retain initialized top-level clone coverage"
 )
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "property serialization CRC failure replaced committed state"
+  "serialized property regression must retain late-validation rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "property serialization accepted an oversized count"
+  "serialized property regression must retain count-bound coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "property serialization snapshot did not replace committed state"
+  "serialized property regression must retain candidate publication coverage"
+)
 forbid_source_text(
   "${PROPERTIES_SOURCE}"
   "char * buf = new char"
@@ -5252,6 +5287,11 @@ forbid_source_text(
   "${PROPERTIES_SOURCE}"
   "return CRPropRef(new CRProp"
   "property factories must not publish raw candidates directly"
+)
+forbid_source_text(
+  "${PROPERTIES_SOURCE}"
+  "bool CRPropAccessor::deserialize( SerialBuf & buf )\n{\n    clear();"
+  "serialized property restore must not clear live state before validation"
 )
 
 # --- XML/HTML document factories and FB3/OPC ownership ---

@@ -982,14 +982,24 @@ void CRPropAccessor::serialize( SerialBuf & buf )
 /// deserialize from byte buffer
 bool CRPropAccessor::deserialize( SerialBuf & buf )
 {
-    clear();
     if ( buf.error() )
         return false;
     int pos = buf.pos();
     if ( !buf.checkMagic( props_magic ) )
         return false;
-    lInt32 sz;
+    lInt32 sz = 0;
     buf >> sz;
+    static const int minimumSerializedPropertySize = 8;
+    static const int serializedFooterSize = 4;
+    if ( buf.error()
+            || sz < 0
+            || buf.space() < serializedFooterSize
+            || sz > (buf.space() - serializedFooterSize)
+                    / minimumSerializedPropertySize ) {
+        buf.seterror();
+        return false;
+    }
+    CRPropRef candidate = LVCreatePropsContainer();
     for ( int i=0; i<sz; i++ ) {
         lString8 nm;
         lString32 val;
@@ -999,9 +1009,11 @@ bool CRPropAccessor::deserialize( SerialBuf & buf )
         if ( !buf.checkMagic( props_value_magic ) )
             return false;
         buf >> val;
-        setString( nm.c_str(), val );
+        candidate->setString( nm.c_str(), val );
         // CRLog::debug("  deserialized prop %s: %s", nm.c_str(), UnicodeToLocal(val).c_str());
     }
-    buf.checkCRC( buf.pos() - pos );
-    return !buf.error();
+    if ( !buf.checkCRC( buf.pos() - pos ) )
+        return false;
+    set(candidate);
+    return true;
 }

@@ -2599,6 +2599,56 @@ static int testPropertyStreamOwnership() {
             || properties->getStringDef("stable") != U"new")
         return fail("property container clone lost independent revision state");
 
+    CRPropRef serializedProperties = LVCreatePropsContainer();
+    serializedProperties->setString("alpha", "one");
+    serializedProperties->setString("beta", "two");
+    SerialBuf serializedPropertiesBuffer(1, true);
+    serializedProperties->serialize(serializedPropertiesBuffer);
+    if (serializedPropertiesBuffer.error())
+        return fail("property serialization fixture could not serialize");
+    const int serializedPropertiesSize = serializedPropertiesBuffer.pos();
+    std::vector<lUInt8> serializedPropertyBytes(
+            serializedPropertiesBuffer.buf(),
+            serializedPropertiesBuffer.buf() + serializedPropertiesSize);
+
+    CRPropRef serializedTarget = LVCreatePropsContainer();
+    serializedTarget->setString("sentinel", "keep");
+    std::vector<lUInt8> corruptedPropertyBytes(serializedPropertyBytes);
+    corruptedPropertyBytes.back() ^= 0x80;
+    SerialBuf corruptedPropertyInput(
+            corruptedPropertyBytes.data(),
+            static_cast<int>(corruptedPropertyBytes.size()));
+    if (serializedTarget->deserialize(corruptedPropertyInput)
+            || serializedTarget->getStringDef("sentinel") != U"keep"
+            || serializedTarget->hasProperty("alpha"))
+        return fail(
+                "property serialization CRC failure replaced committed state");
+
+    std::vector<lUInt8> oversizedPropertyCount(serializedPropertyBytes);
+    oversizedPropertyCount[4] = 0xFF;
+    oversizedPropertyCount[5] = 0xFF;
+    oversizedPropertyCount[6] = 0xFF;
+    oversizedPropertyCount[7] = 0x7F;
+    SerialBuf oversizedPropertyInput(
+            oversizedPropertyCount.data(),
+            static_cast<int>(oversizedPropertyCount.size()));
+    if (serializedTarget->deserialize(oversizedPropertyInput)
+            || !oversizedPropertyInput.error()
+            || serializedTarget->getStringDef("sentinel") != U"keep"
+            || serializedTarget->hasProperty("alpha"))
+        return fail("property serialization accepted an oversized count");
+
+    SerialBuf serializedPropertyInput(
+            serializedPropertyBytes.data(),
+            static_cast<int>(serializedPropertyBytes.size()));
+    if (!serializedTarget->deserialize(serializedPropertyInput)
+            || serializedTarget->getCount() != 2
+            || serializedTarget->getStringDef("alpha") != U"one"
+            || serializedTarget->getStringDef("beta") != U"two"
+            || serializedTarget->hasProperty("sentinel"))
+        return fail(
+                "property serialization snapshot did not replace committed state");
+
     lString32 largeValue;
     largeValue.append(12000, U'x');
     properties->setString("large", largeValue);
