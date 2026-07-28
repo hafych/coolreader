@@ -22,8 +22,10 @@
 #ifndef __LVTEXTLINEQUEUE_H_INCLUDED__
 #define __LVTEXTLINEQUEUE_H_INCLUDED__
 
-#include "lvptrvec.h"
 #include "lvtextfileline.h"
+
+#include <memory>
+#include <vector>
 
 #define MAX_HEADING_CHARS 48
 #define MAX_PARA_LINES 30
@@ -32,10 +34,11 @@
 
 class LVXMLParserCallback;
 
-class LVTextLineQueue : public LVPtrVector<LVTextFileLine>
+class LVTextLineQueue
 {
 private:
-    LVTextFileBase * file;
+    std::vector<std::unique_ptr<LVTextFileLine> > lines;
+    LVTextFileBase &file;
     int first_line_index;
     int maxLineSize;
     lString32 bookTitle;
@@ -56,6 +59,16 @@ private:
     int max_left_second_stats_pos;
     int max_right_stats_pos;
 
+    LVTextFileLine *get(int index)
+    {
+        return lines[static_cast<std::size_t>(index)].get();
+    }
+
+    const LVTextFileLine *get(int index) const
+    {
+        return lines[static_cast<std::size_t>(index)].get();
+    }
+
     enum {
         tftParaPerLine = 1,
         tftParaIdents  = 2,
@@ -69,13 +82,25 @@ private:
         tftPML = 512 // Palm Markup Language
     };
 public:
-    LVTextLineQueue( LVTextFileBase * f, int maxLineLen );
+    LVTextLineQueue(LVTextFileBase &f, int maxLineLen);
+    LVTextLineQueue(const LVTextLineQueue &) = delete;
+    LVTextLineQueue &operator=(const LVTextLineQueue &) = delete;
+
+    int length() const
+    {
+        return static_cast<int>(lines.size());
+    }
+
     // get index of first line of queue
-    int  GetFirstLineIndex() { return first_line_index; }
+    int GetFirstLineIndex() const { return first_line_index; }
     // get line count read from file. Use length() instead to get count of lines queued.
-    int  GetLineCount() { return first_line_index + length(); }
+    int GetLineCount() const { return first_line_index + length(); }
     // get line by line file index
-    LVTextFileLine * GetLine( int index )
+    LVTextFileLine *GetLine(int index)
+    {
+        return get(index - first_line_index);
+    }
+    const LVTextFileLine *GetLine(int index) const
     {
         return get(index - first_line_index);
     }

@@ -74,6 +74,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/crconcurrent.h" CONCURRENCY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextlinequeue.h" TEXT_LINE_QUEUE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextlinequeue.cpp" TEXT_LINE_QUEUE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvhtmlparser.cpp" HTML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvxmlparser.cpp" XML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextbookmarkparser.cpp" BOOKMARK_PARSER_SOURCE)
@@ -1216,6 +1218,93 @@ forbid_source_text(
   "${TEXT_FILE_BASE_SOURCE}"
   "new unsigned char[ sz ]"
   "encoding detection buffer must not regress to owning new[]"
+)
+
+# --- plain-text line queue owners and parser borrow ---
+require_source_text(
+  "${TEXT_LINE_QUEUE_HEADER}"
+  "std::vector<std::unique_ptr<LVTextFileLine> > lines"
+  "plain-text decoded lines must have explicit scoped owners"
+)
+require_source_text(
+  "${TEXT_LINE_QUEUE_HEADER}"
+  "LVTextFileBase &file;"
+  "plain-text line queues must retain a non-null borrowed parser"
+)
+require_source_text(
+  "${TEXT_LINE_QUEUE_HEADER}"
+  "LVTextLineQueue(const LVTextLineQueue &) = delete"
+  "plain-text line ownership must not be shallow-copied"
+)
+require_source_text(
+  "${TEXT_LINE_QUEUE_HEADER}"
+  "return get(index - first_line_index);"
+  "plain-text line lookup must expose only a borrowed item view"
+)
+require_source_text(
+  "${TEXT_LINE_QUEUE_SOURCE}"
+  "std::unique_ptr<LVTextFileLine> line("
+  "plain-text decoded candidates must enter scoped ownership immediately"
+)
+require_source_text(
+  "${TEXT_LINE_QUEUE_SOURCE}"
+  "lines.push_back(std::move(line));"
+  "plain-text line publication must transfer scoped ownership"
+)
+require_source_text(
+  "${TEXT_LINE_QUEUE_SOURCE}"
+  "lines.erase(lines.begin(), lines.begin() + lineCount);"
+  "plain-text head removal must destroy every removed owner"
+)
+require_source_text(
+  "${TEXT_PARSER_SOURCE}"
+  "LVTextLineQueue queue(*this, 2000);"
+  "plain-text parsers must pass an explicit borrowed reference"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testTextLineQueueOwnership()"
+  "plain-text line ownership must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "text line queue head removal lost borrowed views"
+  "plain-text queue regression must retain owner-removal coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "text parser rejected the RAII line queue"
+  "plain-text regression must retain multi-batch parser coverage"
+)
+forbid_source_text(
+  "${TEXT_LINE_QUEUE_HEADER}"
+  "class LVTextLineQueue : public LVPtrVector<LVTextFileLine>"
+  "plain-text line ownership must not regress to pointer-vector inheritance"
+)
+forbid_source_text(
+  "${TEXT_LINE_QUEUE_HEADER}"
+  "LVTextFileBase * file"
+  "plain-text parser linkage must not regress to a nullable pointer"
+)
+forbid_source_text(
+  "${TEXT_LINE_QUEUE_SOURCE}"
+  "LVTextFileLine * line = new"
+  "plain-text decoded candidates must not use raw transitional ownership"
+)
+forbid_source_text(
+  "${TEXT_LINE_QUEUE_SOURCE}"
+  "add( line )"
+  "plain-text line publication must remain owner-aware"
+)
+forbid_source_text(
+  "${TEXT_LINE_QUEUE_SOURCE}"
+  "erase(0, lineCount)"
+  "plain-text line teardown must remain container-managed"
+)
+forbid_source_text(
+  "${TEXT_PARSER_SOURCE}"
+  "LVTextLineQueue queue( this, 2000 )"
+  "plain-text parsers must not pass a nullable queue source"
 )
 
 # --- parser base: persistent read window and charset table ---

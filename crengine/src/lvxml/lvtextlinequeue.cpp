@@ -27,6 +27,8 @@
 #include "pmltextimport.h"
 #include "crlog.h"
 
+#include <memory>
+#include <utility>
 
 static const lChar32 * heading_volume[] = {
     U"volume",
@@ -122,8 +124,11 @@ static lChar32 getSingleLineChar( const lString32 & s) {
 }
 
 
-LVTextLineQueue::LVTextLineQueue(LVTextFileBase* f, int maxLineLen)
-    : file(f), first_line_index(0), maxLineSize(maxLineLen), lastParaWasTitle(false), inSubSection(false)
+LVTextLineQueue::LVTextLineQueue(
+        LVTextFileBase &f, int maxLineLen)
+    : lines(), file(f), first_line_index(0),
+      maxLineSize(maxLineLen), lastParaWasTitle(false),
+      inSubSection(false)
 {
     min_left = -1;
     max_right = -1;
@@ -139,22 +144,23 @@ void LVTextLineQueue::RemoveLines(int lineCount)
 {
     if ((unsigned)lineCount > (unsigned)length())
         lineCount = length();
-    erase(0, lineCount);
+    lines.erase(lines.begin(), lines.begin() + lineCount);
     first_line_index += lineCount;
 }
 
 bool LVTextLineQueue::ReadLines(int lineCount)
 {
     for ( int i=0; i<lineCount; i++ ) {
-        if ( file->Eof() ) {
+        if ( file.Eof() ) {
             if ( i==0 )
                 return false;
             break;
         }
-        LVTextFileLine * line = new LVTextFileLine( file, maxLineSize );
+        std::unique_ptr<LVTextFileLine> line(
+                new LVTextFileLine(&file, maxLineSize));
         if ( min_left>=0 )
-            line->align = getFormat( line );
-        add( line );
+            line->align = getFormat(line.get());
+        lines.push_back(std::move(line));
     }
     return true;
 }
@@ -438,7 +444,7 @@ bool LVTextLineQueue::DetectBookDescription(LVXMLParserCallback* callback)
 {
     
     if ( !testProjectGutenbergHeader() && !testAuthorDotTitleFormat() ) {
-        bookTitle = LVExtractFilenameWithoutExtension( file->getFileName() );
+        bookTitle = LVExtractFilenameWithoutExtension(file.getFileName());
         bookAuthors.clear();
         /*
           
@@ -613,8 +619,8 @@ bool LVTextLineQueue::DoPMLImport(LVXMLParserCallback* callback)
 {
     CRLog::debug("DoPMLImport()");
     RemoveLines( length() );
-    file->Reset();
-    file->SetCharset(U"windows-1252");
+    file.Reset();
+    file.SetCharset(U"windows-1252");
     ReadLines( 100 );
     int remainingLines = 0;
     PMLTextImport importer(callback);
@@ -622,7 +628,7 @@ bool LVTextLineQueue::DoPMLImport(LVXMLParserCallback* callback)
         for ( int i=remainingLines; i<length(); i++ ) {
             LVTextFileLine * item = get(i);
             importer.processLine(item->text);
-            file->updateProgress();
+            file.updateProgress();
         }
         RemoveLines( length()-3 );
         remainingLines = 3;
@@ -647,7 +653,7 @@ bool LVTextLineQueue::DoParaPerLineImport(LVXMLParserCallback* callback)
                 else
                     AddEmptyLine(callback);
             }
-            file->updateProgress();
+            file.updateProgress();
         }
         RemoveLines( length()-3 );
         remainingLines = 3;
@@ -691,7 +697,7 @@ bool LVTextLineQueue::DoIdentParaImport(LVXMLParserCallback* callback)
             AddPara( pos, i-1 - (emptyLineFlag?1:0), callback );
         else
             AddEmptyLine(callback);
-        file->updateProgress();
+        file.updateProgress();
         pos = i;
     }
     if ( inSubSection )
@@ -743,7 +749,7 @@ bool LVTextLineQueue::DoEmptyLineParaImport(LVXMLParserCallback* callback)
             i--;
         if ( i>=pos ) {
             AddPara( pos, i, callback );
-            file->updateProgress();
+            file.updateProgress();
             if ( emptyLineCount ) {
                 if ( shortLineCount > 1 )
                     AddEmptyLine( callback );
@@ -768,7 +774,7 @@ bool LVTextLineQueue::DoPreFormattedImport(LVXMLParserCallback* callback)
             if ( item->rpos > item->lpos ) {
                 callback->OnTagOpenNoAttr( NULL, U"pre" );
                 callback->OnText( item->text.c_str(), item->text.length(), item->flags );
-                file->updateProgress();
+                file.updateProgress();
                 
                 callback->OnTagClose( NULL, U"pre" );
             } else {

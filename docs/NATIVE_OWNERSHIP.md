@@ -531,3 +531,13 @@ parses all incoming definitions into a temporary owner-list and reserves the
 destination before moving any item, so malformed input cannot publish a valid
 prefix. The native regression covers independent copy/set owners, a successful
 round trip, append compatibility and truncated-input rollback.
+
+`LVTextLineQueue` owns decoded `LVTextFileLine` objects in a private vector of
+`unique_ptr`; indexed access returns only borrowed line views. Its source
+`LVTextFileBase` is a non-null borrowed reference bounded by the stack-local
+queue in `LVTextParser::Parse()`. Each newly decoded line enters scoped
+ownership before alignment detection and vector publication, while head-range
+erasure destroys removed owners automatically and preserves the file-relative
+index of retained lines. The native regression checks append/removal/index
+invariants directly and parses a 2400-line document across repeated queue
+batches.

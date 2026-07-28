@@ -48,6 +48,7 @@
 #include "../src/lvstream/lvmemorystream.h"
 #include "../src/lvtextfm_internal.h"
 #include "../src/lvtinydom_internal.h"
+#include "../src/lvxml/lvtextlinequeue.h"
 #include "../src/pdbfmt_internal.h"
 #include "../src/wolutil_internal.h"
 #if (USE_GIF==1)
@@ -1912,6 +1913,56 @@ static LVStreamRef memoryStream(const std::string &contents) {
     return LVCreateMemoryStream(
             const_cast<char *>(contents.data()),
             static_cast<int>(contents.size()), true, LVOM_READ);
+}
+
+static int testTextLineQueueOwnership() {
+    ParserBufferProbe file(memoryStream(
+            "first line\nsecond line\nthird line\nfourth line\n"));
+    file.SetCharset(U"utf-8");
+    LVTextLineQueue queue(file, 80);
+    if (!queue.ReadLines(3)
+            || queue.length() != 3
+            || queue.GetFirstLineIndex() != 0
+            || queue.GetLineCount() != 3
+            || queue.GetLine(0)->text != lString32(U"first line")
+            || queue.GetLine(2)->text != lString32(U"third line")) {
+        return fail("text line queue did not publish owned lines");
+    }
+
+    queue.RemoveLines(2);
+    if (queue.length() != 1
+            || queue.GetFirstLineIndex() != 2
+            || queue.GetLineCount() != 3
+            || queue.GetLine(2)->text != lString32(U"third line")) {
+        return fail("text line queue head removal lost borrowed views");
+    }
+    if (!queue.ReadLines(8)
+            || queue.length() != 2
+            || queue.GetLineCount() != 4
+            || queue.GetLine(3)->text != lString32(U"fourth line")) {
+        return fail("text line queue could not append after owner removal");
+    }
+
+    queue.RemoveLines(99);
+    if (queue.length() != 0
+            || queue.GetFirstLineIndex() != 4
+            || queue.GetLineCount() != 4
+            || queue.ReadLines(1)) {
+        return fail("text line queue teardown retained owned lines");
+    }
+
+    std::string document;
+    for (int line = 0; line < 2400; ++line) {
+        document += "plain text ownership line ";
+        document += std::to_string(line);
+        document += '\n';
+    }
+    NoOpXmlCallback callback;
+    LVTextParser parser(memoryStream(document), &callback, false);
+    parser.SetCharset(U"utf-8");
+    if (!parser.Parse())
+        return fail("text parser rejected the RAII line queue");
+    return 0;
 }
 
 class MisreportingPropertyStream : public LVMemoryStream {
@@ -6218,6 +6269,8 @@ int main() {
     if (testTranslatorOwnerLifecycle() != 0)
         return 1;
     if (testParserOwnedBuffers() != 0)
+        return 1;
+    if (testTextLineQueueOwnership() != 0)
         return 1;
     if (testHistoryOwnership() != 0)
         return 1;
