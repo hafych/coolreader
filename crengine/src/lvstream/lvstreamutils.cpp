@@ -41,6 +41,7 @@
 #include "lvrararc.h"
 #endif
 
+#include <memory>
 #include <stdio.h>
 
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
@@ -183,9 +184,9 @@ LVContainerRef LVOpenArchieve( LVStreamRef stream )
 /// Creates memory stream as copy of string contents
 LVStreamRef LVCreateStringStream( lString8 data )
 {
-    LVMemoryStream * stream = new LVMemoryStream();
-    stream->CreateCopy( (const lUInt8*)data.c_str(), data.length(), LVOM_READ );
-    return LVStreamRef( stream );
+    return LVCreateMemoryStream(
+            const_cast<lChar8 *>(data.c_str()), data.length(),
+            true, LVOM_READ);
 }
 
 /// Creates memory stream as copy of string contents
@@ -196,23 +197,27 @@ LVStreamRef LVCreateStringStream( lString32 data )
 
 LVStreamRef LVCreateMemoryStream( void * buf, int bufSize, bool createCopy, lvopen_mode_t mode )
 {
-    LVMemoryStream * stream = new LVMemoryStream();
+    if (bufSize < 0)
+        return LVStreamRef();
+    std::unique_ptr<LVMemoryStream> stream(new LVMemoryStream());
+    lverror_t result = LVERR_FAIL;
     if ( !buf )
-        stream->Create();
+        result = stream->Create();
     else if ( createCopy )
-        stream->CreateCopy( (lUInt8*)buf, bufSize, mode );
+        result = stream->CreateCopy(
+                static_cast<const lUInt8 *>(buf), bufSize, mode);
     else
-        stream->Open( (lUInt8*)buf, bufSize );
-    return LVStreamRef( stream );
+        result = stream->Open(static_cast<lUInt8 *>(buf), bufSize);
+    if (result != LVERR_OK)
+        return LVStreamRef();
+    return LVStreamRef(stream.release());
 }
 
 LVStreamRef LVCreateMemoryStream( LVStreamRef srcStream )
 {
-    LVMemoryStream * stream = new LVMemoryStream();
+    std::unique_ptr<LVMemoryStream> stream(new LVMemoryStream());
     if ( stream->CreateCopy(srcStream, LVOM_READ)==LVERR_OK )
-        return LVStreamRef( stream );
-    else
-        delete stream;
+        return LVStreamRef(stream.release());
     return LVStreamRef();
 }
 

@@ -23,7 +23,43 @@
  ***************************************************************************/
 
 #include "lvmemorystream.h"
-#include "lvmemman.h"
+
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <new>
+#include <stdexcept>
+#include <utility>
+
+namespace {
+
+bool checkedBufferSize(lvsize_t requested, std::size_t &result)
+{
+    if (requested > static_cast<lvsize_t>(
+            std::numeric_limits<std::size_t>::max()))
+        return false;
+    result = static_cast<std::size_t>(requested);
+    return true;
+}
+
+bool checkedPositionOffset(lvpos_t base, lvoffset_t offset, lvpos_t &result)
+{
+    if (offset < 0) {
+        const lvpos_t magnitude =
+                static_cast<lvpos_t>(-(offset + 1)) + 1;
+        if (magnitude > base)
+            return false;
+        result = base - magnitude;
+        return true;
+    }
+    const lvpos_t magnitude = static_cast<lvpos_t>(offset);
+    if (magnitude > std::numeric_limits<lvpos_t>::max() - base)
+        return false;
+    result = base + magnitude;
+    return true;
+}
+
+} // namespace
 
 lverror_t LVMemoryStream::SetMode(lvopen_mode_t mode)
 {
@@ -40,23 +76,24 @@ lverror_t LVMemoryStream::SetMode(lvopen_mode_t mode)
 
 lverror_t LVMemoryStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRead)
 {
-    if (!m_pBuffer || m_mode==LVOM_WRITE || m_mode==LVOM_APPEND )
+    if (nBytesRead)
+        *nBytesRead = 0;
+    if (!m_pBuffer || (!buf && count > 0)
+            || m_mode==LVOM_WRITE || m_mode==LVOM_APPEND )
         return LVERR_FAIL;
-    //
-    int bytesAvail = (int)(m_size - m_pos);
-    if (bytesAvail>0) {
-        int bytesRead = bytesAvail;
-        if (bytesRead>(int)count)
-            bytesRead = (int)count;
-        if (bytesRead>0)
-            memcpy( buf, m_pBuffer+(int)m_pos, bytesRead );
-        if (nBytesRead)
-            *nBytesRead = bytesRead;
-        m_pos += bytesRead;
-    } else {
-        if (nBytesRead)
-            *nBytesRead = 0; // EOF
-    }
+    if (m_pos > m_size)
+        return LVERR_FAIL;
+    const lvsize_t bytesRead = std::min(count, m_size - m_pos);
+    std::size_t offset = 0;
+    std::size_t amount = 0;
+    if (!checkedBufferSize(m_pos, offset)
+            || !checkedBufferSize(bytesRead, amount))
+        return LVERR_FAIL;
+    if (amount > 0)
+        std::memcpy(buf, m_pBuffer + offset, amount);
+    if (nBytesRead)
+        *nBytesRead = bytesRead;
+    m_pos += bytesRead;
     return LVERR_OK;
 }
 
@@ -85,12 +122,24 @@ lverror_t LVMemoryStream::SetBufSize(lvsize_t new_size)
         return LVERR_FAIL;
     if (new_size<=m_bufsize)
         return LVERR_OK;
-    if (m_own_buffer!=true)
+    if (m_storage.empty() || m_pBuffer != m_storage.data())
         return LVERR_FAIL; // cannot resize foreign buffer
-    //
-    int newbufsize = (int)(new_size * 2 + 4096);
-    m_pBuffer = cr_realloc( m_pBuffer, newbufsize );
-    m_bufsize = newbufsize;
+    if (new_size > (std::numeric_limits<lvsize_t>::max() - 4096) / 2)
+        return LVERR_FAIL;
+    const lvsize_t grownSize = new_size * 2 + 4096;
+    std::size_t vectorSize = 0;
+    if (!checkedBufferSize(grownSize, vectorSize)
+            || vectorSize > m_storage.max_size())
+        return LVERR_FAIL;
+    try {
+        m_storage.resize(vectorSize);
+    } catch (const std::bad_alloc &) {
+        return LVERR_FAIL;
+    } catch (const std::length_error &) {
+        return LVERR_FAIL;
+    }
+    m_pBuffer = m_storage.data();
+    m_bufsize = grownSize;
     return LVERR_OK;
 }
 
@@ -107,20 +156,28 @@ lverror_t LVMemoryStream::SetSize(lvsize_t size)
 
 lverror_t LVMemoryStream::Write(const void *buf, lvsize_t count, lvsize_t *nBytesWritten)
 {
+    if (nBytesWritten)
+        *nBytesWritten = 0;
     if (!m_pBuffer || !buf || m_mode==LVOM_READ )
         return LVERR_FAIL;
-    SetBufSize( m_pos+count ); // check buf size
-    int bytes_avail = (int)(m_bufsize-m_pos);
-    if (bytes_avail>(int)count)
-        bytes_avail = (int)count;
-    if (bytes_avail>0) {
-        memcpy( m_pBuffer+m_pos, buf, bytes_avail );
-        m_pos+=bytes_avail;
+    if (count > std::numeric_limits<lvpos_t>::max() - m_pos)
+        return LVERR_FAIL;
+    const lvpos_t endPos = m_pos + count;
+    if (SetBufSize(endPos) != LVERR_OK)
+        return LVERR_FAIL;
+    std::size_t offset = 0;
+    std::size_t amount = 0;
+    if (!checkedBufferSize(m_pos, offset)
+            || !checkedBufferSize(count, amount))
+        return LVERR_FAIL;
+    if (amount>0) {
+        std::memcpy(m_pBuffer + offset, buf, amount);
+        m_pos = endPos;
         if (m_size<m_pos)
             m_size = m_pos;
     }
     if (nBytesWritten)
-        *nBytesWritten = bytes_avail;
+        *nBytesWritten = count;
     return LVERR_OK;
 }
 
@@ -128,18 +185,23 @@ lverror_t LVMemoryStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_
 {
     if (!m_pBuffer)
         return LVERR_FAIL;
-    lvpos_t newpos;
+    lvpos_t base = 0;
     switch (origin) {
         case LVSEEK_SET:
-            newpos = offset;
+            base = 0;
             break;
         case LVSEEK_CUR:
-            newpos = m_pos + offset;
+            base = m_pos;
             break;
         case LVSEEK_END:
-            newpos = m_size + offset;
+            base = m_size;
             break;
+        default:
+            return LVERR_FAIL;
     }
+    lvpos_t newpos = 0;
+    if (!checkedPositionOffset(base, offset, newpos))
+        return LVERR_FAIL;
     if (newpos>m_size)
         return LVERR_FAIL;
     m_pos = newpos;
@@ -150,14 +212,12 @@ lverror_t LVMemoryStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_
 
 lverror_t LVMemoryStream::Close()
 {
-    if (!m_pBuffer)
-        return LVERR_FAIL;
-    if (m_pBuffer && m_own_buffer)
-        free(m_pBuffer);
+    std::vector<lUInt8>().swap(m_storage);
     m_pBuffer = NULL;
     m_size = 0;
     m_bufsize = 0;
     m_pos = 0;
+    m_mode = LVOM_CLOSED;
     m_containerDepth = 0;
     return LVERR_OK;
 }
@@ -165,11 +225,17 @@ lverror_t LVMemoryStream::Close()
 lverror_t LVMemoryStream::Create()
 {
     Close();
-    m_bufsize = 4096;
+    try {
+        m_storage.resize(4096);
+    } catch (const std::bad_alloc &) {
+        return LVERR_FAIL;
+    } catch (const std::length_error &) {
+        return LVERR_FAIL;
+    }
+    m_pBuffer = m_storage.data();
+    m_bufsize = m_storage.size();
     m_size = 0;
     m_pos = 0;
-    m_pBuffer = (lUInt8*)malloc((int)m_bufsize);
-    m_own_buffer = true;
     m_mode = LVOM_READWRITE;
     return LVERR_OK;
 }
@@ -180,26 +246,25 @@ lverror_t LVMemoryStream::CreateCopy(LVStreamRef srcStream, lvopen_mode_t mode)
     if ( mode!=LVOM_READ || srcStream.isNull() )
         return LVERR_FAIL;
     lvsize_t sz = srcStream->GetSize();
-    if ( (int)sz <= 0 || sz > 0x200000 )
+    if ( sz == 0 || sz > 0x200000 )
         return LVERR_FAIL;
-    m_bufsize = sz;
-    m_size = 0;
-    m_pos = 0;
-    m_pBuffer = (lUInt8*)malloc((int)m_bufsize);
-    if (m_pBuffer) {
-        lvsize_t bytesRead = 0;
-        srcStream->Read( m_pBuffer, m_bufsize, &bytesRead );
-        if ( bytesRead!=m_bufsize ) {
-            free(m_pBuffer);
-            m_pBuffer = 0;
-            m_size = 0;
-            m_pos = 0;
-            m_bufsize = 0;
-            return LVERR_FAIL;
-        }
+    std::vector<lUInt8> replacement;
+    try {
+        replacement.resize(static_cast<std::size_t>(sz));
+    } catch (const std::bad_alloc &) {
+        return LVERR_FAIL;
+    } catch (const std::length_error &) {
+        return LVERR_FAIL;
     }
+    lvsize_t bytesRead = 0;
+    if (srcStream->Read(replacement.data(), sz, &bytesRead) != LVERR_OK
+            || bytesRead != sz)
+        return LVERR_FAIL;
+    m_storage.swap(replacement);
+    m_pBuffer = m_storage.data();
+    m_bufsize = sz;
     m_size = sz;
-    m_own_buffer = true;
+    m_pos = 0;
     m_mode = mode;
     m_containerDepth = srcStream->GetContainerDepth();
     return LVERR_OK;
@@ -209,13 +274,23 @@ lverror_t LVMemoryStream::CreateCopy(const lUInt8 *pBuf, lvsize_t size, lvopen_m
 {
     Close();
     m_containerDepth = 0;
-    m_bufsize = size;
-    m_pos = 0;
-    m_pBuffer = (lUInt8*) malloc((int)m_bufsize);
-    if (m_pBuffer) {
-        memcpy( m_pBuffer, pBuf, (int)size );
+    std::size_t copySize = 0;
+    if ((size > 0 && !pBuf) || !checkedBufferSize(size, copySize))
+        return LVERR_FAIL;
+    std::vector<lUInt8> replacement;
+    try {
+        replacement.resize(copySize > 0 ? copySize : 1);
+    } catch (const std::bad_alloc &) {
+        return LVERR_FAIL;
+    } catch (const std::length_error &) {
+        return LVERR_FAIL;
     }
-    m_own_buffer = true;
+    if (copySize > 0)
+        std::memcpy(replacement.data(), pBuf, copySize);
+    m_storage.swap(replacement);
+    m_pBuffer = m_storage.data();
+    m_bufsize = m_storage.size();
+    m_pos = 0;
     m_mode = mode;
     m_size = size;
     if (mode==LVOM_APPEND)
@@ -227,7 +302,7 @@ lverror_t LVMemoryStream::Open(lUInt8 *pBuf, lvsize_t size)
 {
     if (!pBuf)
         return LVERR_FAIL;
-    m_own_buffer = false;
+    Close();
     m_pBuffer = pBuf;
     m_bufsize = size;
     // set file size and position
@@ -240,13 +315,7 @@ lverror_t LVMemoryStream::Open(lUInt8 *pBuf, lvsize_t size)
 }
 
 LVMemoryStream::LVMemoryStream()
-    : m_pBuffer(NULL), m_own_buffer(false), m_parent(NULL), m_size(0),
+    : m_pBuffer(NULL), m_parent(NULL), m_size(0), m_bufsize(0),
       m_pos(0), m_containerDepth(0)
 {
-}
-
-LVMemoryStream::~LVMemoryStream()
-{
-    Close();
-    m_parent = NULL;
 }

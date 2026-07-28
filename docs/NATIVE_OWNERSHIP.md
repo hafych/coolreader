@@ -145,3 +145,13 @@ owner, copies it into container storage and releases it automatically. Shallow
 copying is disabled so the view cannot detach from its owner. Regression
 coverage exercises CRC round-tripping, autogrowth, legacy adoption, swapping
 and fixed/borrowed overflow rejection.
+
+`LVMemoryStream` keeps owned initial, copied and auto-growing buffers in
+`std::vector`; `m_pBuffer` is either a view of that storage or an explicitly
+borrowed readonly alias. Borrowed streams cannot resize and never release
+caller storage. Reopening first releases any previous owned storage, while
+`Close()` is idempotent. Factories retain candidates in `std::unique_ptr` until
+creation or copying succeeds, so invalid sizes and short source reads cannot
+publish partial streams. Regression coverage includes multi-page growth,
+growth-overflow rollback, borrowed aliasing, deep copies, reopen/close and
+failed factory construction.

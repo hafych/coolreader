@@ -22,6 +22,7 @@
 #include "textlang.h"
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontglyphcache.h"
+#include "../src/lvstream/lvmemorystream.h"
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
 #endif
@@ -1986,6 +1987,95 @@ public:
     bool Eof() override { return false; }
 };
 
+static int testMemoryStreamOwnership() {
+    std::vector<unsigned char> payload(12000);
+    for (std::size_t i = 0; i < payload.size(); ++i)
+        payload[i] = static_cast<unsigned char>((i * 29 + 5) % 251);
+
+    LVStreamRef owned = LVCreateMemoryStream();
+    lvsize_t bytesWritten = 0;
+    if (owned.isNull()
+            || owned->Write(payload.data(), payload.size(), &bytesWritten)
+                    != LVERR_OK
+            || bytesWritten != payload.size()
+            || owned->GetSize() != payload.size()
+            || !verifyStreamRange(owned, payload, 0, payload.size()))
+        return fail("owned memory stream did not grow through RAII storage");
+    bytesWritten = 99;
+    if (owned->Write(
+                payload.data(), LV_INVALID_SIZE, &bytesWritten) != LVERR_FAIL
+            || bytesWritten != 0
+            || owned->GetSize() != payload.size())
+        return fail("memory stream growth overflow changed owned storage");
+
+    unsigned char external[] = {0x10, 0x20, 0x30, 0x40};
+    {
+        LVStreamRef borrowed = LVCreateMemoryStream(
+                external, static_cast<int>(sizeof(external)),
+                false, LVOM_READWRITE);
+        external[1] = 0x2a;
+        unsigned char actual[sizeof(external)] = {};
+        lvsize_t bytesRead = 0;
+        lvsize_t rejectedWrite = 99;
+        if (borrowed.isNull()
+                || borrowed->GetMode() != LVOM_READ
+                || borrowed->Read(actual, sizeof(actual), &bytesRead)
+                        != LVERR_OK
+                || bytesRead != sizeof(actual)
+                || actual[1] != 0x2a
+                || borrowed->SetSize(sizeof(external) + 1) != LVERR_FAIL
+                || borrowed->Write(
+                        payload.data(), 1, &rejectedWrite) != LVERR_FAIL
+                || rejectedWrite != 0)
+            return fail("borrowed memory stream lost its readonly alias");
+    }
+    if (external[0] != 0x10 || external[1] != 0x2a)
+        return fail("borrowed memory stream modified or freed caller storage");
+
+    std::vector<unsigned char> source = {1, 2, 3, 4};
+    LVStreamRef copied = LVCreateMemoryStream(
+            source.data(), static_cast<int>(source.size()),
+            true, LVOM_READWRITE);
+    source[0] = 0xff;
+    std::vector<unsigned char> growth(9000, 0x5c);
+    if (copied.isNull()
+            || copied->SetPos(0) != 0)
+        return fail("copied memory stream was not initialized");
+    unsigned char copiedPrefix[4] = {};
+    lvsize_t copiedRead = 0;
+    if (copied->Read(
+                copiedPrefix, sizeof(copiedPrefix), &copiedRead) != LVERR_OK
+            || copiedRead != sizeof(copiedPrefix)
+            || copiedPrefix[0] != 1
+            || copied->SetPos(copied->GetSize()) != source.size()
+            || copied->Write(growth.data(), growth.size(), &bytesWritten)
+                    != LVERR_OK
+            || bytesWritten != growth.size()
+            || copied->GetSize() != source.size() + growth.size())
+        return fail("copied memory stream did not own or grow its snapshot");
+
+    LVMemoryStream lifecycle;
+    if (lifecycle.Create() != LVERR_OK
+            || lifecycle.Open(external, sizeof(external)) != LVERR_OK
+            || lifecycle.Close() != LVERR_OK
+            || lifecycle.Close() != LVERR_OK
+            || lifecycle.GetMode() != LVOM_CLOSED)
+        return fail("memory stream close/reopen lifecycle is not idempotent");
+
+    int ignoredWrites = 0;
+    LVStreamRef failingSource(new FailingBufferStream(ignoredWrites));
+    if (!LVCreateMemoryStream(failingSource).isNull())
+        return fail("memory stream factory published a failed short copy");
+    if (!LVCreateMemoryStream(
+                external, -1, true, LVOM_READ).isNull())
+        return fail("memory stream factory accepted a negative buffer size");
+
+    LVStreamRef empty = LVCreateStringStream(lString8());
+    if (empty.isNull() || empty->GetSize() != 0)
+        return fail("memory stream rejected an owned empty string");
+    return 0;
+}
+
 static int testDefaultStreamBufferOwnership() {
     std::vector<unsigned char> payload(12);
     for (std::size_t i = 0; i < payload.size(); ++i)
@@ -2470,6 +2560,8 @@ int main() {
         return 1;
 #endif
     if (testImageSourceOwnership() != 0)
+        return 1;
+    if (testMemoryStreamOwnership() != 0)
         return 1;
     if (testDefaultStreamBufferOwnership() != 0)
         return 1;

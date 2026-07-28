@@ -59,6 +59,9 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.cpp" TCR_STREAM_SOUR
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.h" TCR_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.cpp" DEFAULT_STREAM_BUFFER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.h" DEFAULT_STREAM_BUFFER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.cpp" MEMORY_STREAM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.h" MEMORY_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvstreamutils.cpp" STREAM_UTILS_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/serialbuf.h" SERIAL_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/serialbuf.cpp" SERIAL_BUFFER_SOURCE)
 
@@ -1248,6 +1251,73 @@ forbid_source_text(
   "${CACHED_STREAM_SOURCE}"
   "delete[] flags"
   "cached stream scratch cleanup must remain automatic"
+)
+
+# --- owned and borrowed memory-stream storage ---
+require_source_text(
+  "${MEMORY_STREAM_HEADER}"
+  "std::vector<lUInt8> m_storage"
+  "owned memory streams must use RAII storage"
+)
+require_source_text(
+  "${MEMORY_STREAM_HEADER}"
+  "LVMemoryStream(const LVMemoryStream &) = delete"
+  "memory streams must not shallow-copy their buffer view"
+)
+require_source_text(
+  "${MEMORY_STREAM_SOURCE}"
+  "m_storage.empty() || m_pBuffer != m_storage.data()"
+  "borrowed memory streams must remain non-resizable views"
+)
+require_source_text(
+  "${MEMORY_STREAM_SOURCE}"
+  "m_storage.resize(vectorSize)"
+  "owned memory-stream growth must remain container-managed"
+)
+require_source_text(
+  "${MEMORY_STREAM_SOURCE}"
+  "std::vector<lUInt8>().swap(m_storage)"
+  "memory-stream close must release owned storage automatically"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "std::unique_ptr<LVMemoryStream> stream(new LVMemoryStream())"
+  "memory-stream factories must own candidates until initialization succeeds"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "if (result != LVERR_OK)"
+  "memory-stream factories must not publish failed initialization"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "LVStreamRef(stream.release())"
+  "memory-stream ownership must transfer only at the reference boundary"
+)
+forbid_source_text(
+  "${MEMORY_STREAM_HEADER}"
+  "bool m_own_buffer"
+  "memory-stream ownership must not depend on a raw-pointer flag"
+)
+forbid_source_text(
+  "${MEMORY_STREAM_SOURCE}"
+  "cr_realloc("
+  "memory-stream growth must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${MEMORY_STREAM_SOURCE}"
+  "malloc("
+  "memory-stream allocation must remain container-managed"
+)
+forbid_source_text(
+  "${MEMORY_STREAM_SOURCE}"
+  "free(m_pBuffer)"
+  "memory-stream teardown must remain automatic"
+)
+forbid_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "LVMemoryStream * stream = new LVMemoryStream()"
+  "memory-stream factories must not use implicit raw ownership"
 )
 
 # --- serialization buffer owning/borrowed storage ---

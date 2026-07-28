@@ -170,6 +170,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Default stream-region buffers now use RAII storage and rollback-safe factory
   ownership. Nonzero read/write offsets, write-only initialization and
   idempotent flush are covered without writing partial factory state.
+- Memory streams now keep owned and growing buffers in `std::vector` while
+  preserving readonly borrowed aliases. Their factories publish only
+  successfully initialized streams, growth arithmetic is checked, and reopen
+  plus repeated close are rollback-safe.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.

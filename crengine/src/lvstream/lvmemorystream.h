@@ -25,54 +25,60 @@
 
 #include "lvnamedstream.h"
 
+#include <vector>
+
 class LVMemoryStream : public LVNamedStream {
 protected:
+    std::vector<lUInt8> m_storage;
     lUInt8 *m_pBuffer;
-    bool m_own_buffer;
     LVContainer *m_parent;
     lvsize_t m_size;
     lvsize_t m_bufsize;
     lvpos_t m_pos;
-    lvopen_mode_t m_mode;
     unsigned m_containerDepth;
 public:
     /// Check whether end of file is reached
     /**
         \return true if end of file reached
     */
-    virtual bool Eof() {
+    bool Eof() override {
         return m_pos >= m_size;
     }
 
-    virtual lvopen_mode_t GetMode() {
+    lvopen_mode_t GetMode() override {
         return m_mode;
     }
 
     /** \return LVERR_OK if change is ok */
-    virtual lverror_t SetMode(lvopen_mode_t mode);
+    lverror_t SetMode(lvopen_mode_t mode) override;
 
-    virtual LVContainer *GetParentContainer() {
+    LVContainer *GetParentContainer() override {
         return (LVContainer *) m_parent;
     }
 
-    virtual unsigned GetContainerDepth() {
+    unsigned GetContainerDepth() override {
         return m_containerDepth;
     }
 
-    virtual lverror_t Read(void *buf, lvsize_t count, lvsize_t *nBytesRead);
+    lverror_t Read(
+            void *buf, lvsize_t count, lvsize_t *nBytesRead) override;
 
-    virtual lvsize_t GetSize();
+    lvsize_t GetSize() override;
 
-    virtual lverror_t GetSize(lvsize_t *pSize);
+    lverror_t GetSize(lvsize_t *pSize) override;
 
     // ensure that buffer is at least new_size long
     lverror_t SetBufSize(lvsize_t new_size);
 
-    virtual lverror_t SetSize(lvsize_t size);
+    lverror_t SetSize(lvsize_t size) override;
 
-    virtual lverror_t Write(const void *buf, lvsize_t count, lvsize_t *nBytesWritten);
+    lverror_t Write(
+            const void *buf, lvsize_t count,
+            lvsize_t *nBytesWritten) override;
 
-    virtual lverror_t Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t *pNewPos);
+    lverror_t Seek(
+            lvoffset_t offset, lvseek_origin_t origin,
+            lvpos_t *pNewPos) override;
 
     lverror_t Close();
 
@@ -86,8 +92,10 @@ public:
     lverror_t Open(lUInt8 *pBuf, lvsize_t size);
 
     LVMemoryStream();
+    LVMemoryStream(const LVMemoryStream &) = delete;
+    LVMemoryStream &operator=(const LVMemoryStream &) = delete;
 
-    virtual ~LVMemoryStream();
+    ~LVMemoryStream() override = default;
 };
 
 #endif  // __LVMEMORYSTREAM_H_INCLUDED__
