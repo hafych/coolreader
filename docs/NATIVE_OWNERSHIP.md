@@ -636,10 +636,13 @@ its argument immediately, while internal construction keeps every candidate
 scoped until vector publication. The copy constructor clones every owner,
 while `set()` builds its deduplicated replacement completely before swap.
 Deserialization retains the existing append contract and wire format, but
-parses all incoming definitions into a temporary owner-list and reserves the
-destination before moving any item, so malformed input cannot publish a valid
-prefix. The native regression covers independent copy/set owners, a successful
-round trip, append compatibility and truncated-input rollback.
+each definition stages its fields until complete decoding, the list count is
+bounded by the minimum wire size, and all incoming definitions enter a
+temporary owner-list before the destination reserves and moves any item.
+Malformed input therefore cannot publish a valid prefix or partially replace a
+definition. The native regression covers independent copy/set owners, a
+successful round trip, append compatibility, oversized counts and
+truncated-input rollback at both levels.
 
 `LVTextLineQueue` owns decoded `LVTextFileLine` objects in a private vector of
 `unique_ptr`; indexed access returns only borrowed line views. Its source

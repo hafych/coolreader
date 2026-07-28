@@ -835,6 +835,21 @@ require_source_text(
 )
 require_source_text(
   "${EMBEDDED_FONT_SOURCE}"
+  "lString32 url;\n    lString8 face;\n    bool bold = false;\n    bool italic = false;"
+  "embedded-font definition restore must stage all serialized fields"
+)
+require_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "_url = std::move(url)"
+  "embedded-font definition restore must publish only after complete decoding"
+)
+require_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
+  "minimumSerializedFontDefinitionSize = 10"
+  "embedded-font list counts must remain bounded by serialized bytes"
+)
+require_source_text(
+  "${EMBEDDED_FONT_SOURCE}"
   "_items.reserve(_items.size() + parsed._items.size());"
   "embedded-font deserialization must reserve before atomic publication"
 )
@@ -857,6 +872,16 @@ require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "embedded font deserialize published a partial list"
   "embedded-font regression must retain failed-parse rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "embedded font definition truncation replaced committed state"
+  "embedded-font definition restore must retain rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "embedded font list accepted an oversized count"
+  "embedded-font list restore must retain count-bound coverage"
 )
 require_source_text(
   "${GLYPH_CACHE_HEADER}"

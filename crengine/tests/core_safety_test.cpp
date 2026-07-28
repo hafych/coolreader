@@ -2950,6 +2950,29 @@ static int testSerialBufOwnership() {
 }
 
 static int testEmbeddedFontOwnership() {
+    LVEmbeddedFontDef serializedDefinition(
+            lString32(U"fonts/definition.ttf"),
+            lString8("Serialized Definition"), true, true);
+    SerialBuf serializedDefinitionBuffer(1, true);
+    if (!serializedDefinition.serialize(serializedDefinitionBuffer)
+            || serializedDefinitionBuffer.error())
+        return fail("embedded font definition fixture could not serialize");
+    LVEmbeddedFontDef committedDefinition(
+            lString32(U"fonts/sentinel.ttf"),
+            lString8("Definition Sentinel"), false, false);
+    SerialBuf truncatedDefinition(
+            serializedDefinitionBuffer.buf(),
+            serializedDefinitionBuffer.pos() - 1);
+    if (committedDefinition.deserialize(truncatedDefinition)
+            || committedDefinition.getUrl()
+                    != lString32(U"fonts/sentinel.ttf")
+            || committedDefinition.getFace()
+                    != lString8("Definition Sentinel")
+            || committedDefinition.getBold()
+            || committedDefinition.getItalic())
+        return fail(
+                "embedded font definition truncation replaced committed state");
+
     LVEmbeddedFontList source;
     source.add(
             lString32(U"fonts/regular.ttf"),
@@ -3019,6 +3042,22 @@ static int testEmbeddedFontOwnership() {
         return fail(
                 "embedded font deserialize published a partial list");
     }
+
+    std::vector<lUInt8> oversizedCount(
+            serialized.buf(), serialized.buf() + serializedSize);
+    oversizedCount[4] = 0xFF;
+    oversizedCount[5] = 0xFF;
+    oversizedCount[6] = 0xFF;
+    oversizedCount[7] = 0x7F;
+    SerialBuf oversizedInput(
+            oversizedCount.data(),
+            static_cast<int>(oversizedCount.size()));
+    if (rollback.deserialize(oversizedInput)
+            || !oversizedInput.error()
+            || rollback.length() != 1
+            || !rollback.findByUrl(
+                    lString32(U"rollback-sentinel.ttf")))
+        return fail("embedded font list accepted an oversized count");
     return 0;
 }
 

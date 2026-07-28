@@ -40,8 +40,18 @@ bool LVEmbeddedFontDef::serialize(SerialBuf &buf) const {
 bool LVEmbeddedFontDef::deserialize(SerialBuf &buf) {
     if (!buf.checkMagic(EMBEDDED_FONT_DEF_MAGIC))
         return false;
-    buf >> _url >> _face >> _bold >> _italic;
-    return !buf.error();
+    lString32 url;
+    lString8 face;
+    bool bold = false;
+    bool italic = false;
+    buf >> url >> face >> bold >> italic;
+    if (buf.error())
+        return false;
+    _url = std::move(url);
+    _face = std::move(face);
+    _bold = bold;
+    _italic = italic;
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -136,10 +146,13 @@ bool LVEmbeddedFontList::deserialize(SerialBuf &buf) {
         return false;
     lUInt32 count = 0;
     buf >> count;
-    if (buf.error())
-        return false;
-    if (count > static_cast<lUInt32>(
-            std::numeric_limits<int>::max())) {
+    static const int minimumSerializedFontDefinitionSize = 10;
+    if (buf.error()
+            || count > static_cast<lUInt32>(
+                    std::numeric_limits<int>::max())
+            || count > static_cast<lUInt32>(
+                    buf.space()
+                            / minimumSerializedFontDefinitionSize)) {
         buf.seterror();
         return false;
     }
