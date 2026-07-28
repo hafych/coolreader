@@ -1244,6 +1244,35 @@ public:
     }
 };
 
+class FailingImageSource : public LVImageSource {
+private:
+    int &_decodeCalls;
+
+public:
+    explicit FailingImageSource(int &decodeCalls)
+        : _decodeCalls(decodeCalls)
+    {
+    }
+
+    ldomNode *GetSourceNode() override { return NULL; }
+    LVStream *GetSourceStream() override { return NULL; }
+    void Compact() override {}
+    int GetWidth() const override { return 2; }
+    int GetHeight() const override { return 2; }
+
+    bool Decode(LVImageDecoderCallback *callback) override
+    {
+        ++_decodeCalls;
+        if (callback) {
+            lUInt32 row[] = {0x000000, 0xffffff};
+            callback->OnStartDecode(this);
+            callback->OnLineDecoded(this, 0, row);
+            callback->OnEndDecode(this, true);
+        }
+        return false;
+    }
+};
+
 #if (USE_GIF==1)
 static int testGifDecoderOwnership() {
     static const unsigned char validGif[] = {
@@ -1317,6 +1346,31 @@ static int testImageSourceOwnership() {
     if (xpmCallback.starts != 2 || xpmCallback.lines != 4
             || xpmCallback.ends != 2)
         return fail("XPM source callback lifecycle is incomplete");
+
+    static const int unpackedBpps[] = {8, 16, 32};
+    for (int bpp : unpackedBpps) {
+        LVImageSourceRef unpacked =
+                LVCreateUnpackedImageSource(xpm, 1024, bpp);
+        CountingImageDecodeCallback unpackedCallback;
+        if (unpacked.isNull()
+                || unpacked.get() == xpm.get()
+                || !unpacked->Decode(&unpackedCallback)
+                || !unpacked->Decode(&unpackedCallback))
+            return fail("unpacked image source could not reuse its buffers");
+        if (unpackedCallback.starts != 2
+                || unpackedCallback.lines != 4
+                || unpackedCallback.ends != 2)
+            return fail("unpacked image callback lifecycle is incomplete");
+    }
+
+    int failingDecodeCalls = 0;
+    LVImageSourceRef failingSource(
+            new FailingImageSource(failingDecodeCalls));
+    LVImageSourceRef unpackFallback =
+            LVCreateUnpackedImageSource(failingSource, 1024, 16);
+    if (unpackFallback.get() != failingSource.get()
+            || failingDecodeCalls != 1)
+        return fail("failed unpack did not release its candidate buffers");
 
     static const char *invalidXpm[] = {
         "2 2 2 1",

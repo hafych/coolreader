@@ -20,12 +20,13 @@
  ***************************************************************************/
 
 #include "lvunpackedimgsource.h"
-#include "lvarray.h"
 
 // lvdrawbuff private stuff
 #include "../lvdrawbuf/lvdrawbuf_utils.h"
 
+#include <cstddef>
 #include <string.h>
+#include <vector>
 
 // aaaaaaaarrrrrrrrggggggggbbbbbbbb -> yyyyyyaa
 inline lUInt8 grayPack(lUInt32 pixel)
@@ -48,31 +49,23 @@ inline lUInt32 grayUnpack(lUInt8 pixel)
 
 LVUnpackedImgSource::LVUnpackedImgSource(LVImageSourceRef src, int bpp)
     : _isGray(bpp<=8)
+    , _valid(false)
     , _bpp(bpp)
-    , _grayImage(NULL)
-    , _colorImage(NULL)
-    , _colorImage16(NULL)
     , _dx( src->GetWidth() )
     , _dy( src->GetHeight() )
 {
+    const std::size_t pixelCount = _dx > 0 && _dy > 0
+            ? static_cast<std::size_t>(_dx) * static_cast<std::size_t>(_dy)
+            : 0;
     if ( bpp<=8  ) {
-        _grayImage = (lUInt8*)malloc( _dx * _dy * sizeof(lUInt8) );
+        _grayImage.resize(pixelCount);
     } else if ( bpp==16 ) {
-        _colorImage16 = (lUInt16*)malloc( _dx * _dy * sizeof(lUInt16) );
+        _colorImage16.resize(pixelCount);
     } else {
-        _colorImage = (lUInt32*)malloc( _dx * _dy * sizeof(lUInt32) );
+        _colorImage.resize(pixelCount);
     }
-    src->Decode( this );
-}
-
-LVUnpackedImgSource::~LVUnpackedImgSource()
-{
-    if ( _grayImage )
-        free( _grayImage );
-    if ( _colorImage )
-        free( _colorImage );
-    if ( _colorImage )
-        free( _colorImage16 );
+    if ( !src->Decode(this) )
+        _valid = false;
 }
 
 void LVUnpackedImgSource::OnStartDecode(LVImageSource *)
@@ -82,62 +75,72 @@ void LVUnpackedImgSource::OnStartDecode(LVImageSource *)
 
 bool LVUnpackedImgSource::OnLineDecoded(LVImageSource *, int y, lUInt32 *data)
 {
-    if ( y<0 || y>=_dy )
+    if ( y<0 || y>=_dy || _dx<=0 || !data )
         return false;
+    const std::size_t offset =
+            static_cast<std::size_t>(_dx) * static_cast<std::size_t>(y);
     if ( _isGray ) {
-        lUInt8 * dst = _grayImage + _dx * y;
+        lUInt8 * dst = _grayImage.data() + offset;
         for ( int x=0; x<_dx; x++ ) {
             dst[x] = grayPack( data[x] );
         }
     } else if ( _bpp==16 ) {
-        lUInt16 * dst = _colorImage16 + _dx * y;
+        lUInt16 * dst = _colorImage16.data() + offset;
         for ( int x=0; x<_dx; x++ ) {
             dst[x] = rgb888to565( data[x] );
         }
     } else {
-        lUInt32 * dst = _colorImage + _dx * y;
+        lUInt32 * dst = _colorImage.data() + offset;
         memcpy( dst, data, sizeof(lUInt32) * _dx );
     }
     return true;
 }
 
-void LVUnpackedImgSource::OnEndDecode(LVImageSource *, bool)
+void LVUnpackedImgSource::OnEndDecode(LVImageSource *, bool errors)
 {
-    //CRLog::trace( "LVUnpackedImgSource::OnEndDecode" );
+    _valid = !errors;
 }
 
 bool LVUnpackedImgSource::Decode(LVImageDecoderCallback *callback)
 {
+    if ( !_valid || !callback || _dx<=0 || _dy<=0 )
+        return false;
     callback->OnStartDecode( this );
     //bool res = false;
     if ( _isGray ) {
         // gray
-        LVArray<lUInt32> line;
-        line.reserve( _dx );
+        std::vector<lUInt32> line(_dx);
         for ( int y=0; y<_dy; y++ ) {
-            lUInt8 * src = _grayImage + _dx * y;
-            lUInt32 * dst = line.ptr();
+            const std::size_t offset =
+                    static_cast<std::size_t>(_dx)
+                    * static_cast<std::size_t>(y);
+            const lUInt8 * src = _grayImage.data() + offset;
+            lUInt32 * dst = line.data();
             for ( int x=0; x<_dx; x++ )
                 dst[x] = grayUnpack( src[x] );
             callback->OnLineDecoded( this, y, dst );
         }
-        line.clear();
     } else if ( _bpp==16 ) {
         // 16bit
-        LVArray<lUInt32> line;
-        line.reserve( _dx );
+        std::vector<lUInt32> line(_dx);
         for ( int y=0; y<_dy; y++ ) {
-            lUInt16 * src = _colorImage16 + _dx * y;
-            lUInt32 * dst = line.ptr();
+            const std::size_t offset =
+                    static_cast<std::size_t>(_dx)
+                    * static_cast<std::size_t>(y);
+            const lUInt16 * src = _colorImage16.data() + offset;
+            lUInt32 * dst = line.data();
             for ( int x=0; x<_dx; x++ )
                 dst[x] = rgb565to888( src[x] );
             callback->OnLineDecoded( this, y, dst );
         }
-        line.clear();
     } else {
         // color
         for ( int y=0; y<_dy; y++ ) {
-            callback->OnLineDecoded( this, y, _colorImage + _dx * y );
+            const std::size_t offset =
+                    static_cast<std::size_t>(_dx)
+                    * static_cast<std::size_t>(y);
+            callback->OnLineDecoded(
+                    this, y, _colorImage.data() + offset);
         }
     }
     callback->OnEndDecode( this, false );

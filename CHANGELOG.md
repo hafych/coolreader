@@ -154,6 +154,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   draw mark collection and SVG/GIF/XPM image decoding now use scoped RAII
   ownership instead of manual temporary-buffer cleanup; encoding probes also
   restore stream position on every exit.
+- Unpacked image snapshots now own grayscale, RGB565 and 32-bit pixels through
+  RAII containers, eliminating the legacy 16-bit teardown leak; repeat-decode
+  regressions cover every storage depth, while failed predecode rolls back to
+  the original image source.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.

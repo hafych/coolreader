@@ -88,6 +88,14 @@ compatibility view and, only when requested by its legacy factory, a
 `std::unique_ptr` owner. Invalid XPM construction releases partially parsed
 rows without depending on dimensions that were reset after the error.
 
+`LVUnpackedImgSource` owns grayscale, RGB565 and 32-bit pixel snapshots through
+separate `std::vector` buffers and uses a scoped vector for conversion rows.
+Only the buffer selected by the requested bit depth is populated. Automatic
+teardown also closes the legacy 16-bit leak caused by checking the unrelated
+32-bit pointer before freeing RGB565 storage. The factory owns its candidate
+through `std::unique_ptr`; a failed source decode releases the partial pixel
+snapshot and returns the original source instead of publishing invalid data.
+
 The ZIP decoder owns persistent inflate buffers and CRC scratch storage through
 `std::vector`; fallback CRC calculation uses a position guard and supports
 archives whose header omits the checksum. `LVCachedStream` owns cache slots as

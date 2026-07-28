@@ -33,6 +33,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvtextfilebase.h" TEXT_FILE_BASE_HEAD
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextfilebase.cpp" TEXT_FILE_BASE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/rtfimp.h" RTF_PARSER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/rtfimp.cpp" RTF_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvimg.cpp" IMAGE_FACTORY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
@@ -42,6 +43,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.h" DRAWBUF_IMAGE
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdummyimagesource.h" DUMMY_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.cpp" XPM_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvxpmimagesource.h" XPM_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.cpp" UNPACKED_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.h" UNPACKED_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.cpp" ZIP_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.h" ZIP_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREAM_SOURCE)
@@ -786,6 +789,71 @@ forbid_source_text(
   "${XPM_IMAGE_SOURCE}"
   "new lUInt32"
   "XPM source must not use owning palette/output arrays"
+)
+require_source_text(
+  "${UNPACKED_IMAGE_HEADER}"
+  "std::vector<lUInt8> _grayImage"
+  "unpacked grayscale pixels must use RAII ownership"
+)
+require_source_text(
+  "${UNPACKED_IMAGE_HEADER}"
+  "std::vector<lUInt16> _colorImage16"
+  "unpacked 16-bit pixels must use RAII ownership"
+)
+require_source_text(
+  "${UNPACKED_IMAGE_HEADER}"
+  "std::vector<lUInt32> _colorImage"
+  "unpacked 32-bit pixels must use RAII ownership"
+)
+require_source_text(
+  "${UNPACKED_IMAGE_SOURCE}"
+  "std::vector<lUInt32> line(_dx)"
+  "unpacked image conversion rows must use scoped RAII ownership"
+)
+require_source_text(
+  "${UNPACKED_IMAGE_SOURCE}"
+  "_valid = !errors"
+  "unpacked image construction must observe decoder failures"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "std::unique_ptr<LVUnpackedImgSource> img"
+  "unpacked image candidates must have explicit ownership"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "LVImageSourceRef(img.release())"
+  "unpacked image ownership must transfer only at the reference boundary"
+)
+forbid_source_text(
+  "${UNPACKED_IMAGE_HEADER}"
+  "lUInt8 * _grayImage"
+  "unpacked image source must not own a raw grayscale buffer"
+)
+forbid_source_text(
+  "${UNPACKED_IMAGE_HEADER}"
+  "lUInt16 * _colorImage16"
+  "unpacked image source must not own a raw 16-bit buffer"
+)
+forbid_source_text(
+  "${UNPACKED_IMAGE_HEADER}"
+  "lUInt32 * _colorImage"
+  "unpacked image source must not own a raw 32-bit buffer"
+)
+forbid_source_text(
+  "${UNPACKED_IMAGE_SOURCE}"
+  "malloc("
+  "unpacked image allocation must remain container-managed"
+)
+forbid_source_text(
+  "${UNPACKED_IMAGE_SOURCE}"
+  "free("
+  "unpacked image teardown must remain automatic"
+)
+forbid_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "LVUnpackedImgSource * img"
+  "unpacked image construction must not use implicit raw ownership"
 )
 
 # --- TCR decoder dictionary, index and decoded buffers ---

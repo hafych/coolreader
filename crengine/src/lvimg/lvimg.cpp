@@ -45,6 +45,8 @@
 #include "crlog.h"
 #include "parsebudget.h"
 
+#include <memory>
+
 
 LVImageSourceRef LVCreateXPMImageSource( const char * data[] )
 {
@@ -192,9 +194,12 @@ LVImageSourceRef LVCreateUnpackedImageSource( LVImageSourceRef srcImage, int max
     if ( sz>maxSize )
         return srcImage;
     CRLog::trace("Unpacking image %dx%d (%d)", dx, dy, sz);
-    LVUnpackedImgSource * img = new LVUnpackedImgSource( srcImage, gray ? 8 : 32 );
+    std::unique_ptr<LVUnpackedImgSource> img(
+            new LVUnpackedImgSource(srcImage, gray ? 8 : 32));
+    if ( !img->isValid() )
+        return srcImage;
     CRLog::trace("Unpacking done");
-    return LVImageSourceRef( img );
+    return LVImageSourceRef(img.release());
 }
 
 /// creates decoded memory copy of image, if it's unpacked size is less than maxSize
@@ -208,9 +213,12 @@ LVImageSourceRef LVCreateUnpackedImageSource( LVImageSourceRef srcImage, int max
     if ( sz>maxSize )
         return srcImage;
     CRLog::trace("Unpacking image %dx%d (%d)", dx, dy, sz);
-    LVUnpackedImgSource * img = new LVUnpackedImgSource( srcImage, bpp );
+    std::unique_ptr<LVUnpackedImgSource> img(
+            new LVUnpackedImgSource(srcImage, bpp));
+    if ( !img->isValid() )
+        return srcImage;
     CRLog::trace("Unpacking done");
-    return LVImageSourceRef( img );
+    return LVImageSourceRef(img.release());
 }
 
 LVImageSourceRef LVCreateDrawBufImageSource( LVColorDrawBuf * buf, bool own )

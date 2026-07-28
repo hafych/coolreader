@@ -24,19 +24,23 @@
 #include "lvimagesource.h"
 #include "lvimagedecodercallback.h"
 
+#include <vector>
+
 class LVUnpackedImgSource : public LVImageSource, public LVImageDecoderCallback
 {
 protected:
     bool _isGray;
+    bool _valid;
     int _bpp;
-    lUInt8 * _grayImage;
-    lUInt32 * _colorImage;
-    lUInt16 * _colorImage16;
+    std::vector<lUInt8> _grayImage;
+    std::vector<lUInt32> _colorImage;
+    std::vector<lUInt16> _colorImage16;
     int _dx;
     int _dy;
 public:
     LVUnpackedImgSource( LVImageSourceRef src, int bpp );
-    virtual ~LVUnpackedImgSource();
+    virtual ~LVUnpackedImgSource() = default;
+    bool isValid() const { return _valid; }
     virtual void OnStartDecode( LVImageSource * );
     virtual bool OnLineDecoded( LVImageSource *, int y, lUInt32 * data );
     virtual void OnEndDecode( LVImageSource *, bool );
