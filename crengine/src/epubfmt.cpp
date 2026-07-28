@@ -34,6 +34,10 @@
 #include "../include/lvhtmlparser.h"
 #include "../include/lvxmlutils.h"
 
+#include <memory>
+#include <utility>
+#include <vector>
+
 
 class EpubItem {
 public:
@@ -43,15 +47,23 @@ public:
     lString32 title;
     bool nonlinear;
     EpubItem()
-    { }
+        : nonlinear(false)
+    {
+    }
     EpubItem( const EpubItem & v )
-        : href(v.href), mediaType(v.mediaType), id(v.id)
+        : href(v.href)
+        , mediaType(v.mediaType)
+        , id(v.id)
+        , title(v.title)
+        , nonlinear(v.nonlinear)
     { }
     EpubItem & operator = ( const EpubItem & v )
     {
         href = v.href;
         mediaType = v.mediaType;
         id = v.id;
+        title = v.title;
+        nonlinear = v.nonlinear;
         return *this;
     }
 };
@@ -348,14 +360,14 @@ lString32 EpubGetRootFilePath(LVContainerRef m_arc)
     {
         LVStreamRef container_stream = m_arc->OpenStream(U"META-INF/container.xml", LVOM_READ);
         if ( !container_stream.isNull() ) {
-            ldomDocument * doc = LVParseXMLStream( container_stream );
+            std::unique_ptr<ldomDocument> doc(
+                    LVParseXMLStream(container_stream));
             if ( doc ) {
                 ldomNode * rootfile = doc->nodeFromXPath( cs32("container/rootfiles/rootfile") );
                 if ( rootfile && rootfile->isElement() ) {
                     rootfilePath = rootfile->getAttributeValue("full-path");
                     rootfileMediaType = rootfile->getAttributeValue("media-type");
                 }
-                delete doc;
             }
         }
     }
@@ -367,23 +379,35 @@ lString32 EpubGetRootFilePath(LVContainerRef m_arc)
 
 /// encrypted font demangling proxy: XORs first 1024 bytes of source stream with key
 class FontDemanglingStream : public StreamProxy {
-    LVArray<lUInt8> & _key;
+    LVArray<lUInt8> _key;
 public:
-    FontDemanglingStream(LVStreamRef baseStream, LVArray<lUInt8> & key) : StreamProxy(baseStream), _key(key) {
+    FontDemanglingStream(
+            LVStreamRef baseStream, const LVArray<lUInt8> &key)
+        : StreamProxy(baseStream), _key(key)
+    {
     }
 
-    virtual lverror_t Read( void * buf, lvsize_t count, lvsize_t * nBytesRead ) {
+    lverror_t Read(
+            void *buf, lvsize_t count, lvsize_t *nBytesRead) override
+    {
         lvpos_t pos = _base->GetPos();
-        lverror_t res = _base->Read(buf, count, nBytesRead);
+        lvsize_t bytesRead = 0;
+        lverror_t res = _base->Read(buf, count, &bytesRead);
+        if (nBytesRead)
+            *nBytesRead = bytesRead;
         if (pos < 1024 && _key.length() == 16) {
-            for (int i=0; i + pos < 1024; i++) {
-                int keyPos = (i + pos) & 15;
+            for (lvsize_t i = 0;
+                    i < bytesRead && i + pos < 1024; ++i) {
+                int keyPos = static_cast<int>((i + pos) & 15);
                 ((lUInt8*)buf)[i] ^= _key[keyPos];
             }
         }
         return res;
     }
-
+private:
+    FontDemanglingStream(const FontDemanglingStream &) = delete;
+    FontDemanglingStream &operator=(
+            const FontDemanglingStream &) = delete;
 };
 
 class EncryptedItem {
@@ -395,141 +419,159 @@ public:
     }
 };
 
-class EncryptedItemCallback {
-public:
-    virtual void addEncryptedItem(EncryptedItem * item) = 0;
-    virtual ~EncryptedItemCallback() {}
-};
-
-
 class EncCallback : public LVXMLParserCallback {
-    bool insideEncryption;
     bool insideEncryptedData;
     bool insideEncryptionMethod;
-    bool insideCipherData;
     bool insideCipherReference;
+    std::vector<std::unique_ptr<EncryptedItem> > _items;
 public:
     /// called on opening tag <
-    virtual ldomNode * OnTagOpen( const lChar32 * nsname, const lChar32 * tagname) {
+    ldomNode *OnTagOpen(
+            const lChar32 *nsname, const lChar32 *tagname) override
+    {
         CR_UNUSED(nsname);
-        if (!lStr_cmp(tagname, "encryption"))
-            insideEncryption = true;
-        else if (!lStr_cmp(tagname, "EncryptedData"))
+        if (!lStr_cmp(tagname, "EncryptedData")) {
             insideEncryptedData = true;
+            algorithm.clear();
+            uri.clear();
+        }
         else if (!lStr_cmp(tagname, "EncryptionMethod"))
             insideEncryptionMethod = true;
-        else if (!lStr_cmp(tagname, "CipherData"))
-            insideCipherData = true;
         else if (!lStr_cmp(tagname, "CipherReference"))
             insideCipherReference = true;
         return NULL;
     }
     /// called on tag close
-    virtual void OnTagClose( const lChar32 * nsname, const lChar32 * tagname, bool /*self_closing_tag*/=false ) {
+    void OnTagClose(
+            const lChar32 *nsname, const lChar32 *tagname,
+            bool /*self_closing_tag*/=false) override
+    {
         CR_UNUSED(nsname);
-        if (!lStr_cmp(tagname, "encryption"))
-            insideEncryption = false;
-        else if (!lStr_cmp(tagname, "EncryptedData") && insideEncryptedData) {
+        if (!lStr_cmp(tagname, "EncryptedData") && insideEncryptedData) {
             if (!algorithm.empty() && !uri.empty()) {
-                _container->addEncryptedItem(new EncryptedItem(uri, algorithm));
+                std::unique_ptr<EncryptedItem> item(
+                        new EncryptedItem(uri, algorithm));
+                _items.push_back(std::move(item));
             }
             insideEncryptedData = false;
         } else if (!lStr_cmp(tagname, "EncryptionMethod"))
             insideEncryptionMethod = false;
-        else if (!lStr_cmp(tagname, "CipherData"))
-            insideCipherData = false;
         else if (!lStr_cmp(tagname, "CipherReference"))
             insideCipherReference = false;
     }
     /// called on element attribute
-    virtual void OnAttribute( const lChar32 * nsname, const lChar32 * attrname, const lChar32 * attrvalue ) {
-        CR_UNUSED2(nsname, attrvalue);
+    void OnAttribute(
+            const lChar32 *nsname, const lChar32 *attrname,
+            const lChar32 *attrvalue) override
+    {
+        CR_UNUSED(nsname);
         if (!lStr_cmp(attrname, "URI") && insideCipherReference)
-            insideEncryption = false;
+            uri = attrvalue;
         else if (!lStr_cmp(attrname, "Algorithm") && insideEncryptionMethod)
-            insideEncryptedData = false;
+            algorithm = attrvalue;
     }
     /// called on text
-    virtual void OnText( const lChar32 * text, int len, lUInt32 flags ) {
+    void OnText(
+            const lChar32 *text, int len, lUInt32 flags) override
+    {
         CR_UNUSED3(text,len,flags);
     }
     /// add named BLOB data to document
-    virtual bool OnBlob(lString32 name, const lUInt8 * data, int size) {
+    bool OnBlob(
+            lString32 name, const lUInt8 *data, int size) override
+    {
         CR_UNUSED3(name,data,size);
         return false;
     }
 
-    virtual void OnStop() { }
+    void OnStop() override { }
     /// called after > of opening tag (when entering tag body)
-    virtual void OnTagBody() { }
+    void OnTagBody() override { }
 
-    EncryptedItemCallback * _container;
     lString32 algorithm;
     lString32 uri;
-    /// destructor
-    EncCallback(EncryptedItemCallback * container) : _container(container) {
-        insideEncryption = false;
-        insideEncryptedData = false;
-        insideEncryptionMethod = false;
-        insideCipherData = false;
-        insideCipherReference = false;
+    EncCallback()
+        : insideEncryptedData(false)
+        , insideEncryptionMethod(false)
+        , insideCipherReference(false)
+    {
     }
-    virtual ~EncCallback() {}
+    ~EncCallback() override = default;
+    std::vector<std::unique_ptr<EncryptedItem> > takeItems()
+    {
+        return std::move(_items);
+    }
 };
 
-class EncryptedDataContainer : public LVContainer, public EncryptedItemCallback {
+class EncryptedDataContainer : public LVContainer {
     LVContainerRef _container;
-    LVPtrVector<EncryptedItem> _list;
+    std::vector<std::unique_ptr<EncryptedItem> > _list;
 public:
-    EncryptedDataContainer(LVContainerRef baseContainer) : _container(baseContainer) {
-
+    explicit EncryptedDataContainer(LVContainerRef baseContainer)
+        : _container(baseContainer)
+    {
     }
 
-    virtual LVContainer * GetParentContainer() { return _container->GetParentContainer(); }
+    LVContainer *GetParentContainer() override
+    {
+        return _container->GetParentContainer();
+    }
     //virtual const LVContainerItemInfo * GetObjectInfo(const lChar32 * pname);
-    virtual const LVContainerItemInfo * GetObjectInfo(int index) { return _container->GetObjectInfo(index); }
-    virtual int GetObjectCount() const { return _container->GetObjectCount(); }
+    const LVContainerItemInfo *GetObjectInfo(int index) override
+    {
+        return _container->GetObjectInfo(index);
+    }
+    int GetObjectCount() const override
+    {
+        return _container->GetObjectCount();
+    }
     /// returns object size (file size or directory entry count)
-    virtual lverror_t GetSize( lvsize_t * pSize ) { return _container->GetSize(pSize); }
+    lverror_t GetSize(lvsize_t *pSize) override
+    {
+        return _container->GetSize(pSize);
+    }
 
 
-    virtual LVStreamRef OpenStream( const lChar32 * fname, lvopen_mode_t mode ) {
-
+    LVStreamRef OpenStream(
+            const lChar32 *fname, lvopen_mode_t mode) override
+    {
         LVStreamRef res = _container->OpenStream(fname, mode);
         if (res.isNull())
             return res;
-        if (isEncryptedItem(fname))
-            return LVStreamRef(new FontDemanglingStream(res, _fontManglingKey));
+        if (isEncryptedItem(fname)) {
+            std::unique_ptr<FontDemanglingStream> candidate(
+                    new FontDemanglingStream(res, _fontManglingKey));
+            return LVStreamRef(candidate.release());
+        }
         return res;
     }
 
     /// returns stream/container name, may be NULL if unknown
-    virtual const lChar32 * GetName()
+    const lChar32 *GetName() override
     {
         return _container->GetName();
     }
     /// sets stream/container name, may be not implemented for some objects
-    virtual void SetName(const lChar32 * name)
+    void SetName(const lChar32 *name) override
     {
         _container->SetName(name);
     }
 
 
-    virtual void addEncryptedItem(EncryptedItem * item) {
-        _list.add(item);
-    }
-
     EncryptedItem * findEncryptedItem(const lChar32 * name) {
-        lString32 n;
-        if (name[0] != '/' && name[0] != '\\')
-            n << "/";
-        n << name;
-        for (int i=0; i<_list.length(); i++) {
-            lString32 s = _list[i]->_uri;
-            if (s[0]!='/' && s[i]!='\\')
-                s = "/" + s;
-            if (_list[i]->_uri == s)
-                return _list[i];
+        if (!name)
+            return NULL;
+        lString32 expected(name);
+        while (!expected.empty()
+                && (expected[0] == '/' || expected[0] == '\\'))
+            expected.erase(0, 1);
+        for (const std::unique_ptr<EncryptedItem> &item : _list) {
+            lString32 actual = item->_uri;
+            while (!actual.empty()
+                    && (actual[0] == '/' || actual[0] == '\\'))
+                actual.erase(0, 1);
+            if (actual == expected)
+                return item.get();
         }
         return NULL;
     }
@@ -562,8 +604,8 @@ public:
     }
 
     bool hasUnsupportedEncryption() {
-        for (int i=0; i<_list.length(); i++) {
-            lString32 method = _list[i]->_method;
+        for (const std::unique_ptr<EncryptedItem> &item : _list) {
+            lString32 method = item->_method;
             if (method != "http://ns.adobe.com/pdf/enc#RC") {
                 CRLog::debug("unsupported encryption method: %s", LCSTR(method));
                 return true;
@@ -576,14 +618,21 @@ public:
         LVStreamRef stream = _container->OpenStream(U"META-INF/encryption.xml", LVOM_READ);
         if (stream.isNull())
             return false;
-        EncCallback enccallback(this);
+        EncCallback enccallback;
         LVXMLParser parser(stream, &enccallback, false, false);
         if (!parser.Parse())
             return false;
-        if (_list.length())
-            return true;
-        return false;
+        std::vector<std::unique_ptr<EncryptedItem> > items =
+                enccallback.takeItems();
+        if (items.empty())
+            return false;
+        _list.swap(items);
+        return true;
     }
+private:
+    EncryptedDataContainer(const EncryptedDataContainer &) = delete;
+    EncryptedDataContainer &operator=(
+            const EncryptedDataContainer &) = delete;
 };
 
 void createEncryptedEpubWarningDocument(ldomDocument * m_doc) {
@@ -629,12 +678,13 @@ LVStreamRef GetEpubCoverpage(LVContainerRef arc)
     if ( rootfilePath.empty() )
         return LVStreamRef();
 
-    EncryptedDataContainer * decryptor = new EncryptedDataContainer(arc);
+    std::unique_ptr<EncryptedDataContainer> decryptor(
+            new EncryptedDataContainer(arc));
     if (decryptor->open()) {
         CRLog::debug("EPUB: encrypted items detected");
     }
 
-    LVContainerRef m_arc = LVContainerRef(decryptor);
+    LVContainerRef m_arc(decryptor.release());
 
     lString32 codeBase = LVExtractPath(rootfilePath, false);
     CRLog::trace("codeBase=%s", LCSTR(codeBase));
@@ -648,7 +698,8 @@ LVStreamRef GetEpubCoverpage(LVContainerRef arc)
     // reading content stream
     {
         lString32 coverId;
-        ldomDocument * doc = LVParseXMLStream( content_stream );
+        std::unique_ptr<ldomDocument> doc(
+                LVParseXMLStream(content_stream));
         if ( !doc )
             return LVStreamRef();
 
@@ -684,7 +735,6 @@ LVStreamRef GetEpubCoverpage(LVContainerRef arc)
                 }
             }
         }
-        delete doc;
     }
 
     return coverPageImageStream;
@@ -938,18 +988,20 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
     if ( rootfilePath.empty() )
         return false;
 
-    EncryptedDataContainer * decryptor = new EncryptedDataContainer(arc);
+    std::unique_ptr<EncryptedDataContainer> decryptor(
+            new EncryptedDataContainer(arc));
     if (decryptor->open()) {
         CRLog::debug("EPUB: encrypted items detected");
     }
-
-    LVContainerRef m_arc = LVContainerRef(decryptor);
 
     if (decryptor->hasUnsupportedEncryption()) {
         // DRM!!!
         createEncryptedEpubWarningDocument(m_doc);
         return true;
     }
+
+    EncryptedDataContainer *decryptorView = decryptor.get();
+    LVContainerRef m_arc(decryptor.release());
 
     m_doc->setContainer(m_arc);
 
@@ -988,7 +1040,8 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
     // reading content stream
     {
         CRLog::debug("Parsing opf");
-        ldomDocument * doc = LVParseXMLStream( content_stream );
+        std::unique_ptr<ldomDocument> doc(
+                LVParseXMLStream(content_stream));
         if ( !doc )
             return false;
 
@@ -1060,7 +1113,7 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             if (!item)
                 break;
             lString32 key = item->getText().trim();
-            if (decryptor->setManglingKey(key)) {
+            if (decryptorView->setManglingKey(key)) {
                 CRLog::debug("Using font mangling key %s", LCSTR(key));
                 break;
             }
@@ -1082,7 +1135,6 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
                 if ( progressCallback ) {
                     progressCallback->OnLoadFileEnd( );
                 }
-                delete doc;
                 return true;
             }
             CRLog::debug("Not loaded from cache, parsing epub content");
@@ -1226,7 +1278,6 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
         if (metadataOnly && coverId.empty()) {
             // no cover to look for, no need for more work
-            delete doc;
             return true;
         }
 
@@ -1258,15 +1309,15 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
                     }
                     if (metadataOnly) {
                         // coverId found, no need for more work
-                        delete doc;
                         return true;
                     }
                 }
-                EpubItem * epubItem = new EpubItem;
+                std::unique_ptr<EpubItem> epubItem(new EpubItem);
                 epubItem->href = href;
                 epubItem->id = id;
                 epubItem->mediaType = mediaType;
-                epubItems.add( epubItem );
+                epubItems.reserve(epubItems.length() + 1);
+                epubItems.add(epubItem.release());
 
                 if ( isEpub3 && navHref.empty() ) {
                     lString32 properties = item->getAttributeValue("properties");
@@ -1334,7 +1385,6 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             }
             CRLog::debug("opf: reading spine done");
         }
-        delete doc;
         CRLog::debug("opf: closed");
     }
 
@@ -1435,7 +1485,8 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             codeBase.append(1, U'/');
         appender.setCodeBase(codeBase);
         if ( !stream.isNull() ) {
-            ldomDocument * navDoc = LVParseXMLStream( stream );
+            std::unique_ptr<ldomDocument> navDoc(
+                    LVParseXMLStream(stream));
             if ( navDoc!=NULL ) {
                 // Find <nav epub:type="toc">
                 lUInt16 nav_id = navDoc->getElementNameIndex(U"nav");
@@ -1506,7 +1557,6 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
                     if ( ol_root )
                         ReadEpubNavPageMap( m_doc, ol_root, m_doc->getPageMap(), appender );
                 }
-                delete navDoc;
             }
         }
     }
@@ -1523,7 +1573,8 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             codeBase.append(1, U'/');
         appender.setCodeBase(codeBase);
         if ( !stream.isNull() ) {
-            ldomDocument * ncxdoc = LVParseXMLStream( stream );
+            std::unique_ptr<ldomDocument> ncxdoc(
+                    LVParseXMLStream(stream));
             if ( ncxdoc!=NULL ) {
                 if ( !has_toc ) {
                     ldomNode * navMap = ncxdoc->nodeFromXPath( cs32("ncx/navMap"));
@@ -1536,7 +1587,6 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
                     if ( pageList!=NULL )
                         ReadEpubNcxPageList( m_doc, pageList, m_doc->getPageMap(), appender );
                 }
-                delete ncxdoc;
             }
         }
     }
@@ -1571,14 +1621,14 @@ bool ImportEpubDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
             codeBase.append(1, U'/');
         appender.setCodeBase(codeBase);
         if ( !stream.isNull() ) {
-            ldomDocument * pagemapdoc = LVParseXMLStream( stream );
+            std::unique_ptr<ldomDocument> pagemapdoc(
+                    LVParseXMLStream(stream));
             if ( pagemapdoc!=NULL ) {
                 if ( !has_pagemap ) {
                     ldomNode * pageMap = pagemapdoc->nodeFromXPath( cs32("page-map"));
                     if ( pageMap!=NULL )
                         ReadEpubAdobePageMap( m_doc, pageMap, m_doc->getPageMap(), appender );
                 }
-                delete pagemapdoc;
             }
         }
     }

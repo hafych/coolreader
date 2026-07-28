@@ -456,3 +456,16 @@ scoped until successful publication. Regression coverage reads a real CHM
 entry after releasing its container and source, repeats the metadata owner
 chain, rejects malformed metadata and HTML, and verifies failed container
 probing does not publish a candidate.
+
+EPUB encryption metadata is parsed into a vector of scoped item candidates and
+published only after the complete XML document succeeds; a failed parse
+therefore releases its valid prefix without changing the decrypting container.
+Encrypted-item lookup normalizes leading separators before comparing the
+requested path with the stored URI. Each font-demangling stream owns a snapshot
+of the Adobe key and XORs only the bytes actually returned by its base stream,
+so the stream remains valid after its container is released. Decryptor,
+manifest-item and OPF/nav/NCX/page-map document candidates remain in
+`unique_ptr` until their explicit `LVContainerRef`, owning-list or legacy
+factory boundary accepts them. The in-memory EPUB regression covers a valid
+obfuscated font, malformed encryption rollback and cover/font streams that
+outlive their source container.

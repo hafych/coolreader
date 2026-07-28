@@ -1,4 +1,5 @@
 #include "cssdef.h"
+#include "epubfmt.h"
 #include "lvdocview.h"
 #include "lvfntman.h"
 #include "lvstreamutils.h"
@@ -45,6 +46,34 @@ struct ZipEntry {
     lUInt32 checksum = 0;
     lUInt32 localOffset = 0;
 };
+
+enum class EncryptionFixture {
+    None,
+    Valid,
+    Malformed,
+};
+
+static const std::string &plainFontBytes()
+{
+    static const std::string bytes =
+            "EPUB-OWNED-FONT-SNAPSHOT-0123456789-abcdefghijklmnopqrstuvwxyz";
+    return bytes;
+}
+
+static std::string encryptedFontBytes()
+{
+    static const lUInt8 key[16] = {
+        0x00, 0x11, 0x22, 0x33,
+        0x44, 0x55, 0x66, 0x77,
+        0x88, 0x99, 0xaa, 0xbb,
+        0xcc, 0xdd, 0xee, 0xff,
+    };
+    std::string bytes = plainFontBytes();
+    for (std::size_t i = 0; i < bytes.size(); ++i)
+        bytes[i] = static_cast<char>(
+                static_cast<lUInt8>(bytes[i]) ^ key[i & 15]);
+    return bytes;
+}
 
 static void appendBytes(
         std::vector<lUInt8> &output, const std::string &bytes)
@@ -132,7 +161,9 @@ static std::string makeNav(bool includeToc)
     return nav;
 }
 
-static std::vector<lUInt8> makeEpub(bool includeToc)
+static std::vector<lUInt8> makeEpub(
+        bool includeToc,
+        EncryptionFixture encryption = EncryptionFixture::None)
 {
     const std::string container =
             "<?xml version=\"1.0\"?>"
@@ -141,13 +172,15 @@ static std::vector<lUInt8> makeEpub(bool includeToc)
             "<rootfiles><rootfile full-path=\"OEBPS/package.opf\""
             " media-type=\"application/oebps-package+xml\"/>"
             "</rootfiles></container>";
-    const std::string package =
+    std::string package =
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             "<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\""
             " unique-identifier=\"book-id\""
             " prefix=\"media: http://www.idpf.org/epub/vocab/overlays/#\">"
             "<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
-            "<dc:identifier id=\"book-id\">urn:uuid:epub3-regression</dc:identifier>"
+            "<dc:identifier id=\"book-id\">"
+            "urn:uuid:00112233-4455-6677-8899-aabbccddeeff"
+            "</dc:identifier>"
             "<dc:title>EPUB3 Regression</dc:title>"
             "<dc:creator>Author One</dc:creator>"
             "<dc:creator>Author Two</dc:creator>"
@@ -161,7 +194,17 @@ static std::vector<lUInt8> makeEpub(bool includeToc)
             "<meta property=\"group-position\" refines=\"#series\">2</meta>"
             "<meta property=\"media:duration\" refines=\"#overlay\">0:00:04</meta>"
             "<meta property=\"dcterms:modified\">2026-07-24T00:00:00Z</meta>"
-            "</metadata><manifest>"
+            "<meta name=\"cover\" content=\"cover\"/>"
+            "</metadata><manifest>";
+    package +=
+            "<item id=\"cover\" href=\"cover.bin\""
+            " media-type=\"application/octet-stream\"/>";
+    if (encryption != EncryptionFixture::None) {
+        package +=
+            "<item id=\"font\" href=\"font.bin\""
+            " media-type=\"application/vnd.ms-opentype\"/>";
+    }
+    package +=
             "<item id=\"nav\" href=\"nav.xhtml\""
             " media-type=\"application/xhtml+xml\" properties=\"nav\"/>"
             "<item id=\"chapter\" href=\"chapter.xhtml\""
@@ -188,20 +231,45 @@ static std::vector<lUInt8> makeEpub(bool includeToc)
             "<text src=\"chapter.xhtml#start\"/>"
             "<audio src=\"audio.mp3\" clipEnd=\"0:00:04\"/>"
             "</par></seq></body></smil>";
-    return makeStoredZip({
+    std::vector<ZipEntry> entries = {
         {"mimetype", "application/epub+zip"},
         {"META-INF/container.xml", container},
         {"OEBPS/package.opf", package},
         {"OEBPS/nav.xhtml", makeNav(includeToc)},
         {"OEBPS/chapter.xhtml", chapter},
         {"OEBPS/overlay.smil", overlay},
-    });
+        {"OEBPS/cover.bin", "EPUB-COVER-STREAM"},
+    };
+    if (encryption != EncryptionFixture::None) {
+        std::string encryptionXml =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                "<encryption xmlns=\"urn:oasis:names:tc:opendocument:"
+                "xmlns:container\">"
+                "<EncryptedData>"
+                "<EncryptionMethod Algorithm=\"http://ns.adobe.com/pdf/"
+                "enc#RC\"/>"
+                "<CipherData><CipherReference URI=\"/OEBPS/font.bin\"/>"
+                "</CipherData></EncryptedData>";
+        if (encryption == EncryptionFixture::Malformed) {
+            for (int i = 0; i < 300; ++i)
+                encryptionXml += "<n>";
+            for (int i = 0; i < 300; ++i)
+                encryptionXml += "</n>";
+        }
+        encryptionXml += "</encryption>";
+        entries.push_back(
+                {"META-INF/encryption.xml", encryptionXml});
+        entries.push_back(
+                {"OEBPS/font.bin", encryptedFontBytes()});
+    }
+    return makeStoredZip(entries);
 }
 
 static std::unique_ptr<LVDocView> loadEpub(
-        bool includeToc, const lChar32 *fileName)
+        bool includeToc, const lChar32 *fileName,
+        EncryptionFixture encryption = EncryptionFixture::None)
 {
-    std::vector<lUInt8> archive = makeEpub(includeToc);
+    std::vector<lUInt8> archive = makeEpub(includeToc, encryption);
     LVStreamRef stream = LVCreateMemoryStream(
             archive.data(),
             static_cast<int>(archive.size()),
@@ -293,6 +361,72 @@ static int testLandmarksFallback()
     return 0;
 }
 
+static bool streamMatches(
+        LVStreamRef stream, const std::string &expected)
+{
+    if (stream.isNull())
+        return false;
+    std::vector<char> bytes(expected.size() + 1, '\x7f');
+    lvsize_t bytesRead = 0;
+    if (stream->Read(bytes.data(), bytes.size(), &bytesRead) != LVERR_OK
+            || bytesRead != expected.size()
+            || bytes[expected.size()] != '\x7f')
+        return false;
+    return std::string(bytes.data(), bytesRead) == expected;
+}
+
+static int testEncryptedFontOwnership()
+{
+    std::unique_ptr<LVDocView> view = loadEpub(
+            true, U"epub3-encrypted-font.epub",
+            EncryptionFixture::Valid);
+    if (!view)
+        return fail("valid encrypted EPUB fixture did not load");
+    LVContainerRef container = view->getDocument()->getContainer();
+    if (container.isNull())
+        return fail("encrypted EPUB did not retain its container");
+    LVStreamRef font = container->OpenStream(
+            U"OEBPS/font.bin", LVOM_READ);
+    container.Clear();
+    view.reset();
+    if (!streamMatches(font, plainFontBytes()))
+        return fail("font demangling stream did not retain its key snapshot");
+
+    view = loadEpub(
+            true, U"epub3-malformed-encryption.epub",
+            EncryptionFixture::Malformed);
+    if (!view)
+        return fail("malformed encryption rollback fixture did not load");
+    container = view->getDocument()->getContainer();
+    if (container.isNull())
+        return fail("malformed encryption EPUB lost its container");
+    font = container->OpenStream(U"OEBPS/font.bin", LVOM_READ);
+    container.Clear();
+    view.reset();
+    if (!streamMatches(font, encryptedFontBytes()))
+        return fail("failed encryption parse published its valid prefix");
+    return 0;
+}
+
+static int testCoverFactoryOwnership()
+{
+    std::vector<lUInt8> archiveBytes = makeEpub(true);
+    LVStreamRef source = LVCreateMemoryStream(
+            archiveBytes.data(),
+            static_cast<int>(archiveBytes.size()),
+            true,
+            LVOM_READ);
+    LVContainerRef archive = LVOpenArchieve(source);
+    if (archive.isNull())
+        return fail("EPUB cover ownership archive did not open");
+    LVStreamRef cover = GetEpubCoverpage(archive);
+    source.Clear();
+    archive.Clear();
+    if (!streamMatches(cover, "EPUB-COVER-STREAM"))
+        return fail("EPUB cover factory did not retain its stream owner");
+    return 0;
+}
+
 int main()
 {
     if (!InitFontManager(lString8::empty_str) || !fontMan)
@@ -308,6 +442,10 @@ int main()
         result = testFullNavigationAndMetadata();
     if (result == 0)
         result = testLandmarksFallback();
+    if (result == 0)
+        result = testEncryptedFontOwnership();
+    if (result == 0)
+        result = testCoverFactoryOwnership();
     if (!ShutdownFontManager() && result == 0)
         result = fail("EPUB3 fixture font manager did not shut down");
     return result;

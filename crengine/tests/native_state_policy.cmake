@@ -16,6 +16,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/fb3fmt.h" FB3_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/fb3fmt.cpp" FB3_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/chmfmt.cpp" CHM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/chmfmt_internal.h" CHM_INTERNAL_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/epubfmt.cpp" EPUB_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/tests/epub3_regression_test.cpp" EPUB3_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstsheet.cpp" STYLESHEET_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
@@ -3930,4 +3932,191 @@ forbid_source_text(
   "${CHM_SOURCE}"
   "delete chm"
   "CHM container and metadata teardown must remain automatic"
+)
+
+# --- EPUB encrypted-container, stream-key and parse-candidate ownership ---
+require_source_text(
+  "${EPUB_SOURCE}"
+  "LVArray<lUInt8> _key"
+  "EPUB font demangling streams must own a stable key snapshot"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "_base->Read(buf, count, &bytesRead)"
+  "EPUB font demangling must observe the base stream's actual read count"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "i < bytesRead"
+  "EPUB font demangling must transform only bytes returned by the base stream"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::vector<std::unique_ptr<EncryptedItem> > _items"
+  "EPUB encryption parsing must retain item candidates automatically"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "uri = attrvalue"
+  "EPUB encryption parsing must retain the cipher-reference URI"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "algorithm = attrvalue"
+  "EPUB encryption parsing must retain the encryption method"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::vector<std::unique_ptr<EncryptedItem> > _list"
+  "EPUB encrypted-item storage must have one explicit owner collection"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::vector<std::unique_ptr<EncryptedItem> > items"
+  "EPUB encryption metadata must parse into a scoped candidate"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "_list.swap(items)"
+  "EPUB encryption metadata must publish only a complete candidate"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "lString32 actual = item->_uri"
+  "EPUB encrypted-item matching must normalize the stored URI"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "if (actual == expected)"
+  "EPUB encrypted-item matching must compare the URI with the requested path"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::unique_ptr<EncryptedDataContainer> decryptor"
+  "EPUB decryptor candidates must remain scoped until container publication"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "EncryptedDataContainer *decryptorView = decryptor.get()"
+  "EPUB imports must label the decryptor access retained by the container as borrowed"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "LVContainerRef m_arc(decryptor.release())"
+  "EPUB decryptors must transfer ownership only into LVContainerRef"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::unique_ptr<ldomDocument> navDoc"
+  "EPUB navigation DOM candidates must remain scope-owned"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::unique_ptr<ldomDocument> ncxdoc"
+  "EPUB NCX DOM candidates must remain scope-owned"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::unique_ptr<ldomDocument> pagemapdoc"
+  "EPUB page-map DOM candidates must remain scope-owned"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "std::unique_ptr<EpubItem> epubItem"
+  "EPUB manifest item candidates must remain scope-owned"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "epubItems.reserve(epubItems.length() + 1)"
+  "EPUB manifest owners must reserve before crossing the legacy list boundary"
+)
+require_source_text(
+  "${EPUB_SOURCE}"
+  "epubItems.add(epubItem.release())"
+  "EPUB manifest ownership must transfer only at the owning-list boundary"
+)
+require_source_text(
+  "${EPUB3_REGRESSION_SOURCE}"
+  "static int testEncryptedFontOwnership()"
+  "EPUB encrypted stream ownership must retain native regression coverage"
+)
+require_source_text(
+  "${EPUB3_REGRESSION_SOURCE}"
+  "font demangling stream did not retain its key snapshot"
+  "EPUB regression must retain detached demangling-stream coverage"
+)
+require_source_text(
+  "${EPUB3_REGRESSION_SOURCE}"
+  "failed encryption parse published its valid prefix"
+  "EPUB regression must retain failed-parse rollback coverage"
+)
+require_source_text(
+  "${EPUB3_REGRESSION_SOURCE}"
+  "EPUB cover factory did not retain its stream owner"
+  "EPUB regression must retain detached cover-stream coverage"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "LVArray<lUInt8> & _key"
+  "EPUB demangling streams must not borrow a container-owned key"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "EncryptedItemCallback"
+  "EPUB encryption parsing must not publish entries incrementally"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "LVPtrVector<EncryptedItem> _list"
+  "EPUB encrypted items must not regress to implicit legacy ownership"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "EncryptedDataContainer * decryptor = new"
+  "EPUB decryptor rollback must remain automatic"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "ldomDocument * doc = LVParseXMLStream"
+  "EPUB document candidates must not regress to manual ownership"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "ldomDocument * navDoc = LVParseXMLStream"
+  "EPUB navigation documents must not regress to manual ownership"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "ldomDocument * ncxdoc = LVParseXMLStream"
+  "EPUB NCX documents must not regress to manual ownership"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "ldomDocument * pagemapdoc = LVParseXMLStream"
+  "EPUB page-map documents must not regress to manual ownership"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "EpubItem * epubItem = new"
+  "EPUB manifest candidates must not regress to raw ownership"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "delete doc"
+  "EPUB document teardown must remain automatic"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "delete navDoc"
+  "EPUB navigation document teardown must remain automatic"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "delete ncxdoc"
+  "EPUB NCX document teardown must remain automatic"
+)
+forbid_source_text(
+  "${EPUB_SOURCE}"
+  "delete pagemapdoc"
+  "EPUB page-map document teardown must remain automatic"
 )
