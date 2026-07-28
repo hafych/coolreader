@@ -26,6 +26,7 @@
 #include "lvxmlparsercallback.h"
 #include "lvxmlutils.h"
 #include "crlog.h"
+#include <vector>
 
 /// states of XML parser
 enum parser_state_t {
@@ -140,13 +141,13 @@ bool LVXMLParser::CheckFormat()
     Reset();
     AutodetectEncoding();
     Reset();
-    lChar32 * chbuf = new lChar32[XML_PARSER_DETECT_SIZE];
+    std::vector<lChar32> chbuf(XML_PARSER_DETECT_SIZE);
     FillBuffer( XML_PARSER_DETECT_SIZE );
-    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf, XML_PARSER_DETECT_SIZE-1, 0 );
+    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf.data(), XML_PARSER_DETECT_SIZE-1, 0 );
     chbuf[charsDecoded] = 0;
     bool res = false;
     if ( charsDecoded > 30 ) {
-        lString32 s( chbuf, charsDecoded );
+        lString32 s( chbuf.data(), charsDecoded );
         res = s.pos("<FictionBook") >= 0;
         if ( s.pos("<?xml") >= 0 && s.pos("version=") >= 6 ) {
             res = res || !m_fb2Only;
@@ -173,7 +174,6 @@ bool LVXMLParser::CheckFormat()
             }
         }
     }
-    delete[] chbuf;
     Reset();
     //CRLog::trace("LVXMLParser::CheckFormat() finished");
     return res;

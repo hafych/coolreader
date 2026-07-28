@@ -21,6 +21,7 @@
  ***************************************************************************/
 
 #include "lvhtmlparser.h"
+#include <vector>
 
 static lString32 htmlCharset( lString32 htmlHeader )
 {
@@ -110,13 +111,13 @@ bool LVHTMLParser::CheckFormat()
     // encoding test
     if ( !AutodetectEncoding(!this->m_encoding_name.empty()) )
         return false;
-    lChar32 * chbuf = new lChar32[XML_PARSER_DETECT_SIZE];
+    std::vector<lChar32> chbuf(XML_PARSER_DETECT_SIZE);
     FillBuffer( XML_PARSER_DETECT_SIZE );
-    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf, XML_PARSER_DETECT_SIZE-1, 0 );
+    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf.data(), XML_PARSER_DETECT_SIZE-1, 0 );
     chbuf[charsDecoded] = 0;
     bool res = false;
     if ( charsDecoded > 30 ) {
-        lString32 s( chbuf, charsDecoded );
+        lString32 s( chbuf.data(), charsDecoded );
         s.lowercase();
         if ( s.pos("<html") >=0 && ( s.pos("<head") >= 0 || s.pos("<body") >=0 ) ) {
             res = true;
@@ -142,7 +143,6 @@ bool LVHTMLParser::CheckFormat()
         //else if ( s.pos("<html xmlns=\"http://www.w3.org/1999/xhtml\"") >= 0 )
         //    res = true;
     }
-    delete[] chbuf;
     Reset();
     //CRLog::trace("LVXMLParser::CheckFormat() finished");
     return res;

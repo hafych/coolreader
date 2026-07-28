@@ -21,6 +21,7 @@
 
 #include "lvtextbookmarkparser.h"
 #include "lvxmlparsercallback.h"
+#include <vector>
 
 static bool extractItem( lString32 & dst, const lString32 & src, const char * prefix )
 {
@@ -76,9 +77,9 @@ bool LVTextBookmarkParser::CheckFormat()
 
     #define TEXT_PARSER_DETECT_SIZE 16384
     Reset();
-    lChar32 * chbuf = new lChar32[TEXT_PARSER_DETECT_SIZE];
+    std::vector<lChar32> chbuf(TEXT_PARSER_DETECT_SIZE);
     FillBuffer( TEXT_PARSER_DETECT_SIZE );
-    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf, TEXT_PARSER_DETECT_SIZE-1, 0 );
+    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf.data(), TEXT_PARSER_DETECT_SIZE-1, 0 );
     bool res = false;
     lString32 pattern("# Cool Reader 3 - exported bookmarks\r\n# file name: ");
     if ( charsDecoded > (int)pattern.length() && chbuf[0]==0xFEFF) { // BOM
@@ -87,7 +88,6 @@ bool LVTextBookmarkParser::CheckFormat()
             if ( chbuf[i+1] != pattern[i] )
                 res = false;
     }
-    delete[] chbuf;
     Reset();
     return res;
 }

@@ -150,6 +150,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   ownership and a documented process-lifecycle teardown boundary.
 - The process-wide font manager now has RAII ownership, serialized lifecycle
   operations and rollback-safe initialization.
+- Parser selection, XML/HTML/text/bookmark format detection, cache-file
+  serialization, draw mark collection and SVG decoding now use scoped RAII
+  ownership instead of manual temporary-buffer cleanup.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

@@ -49,3 +49,13 @@ The global font manager has a private `std::unique_ptr` owner. The legacy
 `fontMan` symbol is a non-owning compatibility view and is cleared before the
 owner is destroyed. Failed initialization releases the candidate manager
 without leaving a dangling published pointer.
+
+Document format selection owns each candidate parser through
+`std::unique_ptr<LVFileFormatParser>` until parsing completes. XML, HTML, plain
+text and bookmark format probes own their temporary decoded-character buffers
+through `std::vector`, including negative detection paths.
+
+Cache-file serialization buffers, temporary draw mark lists and SVG decoder
+input/output buffers also use standard RAII containers. These operation-scoped
+resources cannot outlive their call and no longer rely on matching cleanup at
+each return.

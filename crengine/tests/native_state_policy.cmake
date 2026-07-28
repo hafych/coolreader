@@ -20,6 +20,10 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HE
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvhtmlparser.cpp" HTML_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvxmlparser.cpp" XML_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextbookmarkparser.cpp" BOOKMARK_PARSER_SOURCE)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -386,6 +390,24 @@ forbid_source_text(
   "extern int gammaIndex"
   "glyph rendering must use the synchronized font gamma API"
 )
+
+# --- parser format detection: operation-scoped decoded buffers ---
+foreach(PARSER_SOURCE
+    TEXT_PARSER_SOURCE
+    HTML_PARSER_SOURCE
+    XML_PARSER_SOURCE
+    BOOKMARK_PARSER_SOURCE)
+  require_source_text(
+    "${${PARSER_SOURCE}}"
+    "std::vector<lChar32> chbuf"
+    "format detector buffer must use scoped RAII ownership"
+  )
+  forbid_source_text(
+    "${${PARSER_SOURCE}}"
+    "new lChar32["
+    "format detector buffer must not regress to owning new[]"
+  )
+endforeach()
 
 # --- lvstring: string literal interning tables ---
 require_source_text(

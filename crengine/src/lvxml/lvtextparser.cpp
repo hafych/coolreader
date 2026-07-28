@@ -23,6 +23,7 @@
 #include "lvxmlparsercallback.h"
 #include "lvtextlinequeue.h"
 #include "crlog.h"
+#include <vector>
 
 /// constructor
 LVTextParser::LVTextParser( LVStreamRef stream, LVXMLParserCallback * callback, bool isPreFormatted )
@@ -47,9 +48,9 @@ bool LVTextParser::CheckFormat()
         return false;
     #define TEXT_PARSER_DETECT_SIZE 16384
     Reset();
-    lChar32 * chbuf = new lChar32[TEXT_PARSER_DETECT_SIZE];
+    std::vector<lChar32> chbuf(TEXT_PARSER_DETECT_SIZE);
     FillBuffer( TEXT_PARSER_DETECT_SIZE );
-    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf, TEXT_PARSER_DETECT_SIZE-1, 0 );
+    int charsDecoded = ReadTextBytes( 0, m_buf_len, chbuf.data(), TEXT_PARSER_DETECT_SIZE-1, 0 );
     bool res = false;
     if ( charsDecoded > 16 ) {
         int illegal_char_count = 0;
@@ -84,7 +85,6 @@ bool LVTextParser::CheckFormat()
         if ( illegal_char_count>0 )
             CRLog::error("illegal characters detected: count=%d", illegal_char_count );
     }
-    delete[] chbuf;
     Reset();
     return res;
 }

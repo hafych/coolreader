@@ -5,6 +5,9 @@
 #include "lvgraydrawbuf.h"
 #include "lvrend.h"
 #include "crskin.h"
+#include "lvhtmlparser.h"
+#include "lvtextbookmarkparser.h"
+#include "lvtextparser.h"
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
 #include "cri18n.h"
@@ -952,6 +955,62 @@ public:
     }
 };
 
+static LVStreamRef memoryStream(const std::string &contents) {
+    return LVCreateMemoryStream(
+            const_cast<char *>(contents.data()),
+            static_cast<int>(contents.size()), true, LVOM_READ);
+}
+
+static int testParserFormatDetectionBuffers() {
+    NoOpXmlCallback callback;
+
+    const std::string fb2 =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<FictionBook><body/></FictionBook>";
+    LVXMLParser xmlParser(memoryStream(fb2), &callback, false, true);
+    if (!xmlParser.CheckFormat())
+        return fail("XML format detector rejected valid FB2");
+    LVXMLParser nonXmlParser(memoryStream(
+            "ordinary text without any XML markup at all"), &callback,
+            false, true);
+    if (nonXmlParser.CheckFormat())
+        return fail("XML format detector accepted plain text");
+
+    const std::string html =
+            "<!doctype html><html><head><title>x</title></head>"
+            "<body>text</body></html>";
+    LVHTMLParser htmlParser(memoryStream(html), &callback);
+    if (!htmlParser.CheckFormat())
+        return fail("HTML format detector rejected valid HTML");
+    LVHTMLParser nonHtmlParser(memoryStream(
+            "ordinary text without any HTML markup at all"), &callback);
+    if (nonHtmlParser.CheckFormat())
+        return fail("HTML format detector accepted plain text");
+
+    LVTextParser textParser(memoryStream(
+            "plain text line one\nplain text line two\n"), &callback, false);
+    if (!textParser.CheckFormat())
+        return fail("text format detector rejected valid plain text");
+    LVTextParser nonTextParser(memoryStream(
+            "abcdefghijklmnopqrstuvwxyz"), &callback, false);
+    if (nonTextParser.CheckFormat())
+        return fail("text format detector accepted text without separators");
+
+    const std::string bookmark =
+            "\xEF\xBB\xBF# Cool Reader 3 - exported bookmarks\r\n"
+            "# file name: sample.fb2\r\n";
+    LVTextBookmarkParser bookmarkParser(memoryStream(bookmark), &callback);
+    if (!bookmarkParser.CheckFormat())
+        return fail("bookmark format detector rejected a valid header");
+    LVTextBookmarkParser nonBookmarkParser(memoryStream(
+            "# Cool Reader exported bookmarks\r\n"
+            "# file name: sample.fb2\r\n"), &callback);
+    if (nonBookmarkParser.CheckFormat())
+        return fail("bookmark format detector accepted an invalid header");
+
+    return 0;
+}
+
 static void appendLe16(std::vector<unsigned char> &bytes, std::uint16_t value) {
     bytes.push_back(static_cast<unsigned char>(value));
     bytes.push_back(static_cast<unsigned char>(value >> 8));
@@ -1337,6 +1396,8 @@ int main() {
     if (testBorrowedDescriptor() != 0)
         return 1;
     if (testIniTranslatorOwnership() != 0)
+        return 1;
+    if (testParserFormatDetectionBuffers() != 0)
         return 1;
     if (testZipArchiveBudgets() != 0)
         return 1;
