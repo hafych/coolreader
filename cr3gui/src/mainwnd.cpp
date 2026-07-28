@@ -748,7 +748,8 @@ void V3DocViewWin::showOrientationMenu()
 void V3DocViewWin::showRecentBooksMenu()
 {
     lvRect rc = _wm->getScreen()->getRect();
-    CRRecentBooksMenu * menu_win = new CRRecentBooksMenu(_wm, _docview, 8, rc);
+    CRRecentBooksMenu * menu_win =
+            new CRRecentBooksMenu(_wm, _docview.get(), 8, rc);
     _wm->activateWindow( menu_win );
 }
 
@@ -811,14 +812,16 @@ void V3DocViewWin::showHelpDialog()
 void V3DocViewWin::showBookmarksMenu( bool goMode )
 {
     lvRect rc = _wm->getScreen()->getRect();
-    CRBookmarkMenu * menu_win = new CRBookmarkMenu(_wm, _docview, 8, rc, goMode);
+    CRBookmarkMenu * menu_win =
+            new CRBookmarkMenu(_wm, _docview.get(), 8, rc, goMode);
     _wm->activateWindow( menu_win );
 }
 
 void V3DocViewWin::showCitesMenu()
 {
     lvRect rc = _wm->getScreen()->getRect();
-    CRCitesMenu * menu_win = new CRCitesMenu(_wm, _docview, 8, rc);
+    CRCitesMenu * menu_win =
+            new CRCitesMenu(_wm, _docview.get(), 8, rc);
     _wm->activateWindow( menu_win );
 }
 

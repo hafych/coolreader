@@ -192,7 +192,7 @@ void CRViewDialog::showGoToPageDialog()
 #endif
         dlg = new CRTOCDialog( _wm,
             lString16( _("Table of contents") ),
-            MCMD_GO_PAGE_APPLY,  _docview->getPageCount(), _docview );
+            MCMD_GO_PAGE_APPLY, _docview->getPageCount(), _docview.get() );
 #if USE_SEPARATE_GO_TO_PAGE_DIALOG==1
     } else {
         dlg = new CRNumberEditDialog( _wm,

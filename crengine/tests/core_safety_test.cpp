@@ -1305,6 +1305,182 @@ static int testGuiScreenOwnership() {
     return 0;
 }
 
+class CountingGuiWindow : public CRGUIWindowBase {
+private:
+    std::atomic<int> &_destroyed;
+    std::atomic<int> &_closed;
+
+public:
+    CountingGuiWindow(CRGUIWindowManager *manager,
+                      std::atomic<int> &destroyed,
+                      std::atomic<int> &closed)
+        : CRGUIWindowBase(manager),
+          _destroyed(destroyed),
+          _closed(closed) {
+    }
+
+    ~CountingGuiWindow() override {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void closing() override {
+        _closed.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
+class CountingGuiEvent : public CRGUIEvent {
+private:
+    std::atomic<int> &_destroyed;
+
+public:
+    CountingGuiEvent(int type, std::atomic<int> &destroyed)
+        : CRGUIEvent(type), _destroyed(destroyed) {
+    }
+
+    ~CountingGuiEvent() override {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
+class CountingGuiDocView : public LVDocView {
+private:
+    std::atomic<int> &_destroyed;
+
+public:
+    explicit CountingGuiDocView(std::atomic<int> &destroyed)
+        : LVDocView(8, true), _destroyed(destroyed) {
+    }
+
+    ~CountingGuiDocView() override {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
+class GuiDocViewOwnershipWindow : public CRDocViewWindow {
+public:
+    GuiDocViewOwnershipWindow(CRGUIWindowManager *manager,
+                              std::atomic<int> &destroyed)
+        : CRDocViewWindow(
+                manager,
+                std::unique_ptr<LVDocView>(
+                        new CountingGuiDocView(destroyed))) {
+    }
+};
+
+static int testGuiRuntimeOwnership() {
+    std::atomic<int> screenDestroyed(0);
+    std::unique_ptr<CountingGuiScreen> screen(
+            new CountingGuiScreen(screenDestroyed));
+
+    std::atomic<int> windowDestroyed(0);
+    std::atomic<int> windowClosed(0);
+    {
+        GuiScreenOwnershipWindowManager manager(screen.get());
+        CountingGuiWindow *first = new CountingGuiWindow(
+                &manager, windowDestroyed, windowClosed);
+        CountingGuiWindow *second = new CountingGuiWindow(
+                &manager, windowDestroyed, windowClosed);
+        manager.activateWindow(first);
+        manager.activateWindow(second);
+        manager.activateWindow(first);
+        if (manager.getWindowCount() != 2
+                || manager.getTopVisibleWindow() != first
+                || windowDestroyed.load(std::memory_order_relaxed) != 0)
+            return fail("GUI window activation duplicated or lost an owner");
+
+        manager.closeWindow(second);
+        if (manager.getWindowCount() != 1
+                || windowDestroyed.load(std::memory_order_relaxed) != 1
+                || windowClosed.load(std::memory_order_relaxed) != 1)
+            return fail("GUI window close did not release one owner");
+
+        manager.closeWindow(new CountingGuiWindow(
+                &manager, windowDestroyed, windowClosed));
+        if (manager.getWindowCount() != 1
+                || windowDestroyed.load(std::memory_order_relaxed) != 2
+                || windowClosed.load(std::memory_order_relaxed) != 2)
+            return fail("GUI unmanaged window adoption did not remain scoped");
+    }
+    if (windowDestroyed.load(std::memory_order_relaxed) != 3
+            || windowClosed.load(std::memory_order_relaxed) != 3)
+        return fail("GUI manager teardown leaked its final window");
+
+    std::atomic<int> eventDestroyed(0);
+    {
+        GuiScreenOwnershipWindowManager manager(screen.get());
+        CountingGuiEvent *fullUpdate =
+                new CountingGuiEvent(CREV_UPDATE, eventDestroyed);
+        fullUpdate->setParam1(1);
+        manager.postEvent(fullUpdate);
+        manager.postEvent(new CountingGuiEvent(
+                CREV_UPDATE, eventDestroyed));
+        if (eventDestroyed.load(std::memory_order_relaxed) != 1)
+            return fail("GUI event deduplication retained the replaced owner");
+
+        manager.postEvent(new CountingGuiEvent(
+                CREV_COMMAND, eventDestroyed));
+        if (!manager.peekEvent()
+                || manager.peekEvent()->getType() != CREV_COMMAND)
+            return fail("GUI event owner queue changed priority order");
+
+        std::unique_ptr<CRGUIEvent> transferred(manager.getEvent());
+        if (!transferred || transferred->getType() != CREV_COMMAND
+                || eventDestroyed.load(std::memory_order_relaxed) != 1)
+            return fail("GUI legacy event boundary did not transfer ownership");
+        transferred.reset();
+        if (eventDestroyed.load(std::memory_order_relaxed) != 2)
+            return fail("GUI transferred event did not release exactly once");
+        if (!manager.peekEvent()
+                || manager.peekEvent()->getType() != CREV_UPDATE
+                || manager.peekEvent()->getParam1() != 1)
+            return fail("GUI event deduplication lost a full-update request");
+
+        if (!manager.processPostedEvents()
+                || eventDestroyed.load(std::memory_order_relaxed) != 3)
+            return fail("GUI event dispatch did not release its scoped owner");
+        manager.postEvent(new CountingGuiEvent(
+                CREV_COMMAND, eventDestroyed));
+    }
+    if (eventDestroyed.load(std::memory_order_relaxed) != 4)
+        return fail("GUI manager teardown leaked a queued event");
+
+    if (!InitFontManager(lString8::empty_str) || !fontMan)
+        return fail("GUI document-view fixture could not initialize fonts");
+    const lString8 guiFontPath(
+            COOLREADER_SOURCE_DIR
+            "/thirdparty/harfbuzz-14.2.1/test/subset/data/expected/"
+            "retain-num-glyphs/Roboto-Regular.retain-num-glyphs.all.ttf");
+    if (!fontMan->RegisterFont(guiFontPath)) {
+        ShutdownFontManager();
+        return fail("GUI document-view fixture font did not register");
+    }
+    std::atomic<int> docViewDestroyed(0);
+    const char *docViewError = NULL;
+    {
+        GuiScreenOwnershipWindowManager manager(screen.get());
+        {
+            GuiDocViewOwnershipWindow window(&manager, docViewDestroyed);
+            if (!window.getDocView()
+                    || docViewDestroyed.load(std::memory_order_relaxed) != 0)
+                docViewError =
+                        "GUI document window did not publish its owner";
+        }
+        if (!docViewError
+                && docViewDestroyed.load(std::memory_order_relaxed) != 1)
+            docViewError = "GUI document window leaked its document view";
+    }
+    ShutdownFontManager();
+    if (docViewError)
+        return fail(docViewError);
+
+    if (screenDestroyed.load(std::memory_order_relaxed) != 0)
+        return fail("GUI runtime owners destroyed their borrowed screen");
+    screen.reset();
+    if (screenDestroyed.load(std::memory_order_relaxed) != 1)
+        return fail("GUI runtime screen fixture did not tear down");
+    return 0;
+}
+
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
 static int testBoundedObservablePageImageCache() {
     LVDocViewImageCache cache;
@@ -6370,6 +6546,8 @@ int main() {
     if (testSkinOwnership() != 0)
         return 1;
     if (testGuiScreenOwnership() != 0)
+        return 1;
+    if (testGuiRuntimeOwnership() != 0)
         return 1;
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
     if (testBoundedObservablePageImageCache() != 0)

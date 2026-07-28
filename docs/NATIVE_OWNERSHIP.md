@@ -580,3 +580,16 @@ XCB and PocketBook managers adopt every screen they create; NanoX does the
 same for a new screen but explicitly borrows an already existing Jinke
 singleton. The native lifecycle regression verifies borrowed teardown, owned
 replacement, owned-to-borrowed transition and final destruction.
+
+The GUI window stack and event queue are vectors of exclusive `unique_ptr`
+owners. The legacy raw `activateWindow()` and `postEvent()` arguments are
+adopted before publication; stack reordering moves an existing owner, closing
+keeps the window alive through its lifecycle callback, and duplicate event
+removal releases the replaced owner automatically. Dispatch holds each event
+in a scoped owner, while `getEvent()` remains an explicit transfer boundary for
+legacy callers. Manager teardown releases queued events and every remaining
+window even when the process font manager is already unavailable.
+`CRDocViewWindow` likewise owns its `LVDocView` directly and exposes only a
+borrowed getter. Native lifecycle coverage verifies reactivation without
+duplication, managed and unmanaged close paths, queued/replaced/transferred
+events, borrowed-screen preservation and document-view teardown.

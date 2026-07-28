@@ -31,6 +31,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #if (COLOR_BACKBUFFER==1)
 #include "lvcolordrawbuf.h"
@@ -478,8 +479,8 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         /// Exclusive screen owner, when the manager creates its screen.
         /// Declared before dependent GUI state so it is destroyed last.
         std::unique_ptr<CRGUIScreen> _ownedScreen;
-        LVPtrVector<CRGUIWindow, true> _windows;
-        LVPtrVector<CRGUIEvent, true> _events;
+        std::vector<std::unique_ptr<CRGUIWindow> > _windows;
+        std::vector<std::unique_ptr<CRGUIEvent> > _events;
         /// Borrowed compatibility view, backed by _ownedScreen when non-null.
         CRGUIScreen * _screen;
         LVRef<CRGUIStringTranslator> _i18n;
@@ -508,6 +509,25 @@ class CRGUIWindowManager : public CRGUIStringTranslator
             _ownedScreen.reset();
         }
 
+        int findWindowIndex( const CRGUIWindow * window ) const
+        {
+            for ( size_t i = 0; i < _windows.size(); ++i ) {
+                if ( _windows[i].get() == window )
+                    return static_cast<int>( i );
+            }
+            return -1;
+        }
+
+        std::unique_ptr<CRGUIEvent> takeEvent()
+        {
+            forwardSystemEvents( false );
+            if ( _events.empty() )
+                return std::unique_ptr<CRGUIEvent>();
+            std::unique_ptr<CRGUIEvent> event = std::move( _events.front() );
+            _events.erase( _events.begin() );
+            return event;
+        }
+
     public:
         CRGUIWindowManager( const CRGUIWindowManager & ) = delete;
         CRGUIWindowManager & operator=( const CRGUIWindowManager & ) = delete;
@@ -520,13 +540,12 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         virtual CRGUIEvent * peekEvent()
         {
             forwardSystemEvents( false );
-            return _events.peekHead();
+            return _events.empty() ? NULL : _events.front().get();
         }
         /// returns head of application message queue, removing from queue (returns NULL if no events in queue)
         virtual CRGUIEvent * getEvent()
         {
-            forwardSystemEvents( false );
-            return _events.popHead();
+            return takeEvent().release();
         }
         /// handle all events from queue
         virtual bool handleAllEvents( bool waitForEvent );
@@ -582,7 +601,7 @@ class CRGUIWindowManager : public CRGUIStringTranslator
             return _i18n->translateString( key, defValue );
         }
         /// returns count of windows
-        virtual int getWindowCount() { return _windows.length(); }
+        virtual int getWindowCount() { return static_cast<int>( _windows.size() ); }
         /// changes screen size and orientation
         virtual void reconfigure( int dx, int dy, cr_rotate_angle_t orientation );
         /// adds command to message queue
@@ -595,7 +614,7 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         /// returns true if command is processed
         virtual bool onCommand( int command, int params = 0 )
         {
-            for ( int i=_windows.length()-1; i>=0; i-- ) {
+            for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
                 if ( _windows[i]->isVisible() && _windows[i]->onCommand( command, params ) )
                     return true;
             }
@@ -606,17 +625,17 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         /// returns top visible window
         CRGUIWindow * getTopVisibleWindow()
         {
-            for ( int i=_windows.length()-1; i>=0; i-- ) {
+            for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
                 if ( !_windows[i]->isVisible() )
                     continue;
-                return _windows[i];
+                return _windows[i].get();
             }
             return NULL;
         }
         /// shows or hides window
         void showWindow( CRGUIWindow * window, bool visible )
         {
-            int index = _windows.indexOf( window );
+            int index = findWindowIndex( window );
             if ( index >= 0  ) { //&& window->isVisible()!=visible
                 window->setVisible( visible );
                 if ( !visible ) {
@@ -657,9 +676,8 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         }
         virtual void closeAllWindows()
         {
-            for ( int i=_windows.length()-1; i>=0; i-- ) {
-                closeWindow(_windows[i]);
-            }
+            while ( !_windows.empty() )
+                closeWindow( _windows.back().get() );
         }
         /// destroy all windows on close
         virtual ~CRGUIWindowManager()
@@ -940,29 +958,32 @@ class CRWxScreen : public CRGUIScreenBase
 class CRDocViewWindow : public CRGUIWindowBase
 {
     protected:
-        LVDocView * _docview;
+        std::unique_ptr<LVDocView> _docview;
 	    CRWindowSkinRef _skin;
         virtual void draw();
-    public:
-        LVDocView * getDocView()
-        {
-            return _docview;
-        }
-        CRDocViewWindow( CRGUIWindowManager * wm )
+        CRDocViewWindow( CRGUIWindowManager * wm,
+                         std::unique_ptr<LVDocView> docview )
         : CRGUIWindowBase( wm )
+        , _docview( std::move( docview ) )
         {
             CRLog::trace("CRDocViewWindow()");
-            _docview = new LVDocView( wm->getScreen()->getCanvas()->GetBitsPerPixel() );
             CRLog::trace("resizing...");
             _docview->Resize( getWidth(), getHeight() );
             _docview->setPageMargins( lvRect(10, 10, 10, 10) );
             CRLog::trace("CRDocViewWindow() finished");
         }
-        virtual ~CRDocViewWindow()
+    public:
+        LVDocView * getDocView()
         {
-            delete _docview;
-            _docview = NULL;
+            return _docview.get();
         }
+        CRDocViewWindow( CRGUIWindowManager * wm )
+        : CRDocViewWindow(
+                wm,
+                std::unique_ptr<LVDocView>( new LVDocView(
+                        wm->getScreen()->getCanvas()->GetBitsPerPixel() ) ) )
+        { }
+        virtual ~CRDocViewWindow() { }
 
         virtual void setRect( const lvRect & rc );
 

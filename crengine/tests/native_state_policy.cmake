@@ -9,6 +9,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvrend.cpp" RENDER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/crgui.cpp" GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
@@ -5038,7 +5039,7 @@ require_source_text(
 require_source_text(
   "${GUI_HEADER}"
   "std::unique_ptr<CRGUIScreen> _ownedScreen;
-        LVPtrVector<CRGUIWindow, true> _windows;"
+        std::vector<std::unique_ptr<CRGUIWindow> > _windows;"
   "the GUI screen owner must outlive dependent window state"
 )
 require_source_text(
@@ -5180,4 +5181,111 @@ forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "_screen ="
   "platform GUI managers must use explicit owned or borrowed screen transitions"
+)
+
+require_source_text(
+  "${GUI_HEADER}"
+  "std::vector<std::unique_ptr<CRGUIWindow> > _windows"
+  "GUI window managers must own window stack entries explicitly"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "std::vector<std::unique_ptr<CRGUIEvent> > _events"
+  "GUI window managers must own queued events explicitly"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "std::unique_ptr<CRGUIEvent> takeEvent()"
+  "GUI event dispatch must transfer a scoped event owner"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "return takeEvent().release();"
+  "the legacy GUI event API must remain an explicit transfer boundary"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "std::unique_ptr<CRGUIWindow> owner( window );"
+  "GUI window activation must adopt new windows before publication"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "owner = std::move( _windows[static_cast<size_t>( index )] );"
+  "GUI window close must retain ownership through lifecycle callbacks"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "owner->closing();
+    owner.reset();"
+  "GUI window close must destroy its scoped owner before refocusing"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "std::unique_ptr<CRGUIEvent> owner( event );"
+  "GUI event posting must adopt its raw argument immediately"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "_events.erase( _events.begin() + i );"
+  "GUI event deduplication must release replaced owners automatically"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "std::unique_ptr<CRGUIEvent> event = takeEvent();"
+  "GUI event dispatch must keep each event scoped through handling"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "std::unique_ptr<LVDocView> _docview"
+  "GUI document windows must own their document view explicitly"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "return _docview.get();"
+  "the GUI document-view getter must expose only a borrowed view"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testGuiRuntimeOwnership()"
+  "GUI runtime ownership must retain native lifecycle coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI manager teardown leaked its final window"
+  "GUI window teardown regression coverage must be retained"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI manager teardown leaked a queued event"
+  "GUI event teardown regression coverage must be retained"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI document window leaked its document view"
+  "GUI document-view teardown regression coverage must be retained"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "LVPtrVector<CRGUIWindow, true> _windows"
+  "GUI window ownership must not regress to a raw-pointer container"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "LVPtrVector<CRGUIEvent, true> _events"
+  "GUI event ownership must not regress to a raw-pointer container"
+)
+forbid_source_text(
+  "${GUI_SOURCE}"
+  "delete window"
+  "GUI window teardown must remain automatic"
+)
+forbid_source_text(
+  "${GUI_SOURCE}"
+  "delete event"
+  "GUI event teardown must remain automatic"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "delete _docview"
+  "GUI document-view teardown must remain automatic"
 )

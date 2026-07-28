@@ -209,7 +209,7 @@ bool CRGUIWindowManager::onKeyPressed( int key, int flags )
         }
     }
     CRLog::trace("CRGUIWindowManager::onKeyPressed( %d, %d)", key, flags );
-    for ( int i=_windows.length()-1; i>=0; i-- ) {
+    for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
         if ( _windows[i]->isVisible() ) {
             if ( _windows[i]->onKeyPressed( key, flags ) ) {
                 CRLog::trace("CRGUIWindowManager::onKeyPressed() -- window %d has processed key, exiting", i );
@@ -240,7 +240,7 @@ void CRGUIWindowManager::reconfigure( int dx, int dy, cr_rotate_angle_t orientat
         return;
     if ( _screen->setSize( dx, dy ) ) {
         fullRect = _screen->getRect();
-        for ( int i=_windows.length()-1; i>=0; i-- ) {
+        for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
             _windows[i]->reconfigure( flags );
         }
         postEvent( new CRGUIUpdateEvent(true) );
@@ -250,21 +250,21 @@ void CRGUIWindowManager::reconfigure( int dx, int dy, cr_rotate_angle_t orientat
 /// redraw one window
 void CRGUIWindowManager::updateWindow( CRGUIWindow * window )
 {
-    int index = _windows.indexOf( window );
+    int index = findWindowIndex( window );
     if ( index < 0 )
         return;
     lvRect coverBox;
     if  ( _windows.empty() )
         return;
     LVPtrVector<CRGUIWindow, false> drawList;
-    for ( int i=_windows.length()-1; i>=index; i-- ) {
+    for ( int i=static_cast<int>( _windows.size() )-1; i>=index; i-- ) {
         if ( !_windows[i]->isVisible() )
             continue;
         lvRect rc = _windows[i]->getRect();
         if ( coverBox.isRectInside( rc ) )
             continue; // fully covered by top window
         if ( !rc.isEmpty() )
-            drawList.add( _windows[i] );
+            drawList.add( _windows[i].get() );
         if ( !rc.isRectInside( coverBox ) )
             coverBox = rc;
     }
@@ -286,14 +286,14 @@ void CRGUIWindowManager::update( bool fullScreenUpdate, bool forceFlushScreen )
     if  ( _windows.empty() )
         return;
     LVPtrVector<CRGUIWindow, false> drawList;
-    for ( int i=_windows.length()-1; i>=0; i-- ) {
+    for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
         if ( !_windows[i]->isVisible() )
             continue;
         lvRect rc = _windows[i]->getRect();
         if ( coverBox.isRectInside( rc ) )
             continue; // fully covered by top window
         if ( !rc.isEmpty() )
-            drawList.add( _windows[i] );
+            drawList.add( _windows[i].get() );
         if ( !rc.isRectInside( coverBox ) )
             coverBox = rc;
     }
@@ -324,32 +324,42 @@ void CRGUIWindowManager::update( bool fullScreenUpdate, bool forceFlushScreen )
 /// closes window, removes from stack, destroys object
 void CRGUIWindowManager::closeWindow( CRGUIWindow * window )
 {
-    int index = _windows.indexOf( window );
+    int index = findWindowIndex( window );
+    std::unique_ptr<CRGUIWindow> owner;
     if ( index >= 0 ) {
-        if ( window == _windows.peek() )
+        if ( window == _windows.back().get() )
             window->covered(); // send cover before close
-        _windows.remove( index );
+        owner = std::move( _windows[static_cast<size_t>( index )] );
+        _windows.erase( _windows.begin() + index );
+    } else {
+        owner.reset( window );
     }
-    window->closing();
-    delete window;
-    for ( int i=0; i<_windows.length() && (index<0 || i<index); i++ )
+    owner->closing();
+    owner.reset();
+    for ( int i=0; i<static_cast<int>( _windows.size() )
+            && (index<0 || i<index); i++ )
         _windows[i]->setDirty();
     CRGUIWindow * gotFocus = getTopVisibleWindow();
     if (gotFocus)
         gotFocus->reactivated();
-    fontMan->gc();
+    if ( fontMan )
+        fontMan->gc();
 }
 
 /// activates window, brings it on top; add to stack if not added
 void CRGUIWindowManager::activateWindow( CRGUIWindow * window )
 {
-    int index = _windows.indexOf( window );
+    int index = findWindowIndex( window );
     CRGUIWindow * lostFocus = getTopVisibleWindow();
     window->setVisible( true );
     if ( index < 0 ) {
-        _windows.push( window );
-    } else if ( index < _windows.length() - 1 ) {
-        _windows.push( _windows.remove( index ) );
+        std::unique_ptr<CRGUIWindow> owner( window );
+        _windows.push_back( std::move( owner ) );
+    } else if ( index < static_cast<int>( _windows.size() ) - 1 ) {
+        std::unique_ptr<CRGUIWindow> owner =
+                std::move( _windows[static_cast<size_t>( index )] );
+        _windows.erase( _windows.begin() + index );
+        _windows.push_back( std::move( owner ) );
     }
     if ( window != lostFocus )
     {
@@ -379,9 +389,10 @@ bool CRGUIWindowManager::handleAllEvents( bool waitForEvent )
         idle();
         forwardSystemEvents( true );
     }
-    for (CRGUIEvent * event=getEvent(); event; event=getEvent() ) {
-        handleEvent( event );
-        delete event;
+    for ( std::unique_ptr<CRGUIEvent> event = takeEvent();
+            event;
+            event = takeEvent() ) {
+        handleEvent( event.get() );
         handled = true;
     }
     return handled;
@@ -394,31 +405,32 @@ void CRGUIWindowManager::postCommand( int command, int params )
 
 void CRGUIWindowManager::postEvent( CRGUIEvent * event )
 {
-    int evt = event->getType();
+    std::unique_ptr<CRGUIEvent> owner( event );
+    int evt = owner->getType();
     if ( evt==CREV_KEYDOWN || evt==CREV_KEYUP || evt==CREV_COMMAND ) {
         // for window events, like keyPress or Command, post them before Update/Resize
-        int i=_events.length()-1;
+        int i=static_cast<int>( _events.size() )-1;
         for ( ; i>=0; i-- ) {
             int t = _events[i]->getType();
             if ( t!=CREV_UPDATE && t!=CREV_RESIZE )
                 break;
         }
-        _events.insert(i+1, event);
+        _events.insert( _events.begin() + i + 1, std::move( owner ) );
         return;
     } else if ( evt==CREV_UPDATE || evt==CREV_RESIZE ) {
-        for ( int i=_events.length()-1; i>=0; i-- ) {
+        for ( int i=static_cast<int>( _events.size() )-1; i>=0; i-- ) {
             int t = _events[i]->getType();
             if ( t==evt || t==CREV_UPDATE ) { // UPDATE is invalidated by Resize
                 if ( t==CREV_UPDATE && evt==CREV_UPDATE && _events[i]->getParam1()!=0 )
-                    event->setParam1(1); // don't miss fullScreen flag from removed events
+                    owner->setParam1(1); // don't miss fullScreen flag from removed events
                 // remove duplicates
-                delete _events.remove(i);
+                _events.erase( _events.begin() + i );
             }
         }
-        _events.push(event);
+        _events.push_back( std::move( owner ) );
         return;
     }
-    _events.push(event);
+    _events.push_back( std::move( owner ) );
 }
 
 /// override to handle
@@ -429,7 +441,7 @@ bool CRGUIWindowManager::handleEvent( CRGUIEvent * event )
         return event->handle( this );
     if ( event->isWindowEvent() ) {
         CRLog::trace("CRGUIWindowManager::handleEvent( %d, %d, %d)", event->getType(), event->getParam1(), event->getParam2() );
-        for ( int i=_windows.length()-1; i>=0; i-- ) {
+        for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
             if ( !event->isForVisibleOnly() || _windows[i]->isVisible() ) {
                 if ( _windows[i]->handleEvent(event) ) {
                     CRLog::trace("CRGUIWindowManager::handleEvent() -- window %d has processed event, exiting", i );

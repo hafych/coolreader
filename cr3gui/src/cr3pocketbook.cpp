@@ -365,7 +365,7 @@ public:
 
     int hasKeyMapping(int key, int flags) {
         // NOTE: orientation related key substitution is performed by inkview
-        for ( int i=_windows.length()-1; i>=0; i-- ) {
+        for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
             if ( _windows[i]->isVisible() ) {
                 int cmd, param;
                 CRGUIAcceleratorTableRef accTable = _windows[i]->getAccelerators();
