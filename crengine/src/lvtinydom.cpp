@@ -17200,6 +17200,58 @@ class ldomDocCacheImpl : public ldomDocCache,
         lUInt32 size;
     };
     LVPtrVector<FileItem> _files;
+
+    static bool deserializeDirectoryIndex(
+            SerialBuf &buf, LVPtrVector<FileItem> &files,
+            lUInt64 &totalSize)
+    {
+        if (!buf.checkMagic(doccache_magic)) {
+            CRLog::error("wrong cache index file format");
+            return false;
+        }
+        const int start = buf.pos();
+        lUInt32 count = 0;
+        buf >> count;
+        static const int minimumSerializedCacheFileSize = 6;
+        static const int serializedCacheIndexFooterSize = 4;
+        if (buf.error()
+                || count > static_cast<lUInt32>(INT_MAX)
+                || buf.space() < serializedCacheIndexFooterSize
+                || count > static_cast<lUInt32>(
+                        (buf.space() - serializedCacheIndexFooterSize)
+                                / minimumSerializedCacheFileSize)) {
+            buf.seterror();
+            return false;
+        }
+
+        LVPtrVector<FileItem> candidate;
+        candidate.reserve(static_cast<int>(count));
+        lUInt64 candidateTotalSize = 0;
+        for (lUInt32 i = 0; i < count; ++i) {
+            std::unique_ptr<FileItem> item =
+                    std::make_unique<FileItem>();
+            buf >> item->filename;
+            buf >> item->size;
+            if (buf.error())
+                return false;
+            candidateTotalSize += item->size;
+            CRLog::trace(
+                    "cache %d: %s [%d]", static_cast<int>(i),
+                    UnicodeToUtf8(item->filename).c_str(),
+                    static_cast<int>(item->size));
+            candidate.add(item.release());
+        }
+        if (!buf.checkCRC(buf.pos() - start)) {
+            CRLog::error("CRC32 doesn't match in cache index file");
+            return false;
+        }
+        files.swap(candidate);
+        totalSize = candidateTotalSize;
+        return true;
+    }
+
+    friend bool LVRunDocumentCacheIndexRestoreRegression();
+
 public:
     ldomDocCacheImpl( lString32 cacheDir, lvsize_t maxSize )
         : _cacheDir( cacheDir ), _maxSize( maxSize ), _oldStreamSize(0),
@@ -17259,38 +17311,21 @@ public:
     {
         lString32 filename = _cacheDir + "cr3cache.inx";
         // read index
-        lUInt32 totalSize = 0;
+        lUInt64 totalSize = 0;
         LVStreamRef instream = LVOpenFileStream( filename.c_str(), LVOM_READ );
         if ( !instream.isNull() ) {
             LVStreamBufferRef sb = instream->GetReadBuffer(0, instream->GetSize() );
             if ( !sb )
                 return false;
             SerialBuf buf( sb->getReadOnly(), sb->getSize() );
-            if ( !buf.checkMagic( doccache_magic ) ) {
-                CRLog::error("wrong cache index file format");
-                return false;
-            }
-
-            lUInt32 start = buf.pos();
-            lUInt32 count;
-            buf >> count;
-            for (lUInt32 i=0; i < count && !buf.error(); i++) {
-                FileItem * item = new FileItem();
-                _files.add( item );
-                buf >> item->filename;
-                buf >> item->size;
-                CRLog::trace("cache %d: %s [%d]", i, UnicodeToUtf8(item->filename).c_str(), (int)item->size );
-                totalSize += item->size;
-            }
-            if ( !buf.checkCRC( buf.pos() - start ) ) {
-                CRLog::error("CRC32 doesn't match in cache index file");
-                return false;
-            }
-
-            if ( buf.error() )
+            if (!deserializeDirectoryIndex(buf, _files, totalSize))
                 return false;
 
-            CRLog::info( "Document cache index file read ok, %d files in cache, %d bytes", _files.length(), totalSize );
+            CRLog::info(
+                    "Document cache index file read ok, %d files in cache, "
+                    "%llu bytes",
+                    _files.length(),
+                    static_cast<unsigned long long>(totalSize));
             return true;
         } else {
             CRLog::error( "Document cache index file cannot be read" );
@@ -17392,10 +17427,11 @@ public:
     {
         int index = findFileIndex( filename );
         if ( index<0 ) {
-            FileItem * item = new FileItem();
+            std::unique_ptr<FileItem> item =
+                    std::make_unique<FileItem>();
             item->filename = filename;
             item->size = size;
-            _files.insert( 0, item );
+            _files.insert(0, item.release());
         } else {
             _files.move( 0, index );
             _files[0]->size = size;
@@ -17658,6 +17694,71 @@ public:
     {
     }
 };
+
+bool LVRunDocumentCacheIndexRestoreRegression()
+{
+    SerialBuf serialized(1, true);
+    serialized.putMagic(doccache_magic);
+    const int start = serialized.pos();
+    serialized << static_cast<lUInt32>(2);
+    serialized << lString32(U"first.cr3");
+    serialized << static_cast<lUInt32>(17);
+    serialized << lString32(U"second.cr3");
+    serialized << static_cast<lUInt32>(29);
+    serialized.putCRC(serialized.pos() - start);
+    if (serialized.error())
+        return false;
+    std::vector<lUInt8> serializedBytes(
+            serialized.buf(), serialized.buf() + serialized.pos());
+
+    LVPtrVector<ldomDocCacheImpl::FileItem> committed;
+    std::unique_ptr<ldomDocCacheImpl::FileItem> sentinel =
+            std::make_unique<ldomDocCacheImpl::FileItem>();
+    sentinel->filename = U"sentinel.cr3";
+    sentinel->size = 7;
+    committed.add(sentinel.release());
+    lUInt64 totalSize = 7;
+
+    std::vector<lUInt8> corrupted(serializedBytes);
+    corrupted.back() ^= 0x80;
+    SerialBuf corruptedInput(
+            corrupted.data(), static_cast<int>(corrupted.size()));
+    if (ldomDocCacheImpl::deserializeDirectoryIndex(
+                corruptedInput, committed, totalSize)
+            || committed.length() != 1
+            || committed[0]->filename != lString32(U"sentinel.cr3")
+            || totalSize != 7)
+        return false;
+
+    std::vector<lUInt8> oversizedCount(serializedBytes);
+    const size_t countOffset = strlen(doccache_magic);
+    oversizedCount[countOffset] = 0xFF;
+    oversizedCount[countOffset + 1] = 0xFF;
+    oversizedCount[countOffset + 2] = 0xFF;
+    oversizedCount[countOffset + 3] = 0x7F;
+    SerialBuf oversizedInput(
+            oversizedCount.data(),
+            static_cast<int>(oversizedCount.size()));
+    if (ldomDocCacheImpl::deserializeDirectoryIndex(
+                oversizedInput, committed, totalSize)
+            || !oversizedInput.error()
+            || committed.length() != 1
+            || committed[0]->filename != lString32(U"sentinel.cr3")
+            || totalSize != 7)
+        return false;
+
+    SerialBuf validInput(
+            serializedBytes.data(),
+            static_cast<int>(serializedBytes.size()));
+    return ldomDocCacheImpl::deserializeDirectoryIndex(
+                validInput, committed, totalSize)
+            && committed.length() == 2
+            && committed[0]->filename == lString32(U"first.cr3")
+            && committed[0]->size == 17
+            && committed[1]->filename == lString32(U"second.cr3")
+            && committed[1]->size == 29
+            && totalSize == 46;
+}
 
 ldomDocCacheStream::~ldomDocCacheStream()
 {

@@ -145,7 +145,8 @@ DRM или ограничений доступа, подбор/получени�
   selector/rule chains, stylesheet snapshots, transactional style-record
   restore и bounded sparse style-index publication,
   reference-cache
-  buckets/index exports and bounded map slots, longjmp-safe PNG rows/pixels,
+  buckets/index exports and bounded map slots, transactional document-cache
+  directory index restore, longjmp-safe PNG rows/pixels,
   JPEG pool/error lifecycle, draw mark list, history XML/file/bookmark parse
   candidates, transactional snapshot publication и synchronization-record
   bookmark ownership, global i18n translator slots и GUI-side translation

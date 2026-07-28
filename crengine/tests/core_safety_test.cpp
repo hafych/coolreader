@@ -3398,6 +3398,12 @@ static int testStyleIndexRestoreOwnership() {
     return 0;
 }
 
+static int testDocumentCacheIndexRestoreOwnership() {
+    if (!LVRunDocumentCacheIndexRestoreRegression())
+        return fail("document-cache directory index restore regression failed");
+    return 0;
+}
+
 #if (LDOM_USE_OWN_MEM_MAN == 1)
 static int testStringChunkStorageOwnership() {
     if (!LVRunStringChunkStorageOwnershipRegression())
@@ -7310,6 +7316,8 @@ int main() {
     if (testStyleRecordSerializationOwnership() != 0)
         return 1;
     if (testStyleIndexRestoreOwnership() != 0)
+        return 1;
+    if (testDocumentCacheIndexRestoreOwnership() != 0)
         return 1;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
     if (testStringChunkStorageOwnership() != 0)

@@ -3628,6 +3628,58 @@ forbid_source_text(
   "css_style_ref_t rec( new css_style_rec_t() )"
   "DOM style-index restore candidates must not begin as raw owners"
 )
+
+# --- document-cache directory index restore ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "minimumSerializedCacheFileSize = 6"
+  "document-cache directory counts must remain bounded by serialized bytes"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "serializedCacheIndexFooterSize = 4"
+  "document-cache directory bounds must preserve room for their CRC"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LVPtrVector<FileItem> candidate"
+  "document-cache directory restore must build an isolated owner candidate"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<FileItem> item"
+  "document-cache directory entries must begin in scoped ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "if (!buf.checkCRC(buf.pos() - start))"
+  "document-cache directory restore must validate CRC before publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "files.swap(candidate)"
+  "document-cache directory restore must publish by no-throw owner swap"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<FileItem> item =\n                    std::make_unique<FileItem>()"
+  "document-cache MRU insertion must stage its item owner"
+)
+require_source_text(
+  "${DOM_INTERNAL_HEADER}"
+  "bool LVRunDocumentCacheIndexRestoreRegression()"
+  "document-cache directory restore must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "document-cache directory index restore regression failed"
+  "document-cache directory restore must retain native regression coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "FileItem * item = new FileItem()"
+  "document-cache directory entries must not begin as raw owners"
+)
 forbid_source_text(
   "${DOM_SOURCE}"
   "delete list;"

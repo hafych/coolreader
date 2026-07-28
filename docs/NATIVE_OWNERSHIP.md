@@ -64,6 +64,12 @@ style index is capped by its `lUInt16` consumers, rejects duplicate slots, owns
 each decoded record before intrusive adoption, and reaches the live reference
 cache only after its terminator and trailing magic have both been validated.
 
+The document-cache directory index similarly bounds entry count by the
+remaining bytes and CRC footer, fills an isolated owning vector, and swaps it
+into live MRU state only after CRC validation. Both restore and new-MRU paths
+stage `FileItem` values in `unique_ptr` before transferring them to the owning
+pointer vector.
+
 `HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
 transfer boundary, while `getDictList()` returns a non-owning pointer valid only

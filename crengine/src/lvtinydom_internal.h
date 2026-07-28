@@ -25,4 +25,7 @@ bool LVRunDomNodePartOwnershipRegression();
 /// Native regression seam for bounded transactional style-index restore.
 bool LVRunStyleIndexRestoreRegression();
 
+/// Native regression seam for document-cache directory index rollback.
+bool LVRunDocumentCacheIndexRestoreRegression();
+
 #endif
