@@ -18,6 +18,7 @@
 #include "lvrend.h"
 #include "lvstreambuffer.h"
 #include "crskin.h"
+#include "hist.h"
 #include "lvhtmlparser.h"
 #include "lvtextbookmarkparser.h"
 #include "lvtextparser.h"
@@ -1613,6 +1614,156 @@ static LVStreamRef memoryStream(const std::string &contents) {
     return LVCreateMemoryStream(
             const_cast<char *>(contents.data()),
             static_cast<int>(contents.size()), true, LVOM_READ);
+}
+
+static std::string historyDocument(const char *fileName,
+                                   const char *title,
+                                   const char *startPos) {
+    std::string xml =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<FictionBookMarks><file><file-info><doc-title>";
+    xml += title;
+    xml += "</doc-title><doc-author>Author</doc-author>"
+           "<doc-series>Series</doc-series><doc-filename>";
+    xml += fileName;
+    xml += "</doc-filename><doc-filepath>/books/</doc-filepath>"
+           "<doc-filesize>4096</doc-filesize>"
+           "<doc-dom-version>20260728</doc-dom-version>"
+           "</file-info><bookmark-list>"
+           "<bookmark type=\"lastpos\" percent=\"12.05%\" "
+           "timestamp=\"1234\" shortcut=\"0\" page=\"7\">"
+           "<start-point>";
+    xml += startPos;
+    xml += "</start-point><end-point/>"
+           "<header-text>Last chapter</header-text>"
+           "<selection-text>Last excerpt</selection-text>"
+           "<comment-text/></bookmark>"
+           "<bookmark type=\"position\" percent=\"42.03%\" "
+           "timestamp=\"2345\" shortcut=\"3\" page=\"9\">"
+           "<start-point>/saved</start-point><end-point/>"
+           "<header-text>Saved chapter</header-text>"
+           "<selection-text>Saved excerpt</selection-text>"
+           "<comment-text>Saved note</comment-text>"
+           "</bookmark></bookmark-list></file></FictionBookMarks>";
+    return xml;
+}
+
+static int testHistoryOwnership() {
+    CRFileHist history;
+    if (!history.loadFromStream(
+                memoryStream(historyDocument("first.fb2", "First", "/first"))))
+        return fail("history parser rejected a valid document");
+    if (history.getRecords().length() != 1)
+        return fail("history parser did not publish one complete record");
+
+    CRFileHistRecord *record = history.getRecords()[0];
+    if (record->getFileName() != U"first.fb2"
+            || record->getTitle() != U"First"
+            || record->getFilePath() != U"/books/"
+            || record->getFileSize() != 4096
+            || record->getDOMversion() != 20260728)
+        return fail("history parser lost file metadata");
+    if (record->getLastPos()->getStartPos() != U"/first"
+            || record->getLastPos()->getType() != bmkt_lastpos
+            || record->getLastPos()->getTimestamp() != 1234
+            || record->getLastPos()->getBookmarkPage() != 7)
+        return fail("history parser lost the last-position bookmark");
+    if (record->getBookmarks().length() != 1
+            || record->getBookmarks()[0]->getStartPos() != U"/saved"
+            || record->getBookmarks()[0]->getType() != bmkt_pos
+            || record->getBookmarks()[0]->getShortcut() != 3
+            || record->getBookmarks()[0]->getCommentText() != U"Saved note")
+        return fail("history parser lost an adopted bookmark");
+
+    if (!history.loadFromStream(
+                memoryStream(historyDocument("second.fb2", "Second", "/second")))
+            || history.getRecords().length() != 1
+            || history.getRecords()[0]->getFileName() != U"second.fb2")
+        return fail("history reload did not replace the committed snapshot");
+
+    std::string rejected =
+            historyDocument("partial.fb2", "Partial", "/partial");
+    rejected.erase(rejected.rfind("</FictionBookMarks>"));
+    for (unsigned i = 0;
+            i < ParseBudgetLimits::defaults().maxXmlDepth + 1; ++i)
+        rejected += "<n>";
+    for (unsigned i = 0;
+            i < ParseBudgetLimits::defaults().maxXmlDepth + 1; ++i)
+        rejected += "</n>";
+    rejected += "</FictionBookMarks>";
+    if (history.loadFromStream(memoryStream(rejected)))
+        return fail("history parser accepted an over-depth document");
+    if (history.getRecords().length() != 1
+            || history.getRecords()[0]->getFileName() != U"second.fb2"
+            || history.getRecords()[0]->getLastPos()->getStartPos()
+                    != U"/second")
+        return fail("failed history load published its valid prefix");
+    if (history.loadFromStream(LVStreamRef()))
+        return fail("history parser accepted a null stream");
+
+    CRBookmark bookmark;
+    bookmark.setType(bmkt_comment);
+    bookmark.setStartPos(U"/start\\segment\nline");
+    bookmark.setEndPos(U"/end\rsegment");
+    bookmark.setTitleText(U"Header\\line\nnext");
+    bookmark.setPosText(U"Excerpt\tcolumn");
+    bookmark.setCommentText(U"Comment\r\nbackslash\\");
+    bookmark.setPercent(6789);
+    bookmark.setShortcut(4);
+    bookmark.setTimestamp(3456);
+    const lString32 fileName(U"folder\\book\nname\t.fb2");
+    ChangeInfo source(&bookmark, fileName, false);
+    const lString8 serialized = source.toString();
+    std::unique_ptr<ChangeInfo> parsed(ChangeInfo::fromString(serialized));
+    if (!parsed.get() || !parsed->getBookmark()
+            || parsed->getFileName() != fileName
+            || parsed->getTimestamp() != 3456
+            || parsed->getBookmark()->getStartPos()
+                    != bookmark.getStartPos()
+            || parsed->getBookmark()->getEndPos() != bookmark.getEndPos()
+            || parsed->getBookmark()->getTitleText()
+                    != bookmark.getTitleText()
+            || parsed->getBookmark()->getPosText() != bookmark.getPosText()
+            || parsed->getBookmark()->getCommentText()
+                    != bookmark.getCommentText())
+        return fail("change record did not round-trip escaped text");
+
+    ChangeInfo copied(*parsed);
+    parsed->getBookmark()->setStartPos(U"/changed");
+    if (!copied.getBookmark()
+            || copied.getBookmark()->getStartPos()
+                    != bookmark.getStartPos())
+        return fail("change record copy shared bookmark ownership");
+    ChangeInfo assigned;
+    assigned = *parsed;
+    parsed->getBookmark()->setEndPos(U"/changed-end");
+    if (!assigned.getBookmark()
+            || assigned.getBookmark()->getEndPos() != bookmark.getEndPos())
+        return fail("change record assignment shared bookmark ownership");
+
+    std::string framed("junk");
+    framed.append(serialized.c_str(), serialized.length());
+    framed += "tail";
+    int recordStart = -1;
+    int recordEnd = -1;
+    if (!ChangeInfo::findNextRecordBounds(
+                &framed[0], 0, static_cast<int>(framed.size()),
+                recordStart, recordEnd)
+            || recordStart != 4
+            || recordEnd != 4 + serialized.length())
+        return fail("change record bounds did not preserve its transfer range");
+    std::unique_ptr<ChangeInfo> fromBytes(ChangeInfo::fromBytes(
+            &framed[0], recordStart, recordEnd));
+    if (!fromBytes.get() || fromBytes->getFileName() != fileName)
+        return fail("change record byte factory did not transfer a candidate");
+    if (ChangeInfo::fromString(lString8(
+                "# start record\nFILE=invalid\n# end record\n")) != NULL
+            || ChangeInfo::fromBytes(NULL, 0, 0) != NULL
+            || ChangeInfo::fromBytes(&framed[0], -1, recordEnd) != NULL
+            || ChangeInfo::findNextRecordBounds(
+                    NULL, 0, 0, recordStart, recordEnd))
+        return fail("invalid change record input published an owner");
+    return 0;
 }
 
 static int testParserOwnedBuffers() {
@@ -5022,6 +5173,8 @@ int main() {
     if (testIniTranslatorOwnership() != 0)
         return 1;
     if (testParserOwnedBuffers() != 0)
+        return 1;
+    if (testHistoryOwnership() != 0)
         return 1;
     if (testStringCollectionOwnership() != 0)
         return 1;

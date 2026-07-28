@@ -26,6 +26,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/hist.h" HISTORY_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/hist.cpp" HISTORY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstring8collection.h" STRING8_COLLECTION_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring8collection.cpp" STRING8_COLLECTION_SOURCE)
@@ -3375,4 +3377,86 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "static bool IS_FIRST_BODY"
   "first-body flag must not be file-scope static"
+)
+
+# --- history parser and synchronization-record ownership ---
+require_source_text(
+  "${HISTORY_HEADER}"
+  "std::unique_ptr<CRBookmark> _bookmark"
+  "change records must own bookmark snapshots explicitly"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "std::unique_ptr<CRBookmark> _curr_bookmark"
+  "history parsing must scope the current bookmark candidate"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "std::unique_ptr<CRFileHistRecord> _curr_file"
+  "history parsing must scope the current file candidate"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "_hist->getRecords().add( _curr_file.release() )"
+  "history file ownership must transfer only at the owning-list boundary"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "_curr_file->getBookmarks().add(_curr_bookmark.release())"
+  "history bookmark ownership must transfer only at the owning-list boundary"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "_records.swap(candidate._records)"
+  "history loads must publish only a complete candidate snapshot"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "std::unique_ptr<ChangeInfo> ci"
+  "change record factories must keep parse candidates scope-owned"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "return ci.release()"
+  "change record ownership must transfer only at the legacy factory boundary"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "char ch = text[i]"
+  "change record escape decoding must read from encoded input"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testHistoryOwnership()"
+  "history candidate ownership must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "failed history load published its valid prefix"
+  "history regression must retain failure rollback coverage"
+)
+forbid_source_text(
+  "${HISTORY_HEADER}"
+  "CRBookmark * _bookmark"
+  "change records must not own bookmarks through raw pointers"
+)
+forbid_source_text(
+  "${HISTORY_SOURCE}"
+  "CRBookmark * _curr_bookmark"
+  "history parsing must not own bookmark candidates through raw pointers"
+)
+forbid_source_text(
+  "${HISTORY_SOURCE}"
+  "CRFileHistRecord * _curr_file"
+  "history parsing must not own file candidates through raw pointers"
+)
+forbid_source_text(
+  "${HISTORY_SOURCE}"
+  "delete _curr_bookmark"
+  "history candidate teardown must remain automatic"
+)
+forbid_source_text(
+  "${HISTORY_SOURCE}"
+  "ChangeInfo * ci = new"
+  "change record factory rollback must remain automatic"
 )

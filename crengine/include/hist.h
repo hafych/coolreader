@@ -30,6 +30,7 @@
 
 #include "lvptrvec.h"
 #include "lvstring.h"
+#include <memory>
 #include <time.h>
 
 enum bmk_type {
@@ -130,23 +131,23 @@ public:
 
 /// bookmark/position change info for synchronization/replication
 class ChangeInfo {
-    CRBookmark * _bookmark;
+    std::unique_ptr<CRBookmark> _bookmark;
     lString32 _fileName;
     bool _deleted;
     time_t _timestamp;
 
 public:
-    ChangeInfo() : _bookmark(NULL), _deleted(false), _timestamp(0) {
+    ChangeInfo() : _deleted(false), _timestamp(0) {
     }
 
     ChangeInfo(CRBookmark * bookmark, lString32 fileName, bool deleted);
+    ChangeInfo(const ChangeInfo & info);
+    ChangeInfo & operator=(const ChangeInfo & info);
 
-    ~ChangeInfo() {
-        if (_bookmark)
-            delete _bookmark;
-    }
+    ~ChangeInfo() = default;
 
-    CRBookmark * getBookmark() { return _bookmark; }
+    /// Returns a non-owning view valid for this ChangeInfo lifetime.
+    CRBookmark * getBookmark() { return _bookmark.get(); }
 
     lString32 getFileName() { return _fileName; }
 
@@ -156,8 +157,10 @@ public:
 
     lString8 toString();
 
+    /// Transfers ownership of the parsed record to the caller.
     static ChangeInfo * fromString(lString8 s);
 
+    /// Transfers ownership of the parsed record to the caller.
     static ChangeInfo * fromBytes(lChar8 * buf, int start, int end);
 
     static bool findNextRecordBounds(lChar8 * buf, int start, int end, int & recordStart, int & recordEnd);

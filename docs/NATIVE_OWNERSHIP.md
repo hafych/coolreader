@@ -406,3 +406,13 @@ the owned graph while retaining sources, and the public alloc/free functions
 remain the explicit raw ownership boundary. `LFormattedText` now holds that
 boundary in a `unique_ptr`, disables shallow copies and swaps a complete
 replacement during `Clear()`.
+
+History XML parsing keeps the current file and bookmark in `unique_ptr`
+candidates until the owning pointer vectors adopt them. A complete history is
+parsed into a temporary `CRFileHist` and swapped into the live object only after
+the parser succeeds, so over-depth or otherwise rejected input releases its
+valid prefix and preserves the prior snapshot. `ChangeInfo` owns its bookmark
+copy directly, deep-copies that state, and keeps factory candidates scoped until
+the legacy raw-return boundary transfers ownership. Regression coverage also
+round-trips escaped synchronization text, ensuring decoding reads the encoded
+input rather than uninitialized output storage.

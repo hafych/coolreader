@@ -35,6 +35,8 @@
 #include "../include/lvxmlutils.h"
 #include "../include/crlog.h"
 
+#include <memory>
+
 void CRFileHist::clear()
 {
     _records.clear();
@@ -45,9 +47,10 @@ class CRHistoryFileParserCallback : public LVXMLParserCallback
 {
 protected:
 	LVFileFormatParser * _parser;
+    // Non-owning publication target. The callback never outlives loadFromStream().
     CRFileHist *  _hist;
-    CRBookmark * _curr_bookmark;
-    CRFileHistRecord * _curr_file;
+    std::unique_ptr<CRBookmark> _curr_bookmark;
+    std::unique_ptr<CRFileHistRecord> _curr_file;
     enum state_t {
         in_xml,
         in_fbm,
@@ -72,7 +75,7 @@ protected:
 public:
     ///
     CRHistoryFileParserCallback( CRFileHist *  hist )
-        : _hist(hist), _curr_bookmark(NULL), _curr_file(NULL)
+        : _parser(NULL), _hist(hist)
     {
         state = in_xml;
     }
@@ -104,7 +107,7 @@ public:
             state = in_fbm;
         } else if ( lStr_cmp(tagname, "file")==0 && state==in_fbm ) {
             state = in_file;
-            _curr_file = new CRFileHistRecord();
+            _curr_file.reset(new CRFileHistRecord());
         } else if ( lStr_cmp(tagname, "file-info")==0 && state==in_file ) {
             state = in_file_info;
         } else if ( lStr_cmp(tagname, "bookmark-list")==0 && state==in_file ) {
@@ -125,7 +128,7 @@ public:
             state = in_dom_version;
         } else if ( lStr_cmp(tagname, "bookmark")==0 && state==in_bm_list ) {
             state = in_bm;
-            _curr_bookmark = new CRBookmark();
+            _curr_bookmark.reset(new CRBookmark());
         } else if ( lStr_cmp(tagname, "start-point")==0 && state==in_bm ) {
             state = in_start_point;
         } else if ( lStr_cmp(tagname, "end-point")==0 && state==in_bm ) {
@@ -147,8 +150,7 @@ public:
         } else if ( lStr_cmp(tagname, "file")==0 && state==in_file ) {
             state = in_fbm;
             if ( _curr_file )
-                _hist->getRecords().add( _curr_file );
-            _curr_file = NULL;
+                _hist->getRecords().add( _curr_file.release() );
         } else if ( lStr_cmp(tagname, "file-info")==0 && state==in_file_info ) {
             state = in_file;
         } else if ( lStr_cmp(tagname, "bookmark-list")==0 && state==in_bm_list ) {
@@ -171,12 +173,11 @@ public:
             state = in_bm_list;
             if ( _curr_bookmark ) {
                 if ( _curr_bookmark->getType() == bmkt_lastpos ) {
-                    _curr_file->setLastPos(_curr_bookmark);
-                    delete _curr_bookmark;
+                    _curr_file->setLastPos(_curr_bookmark.get());
+                    _curr_bookmark.reset();
                 } else {
-                    _curr_file->getBookmarks().add(_curr_bookmark);
+                    _curr_file->getBookmarks().add(_curr_bookmark.release());
                 }
-                _curr_bookmark = NULL;
             }
         } else if ( lStr_cmp(tagname, "start-point")==0 && state==in_start_point ) {
             state = in_bm;
@@ -277,22 +278,21 @@ public:
             break;
         }
     }
-    /// destructor
-    virtual ~CRHistoryFileParserCallback()
-    {
-        if ( _curr_file )
-            delete _curr_file;
-    }
+    virtual ~CRHistoryFileParserCallback() = default;
 };
 
 bool CRFileHist::loadFromStream( LVStreamRef stream )
 {
-    CRHistoryFileParserCallback cb(this);
+    if ( stream.isNull() )
+        return false;
+    CRFileHist candidate;
+    CRHistoryFileParserCallback cb(&candidate);
     LVXMLParser parser( stream, &cb );
     if ( !parser.CheckFormat() )
         return false;
     if ( !parser.Parse() )
         return false;
+    _records.swap(candidate._records);
     return true;
 }
 
@@ -708,7 +708,7 @@ static lString32 decodeText(lString8 text) {
     lString8 buf;
     bool lastControl = false;
     for (int i=0; i<text.length(); i++) {
-        char ch = buf[i];
+        char ch = text[i];
         if (lastControl) {
             switch (ch) {
             case 'r':
@@ -756,6 +756,27 @@ ChangeInfo::ChangeInfo(CRBookmark * bookmark, lString32 fileName, bool deleted)
     _timestamp = bookmark && bookmark->getTimestamp() > 0 ? bookmark->getTimestamp() : (time_t)time(0);
 }
 
+ChangeInfo::ChangeInfo(const ChangeInfo & info)
+    : _bookmark(info._bookmark ? new CRBookmark(*info._bookmark) : NULL)
+    , _fileName(info._fileName)
+    , _deleted(info._deleted)
+    , _timestamp(info._timestamp)
+{
+}
+
+ChangeInfo & ChangeInfo::operator=(const ChangeInfo & info)
+{
+    if ( this == &info )
+        return *this;
+    std::unique_ptr<CRBookmark> bookmark(
+        info._bookmark ? new CRBookmark(*info._bookmark) : NULL);
+    _fileName = info._fileName;
+    _deleted = info._deleted;
+    _timestamp = info._timestamp;
+    _bookmark.swap(bookmark);
+    return *this;
+}
+
 lString8 ChangeInfo::toString() {
     lString8 buf;
     buf << START_TAG << "\n";
@@ -780,7 +801,7 @@ ChangeInfo * ChangeInfo::fromString(lString8 s) {
     lString8Collection rows(s, cs8("\n"));
     if (rows.length() < 3 || rows[0] != START_TAG || rows[rows.length() - 1] != END_TAG)
         return NULL;
-    ChangeInfo * ci = new ChangeInfo();
+    std::unique_ptr<ChangeInfo> ci(new ChangeInfo());
     CRBookmark bmk;
     for (int i=1; i<rows.length() - 1; i++) {
         lString8 row = rows[i];
@@ -815,20 +836,23 @@ ChangeInfo * ChangeInfo::fromString(lString8 s) {
         }
     }
     if (bmk.isValid())
-        ci->_bookmark = new CRBookmark(bmk);
+        ci->_bookmark.reset(new CRBookmark(bmk));
     if (ci->_fileName.empty() || ci->_timestamp == 0 || (!ci->_bookmark && !ci->_deleted)) {
-        delete ci;
         return NULL;
     }
-    return ci;
+    return ci.release();
 }
 
 ChangeInfo * ChangeInfo::fromBytes(lChar8 * buf, int start, int end) {
+    if (!buf || start < 0 || end < start)
+        return NULL;
     lString8 s(buf + start, end - start);
     return fromString(s);
 }
 
 bool ChangeInfo::findNextRecordBounds(lChar8 * buf, int start, int end, int & recordStart, int & recordEnd) {
+    if (!buf || start < 0 || end < start)
+        return false;
     int startTagPos = findBytes(buf, start, end, START_TAG_BYTES);
     if (startTagPos < 0)
         return false;
