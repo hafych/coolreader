@@ -24,6 +24,9 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURC
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvhtmlparser.cpp" HTML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvxmlparser.cpp" XML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextbookmarkparser.cpp" BOOKMARK_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvfileparserbase.h" FILE_PARSER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvfileparserbase.cpp" FILE_PARSER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvtextfilebase.h" TEXT_FILE_BASE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextfilebase.cpp" TEXT_FILE_BASE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
@@ -436,6 +439,58 @@ forbid_source_text(
   "${TEXT_FILE_BASE_SOURCE}"
   "new unsigned char[ sz ]"
   "encoding detection buffer must not regress to owning new[]"
+)
+
+# --- parser base: persistent read window and charset table ---
+require_source_text(
+  "${FILE_PARSER_HEADER}"
+  "std::vector<lUInt8> m_buf"
+  "parser read window must use RAII ownership"
+)
+require_source_text(
+  "${FILE_PARSER_SOURCE}"
+  "m_buf_len = (int)bytesRead"
+  "parser read window must expose only bytes actually read"
+)
+forbid_source_text(
+  "${FILE_PARSER_HEADER}"
+  "lUInt8 * m_buf"
+  "parser base must not own a raw read buffer"
+)
+forbid_source_text(
+  "${FILE_PARSER_SOURCE}"
+  "cr_realloc( m_buf"
+  "parser read-window growth must remain container-managed"
+)
+forbid_source_text(
+  "${FILE_PARSER_SOURCE}"
+  "free( m_buf"
+  "parser read-window teardown must remain automatic"
+)
+require_source_text(
+  "${TEXT_FILE_BASE_HEADER}"
+  "std::vector<lChar32> m_conv_table"
+  "parser charset table must use RAII ownership"
+)
+require_source_text(
+  "${TEXT_FILE_BASE_SOURCE}"
+  "m_conv_table.assign(table, table + 128)"
+  "parser charset table must copy caller-provided mappings"
+)
+forbid_source_text(
+  "${TEXT_FILE_BASE_HEADER}"
+  "lChar32 * m_conv_table"
+  "parser base must not own a raw charset table"
+)
+forbid_source_text(
+  "${TEXT_FILE_BASE_SOURCE}"
+  "new lChar32[128]"
+  "parser charset-table allocation must remain container-managed"
+)
+forbid_source_text(
+  "${TEXT_FILE_BASE_SOURCE}"
+  "delete[] m_conv_table"
+  "parser charset-table teardown must remain automatic"
 )
 
 # --- GIF decoder: image/frame buffers and color tables ---

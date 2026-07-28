@@ -422,7 +422,7 @@ bool LVRtfParser::CheckFormat()
     Reset();
     if ( !FillBuffer( 50 ) )
         return false;
-    if (m_buf == NULL)
+    if (m_buf_len < 5)
         return false;
     res = (m_buf[0]=='{' && m_buf[1]=='\\' && m_buf[2]=='r'
          && m_buf[3]=='t' && m_buf[4]=='f' );
@@ -531,7 +531,7 @@ bool LVRtfParser::Parse()
         // check end of file
         if ( len <=0 )
             break; //EOF
-        const lUInt8 * p = m_buf + m_buf_pos;
+        const lUInt8 * p = m_buf.data() + m_buf_pos;
         lUInt8 ch = *p++;
         if ( ch=='{' ) {
             OnBraceOpen();
@@ -598,7 +598,7 @@ bool LVRtfParser::Parse()
                 p++;
                 OnControlWord( cwname, PARAM_VALUE_NONE, asteriskFlag );
             }
-            m_buf_pos += (int)(p - (m_buf + m_buf_pos));
+            m_buf_pos += (int)(p - (m_buf.data() + m_buf_pos));
             int binLength = m_stack.getInt( pi_bin );
             if(binLength > 0) {
                 if(m_buf_len - m_buf_pos < binLength) {
@@ -607,7 +607,7 @@ bool LVRtfParser::Parse()
                         break;
                     }
                 }
-                m_stack.getDestination()->OnBlob( m_buf + m_buf_pos, binLength);
+                m_stack.getDestination()->OnBlob( m_buf.data() + m_buf_pos, binLength);
                 m_buf_pos += binLength;
             }
         } else {
@@ -636,7 +636,7 @@ bool LVRtfParser::Parse()
             }
             //=======================================================
             //=======================================================
-            m_buf_pos += (int)(p - (m_buf + m_buf_pos));
+            m_buf_pos += (int)(p - (m_buf.data() + m_buf_pos));
         }
     }
     m_callback->OnStop();
@@ -771,4 +771,3 @@ void LVRtfParser::OnControlWord( const char * control, int param, bool asterisk 
         }
     }
 }
-

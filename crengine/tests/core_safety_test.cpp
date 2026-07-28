@@ -962,10 +962,83 @@ public:
     }
 };
 
+class ParserBufferProbe : public LVTextFileBase {
+public:
+    explicit ParserBufferProbe(LVStreamRef stream)
+        : LVTextFileBase(stream)
+    {
+    }
+
+    bool CheckFormat() override
+    {
+        return true;
+    }
+
+    bool Parse() override
+    {
+        return true;
+    }
+
+    bool seekWindow(lvpos_t position, int prefetch)
+    {
+        return Seek(position, prefetch);
+    }
+
+    int windowLength() const
+    {
+        return m_buf_len;
+    }
+
+    std::size_t bufferCapacity() const
+    {
+        return m_buf.size();
+    }
+
+    lUInt8 windowByte(int index) const
+    {
+        return m_buf[index];
+    }
+};
+
 static LVStreamRef memoryStream(const std::string &contents) {
     return LVCreateMemoryStream(
             const_cast<char *>(contents.data()),
             static_cast<int>(contents.size()), true, LVOM_READ);
+}
+
+static int testParserOwnedBuffers() {
+    std::vector<unsigned char> payload(12000);
+    for (std::size_t i = 0; i < payload.size(); ++i)
+        payload[i] = static_cast<unsigned char>((i * 17 + 3) % 251);
+    ParserBufferProbe parser(LVCreateMemoryStream(
+            payload.data(), static_cast<int>(payload.size()),
+            true, LVOM_READ));
+
+    if (!parser.seekWindow(0, 9000)
+            || parser.bufferCapacity() < 9000
+            || parser.windowLength() != 9000)
+        return fail("parser buffer did not grow for a prefetched window");
+    if (!parser.seekWindow(11000, 0)
+            || parser.bufferCapacity() < 9000
+            || parser.windowLength() != 1000
+            || parser.windowByte(0) != payload[11000]
+            || parser.windowByte(999) != payload[11999])
+        return fail("parser tail window exposed stale buffer capacity");
+
+    lChar32 charsetTable[128];
+    for (int i = 0; i < 128; ++i)
+        charsetTable[i] = static_cast<lChar32>(0x400 + i);
+    parser.SetCharsetTable(charsetTable);
+    lChar32 *ownedTable = parser.GetCharsetTable();
+    if (!ownedTable || ownedTable[0] != 0x400 || ownedTable[127] != 0x47f)
+        return fail("parser did not copy the charset table");
+    charsetTable[0] = 0;
+    if (parser.GetCharsetTable()[0] != 0x400)
+        return fail("parser charset table retained caller storage");
+    parser.SetCharset(U"utf-8");
+    if (parser.GetCharsetTable() != NULL)
+        return fail("UTF-8 parser retained an obsolete charset table");
+    return 0;
 }
 
 static int testParserFormatDetectionBuffers() {
@@ -1694,6 +1767,8 @@ int main() {
     if (testBorrowedDescriptor() != 0)
         return 1;
     if (testIniTranslatorOwnership() != 0)
+        return 1;
+    if (testParserOwnedBuffers() != 0)
         return 1;
     if (testParserFormatDetectionBuffers() != 0)
         return 1;

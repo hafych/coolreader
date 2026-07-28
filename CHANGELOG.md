@@ -157,6 +157,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.
+- Shared parser read windows and charset conversion tables now use explicit
+  RAII ownership; short reads near end of file expose only valid bytes instead
+  of stale retained buffer capacity.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

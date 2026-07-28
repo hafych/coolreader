@@ -103,7 +103,7 @@ void ExpandTabs(lString32 & s)
 void LVXMLParser::SetCharset( const lChar32 * name )
 {
     LVTextFileBase::SetCharset( name );
-    m_callback->OnEncoding( name, m_conv_table );
+    m_callback->OnEncoding( name, GetCharsetTable() );
 }
 
 void LVXMLParser::Reset()
@@ -417,10 +417,12 @@ bool LVXMLParser::Parse()
                     attrns.lowercase();
                     attrname.lowercase();
                 }
-                if ( (flags & TXTFLG_CONVERT_8BIT_ENTITY_ENCODING) && m_conv_table ) {
+                if ( (flags & TXTFLG_CONVERT_8BIT_ENTITY_ENCODING)
+                        && !m_conv_table.empty() ) {
                     // (only used when parding html from CHM document, not updating it
                     // to use TXTFLG_PROCESS_ATTRIBUTE)
-                    PreProcessXmlString( attrvalue, 0, m_conv_table );
+                    PreProcessXmlString(
+                            attrvalue, 0, m_conv_table.data() );
                 }
                 else {
                     // Process &#124; and HTML entities, but don't touch space
@@ -644,7 +646,7 @@ bool LVXMLParser::ReadText()
 
             const lChar32 * enc_table = NULL;
             if ( flags & TXTFLG_CONVERT_8BIT_ENTITY_ENCODING )
-                enc_table = this->m_conv_table;
+                enc_table = GetCharsetTable();
 
             if ( m_in_cdata )
                 flags |= TXTFLG_CDATA;

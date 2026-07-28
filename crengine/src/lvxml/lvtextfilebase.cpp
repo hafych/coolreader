@@ -241,7 +241,6 @@ static lChar32 cr3_ksc5601_mbtowc(lChar32 c1, lChar32 c2)
 LVTextFileBase::LVTextFileBase( LVStreamRef stream )
     : LVFileParserBase(stream)
     , m_enc_type( ce_8bit_cp )
-    , m_conv_table(NULL)
     , m_eof(false)
 {
     clearCharBuffer();
@@ -249,11 +248,7 @@ LVTextFileBase::LVTextFileBase( LVStreamRef stream )
 
 
 /// destructor
-LVTextFileBase::~LVTextFileBase()
-{
-    if (m_conv_table)
-        delete[] m_conv_table;
-}
+LVTextFileBase::~LVTextFileBase() = default;
 
 /// reads one character from buffer in RTF format
 lChar32 LVTextFileBase::ReadRtfChar( int, const lChar32 * conv_table )
@@ -302,7 +297,7 @@ int LVTextFileBase::ReadChars( lChar32 * buf, int maxsize )
     switch ( m_enc_type ) {
     case ce_8bit_cp:
     case ce_utf8:
-        if ( m_conv_table!=NULL ) {
+        if ( !m_conv_table.empty() ) {
             for ( ; count<maxsize && m_buf_pos<m_buf_len; count++ ) {
                 lUInt16 ch = m_buf[m_buf_pos++];
                 buf[count] = ( (ch & 0x80) == 0 ) ? ch : m_conv_table[ch&0x7F];
@@ -311,7 +306,8 @@ int LVTextFileBase::ReadChars( lChar32 * buf, int maxsize )
         } else  {
             int srclen = m_buf_len - m_buf_pos;
             int dstlen = maxsize;
-            Utf8ToUnicode(m_buf + m_buf_pos, srclen, buf, dstlen);
+            Utf8ToUnicode(m_buf.data() + m_buf_pos,
+                    srclen, buf, dstlen);
             m_buf_pos += srclen;
             if (dstlen == 0) {
                 checkEof();
@@ -834,17 +830,11 @@ void LVTextFileBase::SetCharsetTable( const lChar32 * table )
 {
     if (!table)
     {
-        if (m_conv_table)
-        {
-            delete[] m_conv_table;
-            m_conv_table = NULL;
-        }
+        m_conv_table.clear();
         return;
     }
     m_enc_type = ce_8bit_cp;
-    if (!m_conv_table)
-        m_conv_table = new lChar32[128];
-    lStr_memcpy( m_conv_table, table, 128 );
+    m_conv_table.assign(table, table + 128);
 }
 
 /// reads next text line, tells file position and size of line, sets EOL flag

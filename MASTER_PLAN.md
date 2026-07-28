@@ -116,8 +116,8 @@ DRM или ограничений доступа, подбор/получени�
   Выполнено: ownership для hyphenation/text-language/font-manager; временные
   буферы INI, cache-file, SVG/GIF/XPM/image rows, encoding autodetect и parser
   format detection; parser selection, draw-buffer source, ZIP decoder,
-  cached-stream slots и draw mark list. Остальные участки мигрируются
-  отдельными bounded-пакетами.
+  cached-stream slots, parser read/charset buffers и draw mark list. Остальные
+  участки мигрируются отдельными bounded-пакетами.
 - [-] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

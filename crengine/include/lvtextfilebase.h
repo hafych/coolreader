@@ -29,6 +29,8 @@
 #define LINE_HAS_EOLN 1
 #define LINE_IS_HEADER 0x2000
 
+#include <vector>
+
 class LVTextFileBase : public LVFileParserBase
 {
 protected:
@@ -36,7 +38,7 @@ protected:
     lString32 m_txt_buf;
     lString32 m_encoding_name;
     lString32 m_lang_name;
-    lChar32 * m_conv_table; // charset conversion table for 8-bit encodings
+    std::vector<lChar32> m_conv_table; // 128-item table for 8-bit encodings
 
     lChar32 m_read_buffer[XML_CHAR_BUFFER_SIZE];
     int m_read_buffer_len;
@@ -140,7 +142,10 @@ public:
     /// sets 8-bit charset conversion table (128 items, for codes 128..255)
     virtual void SetCharsetTable( const lChar32 * table );
     /// returns 8-bit charset conversion table (128 items, for codes 128..255)
-    virtual lChar32 * GetCharsetTable( ) { return m_conv_table; }
+    virtual lChar32 * GetCharsetTable( )
+    {
+        return m_conv_table.empty() ? NULL : m_conv_table.data();
+    }
 
     /// constructor
     LVTextFileBase( LVStreamRef stream );

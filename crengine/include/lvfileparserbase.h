@@ -23,13 +23,13 @@
 
 #include "lvfileformatparser.h"
 #include "lvstream.h"
+#include <vector>
 
 class LVFileParserBase : public LVFileFormatParser
 {
 protected:
     LVStreamRef m_stream;
-    lUInt8 * m_buf;
-    int      m_buf_size;
+    std::vector<lUInt8> m_buf;
     lvsize_t m_stream_size;
     int      m_buf_len;
     int      m_buf_pos;

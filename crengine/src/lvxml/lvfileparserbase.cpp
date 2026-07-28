@@ -31,8 +31,6 @@
 
 LVFileParserBase::LVFileParserBase( LVStreamRef stream )
     : m_stream(stream)
-    , m_buf(NULL)
-    , m_buf_size(0)
     , m_stream_size(0)
     , m_buf_len(0)
     , m_buf_pos(0)
@@ -129,11 +127,7 @@ void LVFileParserBase::Stop()
 }
 
 /// destructor
-LVFileParserBase::~LVFileParserBase()
-{
-    if (m_buf)
-        free( m_buf );
-}
+LVFileParserBase::~LVFileParserBase() = default;
 
 /// seek to specified stream position
 bool LVFileParserBase::Seek( lvpos_t pos, int bytesToPrefetch )
@@ -146,28 +140,28 @@ bool LVFileParserBase::Seek( lvpos_t pos, int bytesToPrefetch )
     }
     if ( pos>=m_stream_size )
         return false;
-    unsigned bytesToRead = (bytesToPrefetch > m_buf_size) ? bytesToPrefetch : m_buf_size;
+    unsigned bytesToRead = (bytesToPrefetch > (int)m_buf.size())
+            ? bytesToPrefetch : (unsigned)m_buf.size();
     if ( bytesToRead < BUF_SIZE_INCREMENT )
         bytesToRead = BUF_SIZE_INCREMENT;
     if ( bytesToRead > (m_stream_size - pos) )
         bytesToRead = (m_stream_size - pos);
-    if ( (unsigned)m_buf_size < bytesToRead ) {
-        m_buf_size = bytesToRead;
-        m_buf = cr_realloc( m_buf, m_buf_size );
-    }
+    if ( m_buf.size() < bytesToRead )
+        m_buf.resize(bytesToRead);
     m_buf_fpos = pos;
     m_buf_pos = 0;
-    m_buf_len = m_buf_size;
+    m_buf_len = 0;
     // TODO: add error handing
     if ( m_stream->SetPos( m_buf_fpos ) != m_buf_fpos ) {
         CRLog::error("cannot set stream position to %d", (int)m_buf_pos );
         return false;
     }
     lvsize_t bytesRead = 0;
-    if ( m_stream->Read( m_buf, bytesToRead, &bytesRead ) != LVERR_OK ) {
+    if ( m_stream->Read( m_buf.data(), bytesToRead, &bytesRead ) != LVERR_OK ) {
         CRLog::error("error while reading %d bytes from stream", (int)bytesToRead);
         return false;
     }
+    m_buf_len = (int)bytesRead;
     return true;
 }
 
@@ -180,7 +174,7 @@ bool LVFileParserBase::FillBuffer( int bytesToRead )
         return true; //FIX
     if (bytesToRead > bytesleft)
         bytesToRead = (int)bytesleft;
-    int space = m_buf_size - m_buf_len;
+    int space = (int)m_buf.size() - m_buf_len;
     if (space < bytesToRead)
     {
         if ( m_buf_pos>bytesToRead || m_buf_pos>((m_buf_len*3)>>2) )
@@ -194,16 +188,17 @@ bool LVFileParserBase::FillBuffer( int bytesToRead )
             m_buf_len = sz;
             m_buf_fpos += m_buf_pos;
             m_buf_pos = 0;
-            space = m_buf_size - m_buf_len;
+            space = (int)m_buf.size() - m_buf_len;
         }
         if (space < bytesToRead)
         {
-            m_buf_size = m_buf_size + (bytesToRead - space + BUF_SIZE_INCREMENT);
-            m_buf = cr_realloc( m_buf, m_buf_size );
+            m_buf.resize(m_buf.size()
+                    + bytesToRead - space + BUF_SIZE_INCREMENT);
         }
     }
     lvsize_t n = 0;
-    if ( m_stream->Read(m_buf+m_buf_len, bytesToRead, &n) != LVERR_OK )
+    if ( m_stream->Read(m_buf.data() + m_buf_len,
+            bytesToRead, &n) != LVERR_OK )
         return false;
 //    if ( CRLog::isTraceEnabled() ) {
 //        const lUInt8 * s = m_buf + m_buf_len;

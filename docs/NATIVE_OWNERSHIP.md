@@ -57,6 +57,12 @@ through `std::vector`, including negative detection paths. Encoding
 autodetection also uses a scoped buffer and a stream-position guard, so success,
 read failure and short-input exits restore the caller's position uniformly.
 
+The shared file-parser read window and text-parser charset conversion table are
+owned by `std::vector`. Parser subclasses use indexed access or temporary
+non-owning `data()` views; they do not manage either allocation. A seek exposes
+only the number of bytes actually read, even when the retained vector capacity
+is larger than the short window available near end of file.
+
 Cache-file serialization buffers, temporary draw mark lists and SVG decoder
 input/output buffers also use standard RAII containers. These operation-scoped
 resources cannot outlive their call and no longer rely on matching cleanup at
