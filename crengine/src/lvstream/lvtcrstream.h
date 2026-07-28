@@ -23,27 +23,22 @@
 
 #include "lvnamedstream.h"
 
+#include <vector>
+
 class LVTCRStream : public LVNamedStream
 {
     class TCRCode {
     public:
-        int len;
-        char * str;
-        TCRCode()
-            : len(0), str(NULL)
-        {
-        }
+        std::vector<lUInt8> str;
         void set( const char * s, int sz );
-        ~TCRCode();
     };
     LVStreamRef _stream;
     TCRCode _codes[256];
     lvpos_t _packedStart;
     lvsize_t _packedSize;
     lvsize_t _unpSize;
-    lUInt32 * _index;
-    lUInt8 * _decoded;
-    int _decodedSize;
+    std::vector<lUInt32> _index;
+    std::vector<lUInt8> _decoded;
     int _decodedLen;
     unsigned _partIndex;
     lvpos_t _decodedStart;
@@ -53,14 +48,15 @@ class LVTCRStream : public LVNamedStream
     #define TCR_READ_BUF_SIZE 4096
     lUInt8 _readbuf[TCR_READ_BUF_SIZE];
     LVTCRStream( LVStreamRef stream )
-    : _stream(stream), _index(NULL), _decoded(NULL),
-      _decodedSize(0), _decodedLen(0), _partIndex((unsigned)-1), _decodedStart(0), _indexSize(0), _pos(0)
+    : _stream(stream), _packedStart(0), _packedSize(0), _unpSize(0),
+      _decodedLen(0), _partIndex((unsigned)-1), _decodedStart(0),
+      _indexSize(0), _pos(0)
     {
     }
 
     bool decodePart( unsigned index );
 public:
-    ~LVTCRStream();
+    ~LVTCRStream() = default;
     bool init();
     static LVStreamRef create( LVStreamRef stream, int mode );
 

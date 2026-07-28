@@ -164,6 +164,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   recoverable truncated input before teardown and emits no document callbacks
   after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership
   through a LIFO owner stack, including malformed-group unwinding.
+- The TCR decoder now owns dictionary, block-index and decoded-block storage
+  through RAII containers; factory failure is rollback-safe, and regressions
+  cover buffer growth, indexed block reuse and truncated dictionaries.
 - The Antiword bridge now keeps writer, layout and stream callback state in a
   scoped per-import context while serializing the third-party library; real
   Word fixture imports are covered concurrently, and sequential lists reset

@@ -22,23 +22,13 @@
 
 #include "lvtcrstream.h"
 
-#include <stdlib.h>
+#include <memory>
 #include <string.h>
 
 void LVTCRStream::TCRCode::set(const char *s, int sz)
 {
-    if ( sz>0 ) {
-        str = (char *)malloc( sz + 1 );
-        memcpy( str, s, sz );
-        str[sz] = 0;
-        len = sz;
-    }
-}
-
-LVTCRStream::TCRCode::~TCRCode()
-{
-    if ( str )
-        free( str );
+    const lUInt8 * begin = reinterpret_cast<const lUInt8 *>(s);
+    str.assign(begin, begin + sz);
 }
 
 
@@ -48,6 +38,8 @@ bool LVTCRStream::decodePart(unsigned index)
 {
     if ( _partIndex==index )
         return true;
+    if ( index >= static_cast<unsigned>(_indexSize) )
+        return false;
     lvsize_t bytesRead;
     int bytesToRead = TCR_READ_BUF_SIZE;
     if ( (index+1)*TCR_READ_BUF_SIZE > _packedSize )
@@ -60,30 +52,17 @@ bool LVTCRStream::decodePart(unsigned index)
         return false;
     if ( bytesToRead!=(int)bytesRead )
         return false;
-    //TODO
-    if ( !_decoded ) {
-        _decodedSize = TCR_READ_BUF_SIZE * 2;
-        _decoded = (lUInt8 *)malloc( _decodedSize );
-    }
-    _decodedLen = 0;
+    _decoded.clear();
+    if ( _decoded.capacity() < TCR_READ_BUF_SIZE * 2 )
+        _decoded.reserve(TCR_READ_BUF_SIZE * 2);
     for ( unsigned i=0; i<bytesRead; i++ ) {
-        TCRCode * item = &_codes[_readbuf[i]];
-        for ( int j=0; j<item->len; j++ )
-            _decoded[_decodedLen++] = item->str[j];
-        if ( _decodedLen >= _decodedSize - 256 ) {
-            _decodedSize += TCR_READ_BUF_SIZE / 2;
-            _decoded = cr_realloc( _decoded, _decodedSize );
-        }
+        const TCRCode & item = _codes[_readbuf[i]];
+        _decoded.insert(_decoded.end(), item.str.begin(), item.str.end());
     }
+    _decodedLen = static_cast<int>(_decoded.size());
     _decodedStart = _index[index];
     _partIndex = index;
     return true;
-}
-
-LVTCRStream::~LVTCRStream()
-{
-    if ( _index )
-        free(_index);
 }
 
 bool LVTCRStream::init()
@@ -107,7 +86,7 @@ bool LVTCRStream::init()
     if ( _packedSize<10 || _packedSize>0x8000000 )
         return false;
     _indexSize = (_packedSize + TCR_READ_BUF_SIZE - 1) / TCR_READ_BUF_SIZE;
-    _index = (lUInt32*)malloc( sizeof(lUInt32) * (_indexSize + 1) );
+    _index.assign(_indexSize + 1, 0);
     lvpos_t pos = 0;
     lvsize_t size = 0;
     for (;;) {
@@ -117,13 +96,12 @@ bool LVTCRStream::init()
             return false;
         if ( bytesRead>0 ) {
             for ( unsigned i=0; i<bytesRead; i++ ) {
-                int sz = _codes[_readbuf[i]].len;
                 if ( (pos & (TCR_READ_BUF_SIZE-1)) == 0 ) {
                     // add pos index
                     int index = pos / TCR_READ_BUF_SIZE;
                     _index[index] = size;
                 }
-                size += sz;
+                size += _codes[_readbuf[i]].str.size();
                 pos ++;
             }
         }
@@ -153,12 +131,10 @@ LVStreamRef LVTCRStream::create(LVStreamRef stream, int mode)
         return res;
     if (memcmp(signature, buf, 9) != 0)
         return res;
-    LVTCRStream * decoder = new LVTCRStream( stream );
-    if ( !decoder->init() ) {
-        delete decoder;
+    std::unique_ptr<LVTCRStream> decoder(new LVTCRStream(stream));
+    if ( !decoder->init() )
         return res;
-    }
-    return LVStreamRef ( decoder );
+    return LVStreamRef(decoder.release());
 }
 
 lverror_t LVTCRStream::Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t *pNewPos)
@@ -228,7 +204,7 @@ lverror_t LVTCRStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRead)
                 return LVERR_FAIL;
             }
         }
-        lUInt8 * src = _decoded + (_pos - _decodedStart);
+        lUInt8 * src = _decoded.data() + (_pos - _decodedStart);
         unsigned n = count;
         if ( n > (unsigned)bytesLeft )
             n = bytesLeft;

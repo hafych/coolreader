@@ -94,3 +94,10 @@ archives whose header omits the checksum. `LVCachedStream` owns cache slots as
 `std::unique_ptr<BufItem>` values inside a vector while its LRU links remain
 non-owning views. Slot eviction transfers ownership instead of deleting and
 reallocating nodes.
+
+The TCR decoder owns dictionary entries, its packed-block index and the
+reusable decoded block through `std::vector`. Its factory keeps a candidate
+decoder in `std::unique_ptr` until ownership crosses into `LVStreamRef`.
+Regression coverage expands a decoded block beyond its initial reserve, seeks
+across packed-block boundaries and rejects a truncated dictionary after
+partially initialized entries have been released automatically.

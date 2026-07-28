@@ -46,6 +46,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.cpp" ZIP_STREA
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.h" ZIP_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.h" CACHED_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.cpp" TCR_STREAM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.h" TCR_STREAM_HEADER)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -784,6 +786,63 @@ forbid_source_text(
   "${XPM_IMAGE_SOURCE}"
   "new lUInt32"
   "XPM source must not use owning palette/output arrays"
+)
+
+# --- TCR decoder dictionary, index and decoded buffers ---
+require_source_text(
+  "${TCR_STREAM_HEADER}"
+  "std::vector<lUInt8> str"
+  "TCR dictionary entries must use RAII ownership"
+)
+require_source_text(
+  "${TCR_STREAM_HEADER}"
+  "std::vector<lUInt32> _index"
+  "TCR block index must use RAII ownership"
+)
+require_source_text(
+  "${TCR_STREAM_HEADER}"
+  "std::vector<lUInt8> _decoded"
+  "TCR decoded block must use RAII ownership"
+)
+require_source_text(
+  "${TCR_STREAM_SOURCE}"
+  "_decoded.insert(_decoded.end(), item.str.begin(), item.str.end())"
+  "TCR decoded-buffer growth must remain container-managed"
+)
+require_source_text(
+  "${TCR_STREAM_SOURCE}"
+  "std::unique_ptr<LVTCRStream> decoder"
+  "TCR factory construction must have explicit ownership"
+)
+require_source_text(
+  "${TCR_STREAM_SOURCE}"
+  "LVStreamRef(decoder.release())"
+  "TCR factory must transfer ownership only at the reference boundary"
+)
+forbid_source_text(
+  "${TCR_STREAM_HEADER}"
+  "lUInt32 * _index"
+  "TCR decoder must not own a raw block index"
+)
+forbid_source_text(
+  "${TCR_STREAM_HEADER}"
+  "lUInt8 * _decoded"
+  "TCR decoder must not own a raw decoded buffer"
+)
+forbid_source_text(
+  "${TCR_STREAM_SOURCE}"
+  "malloc("
+  "TCR decoder allocation must remain container-managed"
+)
+forbid_source_text(
+  "${TCR_STREAM_SOURCE}"
+  "cr_realloc("
+  "TCR decoded-buffer growth must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${TCR_STREAM_SOURCE}"
+  "free("
+  "TCR decoder teardown must remain automatic"
 )
 
 # --- ZIP decoder and cached stream buffers ---

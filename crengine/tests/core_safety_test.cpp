@@ -1570,6 +1570,65 @@ static bool verifyStreamRange(LVStreamRef stream,
     return true;
 }
 
+static std::vector<unsigned char> buildTcrFixture(
+        std::vector<unsigned char> &decoded) {
+    static const unsigned char signature[] = {
+        '!', '!', '8', '-', 'B', 'i', 't', '!', '!'
+    };
+    std::vector<std::vector<unsigned char>> codes(256);
+    codes[1].resize(255);
+    for (std::size_t i = 0; i < codes[1].size(); ++i)
+        codes[1][i] = static_cast<unsigned char>((i * 13 + 7) % 251);
+    for (std::size_t i = 2; i < codes.size(); ++i)
+        codes[i].push_back(static_cast<unsigned char>(i));
+
+    std::vector<unsigned char> bytes(signature,
+            signature + sizeof(signature));
+    for (const std::vector<unsigned char> &code : codes) {
+        bytes.push_back(static_cast<unsigned char>(code.size()));
+        bytes.insert(bytes.end(), code.begin(), code.end());
+    }
+
+    std::vector<unsigned char> packed(4096, 1);
+    packed.insert(packed.end(), 731, 2);
+    decoded.clear();
+    decoded.reserve(4096 * codes[1].size() + 731);
+    for (unsigned char code : packed)
+        decoded.insert(decoded.end(), codes[code].begin(), codes[code].end());
+    bytes.insert(bytes.end(), packed.begin(), packed.end());
+    return bytes;
+}
+
+static int testTcrStreamOwnership() {
+    std::vector<unsigned char> expected;
+    std::vector<unsigned char> tcrBytes = buildTcrFixture(expected);
+    LVStreamRef decoded = LVCreateTCRDecoderStream(LVCreateMemoryStream(
+            tcrBytes.data(), static_cast<int>(tcrBytes.size()),
+            true, LVOM_READ));
+    const std::size_t blockBoundary = 4096 * 255;
+    if (decoded.isNull()
+            || decoded->GetSize() != expected.size()
+            || !verifyStreamRange(decoded, expected, 0, 12000)
+            || !verifyStreamRange(
+                    decoded, expected, blockBoundary - 200, 400)
+            || !verifyStreamRange(
+                    decoded, expected, blockBoundary - 8192, 4096))
+        return fail("TCR decoder failed RAII growth or indexed block reuse");
+
+    static const unsigned char truncatedTcr[] = {
+        '!', '!', '8', '-', 'B', 'i', 't', '!', '!',
+        0,
+        3, 'a', 'b', 'c',
+        2, 'x'
+    };
+    LVStreamRef invalid = LVCreateTCRDecoderStream(LVCreateMemoryStream(
+            const_cast<unsigned char *>(truncatedTcr),
+            static_cast<int>(sizeof(truncatedTcr)), true, LVOM_READ));
+    if (!invalid.isNull())
+        return fail("TCR decoder accepted a truncated dictionary");
+    return 0;
+}
+
 static int testStreamBufferOwnership() {
     std::vector<unsigned char> payload(5 * 4096 + 731);
     for (std::size_t i = 0; i < payload.size(); ++i)
@@ -1893,6 +1952,8 @@ int main() {
         return 1;
 #endif
     if (testImageSourceOwnership() != 0)
+        return 1;
+    if (testTcrStreamOwnership() != 0)
         return 1;
     if (testStreamBufferOwnership() != 0)
         return 1;

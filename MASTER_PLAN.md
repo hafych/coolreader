@@ -117,8 +117,8 @@ DRM или ограничений доступа, подбор/получени�
   буферы INI, cache-file, SVG/GIF/XPM/image rows, encoding autodetect и parser
   format detection; parser selection, draw-buffer source, ZIP decoder,
   cached-stream slots, parser read/charset buffers, RTF text/destination
-  ownership и draw mark list. Остальные участки мигрируются отдельными
-  bounded-пакетами.
+  ownership, TCR dictionary/index/decoded buffers и draw mark list. Остальные
+  участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для
