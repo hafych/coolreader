@@ -26,33 +26,45 @@
  * \brief Name to Id map
  */
 
-#include "../include/lvmemman.h"
 #include "../include/lstridmap.h"
 #include "../include/dtddef.h"
 #include "../include/lvtinydom.h"
-#include <string.h>
+
+#include <algorithm>
 
 LDOMNameIdMapItem::LDOMNameIdMapItem(lUInt16 _id, const lString32 & _value, const css_elem_def_props_t * _data)
-    : id(_id), value(_value)
+    : data(_data
+            ? std::unique_ptr<css_elem_def_props_t>(
+                    new css_elem_def_props_t(*_data))
+            : std::unique_ptr<css_elem_def_props_t>())
+    , id(_id)
+    , value(_value)
 {
-	if ( _data ) {
-        data = new css_elem_def_props_t();
-		*data = *_data;
-	} else
-		data = NULL;
 }
 
-LDOMNameIdMapItem::LDOMNameIdMapItem(LDOMNameIdMapItem & item)
-    : id(item.id), value(item.value)
+LDOMNameIdMapItem::LDOMNameIdMapItem(const LDOMNameIdMapItem & item)
+    : data(item.data
+            ? std::unique_ptr<css_elem_def_props_t>(
+                    new css_elem_def_props_t(*item.data))
+            : std::unique_ptr<css_elem_def_props_t>())
+    , id(item.id)
+    , value(item.value)
 {
-	if ( item.data ) {
-		data = new css_elem_def_props_t();
-		*data = *item.data;
-	} else {
-		data = NULL;
-	}
 }
 
+LDOMNameIdMapItem &LDOMNameIdMapItem::operator=(
+        const LDOMNameIdMapItem &item)
+{
+    if (this == &item)
+        return *this;
+    std::unique_ptr<css_elem_def_props_t> dataCopy;
+    if (item.data)
+        dataCopy.reset(new css_elem_def_props_t(*item.data));
+    id = item.id;
+    value = item.value;
+    data = std::move(dataCopy);
+    return *this;
+}
 
 static const char id_map_item_magic[] = "IDMI";
 
@@ -77,39 +89,40 @@ void LDOMNameIdMapItem::serialize( SerialBuf & buf )
 }
 
 /// deserialize from byte array
-LDOMNameIdMapItem * LDOMNameIdMapItem::deserialize( SerialBuf & buf )
+std::unique_ptr<LDOMNameIdMapItem> LDOMNameIdMapItem::deserialize(
+        SerialBuf &buf)
 {
     if ( buf.error() ) {
-        return NULL;
+        return std::unique_ptr<LDOMNameIdMapItem>();
     }
     if ( !buf.checkMagic( id_map_item_magic ) ) {
-        return NULL;
+        return std::unique_ptr<LDOMNameIdMapItem>();
     }
 	lUInt16 id;
 	lString32 value;
-	lUInt8 flgData;
+    lUInt8 flgData;
     buf >> id >> value >> flgData;
-    if ( id>=MAX_TYPE_ID )
-        return NULL;
+    if (buf.error() || id == 0 || id >= MAX_TYPE_ID || flgData > 1)
+        return std::unique_ptr<LDOMNameIdMapItem>();
     if ( flgData ) {
-        css_elem_def_props_t props;
+        css_elem_def_props_t props = {};
         lUInt8 display;
         lUInt8 white_space;
         buf >> display >> white_space >> props.allow_text >> props.is_object;
-        if ( display > css_d_none || white_space > css_ws_break_spaces )
-            return NULL;
+        if (buf.error()
+                || display > css_d_none
+                || white_space > css_ws_break_spaces)
+            return std::unique_ptr<LDOMNameIdMapItem>();
         props.display = (css_display_t)display;
         props.white_space = (css_white_space_t)white_space;
-    	return new LDOMNameIdMapItem(id, value, &props);
+        return std::unique_ptr<LDOMNameIdMapItem>(
+                new LDOMNameIdMapItem(id, value, &props));
     }
-   	return new LDOMNameIdMapItem(id, value, NULL);
+    return std::unique_ptr<LDOMNameIdMapItem>(
+            new LDOMNameIdMapItem(id, value, NULL));
 }
 
-LDOMNameIdMapItem::~LDOMNameIdMapItem()
-{
-	if ( data )
-		delete data;
-}
+LDOMNameIdMapItem::~LDOMNameIdMapItem() = default;
 
 static const char id_map_magic[] = "IMAP";
 
@@ -122,8 +135,8 @@ void LDOMNameIdMap::serialize( SerialBuf & buf )
         Sort();
     int start = buf.pos();
 	buf.putMagic( id_map_magic );
-    buf << m_count;
-    for ( int i=0; i<m_size; i++ ) {
+    buf << static_cast<lUInt16>(m_by_name.size());
+    for (std::size_t i = 0; i < m_by_id.size(); i++) {
         if ( m_by_id[i] )
             m_by_id[i]->serialize( buf );
     }
@@ -141,163 +154,150 @@ bool LDOMNameIdMap::deserialize( SerialBuf & buf )
         buf.seterror();
         return false;
     }
-    Clear();
     lUInt16 count;
     buf >> count;
-    if ( count>m_size ) {
+    if (buf.error() || count > m_by_id.size()) {
         buf.seterror();
         return false;
     }
-    for ( int i=0; i<count; i++ ) {
-        LDOMNameIdMapItem * item = LDOMNameIdMapItem::deserialize(buf);
-        if ( !item || (item->id<m_size && m_by_id[item->id]!=NULL ) ) { // invalid entry
-            if ( item )
-                delete item;
+    LDOMNameIdMap candidate(0);
+    candidate.m_by_id.resize(m_by_id.size());
+    candidate.m_by_name.reserve(count);
+    for (lUInt16 i = 0; i < count; i++) {
+        std::unique_ptr<LDOMNameIdMapItem> item =
+                LDOMNameIdMapItem::deserialize(buf);
+        if (!item || (item->id < candidate.m_by_id.size()
+                    && candidate.m_by_id[item->id])) {
             buf.seterror();
             return false;
         }
-        AddItem( item );
+        candidate.AddItem(std::move(item));
     }
-    m_sorted = false;
+    if (candidate.m_by_name.size() != count) {
+        buf.seterror();
+        return false;
+    }
+    candidate.Sort();
     buf.checkCRC( buf.pos() - start );
+    if (buf.error())
+        return false;
+    swap(candidate);
     m_changed = false;
-    if (!m_sorted)
-        Sort();
-    return !buf.error();
+    return true;
 }
 
 
 LDOMNameIdMap::LDOMNameIdMap(lUInt16 maxId)
+    : m_by_id(static_cast<std::size_t>(maxId) + 1)
+    , m_by_name()
+    , m_sorted(true)
+    , m_changed(false)
 {
-    m_size = maxId+1;
-    m_count = 0;
-    m_by_id   = new LDOMNameIdMapItem * [m_size]();
-    m_by_name = new LDOMNameIdMapItem * [m_size]();
-    m_sorted = true;
-    m_changed = false;
+    m_by_name.reserve(m_by_id.size());
 }
 
 /// Copy constructor
-LDOMNameIdMap::LDOMNameIdMap( LDOMNameIdMap & map )
+LDOMNameIdMap::LDOMNameIdMap(const LDOMNameIdMap &map)
+    : m_by_id(map.m_by_id.size())
+    , m_by_name()
+    , m_sorted(map.m_sorted)
+    , m_changed(false)
 {
-    m_changed = false;
-    m_size = map.m_size;
-    m_count = map.m_count;
-    m_by_id   = new LDOMNameIdMapItem * [m_size];
-    int i;
-    for ( i=0; i<m_size; i++ ) {
-        if ( map.m_by_id[i] )
-            m_by_id[i] = new LDOMNameIdMapItem( *map.m_by_id[i] );
-        else
-            m_by_id[i] = NULL;
+    for (std::size_t i = 0; i < map.m_by_id.size(); i++) {
+        if (map.m_by_id[i])
+            m_by_id[i].reset(
+                    new LDOMNameIdMapItem(*map.m_by_id[i]));
     }
-    m_by_name = new LDOMNameIdMapItem * [m_size];
-    for ( i=0; i<m_size; i++ ) {
-        if ( map.m_by_name[i] )
-            m_by_name[i] = new LDOMNameIdMapItem( *map.m_by_name[i] );
-        else
-            m_by_name[i] = NULL;
+    m_by_name.reserve(map.m_by_name.size());
+    for (LDOMNameIdMapItem *item : map.m_by_name) {
+        if (item && item->id < m_by_id.size() && m_by_id[item->id])
+            m_by_name.push_back(m_by_id[item->id].get());
     }
-    m_sorted = map.m_sorted;
 }
 
-LDOMNameIdMap::~LDOMNameIdMap()
+LDOMNameIdMap &LDOMNameIdMap::operator=(const LDOMNameIdMap &map)
 {
-    Clear();
-    delete[] m_by_name;
-    delete[] m_by_id;
+    if (this != &map) {
+        LDOMNameIdMap copy(map);
+        swap(copy);
+    }
+    return *this;
 }
 
-static int compare_items( const void * item1, const void * item2 )
+void LDOMNameIdMap::swap(LDOMNameIdMap &map)
 {
-    return (*((LDOMNameIdMapItem **)item1))->value.compare( (*((LDOMNameIdMapItem **)item2))->value );
+    m_by_id.swap(map.m_by_id);
+    m_by_name.swap(map.m_by_name);
+    std::swap(m_sorted, map.m_sorted);
+    std::swap(m_changed, map.m_changed);
 }
 
 void LDOMNameIdMap::Sort()
 {
-    if (m_count>1)
-        qsort( m_by_name, m_count, sizeof(LDOMNameIdMapItem*), compare_items );
+    std::sort(
+            m_by_name.begin(), m_by_name.end(),
+            [](const LDOMNameIdMapItem *left,
+                    const LDOMNameIdMapItem *right) {
+                return left->value.compare(right->value) < 0;
+            });
     m_sorted = true;
 }
 
 const LDOMNameIdMapItem * LDOMNameIdMap::findItem( const lChar32 * name )
 {
-    if (m_count==0 || !name || !*name)
+    if (m_by_name.empty() || !name || !*name)
         return NULL;
     if (!m_sorted)
         Sort();
-    lUInt16 a, b, c;
-    int r;
-    a = 0;
-    b = m_count;
-    for (;;) {
-        c = (a + b)>>1;
-        r = lStr_cmp( name, m_by_name[c]->value.c_str() );
-        if (r == 0)
-            return m_by_name[c]; // found
-        if (b==a+1)
-            return NULL; // not found
-        if (r>0) {
-            a = c;
-        } else {
-            b = c;
-        }
-    }
+    const std::vector<LDOMNameIdMapItem *>::const_iterator found =
+            std::lower_bound(
+                    m_by_name.begin(), m_by_name.end(), name,
+                    [](const LDOMNameIdMapItem *item,
+                            const lChar32 *value) {
+                        return lStr_cmp(
+                                item->value.c_str(), value) < 0;
+                    });
+    return found != m_by_name.end()
+                    && lStr_cmp((*found)->value.c_str(), name) == 0
+            ? *found
+            : NULL;
 }
 
 const LDOMNameIdMapItem * LDOMNameIdMap::findItem( const lChar8 * name )
 {
-    if (m_count==0 || !name || !*name)
+    if (m_by_name.empty() || !name || !*name)
         return NULL;
     if (!m_sorted)
         Sort();
-    lUInt16 a, b, c;
-    int r;
-    a = 0;
-    b = m_count;
-    for (;;) {
-        c = (a + b)>>1;
-        r = lStr_cmp( name, m_by_name[c]->value.c_str() );
-        if (r == 0)
-            return m_by_name[c]; // found
-        if (b==a+1)
-            return NULL; // not found
-        if (r>0) {
-            a = c;
-        } else {
-            b = c;
-        }
-    }
+    const std::vector<LDOMNameIdMapItem *>::const_iterator found =
+            std::lower_bound(
+                    m_by_name.begin(), m_by_name.end(), name,
+                    [](const LDOMNameIdMapItem *item,
+                            const lChar8 *value) {
+                        return lStr_cmp(
+                                item->value.c_str(), value) < 0;
+                    });
+    return found != m_by_name.end()
+                    && lStr_cmp((*found)->value.c_str(), name) == 0
+            ? *found
+            : NULL;
 }
 
-void LDOMNameIdMap::AddItem( LDOMNameIdMapItem * item )
+void LDOMNameIdMap::AddItem(
+        std::unique_ptr<LDOMNameIdMapItem> item)
 {
-    if ( item==NULL )
+    if (!item)
         return;
     if ( item->id==0 ) {
-        delete item;
         return;
     }
-    if (item->id>=m_size)
-    {
-        // reallocate storage
-        lUInt16 newsize = item->id+16;
-        m_by_id = cr_realloc( m_by_id, newsize );
-        m_by_name = cr_realloc( m_by_name, newsize );
-        for (lUInt16 i = m_size; i<newsize; i++)
-        {
-            m_by_id[i] = NULL;
-            m_by_name[i] = NULL;
-        }
-        m_size = newsize;
-    }
-    if (m_by_id[item->id] != NULL)
-    {
-        delete item;
+    if (item->id >= m_by_id.size())
+        m_by_id.resize(static_cast<std::size_t>(item->id) + 1);
+    if (m_by_id[item->id])
         return; // already exists
-    }
-    m_by_id[item->id] = item;
-    m_by_name[m_count++] = item;
+    LDOMNameIdMapItem *itemView = item.get();
+    m_by_name.push_back(itemView);
+    m_by_id[itemView->id] = std::move(item);
     m_sorted = false;
     if (!m_changed) {
         m_changed = true;
@@ -309,25 +309,26 @@ void LDOMNameIdMap::AddItem( lUInt16 id, const lString32 & value, const css_elem
 {
     if (id==0)
         return;
-    LDOMNameIdMapItem * item = new LDOMNameIdMapItem( id, value, data );
-    AddItem( item );
+    std::unique_ptr<LDOMNameIdMapItem> item(
+            new LDOMNameIdMapItem(id, value, data));
+    AddItem(std::move(item));
 }
 
 
 void LDOMNameIdMap::Clear()
 {
-    for (lUInt16 i = 0; i<m_count; i++)
-    {
-        if (m_by_name[i])
-            delete m_by_name[i];
-    }
-    memset( m_by_id, 0, sizeof(LDOMNameIdMapItem *)*m_size);
-    m_count = 0;
+    m_by_name.clear();
+    for (std::unique_ptr<LDOMNameIdMapItem> &item : m_by_id)
+        item.reset();
+    m_sorted = true;
 }
 
 void LDOMNameIdMap::dumpUnknownItems( FILE * f, int start_id )
 {
-    for (int i=start_id; i<m_size; i++)
+    if (start_id < 0)
+        start_id = 0;
+    for (std::size_t i = static_cast<std::size_t>(start_id);
+            i < m_by_id.size(); i++)
     {
         if (m_by_id[i] != NULL)
         {
@@ -340,7 +341,10 @@ void LDOMNameIdMap::dumpUnknownItems( FILE * f, int start_id )
 lString32 LDOMNameIdMap::getUnknownItems( int start_id )
 {
     lString32 items;
-    for (int i=start_id; i<m_size; i++) {
+    if (start_id < 0)
+        start_id = 0;
+    for (std::size_t i = static_cast<std::size_t>(start_id);
+            i < m_by_id.size(); i++) {
         if (m_by_id[i] != NULL) {
             if ( !items.empty() )
                 items << " ";

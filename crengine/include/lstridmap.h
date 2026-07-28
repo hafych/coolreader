@@ -33,7 +33,10 @@
 #define __LSTR_ID_MAP_H__INCLUDED__
 
 #include "lvstring.h"
+
+#include <memory>
 #include <stdio.h>
+#include <vector>
 
 struct css_elem_def_props_t;
 class SerialBuf;
@@ -42,7 +45,7 @@ class SerialBuf;
 class LDOMNameIdMapItem 
 {
     /// custom data pointer
-    css_elem_def_props_t * data;
+    std::unique_ptr<css_elem_def_props_t> data;
 public:
     /// id
     lUInt16    id;
@@ -51,16 +54,17 @@ public:
 	/// constructor
     LDOMNameIdMapItem(lUInt16 _id, const lString32 & _value, const css_elem_def_props_t * _data);
     /// copy constructor
-    LDOMNameIdMapItem(LDOMNameIdMapItem & item);
+    LDOMNameIdMapItem(const LDOMNameIdMapItem & item);
+    LDOMNameIdMapItem &operator=(const LDOMNameIdMapItem & item);
 	/// destructor
 	~LDOMNameIdMapItem();
 
-	const css_elem_def_props_t * getData() const { return data; }
+	const css_elem_def_props_t * getData() const { return data.get(); }
 
 	/// serialize to byte array (pointer will be incremented by number of bytes written)
 	void serialize( SerialBuf & buf );
 	/// deserialize from byte array (pointer will be incremented by number of bytes read)
-	static LDOMNameIdMapItem * deserialize( SerialBuf & buf );
+	static std::unique_ptr<LDOMNameIdMapItem> deserialize( SerialBuf & buf );
 };
 //===========================================
 
@@ -68,20 +72,22 @@ public:
 class LDOMNameIdMap
 {
 private:
-    LDOMNameIdMapItem * * m_by_id;
-    LDOMNameIdMapItem * * m_by_name;
-    lUInt16 m_count; // non-empty count
-    lUInt16 m_size;  // max number of ids
+    /// exclusive item ownership, indexed by numeric id
+    std::vector<std::unique_ptr<LDOMNameIdMapItem>> m_by_id;
+    /// non-owning views into m_by_id, sorted by name when m_sorted is true
+    std::vector<LDOMNameIdMapItem *> m_by_name;
     bool    m_sorted;
     bool    m_changed;
 
     void    Sort();
+    void    swap( LDOMNameIdMap & map );
 public:
     /// Main constructor
     LDOMNameIdMap( lUInt16 maxId );
     /// Copy constructor
-    LDOMNameIdMap( LDOMNameIdMap & map );
-    ~LDOMNameIdMap();
+    LDOMNameIdMap( const LDOMNameIdMap & map );
+    LDOMNameIdMap &operator=( const LDOMNameIdMap & map );
+    ~LDOMNameIdMap() = default;
 
 	/// serialize to byte array (pointer will be incremented by number of bytes written)
 	void serialize( SerialBuf & buf );
@@ -92,11 +98,11 @@ public:
 
     void AddItem( lUInt16 id, const lString32 & value, const css_elem_def_props_t * data );
 
-    void AddItem( LDOMNameIdMapItem * item );
+    void AddItem( std::unique_ptr<LDOMNameIdMapItem> item );
 
     const LDOMNameIdMapItem * findItem( lUInt16 id ) const
     {
-       return m_by_id[id];
+       return id < m_by_id.size() ? m_by_id[id].get() : NULL;
     }
 
     const LDOMNameIdMapItem * findItem( const lChar32 * name );
@@ -117,7 +123,7 @@ public:
 
     inline const lString32 & nameById( lUInt16 id )
     { 
-        if (id>=m_size)
+        if (id >= m_by_id.size())
             return lString32::empty_str;
         const LDOMNameIdMapItem * item = findItem(id);
         return item?item->value:lString32::empty_str;
@@ -125,7 +131,7 @@ public:
 
     inline const css_elem_def_props_t * dataById( lUInt16 id )
     { 
-        if (id>=m_size)
+        if (id >= m_by_id.size())
             return NULL;
         const LDOMNameIdMapItem * item = findItem(id);
         return item ? item->getData() : NULL;

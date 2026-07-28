@@ -19,6 +19,8 @@
 #include "lvxmlparser.h"
 #include "lvxmlparsercallback.h"
 #include "cri18n.h"
+#include "dtddef.h"
+#include "lstridmap.h"
 #include "logredactor.h"
 #include "parsebudget.h"
 #include "rtfimp.h"
@@ -1560,6 +1562,79 @@ static int testStringCollectionOwnership() {
             || restored.find(collisionFirst.c_str()) != firstIndex
             || restored.find(collisionSecond.c_str()) != secondIndex)
         return fail("hashed string deserialize retained stale buckets");
+    return 0;
+}
+
+static int testNameIdMapOwnership() {
+    css_elem_def_props_t props = {
+        true, false, css_d_block, css_ws_normal
+    };
+    LDOMNameIdMap map(2);
+    map.AddItem(1, lString32(U"alpha"), &props);
+    props.allow_text = false;
+    props.display = css_d_inline;
+    map.AddItem(20, lString32(U"omega"), NULL);
+    map.AddItem(20, lString32(U"duplicate"), NULL);
+
+    const LDOMNameIdMapItem *alphaById =
+            map.findItem(static_cast<lUInt16>(1));
+    const LDOMNameIdMapItem *alphaByName = map.findItem(U"alpha");
+    const css_elem_def_props_t *storedProps = map.dataById(1);
+    if (!alphaById
+            || alphaById != alphaByName
+            || map.idByName("omega") != 20
+            || map.idByName("duplicate") != 0
+            || map.findItem(static_cast<lUInt16>(500)) != NULL
+            || !storedProps
+            || !storedProps->allow_text
+            || storedProps->display != css_d_block)
+        return fail("name/id map did not preserve one owned lookup item");
+
+    LDOMNameIdMap mapCopy(map);
+    LDOMNameIdMap mapAssigned(1);
+    mapAssigned = map;
+    const LDOMNameIdMapItem *copyAlpha =
+            mapCopy.findItem(static_cast<lUInt16>(1));
+    if (!copyAlpha
+            || copyAlpha == alphaById
+            || copyAlpha != mapCopy.findItem(U"alpha")
+            || mapCopy.dataById(1) == storedProps
+            || mapAssigned.idByName(U"omega") != 20)
+        return fail("name/id map copy shared owner or name index");
+    map.Clear();
+    if (map.findItem(static_cast<lUInt16>(1)) != NULL
+            || map.idByName(U"omega") != 0
+            || mapCopy.idByName(U"alpha") != 1
+            || mapAssigned.nameById(20) != lString32(U"omega"))
+        return fail("name/id map clear invalidated an independent copy");
+
+    SerialBuf serialized(1, true);
+    mapCopy.serialize(serialized);
+    if (serialized.error())
+        return fail("name/id map could not serialize RAII storage");
+    const int serializedSize = serialized.pos();
+
+    serialized.reset();
+    LDOMNameIdMap restored(32);
+    restored.AddItem(2, lString32(U"stale"), NULL);
+    if (!restored.deserialize(serialized)
+            || restored.idByName(U"stale") != 0
+            || restored.idByName(U"alpha") != 1
+            || restored.idByName(U"omega") != 20
+            || !restored.dataById(1)
+            || restored.dataById(1)->display != css_d_block)
+        return fail("name/id map round-trip lost items or metadata");
+
+    std::vector<lUInt8> corrupted(
+            serialized.buf(), serialized.buf() + serializedSize);
+    corrupted.back() ^= 0x80;
+    SerialBuf corruptedInput(corrupted.data(), corrupted.size());
+    LDOMNameIdMap rollback(32);
+    rollback.AddItem(3, lString32(U"sentinel"), NULL);
+    if (rollback.deserialize(corruptedInput)
+            || rollback.idByName(U"sentinel") != 3
+            || rollback.idByName(U"alpha") != 0)
+        return fail("name/id map failure replaced committed state");
     return 0;
 }
 
@@ -3377,6 +3452,8 @@ int main() {
     if (testParserOwnedBuffers() != 0)
         return 1;
     if (testStringCollectionOwnership() != 0)
+        return 1;
+    if (testNameIdMapOwnership() != 0)
         return 1;
     if (testSerialBufOwnership() != 0)
         return 1;

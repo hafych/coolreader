@@ -151,6 +151,13 @@ collection owns collision buckets as nested vectors; copies retain independent
 indices, while `clear()` and deserialize discard stale bucket contents before
 new strings are indexed.
 
+`LDOMNameIdMap` owns every name/id item exactly once through a vector of
+`unique_ptr`; its sorted name vector is a non-owning lookup index into those
+stable items. Per-element CSS defaults are also private `unique_ptr` copies.
+Map copy and assignment deep-copy the owner index and rebuild name views,
+vector growth replaces the former pair of sequential reallocations, and
+deserialize swaps in a candidate only after item validation and CRC succeed.
+
 `SerialBuf` owns writable fixed-size and auto-growing storage through
 `std::vector`; its raw `_buf` member is only a compatibility view. The
 deserialization constructor remains explicitly borrowed, while the legacy

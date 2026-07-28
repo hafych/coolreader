@@ -214,6 +214,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   buckets through standard vectors. Copy/assignment no longer share raw
   storage, clearing a hashed collection removes stale indices, and custom
   sorting no longer relies on a process-global comparator pointer.
+- DOM name/id maps now keep one `unique_ptr` owner per item and a non-owning
+  sorted name index. Deep copies rebuild their views, growth is atomic through
+  vectors, and malformed or CRC-failing deserialization preserves the
+  previously committed map.
 - The RTF importer now owns its text accumulator through RAII, flushes
   recoverable truncated input before teardown and emits no document callbacks
   after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership

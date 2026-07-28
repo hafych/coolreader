@@ -26,6 +26,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvstring32collection.h" STRING32_COLL
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring32collection.cpp" STRING32_COLLECTION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstring32hashedcollection.h" HASHED_STRING_COLLECTION_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring32hashedcollection.cpp" HASHED_STRING_COLLECTION_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lstridmap.h" NAME_ID_MAP_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lstridmap.cpp" NAME_ID_MAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
@@ -1292,6 +1294,56 @@ forbid_source_text(
   "${HASHED_STRING_COLLECTION_SOURCE}"
   "free("
   "hashed string collision storage must not regress to free"
+)
+require_source_text(
+  "${NAME_ID_MAP_HEADER}"
+  "std::unique_ptr<css_elem_def_props_t> data"
+  "name/id item metadata must use exclusive RAII ownership"
+)
+require_source_text(
+  "${NAME_ID_MAP_HEADER}"
+  "std::vector<std::unique_ptr<LDOMNameIdMapItem>> m_by_id"
+  "name/id maps must keep one owning id index"
+)
+require_source_text(
+  "${NAME_ID_MAP_HEADER}"
+  "std::vector<LDOMNameIdMapItem *> m_by_name"
+  "name/id maps must keep an explicit non-owning name index"
+)
+require_source_text(
+  "${NAME_ID_MAP_SOURCE}"
+  "LDOMNameIdMap candidate(0)"
+  "name/id deserialization must build a rollback candidate"
+)
+require_source_text(
+  "${NAME_ID_MAP_SOURCE}"
+  "swap(candidate)"
+  "name/id deserialization must publish only a validated candidate"
+)
+require_source_text(
+  "${NAME_ID_MAP_SOURCE}"
+  "m_by_name.push_back(itemView)"
+  "name/id adoption must publish the non-owning view before ownership transfer"
+)
+forbid_source_text(
+  "${NAME_ID_MAP_HEADER}"
+  "LDOMNameIdMapItem * *"
+  "name/id maps must not own raw pointer arrays"
+)
+forbid_source_text(
+  "${NAME_ID_MAP_SOURCE}"
+  "cr_realloc("
+  "name/id map growth must not use sequential realloc"
+)
+forbid_source_text(
+  "${NAME_ID_MAP_SOURCE}"
+  "delete[]"
+  "name/id map teardown must not manually delete index arrays"
+)
+forbid_source_text(
+  "${NAME_ID_MAP_SOURCE}"
+  "qsort("
+  "name/id map sorting must stay typed"
 )
 require_source_text(
   "${ZIP_STREAM_HEADER}"
