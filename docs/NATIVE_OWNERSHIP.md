@@ -66,7 +66,10 @@ is larger than the short window available near end of file.
 The RTF importer also owns its accumulated text through `std::vector`. It
 flushes pending text before closing the generated document and calls
 `LVXMLParserCallback::OnStop()` only after all text and structural callbacks
-have completed, including recovery from a truncated final group.
+have completed, including recovery from a truncated final group. Nested RTF
+destinations are owned in LIFO order by `std::unique_ptr`; property-stack raw
+pointers are non-owning restoration views. Truncated groups are unwound before
+`OnStop()`, so deferred image callbacks remain inside the parser lifecycle.
 
 Cache-file serialization buffers, temporary draw mark lists and SVG decoder
 input/output buffers also use standard RAII containers. These operation-scoped

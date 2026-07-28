@@ -509,6 +509,21 @@ require_source_text(
   "m_textBuffer.data(), m_textPos, TXTFLG_RTF"
   "RTF callbacks must receive a non-owning view of the text buffer"
 )
+require_source_text(
+  "${RTF_PARSER_HEADER}"
+  "std::vector<std::unique_ptr<LVRtfDestination>> m_destinationOwners"
+  "RTF destinations must have explicit LIFO ownership"
+)
+require_source_text(
+  "${RTF_PARSER_HEADER}"
+  "void set( std::unique_ptr<LVRtfDestination> newdest )"
+  "RTF destination transitions must transfer explicit ownership"
+)
+require_source_text(
+  "${RTF_PARSER_SOURCE}"
+  "m_stack.unwindDestinations()"
+  "RTF parser must close truncated destination groups before OnStop"
+)
 forbid_source_text(
   "${RTF_PARSER_HEADER}"
   "lChar32 * txtbuf"
@@ -528,6 +543,21 @@ forbid_source_text(
   "${RTF_PARSER_SOURCE}"
   "delete[] txtbuf"
   "RTF text-buffer teardown must remain automatic"
+)
+forbid_source_text(
+  "${RTF_PARSER_HEADER}"
+  "delete dest"
+  "RTF destination teardown must remain automatic"
+)
+forbid_source_text(
+  "${RTF_PARSER_HEADER}"
+  "void set( LVRtfDestination * newdest )"
+  "RTF destination transitions must not accept implicit raw ownership"
+)
+forbid_source_text(
+  "${RTF_PARSER_SOURCE}"
+  "m_stack.set( new LVRtf"
+  "RTF destination creation must use explicit ownership transfer"
 )
 
 # --- GIF decoder: image/frame buffers and color tables ---

@@ -162,7 +162,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   of stale retained buffer capacity.
 - The RTF importer now owns its text accumulator through RAII, flushes
   recoverable truncated input before teardown and emits no document callbacks
-  after `OnStop()`.
+  after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership
+  through a LIFO owner stack, including malformed-group unwinding.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

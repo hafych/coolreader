@@ -941,11 +941,13 @@ public:
     bool stopped;
     bool callbackAfterStop;
     int stopCount;
+    int blobCount;
 
     RecordingRtfCallback()
         : stopped(false)
         , callbackAfterStop(false)
         , stopCount(0)
+        , blobCount(0)
     {
     }
 
@@ -956,6 +958,7 @@ public:
         stopped = false;
         callbackAfterStop = false;
         stopCount = 0;
+        blobCount = 0;
     }
 
     void OnStop() override
@@ -996,6 +999,7 @@ public:
     bool OnBlob(lString32, const lUInt8 *, int) override
     {
         noteCallback();
+        ++blobCount;
         return true;
     }
 };
@@ -1135,6 +1139,19 @@ static int testRtfTextBufferOwnership() {
         return fail("RTF parser did not finish its callback lifecycle once");
     if (callback.callbackAfterStop)
         return fail("RTF parser emitted callbacks after OnStop");
+
+    RecordingRtfCallback pictureCallback;
+    {
+        LVRtfParser parser(memoryStream(
+                "{\\rtf1{\\pict\\pngblip 89504e47"), &pictureCallback);
+        if (!parser.CheckFormat() || !parser.Parse())
+            return fail("RTF parser rejected a truncated picture group");
+    }
+    if (pictureCallback.blobCount != 1)
+        return fail("RTF parser did not finalize an open picture destination");
+    if (!pictureCallback.stopped || pictureCallback.stopCount != 1
+            || pictureCallback.callbackAfterStop)
+        return fail("RTF destination teardown escaped the callback lifecycle");
     return 0;
 }
 

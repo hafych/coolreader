@@ -31,7 +31,9 @@
 
 #include "lvfileparserbase.h"
 #include "crtxtenc.h"
+#include <memory>
 #include <string.h>
+#include <utility>
 #include <vector>
 
 #define PARAM_VALUE_NONE 0x7FFFFFFF
@@ -198,6 +200,7 @@ class LVRtfValueStack
 protected:
     propValue props[pi_max];
     stackedValue stack[MAX_PROP_STACK_SIZE];
+    std::vector<std::unique_ptr<LVRtfDestination>> m_destinationOwners;
     LVRtfDestination * dest;
     int sp;
     bool error;
@@ -210,11 +213,7 @@ public:
         memset(props, 0, sizeof(props) );
         props[pi_ansicpg].p = (void*)GetCharsetByte2UnicodeTable( 1254 ); //
     }
-    ~LVRtfValueStack()
-    {
-        if ( dest )
-            delete dest;
-    }
+    ~LVRtfValueStack() = default;
     void setDefProps()
     {
             props[pi_ch_bold].i = 0;
@@ -227,9 +226,11 @@ public:
             props[pi_align].i = ha_left;
             set( pi_lang, props[pi_deflang].i );
     }
-    void setDestination( LVRtfDestination * newDest )
+    void setDestination( std::unique_ptr<LVRtfDestination> newDest )
     {
-        dest = newDest;
+        m_destinationOwners.clear();
+        m_destinationOwners.push_back(std::move(newDest));
+        dest = m_destinationOwners.back().get();
     }
     /// returns current destination
     inline LVRtfDestination * getDestination() { return dest; }
@@ -265,18 +266,19 @@ public:
         }
     }
     /// set new destination
-    inline void set( LVRtfDestination * newdest )
+    inline void set( std::unique_ptr<LVRtfDestination> newdest )
     {
         if ( sp>=MAX_PROP_STACK_SIZE ) {
             error = true;
-            delete newdest;
         } else {
 #ifdef LOG_RTF_PARSING
-            CRLog::trace("Changing destination. Level=%d old=%08X new=%08X", sp, (unsigned)dest, (unsigned)newdest);
+            CRLog::trace("Changing destination. Level=%d old=%08X new=%08X", sp, (unsigned)dest, (unsigned)newdest.get());
 #endif
+            LVRtfDestination * previousDest = dest;
+            m_destinationOwners.push_back(std::move(newdest));
             stack[sp].index = pi_destination;
-            stack[sp++].value.dest = dest;
-            dest = newdest;
+            stack[sp++].value.dest = previousDest;
+            dest = m_destinationOwners.back().get();
         }
     }
     /// change integer property
@@ -348,9 +350,15 @@ public:
                 break;
             }
             if ( i==pi_destination ) {
-                delete dest;
                 sp--;
-                dest = stack[sp].value.dest;
+                LVRtfDestination * previousDest = stack[sp].value.dest;
+                if ( m_destinationOwners.size()<=1
+                        || m_destinationOwners.back().get()!=dest ) {
+                    error = true;
+                } else {
+                    dest = previousDest;
+                    m_destinationOwners.pop_back();
+                }
 #ifdef LOG_RTF_PARSING
                 CRLog::trace("Restoring destination. Level=%d Value=%08X", sp, (unsigned)dest);
 #endif
@@ -364,6 +372,17 @@ public:
             }
         }
         return !error;
+    }
+    /// closes destinations left open by truncated input
+    void unwindDestinations()
+    {
+        while ( m_destinationOwners.size()>1 ) {
+            dest = m_destinationOwners[m_destinationOwners.size()-2].get();
+            m_destinationOwners.pop_back();
+        }
+        dest = m_destinationOwners.empty()
+                ? NULL : m_destinationOwners.front().get();
+        sp = 0;
     }
 };
 

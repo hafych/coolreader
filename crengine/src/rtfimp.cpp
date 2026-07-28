@@ -401,7 +401,8 @@ LVRtfParser::LVRtfParser( LVStreamRef stream, LVXMLParserCallback * callback )
     , m_textPos(0)
     , imageIndex(0)
 {
-    m_stack.setDestination(  new LVRtfDefDestination(*this) );
+    m_stack.setDestination(std::unique_ptr<LVRtfDestination>(
+            new LVRtfDefDestination(*this)));
     m_firstPageTextCounter = 1000;
 }
 
@@ -634,6 +635,7 @@ bool LVRtfParser::Parse()
         }
     }
     CommitText();
+    m_stack.unwindDestinations();
     m_stack.getDestination()->OnAction(LVRtfDestination::RA_SECTION);
 
       m_callback->OnTagClose( NULL, U"body" );
@@ -721,22 +723,27 @@ void LVRtfParser::OnControlWord( const char * control, int param, bool asterisk 
                 m_stack.set( pi_skip_ansi, 0 );
                 break;
             case dest_fonttbl:
-                m_stack.set( new LVRtfNullDestination(*this) );
+                m_stack.set(std::unique_ptr<LVRtfDestination>(
+                        new LVRtfNullDestination(*this)));
                 break;
             case dest_stylesheet:
-                m_stack.set( new LVRtfNullDestination(*this) );
+                m_stack.set(std::unique_ptr<LVRtfDestination>(
+                        new LVRtfNullDestination(*this)));
                 break;
             case dest_footnote:
-                m_stack.set( new LVRtfNullDestination(*this) );
+                m_stack.set(std::unique_ptr<LVRtfDestination>(
+                        new LVRtfNullDestination(*this)));
                 break;
             case dest_info:
             case dest_header:
             case dest_footer:
             case dest_colortbl:
-                m_stack.set( new LVRtfNullDestination(*this) );
+                m_stack.set(std::unique_ptr<LVRtfDestination>(
+                        new LVRtfNullDestination(*this)));
                 break;
             case dest_pict:
-                m_stack.set( new LVRtfPictDestination(*this) );
+                m_stack.set(std::unique_ptr<LVRtfDestination>(
+                        new LVRtfPictDestination(*this)));
                 break;
             }
             break;
@@ -756,7 +763,8 @@ void LVRtfParser::OnControlWord( const char * control, int param, bool asterisk 
 #endif
         if ( asterisk ) {
             // ignore text after unknown keyword
-            m_stack.set( new LVRtfNullDestination(*this) );
+            m_stack.set(std::unique_ptr<LVRtfDestination>(
+                    new LVRtfNullDestination(*this)));
 #ifdef LOG_RTF_PARSING
             CRLog::trace("Ignoring unknown destination %s !!!", control );
 #endif
