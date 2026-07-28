@@ -353,6 +353,76 @@ require_source_text(
   "process-wide font DPI scaling must be synchronized"
 )
 require_source_text(
+  "${RENDER_SOURCE}"
+  "std::unique_ptr<LVRendPageContext> single_col_context"
+  "single-column table page state must have a row-scoped owner"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "std::unique_ptr<LVRendPageContext> private_cell_context"
+  "private table-cell page state must have an operation-scoped owner"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "appendOwned(_floats, std::make_unique<BlockFloat>"
+  "render floats must enter scoped ownership before publication"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "appendOwned(_shifts, std::make_unique<BlockShift>"
+  "render block shifts must enter scoped ownership before publication"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "~FlowState() = default"
+  "render flow teardown must delegate to its owning containers"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "std::unique_ptr<ldomMarkedRangeList> nbookmarks"
+  "draw-time bookmark ranges must have an operation-scoped owner"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete cell_context"
+  "table-cell page state must not use manual teardown"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete rows[i]->single_col_context"
+  "single-column table page state must not use manual teardown"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete flt"
+  "render floats must be released by their owning container"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete sht"
+  "render block shifts must be released by their owning container"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "new LVRendPageContext"
+  "table page contexts must enter scoped ownership immediately"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "_floats.push( new BlockFloat"
+  "render float publication must not release ownership before reserve"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "_shifts.push( new BlockShift"
+  "render block-shift publication must not release ownership before reserve"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "new ldomMarkedRangeList( bookmarks, rc )"
+  "draw-time bookmark ranges must not regress to raw allocation"
+)
+require_source_text(
   "${BITMAP_SOURCE}"
   "static thread_local lUInt8 glyph_buf[16384]"
   "bitmap glyph scratch must be isolated per thread"

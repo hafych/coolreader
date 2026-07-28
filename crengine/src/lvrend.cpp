@@ -36,6 +36,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <atomic>
+#include <memory>
+#include <stdexcept>
 #include "../include/lvtextfm.h"
 #include "../include/lvtinydom.h"
 #include "../include/fb2def.h"
@@ -232,7 +234,7 @@ public:
     ldomNode * elem;
     LVPtrVector<CCRTableCell> cells;
     CCRTableRowGroup * rowgroup;
-    LVRendPageContext * single_col_context; // we can add cells' lines instead of full rows
+    std::unique_ptr<LVRendPageContext> single_col_context; // we can add cells' lines instead of full rows
     CCRTableRow() : index(0)
     , height(0)
     , baseline(0)
@@ -242,7 +244,6 @@ public:
     , linkindex(-1)
     , elem(NULL)
     , rowgroup(NULL)
-    , single_col_context(NULL)
     { }
 };
 
@@ -1732,7 +1733,8 @@ public:
                                 widows = (int)(elem_style->widows) - (int)(css_orphans_widows_1) + 1;
                                 // We use a LVRendPageContext that gathers links by line,
                                 // so we can transfer them line by line to the upper/main context
-                                row->single_col_context = new LVRendPageContext(NULL, context.getPageHeight());
+                                row->single_col_context = std::make_unique<LVRendPageContext>(
+                                        nullptr, context.getPageHeight());
                                 row->single_col_context->AddLine(0, padding_top, RN_SPLIT_AFTER_AVOID);
                             }
                             int count = txform->GetLineCount();
@@ -1798,18 +1800,22 @@ public:
                         // in their row's height (added to main context below).
                         // Except when table is a single column, and we can just
                         // transfer lines to the upper context.
+                        std::unique_ptr<LVRendPageContext> private_cell_context;
                         LVRendPageContext * cell_context;
                         int rend_flags = elem->getDocument()->getRenderBlockRenderingFlags();
                         if ( is_single_column ) {
-                            row->single_col_context = new LVRendPageContext(NULL, context.getPageHeight());
-                            cell_context = row->single_col_context;
+                            row->single_col_context = std::make_unique<LVRendPageContext>(
+                                    nullptr, context.getPageHeight());
+                            cell_context = row->single_col_context.get();
                             // We want to avoid negative margins (if allowed in global flags) and
                             // going back the flow y, as the transfered lines would not reflect
                             // that, and we could get some small mismatches and glitches.
                             rend_flags &= ~BLOCK_RENDERING_ALLOW_NEGATIVE_COLLAPSED_MARGINS;
                         }
                         else {
-                            cell_context = new LVRendPageContext( NULL, context.getPageHeight(), 0, false );
+                            private_cell_context = std::make_unique<LVRendPageContext>(
+                                    nullptr, context.getPageHeight(), 0, false);
+                            cell_context = private_cell_context.get();
                         }
                         // We request renderBlockElement() to give us back the baseline
                         // of the block as expected for tables
@@ -1840,7 +1846,6 @@ public:
                                     row->links.add( link_ids->at(n) );
                                 }
                             }
-                            delete cell_context;
                         }
                     }
                     // RenderRectAccessor needs to be updated after the call
@@ -2246,15 +2251,6 @@ public:
                     if ( max_row_bottom_overflow_y > fmt.getHeight() ) {
                         fmt.setBottomOverflow( max_row_bottom_overflow_y - fmt.getHeight() );
                     }
-                }
-            }
-        }
-
-        if ( is_single_column ) {
-            // Cleanup rows' LVRendPageContext
-            for ( i=0; i<rows.length(); i++ ) {
-                if ( rows[i]->single_col_context ) {
-                    delete rows[i]->single_col_context;
                 }
             }
         }
@@ -5174,6 +5170,15 @@ private:
                     }
                 }
     };
+    template <typename T>
+    static void appendOwned(
+            LVPtrVector<T> &destination,
+            std::unique_ptr<T> candidate) {
+        if (destination.length() == INT_MAX)
+            throw std::length_error("render state item limit exceeded");
+        destination.reserve(destination.length() + 1);
+        destination.push(candidate.release());
+    }
     int direction; // flow inline direction (LTR/RTL)
     lInt32 lang_node_idx; // dataIndex of nearest upper node with a lang="" attribute (0 if none)
                     // We don't need to know its value in here, the idx of this node
@@ -5262,20 +5267,7 @@ public:
             usable_overflow_x_min = x_min - usable_left_overflow;
             usable_overflow_x_max = x_max + usable_right_overflow;
         }
-    ~FlowState() {
-        // Shouldn't be needed as these must have been cleared
-        // by leaveBlockLevel(). But let's ensure we clean up well.
-        for (int i=_floats.length()-1; i>=0; i--) {
-            BlockFloat * flt = _floats[i];
-            _floats.remove(i);
-            delete flt;
-        }
-        for (int i=_shifts.length()-1; i>=0; i--) {
-            BlockShift * sht = _shifts[i];
-            _shifts.remove(i);
-            delete sht;
-        }
-    }
+    ~FlowState() = default;
 
     bool isMainFlow() {
         return is_main_flow;
@@ -6086,9 +6078,10 @@ public:
         // Don't new/delete to avoid too many malloc/free, keep and re-use/reset
         // the ones already created
         if ( _shifts.length() <= level ) {
-            _shifts.push( new BlockShift( direction, lang_node_idx,
-                                    x_min, x_max, usable_overflow_x_min, usable_overflow_x_max,
-                                    l_y, in_y_min, in_y_max, avoid_pb_inside ) );
+            appendOwned(_shifts, std::make_unique<BlockShift>(
+                    direction, lang_node_idx, x_min, x_max,
+                    usable_overflow_x_min, usable_overflow_x_max,
+                    l_y, in_y_min, in_y_max, avoid_pb_inside));
         }
         else {
             _shifts[level]->reset( direction, lang_node_idx,
@@ -6175,8 +6168,7 @@ public:
             for (int i=_floats.length()-1; i>=0; i--) {
                 BlockFloat * flt = _floats[i];
                 if (flt->level > level) {
-                    _floats.remove(i);
-                    delete flt;
+                    _floats.erase(i, 1);
                 }
             }
             height = new_c_y - start_c_y;
@@ -6223,8 +6215,7 @@ public:
             if (flt->bottom <= c_y) {
                 // This float is past, we shouldn't have to worry
                 // about it anymore
-                _floats.remove(i);
-                delete flt;
+                _floats.erase(i, 1);
             }
         }
         return had_floats_running;
@@ -6391,7 +6382,9 @@ public:
             fy = pos_y;
         int fx = 0;
         fy = getYWithAvailableWidth(fy, width, height, x_min, x_max, fx, is_right);
-        _floats.push( new BlockFloat( fx, fy, fx + width, fy + height, is_right, level, true, node) );
+        appendOwned(_floats, std::make_unique<BlockFloat>(
+                fx, fy, fx + width, fy + height,
+                is_right, level, true, node));
 
         // Get relative coordinates to current container top
         shift_x = fx - x_min;
@@ -6421,7 +6414,9 @@ public:
         // (even if we didn't create a sublevel), let's add them with level+1
         // so they get correctly shifted when vertical margins collapse
         // in an outer level from the final node they come from.
-        _floats.push( new BlockFloat( fx, fy, fx + width, fy + height, is_right, level+1, false, node ) );
+        appendOwned(_floats, std::make_unique<BlockFloat>(
+                fx, fy, fx + width, fy + height,
+                is_right, level + 1, false, node));
 
         // No need to update this level in_y_min/max with this float,
         // as it belongs to some erm_final block that will itself
@@ -9582,9 +9577,10 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
                         rc.right -= padding_right;
                         rc.bottom -= padding_bottom;
                     }
-                    ldomMarkedRangeList *nbookmarks = NULL;
+                    std::unique_ptr<ldomMarkedRangeList> nbookmarks;
                     if ( bookmarks && bookmarks->length()) { // internal crengine bookmarked text highlights
-                        nbookmarks = new ldomMarkedRangeList( bookmarks, rc );
+                        nbookmarks = std::make_unique<ldomMarkedRangeList>(
+                                bookmarks, rc);
                     }
                     if ( marks && marks->length() ) { // "native highlighting" of a selection in progress
                         // Keep marks that are part of the top and bottom overflows
@@ -9594,14 +9590,12 @@ void DrawDocument( LVDrawBuf & drawbuf, ldomNode * enode, int x0, int y0, int dx
                         ldomMarkedRangeList nmarks( marks, rc, &crop_rc );
                         // DrawBackgroundImage(enode, drawbuf, x0, y0, doc_x, doc_y, fmt.getWidth(), fmt.getHeight());
                         // Draw regular text with currently marked highlights
-                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, &nmarks, nbookmarks );
+                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, &nmarks, nbookmarks.get() );
                     } else {
                         // DrawBackgroundImage(enode, drawbuf, x0, y0, doc_x, doc_y, fmt.getWidth(), fmt.getHeight());
                         // Draw regular text, no marks
-                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, marks, nbookmarks );
+                        txform->Draw( &drawbuf, doc_x+x0 + padding_left, doc_y+y0 + padding_top, marks, nbookmarks.get() );
                     }
-                    if (nbookmarks)
-                        delete nbookmarks;
                 }
                 #if (DEBUG_TREE_DRAW!=0)
                     drawbuf.FillRect( doc_x+x0, doc_y+y0, doc_x+x0+fmt.getWidth(), doc_y+y0+1, color );

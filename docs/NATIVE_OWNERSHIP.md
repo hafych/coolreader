@@ -606,3 +606,12 @@ window even when the process font manager is already unavailable.
 borrowed getter. Native lifecycle coverage verifies reactivation without
 duplication, managed and unmanaged close paths, queued/replaced/transferred
 events, borrowed-screen preservation and document-view teardown.
+
+Render-flow shifts and floats enter scoped candidates before publication in
+their owning vectors; removal and final teardown are delegated to those
+containers instead of paired `remove()`/`delete` loops. Single-column table
+page contexts are owned by their rows, while private cell contexts and
+draw-time bookmark range filters are operation-scoped `unique_ptr` values.
+The rendered-document regression exercises a floating single-column table,
+pagination and an actual highlighted-page draw twice; the source policy keeps
+all three ownership boundaries from returning to manual teardown.

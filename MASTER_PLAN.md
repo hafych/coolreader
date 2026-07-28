@@ -157,7 +157,8 @@ DRM или ограничений доступа, подбор/получени�
   output ownership, а также GUI window-manager screen owner/borrow lifecycle,
   GUI window/event queue ownership и lifecycle `CRDocViewWindow`, bookmark
   mutation/highlight-range candidates и transactional bookmark-list
-  publication.
+  publication, render-flow float/shift publication и teardown, table-cell
+  page-context ownership и draw-time bookmark-range filters.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

@@ -129,7 +129,12 @@ static std::string createRenderedFixture() {
     std::string fixture =
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
             "<FictionBook><body><section>"
-            "<title><p>Rendered regression chapter</p></title>";
+            "<title><p>Rendered regression chapter</p></title>"
+            "<table id=\"render-state-table\" "
+            "style=\"float: left; width: 42%;\">"
+            "<tr><td>Scoped render state in a floating single-column "
+            "table must survive nested layout and pagination.</td></tr>"
+            "</table>";
     for (int index = 0; index < 80; index++) {
         fixture += "<p>Paragraph ";
         fixture += std::to_string(index);
@@ -189,6 +194,16 @@ static int snapshotRenderedDocument(
         return fail("rendered document fixture did not load");
     view.Render(320, 240);
 
+    ldomDocument *document = view.getDocument();
+    ldomNode *renderStateTable =
+            document->getElementById(U"render-state-table");
+    if (!renderStateTable
+            || renderStateTable->getRendMethod() != erm_table
+            || !renderStateTable->getParentNode()
+            || renderStateTable->getParentNode()->getNodeId()
+                    != el_floatBox)
+        return fail("render-state table did not enter the floated table path");
+
     const int pageCount = view.getPageCount();
     if (pageCount < 8)
         return fail("rendered fixture did not produce enough pages");
@@ -229,7 +244,6 @@ static int snapshotRenderedDocument(
             || snapshot.restoredBookmark != savedBookmark)
         return fail("saved rendered position did not restore exactly");
 
-    ldomDocument *document = view.getDocument();
     ldomXPointer selectionPointer = document->createXPointer(
             U"/FictionBook/body[1]/section[1]/p[31]/text()[1]");
     if (selectionPointer.isNull() || !selectionPointer.isText())
@@ -267,6 +281,9 @@ static int snapshotRenderedDocument(
             || record->getBookmarks().length() != 2
             || view.bookmarkRangeCount() != 1)
         return fail("bookmark candidates did not publish complete ranges");
+
+    LVColorDrawBuf highlightedPage(320, 240, 32);
+    view.Draw(highlightedPage, false);
 
     CRBookmark *firstShortcut =
             view.saveCurrentPageShortcutBookmark(7);
