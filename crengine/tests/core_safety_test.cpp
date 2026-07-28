@@ -1,3 +1,4 @@
+#include "chmfmt.h"
 #include "lvstreamutils.h"
 #include "lvstreamfragment.h"
 #include "lvarray.h"
@@ -35,6 +36,7 @@
 #include "rtfimp.h"
 #include "serialbuf.h"
 #include "textlang.h"
+#include "../src/chmfmt_internal.h"
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontglyphcache.h"
 #include "../src/lvstream/lvfilestream.h"
@@ -4628,6 +4630,84 @@ static int testOpcFb3Ownership() {
     return 0;
 }
 
+static int testChmOwnership() {
+#if CHM_SUPPORT_ENABLED==1
+    const lString32 fixturePath = Utf8ToUnicode(lString8(
+            COOLREADER_SOURCE_DIR
+            "/thirdparty/zlib-1.3.2/contrib/dotzlib/DotZLib.chm"));
+    LVStreamRef source = LVOpenFileStream(fixturePath.c_str(), LVOM_READ);
+    if (source.isNull() || !DetectCHMFormat(source))
+        return fail("CHM ownership fixture was not detected");
+    if (source->SetPos(0) != 0)
+        return fail("CHM ownership fixture could not rewind");
+
+    LVContainerRef container = LVOpenCHMContainer(source);
+    if (container.isNull() || container->GetObjectCount() <= 0)
+        return fail("CHM ownership fixture could not open");
+    lString32 entryName;
+    lvsize_t entrySize = 0;
+    for (int i = 0; i < container->GetObjectCount(); ++i) {
+        const LVContainerItemInfo *candidate =
+                container->GetObjectInfo(i);
+        if (candidate && !candidate->IsContainer()
+                && candidate->GetSize() > 0) {
+            LVStreamRef probe = container->OpenStream(
+                    candidate->GetName(), LVOM_READ);
+            unsigned char probeByte = 0;
+            lvsize_t probeRead = 0;
+            if (!probe.isNull()
+                    && probe->Read(&probeByte, 1, &probeRead) == LVERR_OK
+                    && probeRead == 1) {
+                entryName = candidate->GetName();
+                entrySize = candidate->GetSize();
+                break;
+            }
+        }
+    }
+    if (entryName.empty())
+        return fail("CHM ownership fixture has no readable entry");
+    LVStreamRef entry = container->OpenStream(
+            entryName.c_str(), LVOM_READ);
+    source.Clear();
+    container.Clear();
+    unsigned char firstByte = 0;
+    lvsize_t bytesRead = 0;
+    const lverror_t entryReadStatus = entry.isNull()
+            ? LVERR_FAIL
+            : entry->Read(&firstByte, 1, &bytesRead);
+    if (entry.isNull() || entryReadStatus != LVERR_OK || bytesRead != 1) {
+        std::fprintf(stderr,
+                "CHM detached entry '%s': size=%llu status=%d read=%llu\n",
+                UnicodeToUtf8(entryName).c_str(),
+                static_cast<unsigned long long>(entrySize),
+                static_cast<int>(entryReadStatus),
+                static_cast<unsigned long long>(bytesRead));
+        return fail("CHM entry did not retain its CHM file owner");
+    }
+    entry.Clear();
+
+    std::unique_ptr<ldomDocument> parent(new ldomDocument());
+    std::unique_ptr<ldomDocument> parsed(LVParseCHMHTMLStream(
+            memoryStream("<!doctype html><html><head><title>x</title>"
+                         "</head><body>owned</body></html>"),
+            U"utf-8", parent.get()));
+    if (!parsed)
+        return fail("CHM HTML factory did not transfer its document");
+    std::unique_ptr<ldomDocument> rejected(LVParseCHMHTMLStream(
+            memoryStream("ordinary text without HTML markup"),
+            U"utf-8", parent.get()));
+    if (rejected)
+        return fail("CHM HTML factory published a rejected candidate");
+
+    if (!LVRunChmMetadataOwnershipRegression())
+        return fail("CHM metadata owner chain did not complete");
+    if (!LVOpenCHMContainer(
+            memoryStream("not a CHM container")).isNull())
+        return fail("CHM container factory published a failed candidate");
+#endif
+    return 0;
+}
+
 static int testArchiveContainerOwnership() {
     class PayloadFailingMemoryStream : public LVMemoryStream {
         lvpos_t _payloadStart;
@@ -5774,6 +5854,8 @@ int main() {
     if (testArchiveContainerOwnership() != 0)
         return 1;
     if (testOpcFb3Ownership() != 0)
+        return 1;
+    if (testChmOwnership() != 0)
         return 1;
     if (testStreamBufferOwnership() != 0)
         return 1;

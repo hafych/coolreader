@@ -24,6 +24,7 @@
 //#define CHM_SUPPORT_ENABLED 1
 #if CHM_SUPPORT_ENABLED==1
 #include "../include/chmfmt.h"
+#include "chmfmt_internal.h"
 #include "../include/lvnamedstream.h"
 #include "../include/lvstreamutils.h"
 #include "../include/lvnamedcontainer.h"
@@ -32,6 +33,8 @@
 #include "../include/lvhtmlparser.h"
 #include "../include/crlog.h"
 #include <chm_lib.h>
+
+#include <memory>
 
 #define DUMP_CHM_DOC 0
 
@@ -72,29 +75,62 @@ struct crChmExternalFileStream : public chmExternalFileStream {
     }
 };
 
+class LVCHMFile : public LVRefCounter
+{
+    crChmExternalFileStream _stream;
+    /// Owned external handle, paired with chm_close() in the destructor.
+    chmFile *_file;
+public:
+    explicit LVCHMFile(LVStreamRef stream)
+        : _stream(stream), _file(NULL)
+    {
+    }
+    ~LVCHMFile()
+    {
+        if (_file)
+            chm_close(_file);
+    }
+    bool open()
+    {
+        _file = chm_open(&_stream);
+        return _file != NULL;
+    }
+    chmFile *get() const
+    {
+        return _file;
+    }
+private:
+    LVCHMFile(const LVCHMFile &) = delete;
+    LVCHMFile &operator=(const LVCHMFile &) = delete;
+};
+
+typedef LVFastRef<LVCHMFile> LVCHMFileRef;
+
 class LVCHMStream : public LVNamedStream
 {
 protected:
-    chmFile* _file;
+    LVCHMFileRef _file;
     chmUnitInfo m_ui;
     lvpos_t m_pos;
     lvpos_t m_size;
 public:
-    LVCHMStream( chmFile* file )
+    explicit LVCHMStream(LVCHMFileRef file)
             : _file(file), m_pos(0), m_size(0)
     {
     }
     bool open( const char * name )
     {
         memset(&m_ui, 0, sizeof(m_ui));
-        if ( CHM_RESOLVE_SUCCESS==chm_resolve_object(_file, name, &m_ui ) ) {
+        if ( CHM_RESOLVE_SUCCESS
+                == chm_resolve_object(_file->get(), name, &m_ui) ) {
             m_size = (lvpos_t)m_ui.length;
             return true;
         }
         return false;
     }
 
-    virtual lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin, lvpos_t * pNewPos )
+    lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin,
+                    lvpos_t * pNewPos ) override
     {
         //
         lvpos_t newpos = m_pos;
@@ -123,13 +159,13 @@ public:
         \param pNewPos points to place to store file position
         \return lverror_t status: LVERR_OK if success
     */
-    virtual lverror_t Tell( lvpos_t * pPos )
+    lverror_t Tell( lvpos_t * pPos ) override
     {
         *pPos = m_pos;
         return LVERR_OK;
     }
 
-    virtual lvpos_t SetPos(lvpos_t p)
+    lvpos_t SetPos(lvpos_t p) override
     {
         if ( p<=m_size ) {
             m_pos = p;
@@ -142,7 +178,7 @@ public:
     /**
         \return lvpos_t file position
     */
-    virtual lvpos_t   GetPos()
+    lvpos_t GetPos() override
     {
         return m_pos;
     }
@@ -151,25 +187,27 @@ public:
     /**
         \return lvsize_t file size
     */
-    virtual lvsize_t  GetSize()
+    lvsize_t GetSize() override
     {
         return m_size;
     }
 
-    virtual lverror_t GetSize( lvsize_t * pSize )
+    lverror_t GetSize( lvsize_t * pSize ) override
     {
         *pSize = m_size;
         return LVERR_OK;
     }
 
-    virtual lverror_t Read( void * buf, lvsize_t count, lvsize_t * nBytesRead )
+    lverror_t Read(
+            void * buf, lvsize_t count, lvsize_t * nBytesRead) override
     {
         int cnt = (int)count;
         if ( m_pos + cnt > m_size )
             cnt = (int)(m_size - m_pos);
         if ( cnt <= 0 )
             return LVERR_FAIL;
-        LONGINT64 gotBytes = chm_retrieve_object(_file, &m_ui, (unsigned char *)buf, m_pos, cnt );
+        LONGINT64 gotBytes = chm_retrieve_object(
+                _file->get(), &m_ui, (unsigned char *)buf, m_pos, cnt);
         m_pos += (lvpos_t)gotBytes;
         if (nBytesRead)
             *nBytesRead = (lvsize_t)gotBytes;
@@ -177,17 +215,18 @@ public:
     }
 
 
-    virtual lverror_t Write( const void * /*buf*/, lvsize_t /*count*/, lvsize_t * /*nBytesWritten*/ )
+    lverror_t Write( const void * /*buf*/, lvsize_t /*count*/,
+                     lvsize_t * /*nBytesWritten*/ ) override
     {
         return LVERR_FAIL;
     }
 
-    virtual bool Eof()
+    bool Eof() override
     {
         return (m_pos >= m_size);
     }
 
-    virtual lverror_t SetSize( lvsize_t size )
+    lverror_t SetSize( lvsize_t size ) override
     {
         CR_UNUSED(size);
         // support only size grow
@@ -200,66 +239,62 @@ public:
 class LVCHMContainer : public LVNamedContainer
 {
 protected:
-    //LVDirectoryContainer * m_parent;
-    crChmExternalFileStream _stream;
-    chmFile* _file;
+    /// Retained only until LVCHMFile adopts an anchoring stream reference.
+    LVStreamRef _source;
+    LVCHMFileRef _file;
 public:
-    virtual LVStreamRef OpenStream( const lChar32 * fname, lvopen_mode_t mode )
+    LVStreamRef OpenStream(
+            const lChar32 * fname, lvopen_mode_t mode) override
     {
         LVStreamRef stream;
         if ( mode!=LVOM_READ )
             return stream;
 
-        LVCHMStream * p = new LVCHMStream(_file);
+        std::unique_ptr<LVCHMStream> candidate(new LVCHMStream(_file));
         lString32 fn(fname);
+        if (fn.empty())
+            return stream;
         if ( fn[0]!='/' )
             fn = cs32("/") + fn;
-        if ( !p->open( UnicodeToUtf8(lString32(fn)).c_str() )) {
-            delete p;
+        if ( !candidate->open(UnicodeToUtf8(lString32(fn)).c_str()) )
             return stream;
-        }
-        stream = p;
+        stream = LVStreamRef(candidate.release());
         stream->SetName( fname );
         return stream;
     }
-    virtual LVContainer * GetParentContainer()
+    LVContainer * GetParentContainer() override
     {
         return NULL;
     }
-    virtual const LVContainerItemInfo * GetObjectInfo(int index)
+    const LVContainerItemInfo * GetObjectInfo(int index) override
     {
         if (index>=0 && index<m_list.length())
             return m_list[index];
         return NULL;
     }
-    virtual int GetObjectCount() const
+    int GetObjectCount() const override
     {
         return m_list.length();
     }
-    virtual lverror_t GetSize( lvsize_t * pSize )
+    lverror_t GetSize( lvsize_t * pSize ) override
     {
         if (m_fname.empty())
             return LVERR_FAIL;
         *pSize = GetObjectCount();
         return LVERR_OK;
     }
-    LVCHMContainer(LVStreamRef s) : _stream(s), _file(NULL)
+    explicit LVCHMContainer(LVStreamRef source) : _source(source)
     {
     }
-    virtual ~LVCHMContainer()
-    {
-        SetName(NULL);
-        Clear();
-        if ( _file )
-            chm_close( _file );
-    }
+    ~LVCHMContainer() override = default;
 
     void addFileItem( const char * filename, LONGUINT64 len )
     {
-        LVCommonContainerItemInfo * item = new LVCommonContainerItemInfo();
+        std::unique_ptr<LVCommonContainerItemInfo> item(
+                new LVCommonContainerItemInfo());
         item->SetItemInfo( lString32(filename), (lvsize_t)len, 0, false );
         //CRLog::trace("CHM file item: %s [%d]", filename, (int)len);
-        Add(item);
+        Add(item.release());
     }
 
     static int CHM_ENUMERATOR_CALLBACK (struct chmFile * /*h*/,
@@ -275,27 +310,30 @@ public:
 
     bool open()
     {
-        _file = chm_open( &_stream );
-        if ( !_file )
+        std::unique_ptr<LVCHMFile> file(new LVCHMFile(_source));
+        if ( !file->open() )
             return false;
-        chm_enumerate( _file,
+        _file = LVCHMFileRef(file.release());
+        _source.Clear();
+        chm_enumerate( _file->get(),
                   CHM_ENUMERATE_ALL,
                   CHM_ENUMERATOR_CALLBACK,
                   this);
         return true;
     }
+private:
+    LVCHMContainer(const LVCHMContainer &) = delete;
+    LVCHMContainer &operator=(const LVCHMContainer &) = delete;
 };
 
 /// opens CHM container
 LVContainerRef LVOpenCHMContainer( LVStreamRef stream )
 {
-    LVCHMContainer * chm = new LVCHMContainer(stream);
-    if ( !chm->open() ) {
-        delete chm;
+    std::unique_ptr<LVCHMContainer> chm(new LVCHMContainer(stream));
+    if ( !chm->open() )
         return LVContainerRef();
-    }
     chm->SetName( stream->GetName() );
-    return LVContainerRef( chm );
+    return LVContainerRef(chm.release());
 }
 
 bool DetectCHMFormat( LVStreamRef stream )
@@ -472,11 +510,12 @@ class CHMUrlStr {
             //lUInt32 frameOffset =
             readInt32(data);
             if ( data < maxdata ) { //urlOffset > offset ) {
-                CHMUrlStrEntry * item = new CHMUrlStrEntry();
+                std::unique_ptr<CHMUrlStrEntry> item(
+                        new CHMUrlStrEntry());
                 item->offset = offset;
                 item->url = readString(data, (int)(maxdata - data));
                 //CRLog::trace("urlstr[offs=%x, url=%s]", item->offset, item->url.c_str());
-                _table.add( item );
+                _table.add(item.release());
             }
         }
         return true;
@@ -500,15 +539,13 @@ class CHMUrlStr {
         return !err;
     }
 public:
-    static CHMUrlStr * open( LVContainerRef container ) {
+    static std::unique_ptr<CHMUrlStr> open(LVContainerRef container) {
         LVStreamRef stream = container->OpenStream(U"#URLSTR", LVOM_READ);
         if ( stream.isNull() )
-            return NULL;
-        CHMUrlStr * res = new CHMUrlStr( container, stream );
-        if ( !res->read() ) {
-            delete res;
-            return NULL;
-        }
+            return std::unique_ptr<CHMUrlStr>();
+        std::unique_ptr<CHMUrlStr> res(new CHMUrlStr(container, stream));
+        if ( !res->read() )
+            return std::unique_ptr<CHMUrlStr>();
         CRLog::info("CHM URLSTR: %d entries read", res->_table.length());
         return res;
     }
@@ -527,6 +564,9 @@ public:
             }
         }
     }
+private:
+    CHMUrlStr(const CHMUrlStr &) = delete;
+    CHMUrlStr &operator=(const CHMUrlStr &) = delete;
 };
 
 class CHMUrlTableEntry {
@@ -551,10 +591,11 @@ class CHMUrlTable {
     LVContainerRef _container;
     CHMBinaryReader _reader;
     LVPtrVector<CHMUrlTableEntry> _table;
-    CHMUrlStr * _strings;
+    std::unique_ptr<CHMUrlStr> _strings;
 
 
-    CHMUrlTable( LVContainerRef container, LVStreamRef stream ) : _container(container), _reader(stream), _strings(NULL)
+    CHMUrlTable(LVContainerRef container, LVStreamRef stream)
+        : _container(container), _reader(stream)
     {
 
     }
@@ -569,13 +610,14 @@ class CHMUrlTable {
 
     bool decodeBlock( const lUInt8 * data, lUInt32 offset, int size ) {
         for ( int i=0; i<URLTBL_BLOCK_RECORD_COUNT && size>0; i++ ) {
-            CHMUrlTableEntry * item = new CHMUrlTableEntry();
+            std::unique_ptr<CHMUrlTableEntry> item(
+                    new CHMUrlTableEntry());
             item->offset = offset;
             item->id = readInt32(data);
             item->topicsIndex = readInt32(data);
             item->urlStrOffset = readInt32(data);
             //CRLog::trace("urltbl[offs=%x, id=%x, ti=%x, urloffs=%x]", item->offset, item->id, item->topicsIndex, item->urlStrOffset);
-            _table.add( item );
+            _table.add(item.release());
             offset += 4*3;
             size -= 4*3;
         }
@@ -603,20 +645,16 @@ class CHMUrlTable {
         return !err;
     }
 public:
-    ~CHMUrlTable() {
-        if ( _strings )
-            delete _strings;
-    }
+    ~CHMUrlTable() = default;
 
-    static CHMUrlTable * open( LVContainerRef container ) {
+    static std::unique_ptr<CHMUrlTable> open(LVContainerRef container) {
         LVStreamRef stream = container->OpenStream(U"#URLTBL", LVOM_READ);
         if ( stream.isNull() )
-            return NULL;
-        CHMUrlTable * res = new CHMUrlTable( container, stream );
-        if ( !res->read() ) {
-            delete res;
-            return NULL;
-        }
+            return std::unique_ptr<CHMUrlTable>();
+        std::unique_ptr<CHMUrlTable> res(
+                new CHMUrlTable(container, stream));
+        if ( !res->read() )
+            return std::unique_ptr<CHMUrlTable>();
         CRLog::info("CHM URLTBL: %d entries read", res->_table.length());
         return res;
     }
@@ -657,6 +695,9 @@ public:
 //            }
 //        }
     }
+private:
+    CHMUrlTable(const CHMUrlTable &) = delete;
+    CHMUrlTable &operator=(const CHMUrlTable &) = delete;
 };
 
 class CHMSystem {
@@ -679,7 +720,7 @@ class CHMSystem {
     lUInt32 _binaryTOCURLTableId;
     const lChar32 * _enc_table;
     lString32 _enc_name;
-    CHMUrlTable * _urlTable;
+    std::unique_ptr<CHMUrlTable> _urlTable;
 
     CHMSystem( LVContainerRef container, LVStreamRef stream ) : _container(container), _reader(stream)
     , _fileVersion(0)
@@ -691,7 +732,6 @@ class CHMSystem {
     , _binaryIndexURLTableId(0)
     , _binaryTOCURLTableId(0)
     , _enc_table(NULL)
-    , _urlTable(NULL)
     {
     }
 
@@ -809,20 +849,15 @@ class CHMSystem {
     }
 
 public:
-    ~CHMSystem() {
-        if ( _urlTable!=NULL )
-            delete _urlTable;
-    }
+    ~CHMSystem() = default;
 
-    static CHMSystem * open( LVContainerRef container ) {
+    static std::unique_ptr<CHMSystem> open(LVContainerRef container) {
         LVStreamRef stream = container->OpenStream(U"#SYSTEM", LVOM_READ);
         if ( stream.isNull() )
-            return NULL;
-        CHMSystem * res = new CHMSystem( container, stream );
-        if ( !res->read() ) {
-            delete res;
-            return NULL;
-        }
+            return std::unique_ptr<CHMSystem>();
+        std::unique_ptr<CHMSystem> res(new CHMSystem(container, stream));
+        if ( !res->read() )
+            return std::unique_ptr<CHMSystem>();
         return res;
     }
 
@@ -881,7 +916,88 @@ public:
             return;
         _urlTable->getUrlList(urlList);
     }
+private:
+    CHMSystem(const CHMSystem &) = delete;
+    CHMSystem &operator=(const CHMSystem &) = delete;
 };
+
+bool LVRunChmMetadataOwnershipRegression()
+{
+    class MetadataFixtureContainer : public LVContainer {
+        bool _malformedSystem;
+    public:
+        explicit MetadataFixtureContainer(bool malformedSystem)
+            : _malformedSystem(malformedSystem)
+        {
+        }
+        LVContainer *GetParentContainer() override
+        {
+            return NULL;
+        }
+        const LVContainerItemInfo *GetObjectInfo(int) override
+        {
+            return NULL;
+        }
+        int GetObjectCount() const override
+        {
+            return 0;
+        }
+        lverror_t GetSize(lvsize_t *size) override
+        {
+            if (!size)
+                return LVERR_FAIL;
+            *size = 0;
+            return LVERR_OK;
+        }
+        LVStreamRef OpenStream(
+                const lChar32 *name, lvopen_mode_t mode) override
+        {
+            if (!name || mode != LVOM_READ)
+                return LVStreamRef();
+            static const lUInt8 validSystem[] = { 3, 0, 0, 0 };
+            static const lUInt8 malformedSystem[] =
+                    { 3, 0, 0, 0, 1, 0 };
+            static const lUInt8 urlTable[] =
+                    { 7, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 };
+            static const lUInt8 urlStrings[] =
+                    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 'a', 0 };
+            const lString32 streamName(name);
+            const lUInt8 *bytes = NULL;
+            int size = 0;
+            if (streamName == U"#SYSTEM") {
+                bytes = _malformedSystem
+                        ? malformedSystem : validSystem;
+                size = _malformedSystem
+                        ? sizeof(malformedSystem) : sizeof(validSystem);
+            } else if (streamName == U"#URLTBL") {
+                bytes = urlTable;
+                size = sizeof(urlTable);
+            } else if (streamName == U"#URLSTR") {
+                bytes = urlStrings;
+                size = sizeof(urlStrings);
+            } else {
+                return LVStreamRef();
+            }
+            return LVCreateMemoryStream(
+                    const_cast<lUInt8 *>(bytes),
+                    size, true, LVOM_READ);
+        }
+    };
+
+    for (int iteration = 0; iteration < 3; ++iteration) {
+        LVContainerRef fixture(new MetadataFixtureContainer(false));
+        std::unique_ptr<CHMSystem> system = CHMSystem::open(fixture);
+        lString32Collection urls;
+        if (!system)
+            return false;
+        system->getUrlList(urls);
+        if (system->getEncodingName() != U"windows-1252"
+                || urls.length() != 1 || urls[0] != U"a")
+            return false;
+    }
+    LVContainerRef malformed(new MetadataFixtureContainer(true));
+    return !CHMSystem::open(malformed);
+}
 
 ldomDocument * LVParseCHMHTMLStream( LVStreamRef stream, lString32 defEncodingName, ldomDocument * parent_doc )
 {
@@ -892,7 +1008,8 @@ ldomDocument * LVParseCHMHTMLStream( LVStreamRef stream, lString32 defEncodingNa
     // detect encondig
     stream->SetPos(0);
 
-    ldomDocument * encDetectionDoc = LVParseHTMLStream( stream );
+    std::unique_ptr<ldomDocument> encDetectionDoc(
+            LVParseHTMLStream(stream));
     int encoding = 0;
     if ( encDetectionDoc!=NULL ) {
         ldomNode * node = encDetectionDoc->nodeFromXPath(U"/html/body/object[1]");
@@ -914,7 +1031,6 @@ ldomDocument * LVParseCHMHTMLStream( LVStreamRef stream, lString32 defEncodingNa
                 }
             }
         }
-        delete encDetectionDoc;
     }
     const lChar32 * enc = U"cp1252";
     if ( encoding==1 ) {
@@ -923,30 +1039,21 @@ ldomDocument * LVParseCHMHTMLStream( LVStreamRef stream, lString32 defEncodingNa
 #endif
 
     stream->SetPos(0);
-    bool error = true;
-    ldomDocument * doc;
-    doc = new ldomDocument();
+    std::unique_ptr<ldomDocument> doc(new ldomDocument());
     doc->setDocFlags( 0 );
     doc->setAllTypesFrom(parent_doc);
 
-    ldomDocumentWriterFilter writerFilter(doc, false, HTML_AUTOCLOSE_TABLE);
+    ldomDocumentWriterFilter writerFilter(
+            doc.get(), false, HTML_AUTOCLOSE_TABLE);
     writerFilter.setFlags(writerFilter.getFlags() | TXTFLG_CONVERT_8BIT_ENTITY_ENCODING);
 
     /// HTML format
-    LVFileFormatParser * parser = new LVHTMLParser(stream, &writerFilter);
+    LVHTMLParser parser(stream, &writerFilter);
     if ( !defEncodingName.empty() )
-        parser->SetCharset(defEncodingName.c_str());
-    if ( parser->CheckFormat() ) {
-        if ( parser->Parse() ) {
-            error = false;
-        }
-    }
-    delete parser;
-    if ( error ) {
-        delete doc;
-        doc = NULL;
-    }
-    return doc;
+        parser.SetCharset(defEncodingName.c_str());
+    if ( parser.CheckFormat() && parser.Parse() )
+        return doc.release();
+    return NULL;
 }
 
 static int filename_comparator(lString32 & _s1, lString32 & _s2) {
@@ -990,8 +1097,10 @@ static int filename_comparator(lString32 & _s1, lString32 & _s2) {
 
 class CHMTOCReader {
     LVContainerRef _cont;
+    /// Borrowed writer and document views scoped to ImportCHMDocument().
     ldomDocumentFragmentWriter * _appender;
     ldomDocument * _doc;
+    /// Non-owning cursor into the document-owned TOC.
     LVTocItem * _toc;
     lString32HashedCollection _fileList;
     lString32 lastFile;
@@ -1126,7 +1235,9 @@ public:
                 CRLog::error("CHM: Cannot open .hhc");
                 return false;
             }
-            ldomDocument * doc = LVParseCHMHTMLStream( tocStream, defEncodingName, _doc );
+            std::unique_ptr<ldomDocument> doc(
+                    LVParseCHMHTMLStream(
+                            tocStream, defEncodingName, _doc));
             if ( !doc ) {
                 CRLog::error("CHM: Cannot parse .hhc");
                 return false;
@@ -1159,7 +1270,6 @@ public:
                     m_doc_props->setString(DOC_PROP_TITLE, name);
                 }
             }
-            delete doc;
             return res;
         }
     }
@@ -1218,7 +1328,7 @@ bool ImportCHMDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallbac
     }
 #endif
 
-    CHMSystem * chm = CHMSystem::open(cont);
+    std::unique_ptr<CHMSystem> chm = CHMSystem::open(cont);
     if ( !chm )
         return false;
     lString32 tocFileName = chm->getContentsFileName();
@@ -1230,7 +1340,6 @@ bool ImportCHMDocument( LVStreamRef stream, ldomDocument * doc, LVDocViewCallbac
     //
     lString32Collection urlList;
     chm->getUrlList(urlList);
-    delete chm;
 
     int fragmentCount = 0;
     ldomDocumentWriterFilter writer(doc, false, HTML_AUTOCLOSE_TABLE);

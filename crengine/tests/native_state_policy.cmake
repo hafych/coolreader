@@ -14,6 +14,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvopc.h" OPC_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvopc.cpp" OPC_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/fb3fmt.h" FB3_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/fb3fmt.cpp" FB3_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/chmfmt.cpp" CHM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/chmfmt_internal.h" CHM_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstsheet.cpp" STYLESHEET_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
@@ -3786,4 +3788,146 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "LVFileFormatParser * parser = new LVHTMLParser(stream, &writerFilter)"
   "the HTML document factory must not regress to a manually deleted parser"
+)
+
+# --- CHM file, metadata and document ownership ---
+require_source_text(
+  "${CHM_SOURCE}"
+  "class LVCHMFile : public LVRefCounter"
+  "the external CHM handle must have one reference-counted lifetime anchor"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "chm_close(_file)"
+  "the CHM handle owner must pair external teardown in its destructor"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "typedef LVFastRef<LVCHMFile> LVCHMFileRef"
+  "CHM containers and entry streams must share the engine lifetime anchor"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "std::unique_ptr<LVCHMStream> candidate"
+  "CHM entry factories must retain candidates until stream publication"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "_file = LVCHMFileRef(file.release())"
+  "the CHM handle must transfer only after external open succeeds"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "std::unique_ptr<LVCHMContainer> chm"
+  "CHM container factories must retain candidates until reference transfer"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "std::unique_ptr<CHMUrlStr> _strings"
+  "the CHM URL table must own its string table explicitly"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "std::unique_ptr<CHMUrlTable> _urlTable"
+  "the CHM system metadata must own its URL table explicitly"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "static std::unique_ptr<CHMUrlStr> open"
+  "CHM URL-string parsing must return a scoped candidate"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "static std::unique_ptr<CHMUrlTable> open"
+  "CHM URL-table parsing must return a scoped candidate"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "static std::unique_ptr<CHMSystem> open"
+  "CHM system parsing must return a scoped candidate"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "LVHTMLParser parser(stream, &writerFilter)"
+  "the CHM HTML document parser must use automatic lifetime"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "return doc.release()"
+  "the CHM HTML factory must transfer only a complete document"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "std::unique_ptr<ldomDocument> doc("
+  "CHM TOC and HTML parse documents must remain scope-owned"
+)
+require_source_text(
+  "${CHM_SOURCE}"
+  "std::unique_ptr<CHMSystem> chm = CHMSystem::open(cont)"
+  "CHM import metadata must remain owned through value extraction"
+)
+require_source_text(
+  "${CHM_INTERNAL_HEADER}"
+  "bool LVRunChmMetadataOwnershipRegression()"
+  "CHM metadata ownership must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testChmOwnership()"
+  "CHM ownership must retain end-to-end native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "CHM entry did not retain its CHM file owner"
+  "CHM regression must retain detached entry lifetime coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "CHM HTML factory published a rejected candidate"
+  "CHM regression must retain document factory rollback coverage"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "LVCHMStream * p = new LVCHMStream"
+  "CHM entry creation must not regress to a raw candidate"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "LVCHMContainer * chm = new LVCHMContainer"
+  "CHM container creation must not regress to a raw candidate"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "CHMUrlStr * _strings"
+  "the CHM URL string table must not be a raw owning field"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "CHMUrlTable * _urlTable"
+  "the CHM URL table must not be a raw owning field"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "CHMSystem * chm = CHMSystem::open"
+  "CHM import metadata must not be a raw owning candidate"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "LVFileFormatParser * parser = new LVHTMLParser"
+  "CHM HTML parser teardown must remain automatic"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "delete _strings"
+  "CHM URL-string teardown must remain automatic"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "delete _urlTable"
+  "CHM URL-table teardown must remain automatic"
+)
+forbid_source_text(
+  "${CHM_SOURCE}"
+  "delete chm"
+  "CHM container and metadata teardown must remain automatic"
 )

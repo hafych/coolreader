@@ -544,6 +544,9 @@ if(BUILD_TESTING AND UNIX)
   target_link_libraries(core_safety_test
     crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}
   )
+  target_compile_definitions(core_safety_test PRIVATE
+    COOLREADER_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  )
   add_test(NAME core_safety COMMAND core_safety_test)
 
   add_executable(thread_safety_test

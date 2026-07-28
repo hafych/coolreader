@@ -143,8 +143,9 @@ DRM или ограничений доступа, подбор/получени�
   bookmark ownership, global i18n translator slots и GUI-side translation
   candidates, bounded properties input/candidate snapshots и exact-write
   settings output, XML/HTML document factories, OPC relation-table
-  owner/index publication и FB3 description/parser state. Остальные участки
-  мигрируются отдельными bounded-пакетами.
+  owner/index publication, FB3 description/parser state и CHM
+  container/file/metadata/HTML parse ownership. Остальные участки мигрируются
+  отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

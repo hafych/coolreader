@@ -444,3 +444,15 @@ description DOM and returns only a non-owning view, while the body parser uses
 automatic storage. The end-to-end in-memory FB3 archive regression covers
 content types, relationships, metadata, cached description, successful import,
 and XML-depth rejection without publishing partial documents.
+
+CHM container and entry streams share a small intrusive owner that keeps the
+external `chmFile` handle and its source stream alive until the final consumer
+is released; `chm_close()` is paired in that owner's destructor. Container,
+entry and enumerated-item candidates remain in `unique_ptr` until their legacy
+reference or owning-list boundary accepts them. The `#SYSTEM`, `#URLTBL` and
+`#URLSTR` metadata chain uses nested `unique_ptr` owners and move-returning
+factories, while CHM HTML and TOC documents keep both DOM and parser candidates
+scoped until successful publication. Regression coverage reads a real CHM
+entry after releasing its container and source, repeats the metadata owner
+chain, rejects malformed metadata and HTML, and verifies failed container
+probing does not publish a candidate.
