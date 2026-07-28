@@ -73,6 +73,14 @@ through `std::vector`, including negative detection paths. Encoding
 autodetection also uses a scoped buffer and a stream-position guard, so success,
 read failure and short-input exits restore the caller's position uniformly.
 
+Encoding autodetection accumulates double-character frequencies in a fixed
+array of sparse `unique_ptr<lUInt16[]>` row owners and builds its sortable
+output in a scoped vector. The obsolete parallel tree implementation and its
+recursive manual deletion are gone. The live collector cannot be copied, and
+reset releases every allocated row while restoring both counters so the same
+object can run another collection cycle. Native regression coverage verifies
+scaled output, complete row teardown and successful reuse after reset.
+
 The shared file-parser read window and text-parser charset conversion table are
 owned by `std::vector`. Parser subclasses use indexed access or temporary
 non-owning `data()` views; they do not manage either allocation. A seek exposes

@@ -40,6 +40,7 @@
 #include "serialbuf.h"
 #include "textlang.h"
 #include "../src/chmfmt_internal.h"
+#include "../src/crtxtenc_internal.h"
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontcache.h"
 #include "../src/lvfont/lvfontglyphcache.h"
@@ -2520,6 +2521,12 @@ static int testDomChunkStorageOwnership() {
 static int testDomNodePartOwnership() {
     if (!LVRunDomNodePartOwnershipRegression())
         return fail("DOM node-part/cache-file ownership regression failed");
+    return 0;
+}
+
+static int testDoubleCharStatOwnership() {
+    if (!LVRunDoubleCharStatOwnershipRegression())
+        return fail("double-character statistic ownership regression failed");
     return 0;
 }
 
@@ -6309,6 +6316,8 @@ int main() {
     if (testDomChunkStorageOwnership() != 0)
         return 1;
     if (testDomNodePartOwnership() != 0)
+        return 1;
+    if (testDoubleCharStatOwnership() != 0)
         return 1;
     if (testWolBufferOwnership() != 0)
         return 1;

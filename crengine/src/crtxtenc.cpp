@@ -25,8 +25,13 @@
 #include "../include/lvstring.h"
 #include "../include/cp_stats.h"
 #include "../include/crlog.h"
+#include "crtxtenc_internal.h"
 #include <string.h>
 #include <stdio.h>
+
+#include <array>
+#include <memory>
+#include <vector>
 
 static const lChar32 __cp737[128] = {
   /* 0x80 */
@@ -1441,184 +1446,6 @@ const lChar8 ** GetCharsetUnicode2ByteTable( const lChar32 * enc_name )
 // AUTODETECT ENCODINGS feature
 #define DBL_CHAR_STAT_SIZE 256
 
-class CDoubleCharStat
-{
-
-   struct CDblCharNode
-   {
-      unsigned char ch1;
-      unsigned char ch2;
-      unsigned int  count;
-      unsigned int  index;
-      CDblCharNode * left;
-      CDblCharNode * right;
-      CDblCharNode * sleft;
-      CDblCharNode * sright;
-      CDblCharNode( unsigned char c1, unsigned char c2 ) :
-         ch1(c1), ch2(c2), count(1), index(0), left(NULL), right(NULL),
-         sleft(NULL), sright(NULL)
-      {
-      }
-      ~CDblCharNode()
-      {
-         if (left)
-            delete left;
-         if (right)
-            delete right;
-      }
-      bool operator < (const CDblCharNode & node )
-      {
-         return (ch1<node.ch2) || (ch1==node.ch1 && ch2<node.ch2);
-      }
-      bool operator == (const CDblCharNode & node )
-      {
-         return (ch1==node.ch1) && (ch2=node.ch2);
-      }
-      static inline void Add( CDblCharNode * & pnode, unsigned char c1, unsigned char c2 )
-      {
-         if (pnode)
-            pnode->Add( c1, c2 );
-         else
-            pnode = new CDblCharNode( c1, c2 );
-      }
-      void Add( unsigned char c1, unsigned char c2 )
-      {
-         if (c1==ch1 && c2==ch2) {
-            count++; // found
-         } else if (c1<ch1 || (c1==ch1 && c2<ch2) ) {
-            Add(left, c1, c2 );
-         } else {
-            Add(right, c1, c2 );
-         }
-      }
-      void AddSorted( CDblCharNode * & sroot )
-      {
-         if (!sroot)
-            sroot = this;
-         else if (count>sroot->count)
-            AddSorted( sroot->sleft );
-         else
-            AddSorted( sroot->sright );
-      }
-      void Sort( CDblCharNode * & sroot )
-      {
-         if (left)
-            left->Sort( sroot );
-         AddSorted( sroot );
-         if (right)
-            right->Sort( sroot );
-      }
-      void Renumber( int & curr_index )
-      {
-         if (sleft)
-            sleft->Renumber( curr_index );
-         index = curr_index++;
-         if (sright)
-            sright->Renumber( curr_index );
-      }
-      void Renumber1( int & curr_index )
-      {
-         if (left)
-            left->Renumber1( curr_index );
-         index = curr_index++;
-         if (right)
-            right->Renumber1( curr_index );
-      }
-      void GetData( dbl_char_stat_long_t * & pData, int & len, unsigned int maxindex )
-      {
-         if (len<=0)
-            return;
-         if (left)
-            left->GetData( pData, len, maxindex );
-         if (len<=0)
-            return;
-         if (index<maxindex)
-         {
-            pData->ch1 = ch1;
-            pData->ch2 = ch2;
-            pData->count = count;
-            pData++;
-            len--;
-         }
-         if (len<=0)
-            return;
-         if (right)
-            right->GetData( pData, len, maxindex );
-      }
-   };
-
-   CDblCharNode * nodes;
-   int total;
-public:
-   CDoubleCharStat() : nodes(NULL), total(0)
-   {
-   }
-   void Add( unsigned char c1, unsigned char c2 )
-   {
-/*   	if ( !(c1>127 || c1>='a' && c1<='z' || c1>='A' && c1<='Z' || c1=='\'')
-           && !(c2>127 || c2>='a' && c2<='z' || c2>='A' && c2<='Z' || c2=='\'') )
-      {
-         return;
-      }
-      */
-      if (c1==' ' && c2==' ')
-         return;
-      total++;
-      CDblCharNode::Add( nodes, c1, c2 );
-   }
-   void GetData( dbl_char_stat_t * pData, int len )
-   {
-       dbl_char_stat_long_t data[DBL_CHAR_STAT_SIZE];
-      dbl_char_stat_long_t * pData2 = data;
-      int len2 = len;
-      int idx = 0;
-      if (nodes && total)
-      {
-         nodes->Renumber1( idx );
-         idx = 0;
-         if (nodes->left)
-            nodes->left->Sort(nodes);
-         if (nodes->right)
-            nodes->right->Sort(nodes);
-         //nodes->Sort( nodes );
-         nodes->Renumber( idx );
-         nodes->GetData( pData2, len2, len2 );
-      }
-      // fill rest of array
-      for ( ; len2>0; len2--, pData2++ ) {
-         pData2->ch1 = 0;
-         pData2->ch2 = 0;
-         pData2->count = 0;
-      }
-      // scale by total
-      if (total) {
-          for (int i=0; i<len; i++) {
-              if ( data[i].count<0 ) {
-                    data[i].count = -data[i].count;
-              }
-              data[i].count = (int)(data[i].count * (lInt64)0x7000 / total);
-          }
-      }
-      for ( int i=0; i<len; i++ ) {
-           pData[i].ch1 = data[i].ch1;
-           pData[i].ch2 = data[i].ch2;
-           pData[i].count = data[i].count;
-      }
-      Close();
-   }
-   void Close()
-   {
-      if (nodes)
-         delete nodes;
-      nodes = NULL;
-      total = 0;
-   }
-   virtual ~CDoubleCharStat()
-   {
-      Close();
-   }
-};
-
 int sort_dblstats_by_count( const void * p1, const void * p2 )
 {
     int n1 = static_cast<const dbl_char_stat_long_t*>(p1)->count;
@@ -1647,89 +1474,113 @@ int sort_dblstats_by_ch( const void * p1, const void * p2 )
         return 0;
 }
 
-class CDoubleCharStat2
+class CDoubleCharStat
 {
 private:
-    lUInt16 * * stats;
+    std::array<std::unique_ptr<lUInt16[]>, 256> stats;
     int total;
     int items;
+    friend bool LVRunDoubleCharStatOwnershipRegression();
 public:
-    CDoubleCharStat2() : stats(NULL), total(0), items(0)
+    CDoubleCharStat() : stats(), total(0), items(0)
     {
     }
+    CDoubleCharStat(const CDoubleCharStat &) = delete;
+    CDoubleCharStat &operator=(const CDoubleCharStat &) = delete;
     void Add( unsigned char c1, unsigned char c2 )
     {
-        if ( !stats ) {
-            stats = new lUInt16* [256]();
-            memset(stats, 0, sizeof(lUInt16*)*256);
-        }
         if (c1==' ' && c2==' ')
             return;
         total++;
-        if ( stats[c1]==NULL ) {
-            stats[c1] = new lUInt16[256]();
-        }
+        if (!stats[c1])
+            stats[c1].reset(new lUInt16[256]());
         if ( stats[c1][c2]++ == 0)
             items++;
     }
     void GetData( dbl_char_stat_t * pData, int len )
     {
         int count = 0;
-        dbl_char_stat_long_t * pdata = new dbl_char_stat_long_t[items];
+        std::vector<dbl_char_stat_long_t> data(items);
         if ( total ) {
             for ( int i=0; i<256; i++ ) {
                 if ( stats[i] ) {
                     for ( int j=0; j<256; j++ ) {
                         if ( stats[i][j]> 0 ) {
-                            pdata[count].ch1 = i;
-                            pdata[count].ch2 = j;
+                            data[count].ch1 = i;
+                            data[count].ch2 = j;
                             int n = stats[i][j];
                             n = (int)(n * (lInt64)0x7000 / total);
-                            pdata[count].count = n;
+                            data[count].count = n;
                             count++;
                         }
                     }
                 }
             }
-            qsort(pdata, count, sizeof(dbl_char_stat_long_t), sort_dblstats_by_count);
+            qsort(data.data(), count, sizeof(dbl_char_stat_long_t), sort_dblstats_by_count);
             int nsort = count;
             if ( nsort>len )
                 nsort = len;
-            qsort(pdata, nsort, sizeof(dbl_char_stat_long_t), sort_dblstats_by_ch);
+            qsort(data.data(), nsort, sizeof(dbl_char_stat_long_t), sort_dblstats_by_ch);
         }
         // copy data to destination
         for ( int k=0; k<len; k++ ) {
             if ( k<count ) {
-                pData[k].ch1 = pdata[k].ch1;
-                pData[k].ch2 = pdata[k].ch2;
-                pData[k].count = pdata[k].count;
+                pData[k].ch1 = data[k].ch1;
+                pData[k].ch2 = data[k].ch2;
+                pData[k].count = data[k].count;
             } else {
                 pData[k].ch1 = 0;
                 pData[k].ch2 = 0;
                 pData[k].count = 0;
             }
         }
-        delete[] pdata;
         Close();
-   }
+    }
 
-   void Close()
-   {
-       if ( stats ) {
-           for ( int i=0; i<256; i++ )
-               if ( stats[i] )
-                   delete[] stats[i];
-           delete[] stats;
-           stats = NULL;
-       }
-       total = 0;
-   }
+    void Close()
+    {
+        for (std::unique_ptr<lUInt16[]> &row : stats)
+            row.reset();
+        total = 0;
+        items = 0;
+    }
 
-   virtual ~CDoubleCharStat2()
-   {
-       Close();
-   }
+    ~CDoubleCharStat() = default;
 };
+
+bool LVRunDoubleCharStatOwnershipRegression()
+{
+    CDoubleCharStat maker;
+    maker.Add(0xC0, 0xC1);
+    maker.Add(0xC0, 0xC2);
+    if (!maker.stats[0xC0] || maker.total != 2 || maker.items != 2)
+        return false;
+
+    dbl_char_stat_t first[4] = {};
+    maker.GetData(first, 4);
+    if (maker.total != 0 || maker.items != 0
+            || first[0].ch1 != 0xC0 || first[0].ch2 != 0xC1
+            || first[0].count != 0x3800
+            || first[1].ch1 != 0xC0 || first[1].ch2 != 0xC2
+            || first[1].count != 0x3800)
+        return false;
+    for (const std::unique_ptr<lUInt16[]> &row : maker.stats) {
+        if (row)
+            return false;
+    }
+
+    maker.Add(0xD0, 0xD1);
+    maker.Add(0xD0, 0xD1);
+    maker.Add(0xD0, 0xD1);
+    dbl_char_stat_t second[2] = {};
+    maker.GetData(second, 2);
+    return maker.total == 0 && maker.items == 0
+            && !maker.stats[0xD0]
+            && second[0].ch1 == 0xD0
+            && second[0].ch2 == 0xD1
+            && second[0].count == 0x7000
+            && second[1].count == 0;
+}
 
 bool isValidUtf8Data( const unsigned char * buf, int buf_size )
 {
@@ -1773,7 +1624,7 @@ bool isValidUtf8Data( const unsigned char * buf, int buf_size )
 
 void MakeDblCharStat(const unsigned char * buf, int buf_size, dbl_char_stat_t * stat, int stat_len, bool skipHtml)
 {
-   CDoubleCharStat2 maker;
+   CDoubleCharStat maker;
    unsigned char ch1=' ';
    unsigned char ch2=' ';
    bool insideTag = false;

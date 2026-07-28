@@ -75,6 +75,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/crlog.h" LOG_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crlog.cpp" LOG_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/crtxtenc.cpp" TEXT_ENCODING_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/crtxtenc_internal.h" TEXT_ENCODING_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextlinequeue.h" TEXT_LINE_QUEUE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextlinequeue.cpp" TEXT_LINE_QUEUE_SOURCE)
@@ -1307,6 +1309,78 @@ forbid_source_text(
   "${TEXT_FILE_BASE_SOURCE}"
   "new unsigned char[ sz ]"
   "encoding detection buffer must not regress to owning new[]"
+)
+
+# --- encoding double-character statistic storage and reuse ---
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "std::array<std::unique_ptr<lUInt16[]>, 256> stats"
+  "encoding double-character rows must have scoped sparse ownership"
+)
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "CDoubleCharStat(const CDoubleCharStat &) = delete"
+  "encoding statistic ownership must not be shallow-copied"
+)
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "std::vector<dbl_char_stat_long_t> data(items)"
+  "encoding statistic output must use scoped contiguous storage"
+)
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "for (std::unique_ptr<lUInt16[]> &row : stats)\n            row.reset();"
+  "encoding statistic reset must release every sparse row"
+)
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "total = 0;\n        items = 0;"
+  "encoding statistic reset must restore all reusable state"
+)
+require_source_text(
+  "${TEXT_ENCODING_INTERNAL_HEADER}"
+  "bool LVRunDoubleCharStatOwnershipRegression()"
+  "encoding statistic ownership must expose its native regression seam"
+)
+require_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "bool LVRunDoubleCharStatOwnershipRegression()"
+  "encoding statistic ownership must retain native lifecycle coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "double-character statistic ownership regression failed"
+  "encoding statistic regression must remain wired into the native suite"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "CDblCharNode"
+  "unused manual encoding-statistic tree ownership must not return"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "lUInt16 * * stats"
+  "encoding statistic rows must not regress to a raw pointer table"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "new lUInt16* [256]"
+  "encoding statistic row slots must not use manual array ownership"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "new dbl_char_stat_long_t[items]"
+  "encoding statistic output must not use a manual candidate array"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "delete[] stats"
+  "encoding statistic row teardown must remain automatic"
+)
+forbid_source_text(
+  "${TEXT_ENCODING_SOURCE}"
+  "delete[] pdata"
+  "encoding statistic output teardown must remain automatic"
 )
 
 # --- plain-text line queue owners and parser borrow ---
