@@ -165,6 +165,25 @@ struct Zip64ExtInfo
     }
 };
 
+inline Zip64ExtInfo *findZip64ExtInfo(
+        lUInt8 *extra, lUInt32 extraSize)
+{
+    lUInt32 offset = 0;
+    while (offset <= extraSize && extraSize - offset >= 4) {
+        Zip64ExtInfo *record =
+                reinterpret_cast<Zip64ExtInfo *>(extra + offset);
+        record->byteOrderConv();
+        const lUInt32 recordSize =
+                4 + static_cast<lUInt32>(record->Size);
+        if (recordSize > extraSize - offset)
+            return NULL;
+        if (record->Tag == 0x0001)
+            return record;
+        offset += recordSize;
+    }
+    return NULL;
+}
+
 #pragma pack(pop)
 
 #endif  // __ZIPHDR_H_INCLUDED__

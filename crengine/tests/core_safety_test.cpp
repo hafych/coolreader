@@ -1,4 +1,5 @@
 #include "lvstreamutils.h"
+#include "lvstreamfragment.h"
 #include "lvthread.h"
 #include "lvcontaineriteminfo.h"
 #include "hyphman.h"
@@ -2194,6 +2195,32 @@ static bool verifyStreamRange(LVStreamRef stream,
 }
 
 static int testArchiveContainerOwnership() {
+    class PayloadFailingMemoryStream : public LVMemoryStream {
+        lvpos_t _payloadStart;
+        lvpos_t _payloadEnd;
+    public:
+        PayloadFailingMemoryStream(
+                lvpos_t payloadStart, lvpos_t payloadEnd)
+            : _payloadStart(payloadStart)
+            , _payloadEnd(payloadEnd)
+        {
+        }
+
+        lverror_t Read(
+                void *buf, lvsize_t count,
+                lvsize_t *bytesRead) override
+        {
+            if (count > 0
+                    && m_pos >= _payloadStart
+                    && m_pos < _payloadEnd) {
+                if (bytesRead)
+                    *bytesRead = 0;
+                return LVERR_FAIL;
+            }
+            return LVMemoryStream::Read(buf, count, bytesRead);
+        }
+    };
+
     const std::vector<unsigned char> payload =
             {'a', 'r', 'c', 'h', 'i', 'v', 'e'};
     std::vector<unsigned char> zipBytes =
@@ -2227,11 +2254,66 @@ static int testArchiveContainerOwnership() {
     LVStreamRef decoded =
             archive->OpenStream(U"entry.txt", LVOM_READ);
     archive.Clear();
+    std::vector<unsigned char> oversized(payload.size() + 8, 0xcd);
+    lvsize_t oversizedRead = 0;
     if (decoded.isNull()
-            || !verifyStreamRange(
-                    decoded, payload, 0, payload.size()))
+            || decoded->Read(
+                    oversized.data(), oversized.size(), &oversizedRead)
+                    != LVERR_OK
+            || oversizedRead != payload.size()
+            || !decoded->Eof()
+            || !std::equal(
+                    payload.begin(), payload.end(), oversized.begin())
+            || oversized[payload.size()] != 0xcd)
         return fail("archive/entry did not retain its source ownership");
     decoded.Clear();
+
+    const std::vector<unsigned char> fragmentSourceBytes =
+            {0x10, 0x20, 0x30, 0x40, 0x50, 0x60};
+    LVStreamRef fragmentSource = LVCreateMemoryStream(
+            const_cast<unsigned char *>(fragmentSourceBytes.data()),
+            static_cast<int>(fragmentSourceBytes.size()),
+            true, LVOM_READ);
+    std::unique_ptr<LVStreamFragment> fragmentOwner(
+            new LVStreamFragment(fragmentSource, 2, 3, 7));
+    LVStreamRef fragment(fragmentOwner.release());
+    unsigned char fragmentBytes[6] =
+            {0xee, 0xee, 0xee, 0xee, 0xee, 0xee};
+    lvsize_t fragmentRead = 99;
+    if (fragment->GetMode() != LVOM_READ
+            || fragment->GetContainerDepth() != 7
+            || fragment->Read(
+                    fragmentBytes, sizeof(fragmentBytes), &fragmentRead)
+                    != LVERR_OK
+            || fragmentRead != 3
+            || fragmentBytes[0] != 0x30
+            || fragmentBytes[2] != 0x50
+            || fragmentBytes[3] != 0xee
+            || fragment->Seek(-1, LVSEEK_END, NULL) != LVERR_OK
+            || fragment->GetPos() != 2
+            || fragment->Seek(1, LVSEEK_END, NULL) != LVERR_FAIL
+            || fragment->GetPos() != 2
+            || fragment->Seek(-4, LVSEEK_END, NULL) != LVERR_FAIL
+            || fragment->GetPos() != 2
+            || fragment->Seek(0, LVSEEK_SET, NULL) != LVERR_OK) {
+        return fail("stream fragment escaped its bounded seek/read region");
+    }
+    fragmentRead = 99;
+    if (fragment->Read(NULL, 1, &fragmentRead) != LVERR_FAIL
+            || fragmentRead != 0
+            || fragment->GetPos() != 0)
+        return fail("stream fragment failure changed position or byte count");
+    std::unique_ptr<LVStreamFragment> overflowFragmentOwner(
+            new LVStreamFragment(
+                    fragmentSource, LV_INVALID_SIZE, 2));
+    LVStreamRef overflowFragment(overflowFragmentOwner.release());
+    fragmentRead = 99;
+    if (overflowFragment->Read(
+                fragmentBytes, 1, &fragmentRead) != LVERR_FAIL
+            || fragmentRead != 0
+            || overflowFragment->Seek(
+                    0, LVSEEK_SET, NULL) != LVERR_FAIL)
+        return fail("stream fragment accepted an overflowing source region");
 
     unsigned char nonArchiveBytes[] =
             {'N', 'O', 'T', '!', 'd', 'a', 't', 'a'};
@@ -2255,6 +2337,72 @@ static int testArchiveContainerOwnership() {
                 || !LVOpenArchieve(corruptSource).isNull()
                 || corruptSource->GetPos() != 5)
             return fail("corrupt archive candidate leaked partial state");
+    }
+
+    std::vector<unsigned char> malformedZip64 =
+            buildStoredZip("entry.txt", payload);
+    const std::size_t localNameEnd = 30 + std::strlen("entry.txt");
+    malformedZip64[22] = 0xff;
+    malformedZip64[23] = 0xff;
+    malformedZip64[24] = 0xff;
+    malformedZip64[25] = 0xff;
+    malformedZip64[28] = 4;
+    malformedZip64[29] = 0;
+    malformedZip64.insert(
+            malformedZip64.begin() + localNameEnd,
+            {0x01, 0x00, 0x1c, 0x00});
+    const std::size_t eocdOffset = malformedZip64.size() - 22;
+    const std::uint32_t originalCentralOffset =
+            static_cast<std::uint32_t>(
+                    30 + std::strlen("entry.txt") + payload.size());
+    const std::uint32_t shiftedCentralOffset = originalCentralOffset + 4;
+    malformedZip64[eocdOffset + 16] =
+            static_cast<unsigned char>(shiftedCentralOffset);
+    malformedZip64[eocdOffset + 17] =
+            static_cast<unsigned char>(shiftedCentralOffset >> 8);
+    malformedZip64[eocdOffset + 18] =
+            static_cast<unsigned char>(shiftedCentralOffset >> 16);
+    malformedZip64[eocdOffset + 19] =
+            static_cast<unsigned char>(shiftedCentralOffset >> 24);
+    LVContainerRef malformedArchive =
+            LVOpenArchieve(LVCreateMemoryStream(
+                    malformedZip64.data(),
+                    static_cast<int>(malformedZip64.size()),
+                    true, LVOM_READ));
+    if (malformedArchive.isNull()
+            || !malformedArchive->OpenStream(
+                    U"entry.txt", LVOM_READ).isNull())
+        return fail("truncated ZIP64 local extra data was published");
+
+    const std::vector<unsigned char> deflatedPayload(256, 0x5a);
+    const std::string failingName("broken.bin");
+    std::vector<unsigned char> failingZip =
+            buildDeflatedZip(failingName, deflatedPayload, false);
+    if (failingZip.size() < 22)
+        return fail("failing ZIP decoder fixture was not built");
+    const std::size_t failingEocd = failingZip.size() - 22;
+    const lvpos_t failingCentralOffset =
+            static_cast<lvpos_t>(failingZip[failingEocd + 16])
+            | (static_cast<lvpos_t>(failingZip[failingEocd + 17]) << 8)
+            | (static_cast<lvpos_t>(failingZip[failingEocd + 18]) << 16)
+            | (static_cast<lvpos_t>(failingZip[failingEocd + 19]) << 24);
+    const lvpos_t failingPayloadStart =
+            30 + static_cast<lvpos_t>(failingName.size());
+    std::unique_ptr<PayloadFailingMemoryStream> failingSourceOwner(
+            new PayloadFailingMemoryStream(
+                    failingPayloadStart, failingCentralOffset));
+    if (failingSourceOwner->CreateCopy(
+                failingZip.data(), failingZip.size(), LVOM_READ) != LVERR_OK)
+        return fail("failing ZIP decoder source could not initialize");
+    LVStreamRef failingSource(failingSourceOwner.release());
+    LVContainerRef failingArchive = LVOpenArchieve(failingSource);
+    if (failingArchive.isNull())
+        return fail("failing ZIP decoder central directory was rejected");
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        if (!failingArchive->OpenStream(
+                    Utf8ToUnicode(lString8(failingName.c_str())).c_str(),
+                    LVOM_READ).isNull())
+            return fail("failed inflater input published a decoder candidate");
     }
     return 0;
 }
@@ -2834,6 +2982,10 @@ static int testStreamBufferOwnership() {
         return fail("ZIP CRC fallback did not restore stream position");
     if (!verifyStreamRange(decoded, payload, savedPosition, 4096))
         return fail("ZIP decoder could not continue after CRC fallback");
+    lvsize_t rejectedRead = 99;
+    if (decoded->Read(NULL, LV_INVALID_SIZE, &rejectedRead) != LVERR_FAIL
+            || rejectedRead != 0)
+        return fail("ZIP decoder accepted an unbounded read request");
     return 0;
 }
 

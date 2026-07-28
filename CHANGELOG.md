@@ -198,6 +198,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.
+- ZIP entry construction now scopes stored fragments, deflated source
+  fragments and decoder candidates until inflater initialization and
+  `LVStreamRef` adoption succeed. Fragment reads/seeks cannot escape entry
+  bounds, and malformed local-header offsets or truncated ZIP64 extras are
+  rejected before a decoder is published.
 - Shared parser read windows and charset conversion tables now use explicit
   RAII ownership; short reads near end of file expose only valid bytes instead
   of stale retained buffer capacity.

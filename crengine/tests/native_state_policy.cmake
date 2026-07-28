@@ -57,6 +57,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREA
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.h" CACHED_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.cpp" TCR_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.h" TCR_STREAM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvstreamfragment.h" STREAM_FRAGMENT_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.cpp" DEFAULT_STREAM_BUFFER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.h" DEFAULT_STREAM_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvblockwritestream.cpp" BLOCK_WRITE_STREAM_SOURCE)
@@ -72,6 +73,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvziparc.cpp" ZIP_ARCHIVE_SOURCE
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvziparc.h" ZIP_ARCHIVE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvrararc.cpp" RAR_ARCHIVE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvrararc.h" RAR_ARCHIVE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/ziphdr.h" ZIP_HEADER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.cpp" MEMORY_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.h" MEMORY_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvstreamutils.cpp" STREAM_UTILS_SOURCE)
@@ -1220,6 +1222,86 @@ require_source_text(
   "m_originalCRC != 0 && m_CRC != m_originalCRC"
   "ZIP streams with a missing CRC must allow fallback calculation"
 )
+require_source_text(
+  "${ZIP_STREAM_HEADER}"
+  "static std::unique_ptr<LVStream> Create"
+  "ZIP entry factories must return scoped ownership"
+)
+require_source_text(
+  "${ZIP_STREAM_HEADER}"
+  "LVZipDecodeStream(const LVZipDecodeStream &) = delete"
+  "ZIP decoders must not copy inflater and buffer ownership"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "std::unique_ptr<LVStreamFragment> sourceFragment"
+  "deflated ZIP source fragments must start with scoped ownership"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "LVStreamRef srcStream(sourceFragment.release())"
+  "ZIP source fragments must transfer only into the engine reference owner"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "std::unique_ptr<LVZipDecodeStream> res"
+  "ZIP decoder candidates must stay scoped during inflater initialization"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "if (!res->rewind())"
+  "failed ZIP inflater initialization must roll back the decoder candidate"
+)
+require_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "std::unique_ptr<LVStream> stream"
+  "ZIP archive entries must stay scoped until LVStreamRef adoption"
+)
+require_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "return LVStreamRef(stream.release())"
+  "ZIP entry ownership must transfer only at the stream reference boundary"
+)
+require_source_text(
+  "${STREAM_FRAGMENT_HEADER}"
+  "LVStreamFragment(const LVStreamFragment &) = delete"
+  "stream fragments must not copy source ownership and position state"
+)
+require_source_text(
+  "${STREAM_FRAGMENT_HEADER}"
+  "if (size > remaining)"
+  "stream fragment reads must clamp to their declared region"
+)
+require_source_text(
+  "${STREAM_FRAGMENT_HEADER}"
+  "delta > m_size - base"
+  "stream fragment seeks must reject positions outside their region"
+)
+require_source_text(
+  "${STREAM_FRAGMENT_HEADER}"
+  "m_start > LV_INVALID_SIZE - m_size"
+  "stream fragment source ranges must reject overflow"
+)
+require_source_text(
+  "${ZIP_HEADER_SOURCE}"
+  "findZip64ExtInfo"
+  "ZIP64 extra records must use a bounded record parser"
+)
+require_source_text(
+  "${ZIP_HEADER_SOURCE}"
+  "recordSize > extraSize - offset"
+  "ZIP64 record sizes must stay within the supplied extra bytes"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "hdr.Mark != 0x04034b50"
+  "ZIP entry creation must validate the local header signature"
+)
+require_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "pos > LV_INVALID_SIZE - localHeaderSize"
+  "ZIP local-header offset arithmetic must reject overflow"
+)
 forbid_source_text(
   "${ZIP_STREAM_HEADER}"
   "lUInt8 *    m_inbuf"
@@ -1234,6 +1316,21 @@ forbid_source_text(
   "${ZIP_STREAM_SOURCE}"
   "malloc(ARC_OUTBUF_SIZE)"
   "ZIP CRC scratch allocation must not regress to malloc"
+)
+forbid_source_text(
+  "${ZIP_STREAM_HEADER}"
+  "static LVStream * Create"
+  "ZIP entry factories must not return implicit raw ownership"
+)
+forbid_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "LVStreamFragment * fragment = new"
+  "stored ZIP entry construction must not use implicit raw ownership"
+)
+forbid_source_text(
+  "${ZIP_STREAM_SOURCE}"
+  "LVZipDecodeStream * res = new"
+  "ZIP decoder construction must not use implicit raw ownership"
 )
 require_source_text(
   "${CACHED_STREAM_HEADER}"

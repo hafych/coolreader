@@ -28,6 +28,7 @@
 
 #include "lvnamedstream.h"
 
+#include <memory>
 #include <zlib.h>
 #include <vector>
 
@@ -54,11 +55,12 @@ private:
                        lvsize_t unpacksize, lUInt32 crc,
                        unsigned containerDepth );
 
-    ~LVZipDecodeStream();
+    LVZipDecodeStream(const LVZipDecodeStream &) = delete;
+    LVZipDecodeStream &operator=(const LVZipDecodeStream &) = delete;
 
     /// Get stream open mode
     /** \return lvopen_mode_t open mode */
-    virtual lvopen_mode_t GetMode()
+    lvopen_mode_t GetMode() override
     {
         return LVOM_READ;
     }
@@ -81,45 +83,51 @@ private:
     /// decode bytes
     int read( lUInt8 * buf, int bytesToRead );
 public:
-    virtual unsigned GetContainerDepth()
+    ~LVZipDecodeStream() override;
+
+    unsigned GetContainerDepth() override
     {
         return m_containerDepth;
     }
 
     /// fastly return already known CRC
-    virtual lverror_t getcrc32( lUInt32 & dst );
+    lverror_t getcrc32( lUInt32 & dst ) override;
 
-    virtual bool Eof()
+    bool Eof() override
     {
         return m_outbytesleft==0; //m_pos >= m_size;
     }
-    virtual lvsize_t  GetSize()
+    lvsize_t GetSize() override
     {
         return m_unpacksize;
     }
-    virtual lvpos_t GetPos()
+    lvpos_t GetPos() override
     {
         return m_unpacksize - m_outbytesleft;
     }
-    virtual lverror_t GetPos( lvpos_t * pos )
+    lverror_t GetPos( lvpos_t * pos )
     {
         if (pos)
             *pos = m_unpacksize - m_outbytesleft;
         return LVERR_OK;
     }
-    virtual lverror_t Seek(lvoffset_t offset, lvseek_origin_t origin, lvpos_t* newPos);
-    virtual lverror_t Write(const void*, lvsize_t, lvsize_t*)
+    lverror_t Seek(
+            lvoffset_t offset, lvseek_origin_t origin,
+            lvpos_t *newPos) override;
+    lverror_t Write(const void*, lvsize_t, lvsize_t*) override
     {
         return LVERR_NOTIMPL;
     }
-    virtual lverror_t Read(void* buf, lvsize_t count, lvsize_t* bytesRead);
-    virtual lverror_t SetSize(lvsize_t)
+    lverror_t Read(
+            void *buf, lvsize_t count, lvsize_t *bytesRead) override;
+    lverror_t SetSize(lvsize_t) override
     {
         return LVERR_NOTIMPL;
     }
-    static LVStream * Create( LVStreamRef stream, lvpos_t pos, lString32 name,
-                              lvsize_t srcPackSize, lvsize_t srcUnpSize,
-                              unsigned containerDepth );
+    static std::unique_ptr<LVStream> Create(
+            LVStreamRef stream, lvpos_t pos, lString32 name,
+            lvsize_t srcPackSize, lvsize_t srcUnpSize,
+            unsigned containerDepth );
 };
 
 #endif  // (USE_ZLIB==1)

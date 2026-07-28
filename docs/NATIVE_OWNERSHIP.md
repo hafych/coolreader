@@ -125,8 +125,14 @@ before releasing both storage and the stream reference.
 
 The ZIP decoder owns persistent inflate buffers and CRC scratch storage through
 `std::vector`; fallback CRC calculation uses a position guard and supports
-archives whose header omits the checksum. `LVCachedStream` owns cache slots as
-`std::unique_ptr<BufItem>` values inside a vector while its LRU links remain
+archives whose header omits the checksum. Entry creation returns `unique_ptr`
+and keeps stored fragments, deflated source fragments and decoder candidates
+scoped until inflater initialization and the final `LVStreamRef` transfer
+succeed. `LVStreamFragment` cannot be copied and clamps reads/seeks to its
+declared region, so a stored entry cannot expose following archive bytes.
+Local-header offsets and ZIP64 extra records are validated with bounded
+arithmetic before a candidate is published. `LVCachedStream` owns cache slots
+as `std::unique_ptr<BufItem>` values inside a vector while its LRU links remain
 non-owning views. Slot eviction transfers ownership instead of deleting and
 reallocating nodes.
 

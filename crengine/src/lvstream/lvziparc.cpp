@@ -106,23 +106,20 @@ LVStreamRef LVZipArc::OpenStream(const char32_t *fname, lvopen_mode_t)
     // make filename
     lString32 fn = fname;
     LVStreamRef strm = m_stream; // fix strange arm-linux-g++ bug
-    LVStreamRef stream(
-                LVZipDecodeStream::Create(
+    std::unique_ptr<LVStream> stream =
+            LVZipDecodeStream::Create(
                     strm,
                     m_list[found_index]->GetSrcPos(),
                     fn,
                     m_list[found_index]->GetSrcSize(),
                     m_list[found_index]->GetSize(),
-                    GetContainerDepth() )
-                );
-    if (!stream.isNull()) {
+                    GetContainerDepth());
+    if (stream) {
         stream->SetName(m_list[found_index]->GetName());
         // Use buffering?
-        //return stream;
-        return stream;
-        //return LVCreateBufferedStream( stream, ZIP_STREAM_BUFFER_SIZE );
+        return LVStreamRef(stream.release());
     }
-    return stream;
+    return LVStreamRef();
 }
 
 int LVZipArc::ReadContents() {
@@ -300,7 +297,7 @@ int LVZipArc::ReadContents() {
         int extraPosUnpSize = -1;
         int extraPosPackSize = -1;
         int extraPosOffset = -1;
-        int extraLastPos = 0;
+        unsigned extraLastPos = 0;
         Zip64ExtInfo *zip64ExtInfo = NULL;
         if (0xFFFFFFFF == ZipHeader.UnpSize) {
             extraPosUnpSize = extraLastPos;
@@ -352,19 +349,13 @@ int LVZipArc::ReadContents() {
         }
 #if LVLONG_FILE_SUPPORT == 1
         // Find Zip64 extension if required
-        lvsize_t offs = 0;
-        Zip64ExtInfo *ext;
-        if (zip64) {
-            while (offs + 4 < extraSizeToRead) {
-                ext = (Zip64ExtInfo *)&extra[offs];
-                ext->byteOrderConv();
-                if (0x0001 == ext->Tag) {
-                    zip64ExtInfo = ext;
-                    break;
-                } else {
-                    offs += 4 + ext->Size;
-                }
-            }
+        if (zip64)
+            zip64ExtInfo = findZip64ExtInfo(
+                    extra, static_cast<lUInt32>(extraSizeToRead));
+        if (extraLastPos > 0 && (!zip64ExtInfo
+                || zip64ExtInfo->Size < extraLastPos)) {
+            CRLog::error("ZIP64 central extra data is truncated");
+            return 0;
         }
 #endif
 
