@@ -29,68 +29,81 @@
 #ifndef __LVARRAY_H_INCLUDED__
 #define __LVARRAY_H_INCLUDED__
 
-#include <stdlib.h>
-#include <assert.h>
 #include "lvref.h"
 
-/** \brief template which implements vector of pointer
+#include <cassert>
+#include <climits>
+#include <memory>
+#include <stdexcept>
+#include <utility>
 
-    Automatically deletes objects when vector items are destroyed.
-*/
+/** \brief template which implements a contiguous array of values */
 template <typename T >
 class LVArray
 {
-    T * _array;
+    std::unique_ptr<T[]> _array;
     int _size;
     int _count;
+
+    void swap(LVArray &array)
+    {
+        _array.swap(array._array);
+        std::swap(_size, array._size);
+        std::swap(_count, array._count);
+    }
+
 public:
     /// default constructor
-    LVArray() : _array(NULL), _size(0), _count(0) {}
+    LVArray() : _array(), _size(0), _count(0) {}
+
     /// creates array of given size
     LVArray( int len, T value )
+        : _array(), _size(0), _count(0)
     {
+        if (len <= 0)
+            return;
+        std::unique_ptr<T[]> storage(new T[len]());
+        for (int i = 0; i < len; i++)
+            storage[i] = value;
+        _array = std::move(storage);
         _size = _count = len;
-        _array = new T[ _size ];
-        for (int i=0; i<_count; i++)
-            _array[i] = value;
     }
+
     LVArray( const LVArray & v )
+        : _array(), _size(0), _count(0)
     {
+        if (v._count <= 0)
+            return;
+        std::unique_ptr<T[]> storage(new T[v._count]());
+        for (int i = 0; i < v._count; i++)
+            storage[i] = v._array[i];
+        _array = std::move(storage);
         _size = _count = v._count;
-        if ( _size ) {
-            _array = new T[_size];
-            for (int i=0; i<_count; i++)
-                _array[i] = v._array[i];
-        } else {
-            _array = NULL;
-        }
     }
+
     LVArray( const T * ptr, int len )
+        : _array(), _size(0), _count(0)
     {
+        if (!ptr || len <= 0)
+            return;
+        std::unique_ptr<T[]> storage(new T[len]());
+        for (int i = 0; i < len; i++)
+            storage[i] = ptr[i];
+        _array = std::move(storage);
         _size = _count = len;
-        if ( _size ) {
-            _array = new T[ _size ];
-            for (int i=0; i<_count; i++)
-                _array[i] = ptr[i];
-        } else {
-            _array = NULL;
-        }
     }
+
     LVArray & operator = ( const LVArray & v )
     {
-        clear();
-        _size = _count = v._count;
-        if ( _size ) {
-            _array = new T[ _size ];
-            for (int i=0; i<_count; i++)
-                _array[i] = v._array[i];
-        } else {
-            _array = NULL;
+        if (this != &v) {
+            LVArray copy(v);
+            swap(copy);
         }
         return *this;
     }
+
     /// retrieves pointer to C array
-    T * get() { return _array; }
+    T * get() { return _array.get(); }
     /// retrieves item from specified position
     T operator [] ( int pos ) const { return _array[pos]; }
     /// retrieves item from specified position
@@ -100,23 +113,26 @@ public:
     /// ensures that size of vector is not less than specified value
     void reserve( int size )
     {
-        if ( size > _size )
-        {
-            T* new_array = new T[ size ];
-            if ( _array ) {
-        	for ( int i=0; i<_count; i++ )
-        	    new_array[i] = _array[i];
-        	delete [] _array;
-            }
-            _array = new_array;
-            _size = size;
-        }
+        if (size <= _size)
+            return;
+        std::unique_ptr<T[]> storage(new T[size]());
+        for (int i = 0; i < _count; i++)
+            storage[i] = _array[i];
+        _array = std::move(storage);
+        _size = size;
     }
+
     /// sets item by index (extends vector if necessary)
     void set( int index, T item )
     {
-        reserve( index );
+        if (index < 0)
+            return;
+        if (index == INT_MAX)
+            throw std::length_error("LVArray index overflow");
+        reserve(index + 1);
         _array[index] = item;
+        if (index >= _count)
+            _count = index + 1;
     }
     /// returns size of buffer
     int size() const { return _size; }
@@ -127,59 +143,57 @@ public:
     /// clears all items, deallocates storage
     void clear()
     {
-        if (_array)
-        {
-            delete [] _array;
-            _array = NULL;
-        }
+        _array.reset();
         _size = 0;
         _count = 0;
     }
+
     /// clears all items, but unlike clear() does not deallocate storage
     void reset()
     {
+        for (int i = 0; i < _count; i++)
+            _array[i] = T();
         _count = 0;
     }
+
     /// copies range to beginning of array
     void trim( int pos, int count, int reserved )
     {
-#if defined(_DEBUG) && !defined(ANDROID)
-        if ( pos<0 || count<=0 || pos+count > _count )
-            throw;
-#endif
-        int i;
+        if (pos < 0 || count < 0 || reserved < 0
+                || pos > _count || count > _count - pos)
+            return;
         int new_sz = count;
         if (new_sz < reserved)
             new_sz = reserved;
-        T* new_array = new T[ new_sz ];
-        if (_array)
-        {
-            for ( i=0; i<count; i++ )
-            {
-                new_array[i] = _array[ pos + i ];
-            }
-            delete [] _array;
+        std::unique_ptr<T[]> storage;
+        if (new_sz > 0) {
+            storage.reset(new T[new_sz]());
+            for (int i = 0; i < count; i++)
+                storage[i] = _array[pos + i];
         }
-        _array = new_array;
+        _array = std::move(storage);
         _count = count;
         _size = new_sz;
     }
+
     /// removes several items from vector
     void erase( int pos, int count )
     {
-#if defined(_DEBUG) && !defined(ANDROID)
-        if ( pos<0 || count<=0 || pos+count > _count )
-            throw;
-#endif
-        int i;
-        for (i=pos+count; i<_count; i++)
-        {
-            _array[i-count] = _array[i];
-        }
+        if (pos < 0 || count <= 0
+                || pos > _count || count > _count - pos)
+            return;
+        const int oldCount = _count;
+        for (int i = pos + count; i < oldCount; i++)
+            _array[i - count] = _array[i];
         _count -= count;
+        for (int i = _count; i < oldCount; i++)
+            _array[i] = T();
     }
+
     T remove( int pos )
     {
+        if (pos < 0 || pos >= _count)
+            return T();
         T item = _array[ pos ];
         erase( pos, 1 );
         return item;
@@ -194,34 +208,39 @@ public:
     /// adds new item to end of vector
     void append( const T * items, int count )
     {
-        reserve( _count + count );
-        for (int i=0; i<count; i++)
-            _array[ _count+i ] = items[i];
+        if (!items || count <= 0)
+            return;
+        if (_count > INT_MAX - count)
+            throw std::length_error("LVArray append overflow");
+        std::unique_ptr<T[]> snapshot(new T[count]());
+        for (int i = 0; i < count; i++)
+            snapshot[i] = items[i];
+        reserve(_count + count);
+        for (int i = 0; i < count; i++)
+            _array[_count + i] = snapshot[i];
         _count += count;
     }
 
     /// adds new items to end of vector
     void add( const LVArray & list )
     {
-        reserve( _count + list._count );
-        for (int i=0; i<list._count; i++)
-            _array[ _count+i ] = list._array[i];
-        _count += list._count;
+        append(list._array.get(), list._count);
     }
 
     /// adds new items to end of vector
     void add( const T * list, int count )
     {
-        reserve( _count + count );
-        for (int i=0; i<count; i++)
-            _array[ _count+i ] = list[i];
-        _count += count;
+        append(list, count);
     }
 
     T * addSpace( int count )
     {
-        reserve( _count + count );
-        T * ptr = _array + _count;
+        if (count <= 0)
+            return _array ? _array.get() + _count : NULL;
+        if (_count > INT_MAX - count)
+            throw std::length_error("LVArray growth overflow");
+        reserve(_count + count);
+        T * ptr = _array.get() + _count;
         _count += count;
         return ptr;
     }
@@ -231,8 +250,18 @@ public:
     {
         if (pos<0 || pos>_count)
             pos = _count;
-        if ( _count >= _size )
-            reserve( _count * 3 / 2  + 8 );
+        if (_count == INT_MAX)
+            throw std::length_error("LVArray insertion overflow");
+        if (_count >= _size) {
+            const long long desiredSize =
+                    static_cast<long long>(_count) * 3 / 2 + 8;
+            int grownSize = desiredSize > INT_MAX
+                    ? INT_MAX
+                    : static_cast<int>(desiredSize);
+            if (grownSize < _count + 1)
+                grownSize = _count + 1;
+            reserve(grownSize);
+        }
         for (int i=_count; i>pos; --i)
             _array[i] = _array[i-1];
         _array[pos] = item;
@@ -249,9 +278,9 @@ public:
     }
 
     /// returns array pointer
-    T * ptr() const { return _array; }
+    T * ptr() const { return _array.get(); }
     /// destructor
-    ~LVArray() { clear(); }
+    ~LVArray() = default;
 };
 
 template <typename T >

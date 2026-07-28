@@ -1,5 +1,6 @@
 #include "lvstreamutils.h"
 #include "lvstreamfragment.h"
+#include "lvarray.h"
 #include "lvhashtable.h"
 #include "lvstring8collection.h"
 #include "lvstring32hashedcollection.h"
@@ -151,6 +152,25 @@ public:
 
 bool HashResizeValue::_copyBlocked = false;
 int HashResizeValue::_liveCount = 0;
+
+class ArrayTrackedValue : public LVRefCounter {
+    static int _destroyed;
+
+public:
+    ~ArrayTrackedValue() {
+        ++_destroyed;
+    }
+
+    static int destroyed() {
+        return _destroyed;
+    }
+
+    static void reset() {
+        _destroyed = 0;
+    }
+};
+
+int ArrayTrackedValue::_destroyed = 0;
 
 static int testMutex() {
     LVMutex mutex;
@@ -1762,6 +1782,120 @@ static int testHashTableOwnership() {
     }
     if (HashResizeValue::liveCount() != 0)
         return fail("hash clear/destructor leaked stored values");
+    return 0;
+}
+
+static int testValueArrayOwnership() {
+    LVArray<bool> bits;
+    bits.add(true);
+    bits.add(false);
+    bits.set(4, true);
+    if (bits.length() != 5
+            || !bits[0] || bits[1] || bits[2] || bits[3] || !bits[4])
+        return fail("value array sparse set did not initialize bool gaps");
+    bits.reserve(32);
+    bits.trim(1, 4, 8);
+    bits.erase(1, 2);
+    if (bits.length() != 2 || bits.size() != 8
+            || bits[0] || !bits[1])
+        return fail("value array bool reserve/trim/erase lost values");
+
+    LVArray<int> values;
+    values.add(1);
+    values.add(2);
+    values.add(3);
+    values.append(values.ptr() + 1, 2);
+    values.add(values);
+    const int expected[] = {1, 2, 3, 2, 3, 1, 2, 3, 2, 3};
+    if (values.length() != 10)
+        return fail("value array aliased append changed the logical length");
+    for (int i = 0; i < values.length(); ++i) {
+        if (values[i] != expected[i])
+            return fail("value array aliased append lost an element");
+    }
+
+    LVArray<int> copied(values);
+    LVArray<int> assigned;
+    assigned = values;
+    LVArray<int> *assignedAlias = &assigned;
+    assigned = *assignedAlias;
+    values[0] = 99;
+    if (copied[0] != 1 || assigned[0] != 1)
+        return fail("value array copy/assignment shared backing storage");
+    const int retainedSize = values.size();
+    values.reset();
+    if (!values.empty() || values.size() != retainedSize)
+        return fail("value array reset did not retain backing storage");
+    values.add(7);
+    values.erase(-1, 1);
+    values.trim(-1, 1, 0);
+    if (values.length() != 1 || values[0] != 7 || values.remove(8) != 0)
+        return fail("value array invalid range changed committed state");
+
+    if (HashResizeValue::liveCount() != 0)
+        return fail("value array exception fixture started with live values");
+    {
+        LVArray<HashResizeValue> source;
+        source.add(HashResizeValue(11));
+        source.add(HashResizeValue(22));
+        const int originalSize = source.size();
+        const int originalLiveCount = HashResizeValue::liveCount();
+        HashResizeValue::setCopyBlocked(true);
+        bool reserveThrew = false;
+        try {
+            source.reserve(originalSize + 5);
+        } catch (const std::runtime_error &) {
+            reserveThrew = true;
+        }
+        HashResizeValue::setCopyBlocked(false);
+        if (!reserveThrew
+                || source.size() != originalSize
+                || source.length() != 2
+                || source[0].value() != 11
+                || source[1].value() != 22
+                || HashResizeValue::liveCount() != originalLiveCount)
+            return fail("value array failed reserve replaced committed storage");
+
+        LVArray<HashResizeValue> target;
+        target.add(HashResizeValue(99));
+        HashResizeValue::setCopyBlocked(true);
+        bool assignmentThrew = false;
+        try {
+            target = source;
+        } catch (const std::runtime_error &) {
+            assignmentThrew = true;
+        }
+        HashResizeValue::setCopyBlocked(false);
+        if (!assignmentThrew
+                || target.length() != 1
+                || target[0].value() != 99)
+            return fail("value array failed copy replaced assigned storage");
+    }
+    if (HashResizeValue::liveCount() != 0)
+        return fail("value array backing storage leaked constructed values");
+
+    ArrayTrackedValue::reset();
+    {
+        typedef LVFastRef<ArrayTrackedValue> TrackedRef;
+        LVArray<TrackedRef> refs;
+        refs.add(TrackedRef(new ArrayTrackedValue()));
+        refs.add(TrackedRef(new ArrayTrackedValue()));
+        const int reserved = refs.size();
+        refs.erase(0, 1);
+        if (ArrayTrackedValue::destroyed() != 1)
+            return fail("value array erase retained an inactive reference");
+        refs.reset();
+        if (ArrayTrackedValue::destroyed() != 2
+                || refs.size() != reserved || !refs.empty())
+            return fail("value array reset retained active references");
+        refs.add(TrackedRef(new ArrayTrackedValue()));
+        refs.clear();
+        if (ArrayTrackedValue::destroyed() != 3
+                || refs.size() != 0 || !refs.empty())
+            return fail("value array clear retained owned storage");
+    }
+    if (ArrayTrackedValue::destroyed() != 3)
+        return fail("value array reference fixture escaped its lifecycle");
     return 0;
 }
 
@@ -3583,6 +3717,8 @@ int main() {
     if (testNameIdMapOwnership() != 0)
         return 1;
     if (testHashTableOwnership() != 0)
+        return 1;
+    if (testValueArrayOwnership() != 0)
         return 1;
     if (testSerialBufOwnership() != 0)
         return 1;

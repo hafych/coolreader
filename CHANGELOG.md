@@ -222,6 +222,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   `vector<unique_ptr>`. Rehash transfers nodes without copying stored values,
   copies rebuild independent chains, and final-bucket collisions are no longer
   skipped by iteration.
+- Generic native value arrays now own contiguous storage through
+  `unique_ptr<T[]>`; reserve/copy failures preserve committed contents,
+  self-appends remain valid across growth, sparse slots are initialized and
+  erased reference values are released without discarding reserved capacity.
 - The RTF importer now owns its text accumulator through RAII, flushes
   recoverable truncated input before teardown and emits no document callbacks
   after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership

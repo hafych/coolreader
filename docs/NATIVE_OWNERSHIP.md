@@ -165,6 +165,14 @@ bucket vector first and then transfers existing nodes without copying keys or
 values. Copy and assignment rebuild independent chains, removal and clear
 unlink iteratively, and iteration includes collisions in the final bucket.
 
+`LVArray` owns its contiguous backing storage through `unique_ptr<T[]>`, which
+preserves the legacy raw-view API and supports specializations such as
+`LVArray<bool>`. Constructors, copy/assignment, reserve and trim build scoped
+candidate arrays before publishing them. Appends snapshot aliased input before
+growth, sparse `set()` value-initializes gaps, and erase/reset clear inactive
+slots so reference-counted values are released while retained capacity remains
+reusable.
+
 `SerialBuf` owns writable fixed-size and auto-growing storage through
 `std::vector`; its raw `_buf` member is only a compatibility view. The
 deserialization constructor remains explicitly borrowed, while the legacy

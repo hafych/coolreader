@@ -29,6 +29,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstring32hashedcollection.cpp" HASHED_ST
 file(READ "${SOURCE_ROOT}/crengine/include/lstridmap.h" NAME_ID_MAP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lstridmap.cpp" NAME_ID_MAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvhashtable.h" HASH_TABLE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvarray.h" VALUE_ARRAY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
@@ -1391,6 +1392,49 @@ forbid_source_text(
   "memset( _table"
   "hash table clearing must not byte-reset owned nodes"
 )
+
+# --- generic value-array backing storage and rollback ---
+require_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "std::unique_ptr<T[]> _array"
+  "value arrays must use RAII backing storage"
+)
+require_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "std::unique_ptr<T[]> storage(new T[size]())"
+  "value-array growth must build scoped candidate storage"
+)
+require_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "_array = std::move(storage)"
+  "value-array storage must publish only after copying succeeds"
+)
+require_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "std::unique_ptr<T[]> snapshot(new T[count]())"
+  "value-array aliased appends must snapshot their source"
+)
+require_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "_array[i] = T();"
+  "value-array reset and erase must release inactive values"
+)
+forbid_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "T * _array"
+  "value arrays must not own a raw backing array"
+)
+forbid_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "T* new_array"
+  "value-array growth must not regress to raw candidate storage"
+)
+forbid_source_text(
+  "${VALUE_ARRAY_HEADER}"
+  "delete [] _array"
+  "value-array teardown must not use manual delete[]"
+)
+
 require_source_text(
   "${ZIP_STREAM_HEADER}"
   "static std::unique_ptr<LVStream> Create"
