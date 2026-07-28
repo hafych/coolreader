@@ -53,6 +53,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfntman.cpp" FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfntman.h" FONT_MANAGER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.cpp" FREETYPE_FACE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.h" FREETYPE_FACE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontboldtransform.cpp" FONT_BOLD_TRANSFORM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfnt.cpp" BITMAP_FONT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfnt.h" BITMAP_FONT_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvwin32font.cpp" WIN32_FONT_SOURCE)
@@ -813,6 +814,86 @@ require_source_text(
   "${GLYPH_CACHE_SOURCE}"
   "if (head != item)"
   "glyph cache hits must refresh least-recently-used order"
+)
+require_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "using LVFontGlyphCacheItemOwner ="
+  "glyph cache allocation candidates must use exclusive ownership"
+)
+require_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "LVFontGlyphCacheItemOwner> owners"
+  "the global glyph cache must own every published bitmap item"
+)
+require_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "void put(LVFontGlyphCacheItemOwner item)"
+  "glyph cache publication must expose an ownership-transfer boundary"
+)
+require_source_text(
+  "${GLYPH_CACHE_SOURCE}"
+  "owners.emplace(itemView, std::move(item))"
+  "glyph cache items must publish into the global owner set"
+)
+require_source_text(
+  "${GLYPH_CACHE_SOURCE}"
+  "owners.erase(removed_item)"
+  "glyph cache eviction must release through the global owner set"
+)
+require_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "static_cast<int>(bmp_size)"
+  "glyph cache capacity must use the exact allocated bitmap byte count"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "_glyph_cache.put(std::move(candidate))"
+  "FreeType glyph creation must transfer only a complete candidate"
+)
+require_source_text(
+  "${FONT_BOLD_TRANSFORM_SOURCE}"
+  "_glyph_cache.put(std::move(candidate))"
+  "bold glyph creation must transfer only a complete candidate"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "glyph cache rollback candidate allocation failed"
+  "glyph cache ownership must retain candidate rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "glyph cache did not retain exact bitmap byte accounting"
+  "glyph cache ownership must retain signed-pitch byte accounting coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "glyph cache owner graph survived repeated clear"
+  "glyph cache ownership must retain repeated teardown coverage"
+)
+forbid_source_text(
+  "${GLYPH_CACHE_HEADER}"
+  "static void freeItem"
+  "glyph cache item teardown must not expose manual free ownership"
+)
+forbid_source_text(
+  "${GLYPH_CACHE_SOURCE}"
+  "LVFontGlyphCacheItem *item = (LVFontGlyphCacheItem *) malloc"
+  "glyph cache allocation candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${GLYPH_CACHE_SOURCE}"
+  "LVFontGlyphCacheItem::freeItem"
+  "glyph cache eviction and clear must remain owner-managed"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "LVFontGlyphCacheItem *item = LVFontGlyphCacheItem::newItem"
+  "FreeType glyph candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${FONT_BOLD_TRANSFORM_SOURCE}"
+  "item = LVFontGlyphCacheItem::newItem"
+  "bold glyph candidates must not begin as raw owners"
 )
 require_source_text(
   "${DOC_VIEW_HEADER}"

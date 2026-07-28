@@ -131,8 +131,11 @@ LVFontGlyphCacheItem *LVFontBoldTransform::getGlyph(lUInt32 ch, lChar32 def_char
     int dy = oldy ? oldy + _vShift : 0;
     int bmp_sz = dx*dy;
 
-    item = LVFontGlyphCacheItem::newItem(&_glyph_cache, (lChar32)ch, dx, dy, dx, bmp_sz); //, _drawMonochrome
-    if (item) {
+    LVFontGlyphCacheItemOwner candidate =
+            LVFontGlyphCacheItem::newItem(
+                    &_glyph_cache, (lChar32)ch, dx, dy, dx, bmp_sz);
+    item = candidate.get();
+    if (candidate) {
         item->bmp_fmt = olditem->bmp_fmt;
         item->advance = olditem->advance + _hShift;
         item->origin_x = olditem->origin_x;
@@ -158,7 +161,7 @@ LVFontGlyphCacheItem *LVFontBoldTransform::getGlyph(lUInt32 ch, lChar32 def_char
                 }
             }
         }
-        _glyph_cache.put(item);
+        _glyph_cache.put(std::move(candidate));
     }
     return item;
 }

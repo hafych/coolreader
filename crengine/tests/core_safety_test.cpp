@@ -888,7 +888,7 @@ static int testConcurrentFontRenderSettings() {
     return 0;
 }
 
-static LVFontGlyphCacheItem *newGlyphCacheTestItem(
+static LVFontGlyphCacheItemOwner newGlyphCacheTestItem(
         LVFontLocalGlyphCache *localCache, lUInt32 key) {
     static const int width = 4;
     static const int height = 4;
@@ -898,31 +898,43 @@ static LVFontGlyphCacheItem *newGlyphCacheTestItem(
 }
 
 static int testBoundedObservableGlyphCache() {
-    LVFontGlyphCacheItem *sizeProbe = newGlyphCacheTestItem(NULL, 0);
+    LVFontGlyphCacheItemOwner sizeProbe =
+            newGlyphCacheTestItem(NULL, 0);
     if (!sizeProbe)
         return fail("glyph cache size probe allocation failed");
     const int itemSize = sizeProbe->getSize();
-    LVFontGlyphCacheItem::freeItem(sizeProbe);
+    sizeProbe.reset();
+
+    LVFontGlyphCacheItemOwner accountingProbe =
+            LVFontGlyphCacheItem::newItem(
+                    NULL, 10, 4, 1, -4, 12);
+    if (!accountingProbe
+            || accountingProbe->bmp_pitch != -4
+            || accountingProbe->getSize()
+                    != static_cast<int>(
+                            offsetof(LVFontGlyphCacheItem, bmp) + 12))
+        return fail("glyph cache did not retain exact bitmap byte accounting");
 
     LVFontGlobalGlyphCache globalCache(itemSize * 2);
     LVFontLocalGlyphCache localCache(&globalCache);
     if (localCache.get(1) != NULL)
         return fail("empty glyph cache unexpectedly returned an item");
 
-    LVFontGlyphCacheItem *first = newGlyphCacheTestItem(&localCache, 1);
-    LVFontGlyphCacheItem *second = newGlyphCacheTestItem(&localCache, 2);
-    LVFontGlyphCacheItem *third = newGlyphCacheTestItem(&localCache, 3);
-    if (!first || !second || !third) {
-        LVFontGlyphCacheItem::freeItem(first);
-        LVFontGlyphCacheItem::freeItem(second);
-        LVFontGlyphCacheItem::freeItem(third);
+    LVFontGlyphCacheItemOwner firstOwner =
+            newGlyphCacheTestItem(&localCache, 1);
+    LVFontGlyphCacheItemOwner secondOwner =
+            newGlyphCacheTestItem(&localCache, 2);
+    LVFontGlyphCacheItemOwner thirdOwner =
+            newGlyphCacheTestItem(&localCache, 3);
+    if (!firstOwner || !secondOwner || !thirdOwner)
         return fail("glyph cache fixture allocation failed");
-    }
-    localCache.put(first);
-    localCache.put(second);
+    LVFontGlyphCacheItem *first = firstOwner.get();
+    LVFontGlyphCacheItem *third = thirdOwner.get();
+    localCache.put(std::move(firstOwner));
+    localCache.put(std::move(secondOwner));
     if (localCache.get(1) != first)
         return fail("glyph cache did not return the first item");
-    localCache.put(third);
+    localCache.put(std::move(thirdOwner));
 
     if (localCache.get(1) != first)
         return fail("recently used glyph was evicted");
@@ -945,6 +957,26 @@ static int testBoundedObservableGlyphCache() {
     stats = globalCache.getStats();
     if (stats.hits != 0 || stats.misses != 0 || stats.evictions != 0)
         return fail("glyph cache counters did not reset");
+
+    {
+        LVFontGlyphCacheItemOwner rolledBack =
+                newGlyphCacheTestItem(&localCache, 4);
+        if (!rolledBack)
+            return fail("glyph cache rollback candidate allocation failed");
+        std::memset(rolledBack->bmp, 0xA5, 16);
+    }
+    LVFontGlyphCacheItemOwner reusedOwner =
+            newGlyphCacheTestItem(&localCache, 5);
+    if (!reusedOwner)
+        return fail("glyph cache reuse candidate allocation failed");
+    LVFontGlyphCacheItem *reused = reusedOwner.get();
+    localCache.put(std::move(reusedOwner));
+    if (localCache.get(5) != reused)
+        return fail("glyph cache could not publish after repeated clear");
+    localCache.clear();
+    localCache.clear();
+    if (globalCache.getStats().size != 0)
+        return fail("glyph cache owner graph survived repeated clear");
     return 0;
 }
 

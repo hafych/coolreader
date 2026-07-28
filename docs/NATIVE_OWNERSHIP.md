@@ -714,6 +714,18 @@ without manual array teardown. Direct unsigned and signed cache coverage checks
 page boundaries, repeated clear, the last supported codepoint, and verifies
 that unsupported high codepoints cannot alias a lower page.
 
+The shared glyph bitmap cache retains its compact single-allocation item ABI,
+but every malloc-backed candidate now starts in a `unique_ptr` with a matching
+deleter. FreeType and bold-transform producers fill that scoped candidate and
+move it across the local-cache publication boundary. The global LRU owns every
+published item in one owner map; its intrusive LRU links and the local hash or
+list indices are borrowed views. Eviction first detaches those views and then
+erases the sole owner, while local clear delegates destruction to the same
+owner set. Capacity accounting records the exact allocated bitmap byte count
+instead of deriving it from signed pitch and logical height. Native coverage
+includes negative-pitch accounting, candidate rollback, LRU eviction, repeated
+clear and reuse under sanitizers.
+
 Fixed-size FreeType color glyphs keep the temporary output from smooth scaling
 in an exclusive owner with the scaler's platform-specific deleter:
 `_aligned_free` for MinGW and `free` elsewhere. The glyph slot borrows that

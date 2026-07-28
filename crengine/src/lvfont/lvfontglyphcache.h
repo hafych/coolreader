@@ -31,8 +31,11 @@
 #define __LV_FONTGLYPHCACHE_H_INCLUDED__
 
 #include <atomic>
-#include <stdlib.h>
+#include <cstdlib>
+#include <memory>
 #include <stddef.h>
+#include <unordered_map>
+#include <utility>
 #include "crsetup.h"
 #include "lvcache.h"
 #include "lvtypes.h"
@@ -44,6 +47,15 @@
 
 struct LVFontGlyphCacheItem;
 
+struct LVFontGlyphCacheItemDeleter {
+    void operator()(LVFontGlyphCacheItem *item) const;
+};
+
+using LVFontGlyphCacheItemOwner =
+        std::unique_ptr<
+                LVFontGlyphCacheItem,
+                LVFontGlyphCacheItemDeleter>;
+
 class LVFontGlobalGlyphCache {
 private:
     LVFontGlyphCacheItem *head;
@@ -53,6 +65,9 @@ private:
     std::atomic<lUInt64> hit_count;
     std::atomic<lUInt64> miss_count;
     std::atomic<lUInt64> eviction_count;
+    std::unordered_map<
+            LVFontGlyphCacheItem *,
+            LVFontGlyphCacheItemOwner> owners;
 
     void removeNoLock(LVFontGlyphCacheItem *item);
 
@@ -68,9 +83,9 @@ public:
         clear();
     }
 
-    void put(LVFontGlyphCacheItem *item);
+    void put(LVFontGlyphCacheItemOwner item);
 
-    void remove(LVFontGlyphCacheItem *item);
+    void erase(LVFontGlyphCacheItem *item);
 
     void refresh(LVFontGlyphCacheItem *item);
 
@@ -98,7 +113,7 @@ public:
         clear();
     }
     LVFontGlyphCacheItem* get(lUInt32 ch);
-    void put(LVFontGlyphCacheItem *item);
+    void put(LVFontGlyphCacheItemOwner item);
     void remove(LVFontGlyphCacheItem *item);
     void clear();
 };
@@ -119,7 +134,7 @@ public:
         clear();
     }
     LVFontGlyphCacheItem* get(lUInt32 ch);
-    void put(LVFontGlyphCacheItem *item);
+    void put(LVFontGlyphCacheItemOwner item);
     void remove(LVFontGlyphCacheItem *item);
     void clear();
 };
@@ -138,9 +153,9 @@ public:
         FONT_LOCAL_GLYPH_CACHE_GUARD
         return m_storage.get(index);
     }
-    void put(LVFontGlyphCacheItem *item) {
+    void put(LVFontGlyphCacheItemOwner item) {
         FONT_LOCAL_GLYPH_CACHE_GUARD
-        m_storage.put(item);
+        m_storage.put(std::move(item));
     }
     void remove(LVFontGlyphCacheItem *item) {
         FONT_LOCAL_GLYPH_CACHE_GUARD
@@ -173,6 +188,7 @@ struct LVFontGlyphCacheItem {
     lUInt16 bmp_width;
     lUInt16 bmp_height;
     lInt16 bmp_pitch;
+    lUInt32 bmp_size;
     lInt16 origin_x;
     lInt16 origin_y;
     lUInt16 advance;
@@ -181,9 +197,14 @@ struct LVFontGlyphCacheItem {
     //=======================================================================
     int getSize() {
         return offsetof(LVFontGlyphCacheItem, bmp)
-               + (bmp_pitch * bmp_height) * sizeof(lUInt8);
+               + static_cast<int>(bmp_size);
     }
-    static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, LVFontGlyphCacheKeyType ch_or_index, int w, int h, unsigned int bmp_pitch, unsigned int bmp_sz);
-    static void freeItem(LVFontGlyphCacheItem *item);
+    static LVFontGlyphCacheItemOwner newItem(
+            LVFontLocalGlyphCache *local_cache,
+            LVFontGlyphCacheKeyType ch_or_index,
+            int w,
+            int h,
+            int bmp_pitch,
+            unsigned int bmp_sz);
 };
 #endif //__LV_FONTGLYPHCACHE_H_INCLUDED__

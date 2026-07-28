@@ -273,16 +273,22 @@ bool isHBScriptCursive( hb_script_t script ) {
 }
 #endif
 
-static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lChar32 ch, FT_GlyphSlot slot, font_antialiasing_t /*aa_mode*/) // , bool drawMonochrome
+static LVFontGlyphCacheItemOwner newItem(
+        LVFontLocalGlyphCache *local_cache,
+        lChar32 ch,
+        FT_GlyphSlot slot,
+        font_antialiasing_t /*aa_mode*/) // , bool drawMonochrome
 {
     FONT_LOCAL_GLYPH_CACHE_GUARD
     FT_Bitmap *bitmap = &slot->bitmap;
     unsigned int w = (FT_PIXEL_MODE_LCD == bitmap->pixel_mode) ? bitmap->width/3 : bitmap->width;
     unsigned int h = (FT_PIXEL_MODE_LCD_V == bitmap->pixel_mode) ? bitmap->rows/3 : bitmap->rows;
     unsigned int bmp_sz = myabs(bitmap->pitch)*bitmap->rows;
-    LVFontGlyphCacheItem *item = LVFontGlyphCacheItem::newItem(local_cache, ch, w, h, bitmap->pitch, bmp_sz);
+    LVFontGlyphCacheItemOwner item =
+            LVFontGlyphCacheItem::newItem(
+                    local_cache, ch, w, h, bitmap->pitch, bmp_sz);
     if (!item)
-        return 0;
+        return LVFontGlyphCacheItemOwner();
     item->bmp_fmt = getBmpFormat((FT_Pixel_Mode)bitmap->pixel_mode);
 #ifdef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
     // For ClearType-style LCD rendering we must swap R & B channels (for BGR format)
@@ -325,15 +331,21 @@ static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lChar32
 
 #if USE_HARFBUZZ == 1
 
-static LVFontGlyphCacheItem *newItem(LVFontLocalGlyphCache *local_cache, lUInt32 index, FT_GlyphSlot slot, font_antialiasing_t /*aa_mode*/) {
+static LVFontGlyphCacheItemOwner newItem(
+        LVFontLocalGlyphCache *local_cache,
+        lUInt32 index,
+        FT_GlyphSlot slot,
+        font_antialiasing_t /*aa_mode*/) {
     FONT_LOCAL_GLYPH_CACHE_GUARD
     FT_Bitmap *bitmap = &slot->bitmap;
     unsigned int w = (FT_PIXEL_MODE_LCD == bitmap->pixel_mode) ? bitmap->width/3 : bitmap->width;
     unsigned int h = (FT_PIXEL_MODE_LCD_V == bitmap->pixel_mode) ? bitmap->rows/3 : bitmap->rows;
     unsigned int bmp_sz = myabs(bitmap->pitch)*bitmap->rows;
-    LVFontGlyphCacheItem *item = LVFontGlyphCacheItem::newItem(local_cache, index, w, h, bitmap->pitch, bmp_sz);
+    LVFontGlyphCacheItemOwner item =
+            LVFontGlyphCacheItem::newItem(
+                    local_cache, index, w, h, bitmap->pitch, bmp_sz);
     if (!item)
-        return 0;
+        return LVFontGlyphCacheItemOwner();
     item->bmp_fmt = getBmpFormat((FT_Pixel_Mode)bitmap->pixel_mode);
 #ifdef FT_CONFIG_OPTION_SUBPIXEL_RENDERING
     // For ClearType-style LCD rendering we must swap R & B channels (for BGR format)
@@ -2363,8 +2375,10 @@ LVFontGlyphCacheItem *LVFreeTypeFace::getGlyph(lUInt32 ch, lChar32 def_char, lUI
             // Downscale fixed-size color glyph & update metrics
             downScaleColorGlyphBitmap(_slot, _scale_mul, _scale_div, false);
         }
-        item = newItem(&_glyph_cache, (lChar32)ch, _slot, _aa_mode); //, _drawMonochrome
-        if (item) {
+        LVFontGlyphCacheItemOwner candidate =
+                newItem(&_glyph_cache, (lChar32)ch, _slot, _aa_mode);
+        item = candidate.get();
+        if (candidate) {
             if (_synth_weight_strength != 0) {
                 // Assume zero advance means it's a diacritic:
                 // The width of the character above/below which
@@ -2373,7 +2387,7 @@ LVFontGlyphCacheItem *LVFreeTypeFace::getGlyph(lUInt32 ch, lChar32 def_char, lUI
                 if (item->origin_x < 0 && item->advance == 0)
                     item->origin_x -= FONT_METRIC_TO_PX(_synth_weight_strength);
             }
-            _glyph_cache.put(item);
+            _glyph_cache.put(std::move(candidate));
         }
     }
     return item;
@@ -2439,9 +2453,11 @@ LVFontGlyphCacheItem* LVFreeTypeFace::getGlyphByIndex(lUInt32 index) {
             // Downscale fixed-size color glyph & update metrics
             downScaleColorGlyphBitmap(_slot, _scale_mul, _scale_div, false);
         }
-        item = newItem(&_glyph_cache2, index, _slot, _aa_mode);
-        if (item)
-            _glyph_cache2.put(item);
+        LVFontGlyphCacheItemOwner candidate =
+                newItem(&_glyph_cache2, index, _slot, _aa_mode);
+        item = candidate.get();
+        if (candidate)
+            _glyph_cache2.put(std::move(candidate));
     }
     return item;
 }

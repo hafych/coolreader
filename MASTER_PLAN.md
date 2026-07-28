@@ -151,8 +151,9 @@ DRM или ограничений доступа, подбор/получени�
   lifecycle основного документа `LVDocView`, ODT metadata DOM и style/list
   parse-candidates, skin DOM и factory/icon/button parse-candidates, generic
   queue nodes, thread-executor monitor/thread/task ownership и font-cache
-  registered/instance entry ownership, embedded-font definition/list ownership
-  и transactional cache deserialization, а также plain-text line-queue item
+  registered/instance entry ownership, global/local glyph bitmap-item
+  candidate/owner transfer, embedded-font definition/list ownership и
+  transactional cache deserialization, а также plain-text line-queue item
   ownership и non-null parser borrow, process-wide logger ownership и
   synchronized lifecycle/dispatch, persistent DOM CacheFile ownership и
   owner-backed storage/blob borrows, encoding double-character sparse-row и
