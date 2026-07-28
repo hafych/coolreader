@@ -136,3 +136,12 @@ decoder in `std::unique_ptr` until ownership crosses into `LVStreamRef`.
 Regression coverage expands a decoded block beyond its initial reserve, seeks
 across packed-block boundaries and rejects a truncated dictionary after
 partially initialized entries have been released automatically.
+
+`SerialBuf` owns writable fixed-size and auto-growing storage through
+`std::vector`; its raw `_buf` member is only a compatibility view. The
+deserialization constructor remains explicitly borrowed, while the legacy
+`set(lUInt8 *, int)` boundary takes a malloc-allocated buffer into a scoped
+owner, copies it into container storage and releases it automatically. Shallow
+copying is disabled so the view cannot detach from its owner. Regression
+coverage exercises CRC round-tripping, autogrowth, legacy adoption, swapping
+and fixed/borrowed overflow rejection.

@@ -18,6 +18,7 @@
 #include "logredactor.h"
 #include "parsebudget.h"
 #include "rtfimp.h"
+#include "serialbuf.h"
 #include "textlang.h"
 #include "../src/lvdrawbuf/lvimagescaleddrawcallback.h"
 #include "../src/lvfont/lvfontglyphcache.h"
@@ -1125,6 +1126,63 @@ static int testParserOwnedBuffers() {
     parser.SetCharset(U"utf-8");
     if (parser.GetCharsetTable() != NULL)
         return fail("UTF-8 parser retained an obsolete charset table");
+    return 0;
+}
+
+static int testSerialBufOwnership() {
+    SerialBuf serialized(1, true);
+    serialized.putMagic("SB");
+    serialized << static_cast<lUInt32>(0x78563412);
+    serialized << lString8("payload");
+    const int payloadSize = serialized.pos();
+    serialized.putCRC(payloadSize);
+    if (serialized.error()
+            || serialized.size() <= 1
+            || serialized.pos() != payloadSize + 4)
+        return fail("SerialBuf did not grow its owned storage");
+
+    SerialBuf borrowed(serialized.buf(), serialized.pos());
+    lUInt32 number = 0;
+    lString8 text;
+    if (!borrowed.checkMagic("SB"))
+        return fail("SerialBuf rejected its serialized magic");
+    borrowed >> number >> text;
+    if (number != 0x78563412
+            || text != lString8("payload")
+            || !borrowed.checkCRC(payloadSize))
+        return fail("SerialBuf did not preserve serialized contents");
+
+    lUInt8 unchanged = 0x7c;
+    borrowed >> unchanged;
+    if (!borrowed.error() || unchanged != 0x7c)
+        return fail("borrowed SerialBuf accepted an out-of-bounds read");
+
+    SerialBuf fixed(2, false);
+    fixed << static_cast<lUInt32>(0x01020304);
+    if (!fixed.error() || fixed.pos() != 0)
+        return fail("fixed SerialBuf accepted an out-of-bounds write");
+
+    lUInt8 *legacy = static_cast<lUInt8 *>(std::malloc(3));
+    if (!legacy)
+        return fail("SerialBuf adoption fixture allocation failed");
+    legacy[0] = 0x11;
+    legacy[1] = 0x22;
+    legacy[2] = 0x33;
+    SerialBuf adopted(0, true);
+    adopted.set(legacy, 3);
+    adopted << static_cast<lUInt8>(0x44);
+    if (adopted.error()
+            || adopted.pos() != 4
+            || adopted.buf()[0] != 0x11
+            || adopted.buf()[3] != 0x44)
+        return fail("SerialBuf did not adopt and grow legacy storage");
+
+    SerialBuf swapped(0, true);
+    swapped.swap(adopted);
+    if (swapped.pos() != 4
+            || swapped.buf()[1] != 0x22
+            || adopted.pos() != 0)
+        return fail("SerialBuf swap lost its owned-storage view");
     return 0;
 }
 
@@ -2392,6 +2450,8 @@ int main() {
     if (testIniTranslatorOwnership() != 0)
         return 1;
     if (testParserOwnedBuffers() != 0)
+        return 1;
+    if (testSerialBufOwnership() != 0)
         return 1;
     if (testRtfTextBufferOwnership() != 0)
         return 1;

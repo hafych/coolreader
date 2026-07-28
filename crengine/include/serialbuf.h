@@ -25,11 +25,13 @@
 #include "lvtypes.h"
 #include "lvstring.h"
 
+#include <vector>
+
 /// serialization/deserialization buffer
 class SerialBuf
 {
+    std::vector<lUInt8> _storage;
     lUInt8 * _buf;
-    bool _ownbuf;
     bool _error;
     bool _autoresize;
     int _size;
@@ -40,18 +42,11 @@ public:
     /// constructor of serialization buffer
     SerialBuf( int sz, bool autoresize = true );
     SerialBuf( const lUInt8 * p, int sz );
-    ~SerialBuf();
-    
-    void set( lUInt8 * buf, int size )
-    {
-        if ( _buf && _ownbuf )
-            free( _buf );
-        _buf = buf;
-        _ownbuf = true;
-        _error = false;
-        _autoresize = true;
-        _size = _pos = size;
-    }
+    SerialBuf( const SerialBuf & ) = delete;
+    SerialBuf & operator=( const SerialBuf & ) = delete;
+
+    /// replace contents, taking ownership of a malloc-allocated legacy buffer
+    void set( lUInt8 * buf, int size );
     bool copyTo( lUInt8 * buf, int maxSize );
     inline lUInt8 * buf() { return _buf; }
     inline void setPos( int pos ) { _pos = pos; }

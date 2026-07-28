@@ -176,6 +176,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Shared parser read windows and charset conversion tables now use explicit
   RAII ownership; short reads near end of file expose only valid bytes instead
   of stale retained buffer capacity.
+- Serialization buffers now own writable storage through `std::vector`, retain
+  an explicit non-owning deserialization view and reject shallow copies.
+  Autogrowth, legacy buffer adoption and fixed/borrowed overflow paths have
+  native regression coverage.
 - The RTF importer now owns its text accumulator through RAII, flushes
   recoverable truncated input before teardown and emits no document callbacks
   after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership

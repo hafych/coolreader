@@ -59,6 +59,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.cpp" TCR_STREAM_SOUR
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.h" TCR_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.cpp" DEFAULT_STREAM_BUFFER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.h" DEFAULT_STREAM_BUFFER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/serialbuf.h" SERIAL_BUFFER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/serialbuf.cpp" SERIAL_BUFFER_SOURCE)
 
 function(require_source_text SOURCE_VALUE EXPECTED DESCRIPTION)
   string(FIND "${SOURCE_VALUE}" "${EXPECTED}" POSITION)
@@ -1246,6 +1248,43 @@ forbid_source_text(
   "${CACHED_STREAM_SOURCE}"
   "delete[] flags"
   "cached stream scratch cleanup must remain automatic"
+)
+
+# --- serialization buffer owning/borrowed storage ---
+require_source_text(
+  "${SERIAL_BUFFER_HEADER}"
+  "std::vector<lUInt8> _storage"
+  "serialization buffers must use RAII storage ownership"
+)
+require_source_text(
+  "${SERIAL_BUFFER_HEADER}"
+  "SerialBuf( const SerialBuf & ) = delete"
+  "serialization buffers must not shallow-copy their storage view"
+)
+require_source_text(
+  "${SERIAL_BUFFER_SOURCE}"
+  "std::unique_ptr<lUInt8, decltype(&std::free)> adopted"
+  "legacy serialization-buffer adoption must be scope-bound"
+)
+require_source_text(
+  "${SERIAL_BUFFER_SOURCE}"
+  "_storage.resize(static_cast<std::size_t>(grownSize))"
+  "serialization-buffer growth must remain container-managed"
+)
+forbid_source_text(
+  "${SERIAL_BUFFER_HEADER}"
+  "bool _ownbuf"
+  "serialization-buffer ownership must not depend on a raw-pointer flag"
+)
+forbid_source_text(
+  "${SERIAL_BUFFER_SOURCE}"
+  "cr_realloc("
+  "serialization-buffer growth must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${SERIAL_BUFFER_SOURCE}"
+  "free( _buf"
+  "serialization-buffer teardown must remain automatic"
 )
 
 # --- lvstring: string literal interning tables ---

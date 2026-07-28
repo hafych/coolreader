@@ -21,24 +21,39 @@
 
 #include "../include/serialbuf.h"
 
+#include <cstdlib>
+#include <limits>
+#include <memory>
+#include <utility>
+
 /// serialization/deserialization buffer
 
 /// constructor of serialization buffer
 SerialBuf::SerialBuf( int sz, bool autoresize )
-	: _buf( (lUInt8*)malloc(sz) ), _ownbuf(true), _error(false), _autoresize(autoresize), _size(sz), _pos(0)
+    : _storage(sz > 0 ? static_cast<std::size_t>(sz) : 0),
+      _buf(_storage.empty() ? NULL : _storage.data()),
+      _error(sz < 0), _autoresize(autoresize),
+      _size(sz > 0 ? sz : 0), _pos(0)
 {
-    memset( _buf, 0, _size );
 }
 /// constructor of deserialization buffer
 SerialBuf::SerialBuf( const lUInt8 * p, int sz )
-	: _buf( const_cast<lUInt8 *>(p) ), _ownbuf(false), _error(false), _autoresize(false), _size(sz), _pos(0)
+    : _buf(const_cast<lUInt8 *>(p)), _error(sz < 0),
+      _autoresize(false), _size(sz > 0 ? sz : 0), _pos(0)
 {
 }
 
-SerialBuf::~SerialBuf()
+void SerialBuf::set( lUInt8 * buf, int size )
 {
-    if ( _ownbuf )
-        free( _buf );
+    std::unique_ptr<lUInt8, decltype(&std::free)> adopted(buf, &std::free);
+    std::vector<lUInt8> replacement;
+    if ( size > 0 && buf )
+        replacement.assign(buf, buf + size);
+    _storage.swap(replacement);
+    _buf = _storage.empty() ? NULL : _storage.data();
+    _error = size < 0 || (size > 0 && !buf);
+    _autoresize = true;
+    _size = _pos = _error ? 0 : size;
 }
 
 bool SerialBuf::copyTo( lUInt8 * buf, int maxSize )
@@ -56,11 +71,24 @@ bool SerialBuf::check( int reserved )
 {
 	if ( _error )
 		return true;
+    if ( reserved < 0 || _pos < 0 || _pos > _size ) {
+        _error = true;
+        return true;
+    }
 	if ( space()<reserved ) {
         if ( _autoresize ) {
-            _size = (_size>16384 ? _size*2 : 16384) + reserved;
-            _buf = cr_realloc(_buf, _size );
-            memset( _buf+_pos, 0, _size-_pos );
+            const long long grownSize =
+                    (_size > 16384
+                            ? static_cast<long long>(_size) * 2
+                            : 16384)
+                    + reserved;
+            if ( grownSize > std::numeric_limits<int>::max() ) {
+                _error = true;
+                return true;
+            }
+            _storage.resize(static_cast<std::size_t>(grownSize));
+            _buf = _storage.data();
+            _size = static_cast<int>(grownSize);
             return false;
         } else {
 		    _error = true;
@@ -83,19 +111,14 @@ void SerialBuf::putMagic( const char * s )
 	}
 }
 
-#define SWAPVARS(t,a) \
-{ \
-  t tmp; \
-  tmp = a; a = v.a; v.a = tmp; \
-}
 void SerialBuf::swap( SerialBuf & v )
 {
-    SWAPVARS(lUInt8 *, _buf)
-    SWAPVARS(bool, _ownbuf)
-    SWAPVARS(bool, _error)
-    SWAPVARS(bool, _autoresize)
-    SWAPVARS(int, _size)
-    SWAPVARS(int, _pos)
+    _storage.swap(v._storage);
+    std::swap(_buf, v._buf);
+    std::swap(_error, v._error);
+    std::swap(_autoresize, v._autoresize);
+    std::swap(_size, v._size);
+    std::swap(_pos, v._pos);
 }
 
 
