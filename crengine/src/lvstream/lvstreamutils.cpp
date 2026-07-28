@@ -56,6 +56,31 @@ extern "C" {
 
 static LVAssetContainerFactory * _assetContainerFactory = NULL;
 
+namespace {
+
+class LVStreamPositionGuard
+{
+    LVStream *_stream;
+    lvpos_t _position;
+public:
+    explicit LVStreamPositionGuard(LVStream *stream)
+        : _stream(stream)
+        , _position(stream ? stream->GetPos() : LV_INVALID_SIZE)
+    {
+    }
+
+    ~LVStreamPositionGuard()
+    {
+        if (_stream && _position != LV_INVALID_SIZE)
+            _stream->Seek(_position, LVSEEK_SET, NULL);
+    }
+
+    LVStreamPositionGuard(const LVStreamPositionGuard &) = delete;
+    LVStreamPositionGuard &operator=(const LVStreamPositionGuard &) = delete;
+};
+
+} // namespace
+
 lString32 LVExtractAssetPath(lString32 fn) {
 	if (fn.length() < 2 || fn[0] != ASSET_PATH_PREFIX)
 		return lString32();
@@ -151,32 +176,34 @@ LVStreamRef LVOpenFileDescriptorStream( int fd, const lString32 & name,
 
 LVContainerRef LVOpenArchieve( LVStreamRef stream )
 {
-    LVContainerRef ref;
     if (stream.isNull())
-        return ref;
+        return LVContainerRef();
     ParseBudget budget;
     if (!budget.checkContainerDepth(stream->GetContainerDepth() + 1)) {
         CRLog::error("ParseBudget[%d:%s]: nested archive rejected",
                      static_cast<int>(budget.error()),
                      parseBudgetErrorName(budget.error()));
-        return ref;
+        return LVContainerRef();
     }
+    LVStreamPositionGuard positionGuard(stream.get());
 
 #if (USE_ZLIB==1)
     // try ZIP
-    ref = LVZipArc::OpenArchieve( stream );
-    if (!ref.isNull())
-        return ref;
+    std::unique_ptr<LVZipArc> zip =
+            LVZipArc::OpenArchieve(stream);
+    if (zip)
+        return LVContainerRef(zip.release());
 #endif
 
 #if (USE_UNRAR==1)
     // try RAR
-    ref = LVRarArc::OpenArchieve( stream );
-    if (!ref.isNull())
-        return ref;
+    std::unique_ptr<LVRarArc> rar =
+            LVRarArc::OpenArchieve(stream);
+    if (rar)
+        return LVContainerRef(rar.release());
 #endif
     // not found: return null ref
-    return ref;
+    return LVContainerRef();
 }
 
 /// Creates memory stream as copy of string contents

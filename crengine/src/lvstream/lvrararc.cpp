@@ -88,26 +88,27 @@ int LVRarArc::ReadContents()
     return m_list.length();
 }
 
-LVArcContainerBase *LVRarArc::OpenArchieve(LVStreamRef stream)
+std::unique_ptr<LVRarArc> LVRarArc::OpenArchieve(LVStreamRef stream)
 {
+    if (stream.isNull())
+        return std::unique_ptr<LVRarArc>();
     // read beginning of file
     const lvsize_t hdrSize = 4;
     char hdr[hdrSize];
-    stream->SetPos(0);
+    if (stream->SetPos(0) != 0)
+        return std::unique_ptr<LVRarArc>();
     lvsize_t bytesRead = 0;
     if (stream->Read(hdr, hdrSize, &bytesRead)!=LVERR_OK || bytesRead!=hdrSize)
-        return NULL;
-    stream->SetPos(0);
+        return std::unique_ptr<LVRarArc>();
+    if (stream->SetPos(0) != 0)
+        return std::unique_ptr<LVRarArc>();
     // detect arc type
     if (hdr[0]!='R' || hdr[1]!='a' || hdr[2]!='r' || hdr[3]!='!')
-        return NULL;
-    LVRarArc * arc = new LVRarArc( stream );
+        return std::unique_ptr<LVRarArc>();
+    std::unique_ptr<LVRarArc> arc(new LVRarArc(stream));
     int itemCount = arc->ReadContents();
     if ( itemCount <= 0 )
-    {
-        delete arc;
-        return NULL;
-    }
+        return std::unique_ptr<LVRarArc>();
     return arc;
 }
 

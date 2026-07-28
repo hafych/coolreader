@@ -28,20 +28,23 @@
 
 #include "lvarccontainerbase.h"
 
+#include <memory>
+
 class LVRarArc : public LVArcContainerBase
 {
 public:
     LVRarArc( LVStreamRef stream ) : LVArcContainerBase(stream)
     {
     }
-    virtual ~LVRarArc()
-    {
-    }
+    ~LVRarArc() override = default;
+    LVRarArc(const LVRarArc &) = delete;
+    LVRarArc &operator=(const LVRarArc &) = delete;
 
-    virtual LVStreamRef OpenStream( const lChar32 * fname, lvopen_mode_t mode );
-    virtual int ReadContents();
+    LVStreamRef OpenStream(
+            const lChar32 * fname, lvopen_mode_t mode ) override;
+    int ReadContents() override;
 
-    static LVArcContainerBase * OpenArchieve( LVStreamRef stream );
+    static std::unique_ptr<LVRarArc> OpenArchieve( LVStreamRef stream );
 };
 
 #endif  // (USE_UNRAR==1)

@@ -2193,6 +2193,72 @@ static bool verifyStreamRange(LVStreamRef stream,
     return true;
 }
 
+static int testArchiveContainerOwnership() {
+    const std::vector<unsigned char> payload =
+            {'a', 'r', 'c', 'h', 'i', 'v', 'e'};
+    std::vector<unsigned char> zipBytes =
+            buildStoredZip("entry.txt", payload);
+    LVStreamRef source = LVCreateMemoryStream(
+            zipBytes.data(), static_cast<int>(zipBytes.size()),
+            true, LVOM_READ);
+    if (!source.isNull())
+        source->SetName(U"fixture.zip");
+    if (source.isNull() || source->SetPos(7) != 7)
+        return fail("archive ownership fixture could not position its source");
+
+    LVContainerRef archive = LVOpenArchieve(source);
+    lvsize_t itemCount = 0;
+    const LVContainerItemInfo *item =
+            archive.isNull() ? NULL : archive->GetObjectInfo(0);
+    if (archive.isNull()
+            || source->GetPos() != 7
+            || archive->GetParentContainer() != NULL
+            || archive->GetSize(&itemCount) != LVERR_OK
+            || itemCount != 1
+            || archive->GetObjectCount() != 1
+            || !item || !item->GetName()
+            || lString32(item->GetName()) != lString32(U"entry.txt")
+            || item->IsContainer()
+            || item->GetSize() != payload.size()) {
+        return fail("archive candidate metadata or position rollback failed");
+    }
+
+    source.Clear();
+    LVStreamRef decoded =
+            archive->OpenStream(U"entry.txt", LVOM_READ);
+    archive.Clear();
+    if (decoded.isNull()
+            || !verifyStreamRange(
+                    decoded, payload, 0, payload.size()))
+        return fail("archive/entry did not retain its source ownership");
+    decoded.Clear();
+
+    unsigned char nonArchiveBytes[] =
+            {'N', 'O', 'T', '!', 'd', 'a', 't', 'a'};
+    LVStreamRef nonArchive = LVCreateMemoryStream(
+            nonArchiveBytes, sizeof(nonArchiveBytes), true, LVOM_READ);
+    if (nonArchive->SetPos(3) != 3
+            || !LVOpenArchieve(nonArchive).isNull()
+            || nonArchive->GetPos() != 3)
+        return fail("failed archive probe did not restore caller position");
+
+    std::vector<unsigned char> corrupt(64, 0);
+    corrupt[0] = 'P';
+    corrupt[1] = 'K';
+    corrupt[2] = 3;
+    corrupt[3] = 4;
+    LVStreamRef corruptSource = LVCreateMemoryStream(
+            corrupt.data(), static_cast<int>(corrupt.size()),
+            true, LVOM_READ);
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        if (corruptSource->SetPos(5) != 5
+                || !LVOpenArchieve(corruptSource).isNull()
+                || corruptSource->GetPos() != 5)
+            return fail("corrupt archive candidate leaked partial state");
+    }
+    return 0;
+}
+
 class FailingBufferStream : public LVStream {
 private:
     lvpos_t _pos;
@@ -3076,6 +3142,8 @@ int main() {
     if (testDefaultStreamBufferOwnership() != 0)
         return 1;
     if (testTcrStreamOwnership() != 0)
+        return 1;
+    if (testArchiveContainerOwnership() != 0)
         return 1;
     if (testStreamBufferOwnership() != 0)
         return 1;

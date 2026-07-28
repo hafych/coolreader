@@ -30,6 +30,7 @@
 #include "crlog.h"
 #include "parsebudget.h"
 
+#include <memory>
 #include <set>
 #include <string>
 
@@ -83,10 +84,6 @@ bool makeSafeZipEntryKey(const lString32 &name, ZipEntryKey &key,
 LVZipArc::LVZipArc(LVStreamRef stream) : LVArcContainerBase(stream)
 {
     SetName(stream->GetName());
-}
-
-LVZipArc::~LVZipArc()
-{
 }
 
 LVStreamRef LVZipArc::OpenStream(const char32_t *fname, lvopen_mode_t)
@@ -445,10 +442,11 @@ int LVZipArc::ReadContents() {
             return 0;
         }
 
-        LVCommonContainerItemInfo *item = new LVCommonContainerItemInfo();
+        std::unique_ptr<LVCommonContainerItemInfo> item(
+                new LVCommonContainerItemInfo());
         item->SetItemInfo(fName.c_str(), fileUnpSize, (ZipHeader.getAttr() & 0x3f));
         item->SetSrc(fileOffset, filePackSize, ZipHeader.Method);
-        m_list.add(item);
+        m_list.add(item.release());
 
         //#define DUMP_ZIP_HEADERS
 #ifdef DUMP_ZIP_HEADERS
@@ -476,20 +474,24 @@ int LVZipArc::ReadContents() {
     return m_list.length();
 }
 
-LVArcContainerBase *LVZipArc::OpenArchieve(LVStreamRef stream)
+std::unique_ptr<LVZipArc> LVZipArc::OpenArchieve(LVStreamRef stream)
 {
+    if (stream.isNull())
+        return std::unique_ptr<LVZipArc>();
     // read beginning of file
     const lvsize_t hdrSize = 4;
     char hdr[hdrSize];
-    stream->SetPos(0);
+    if (stream->SetPos(0) != 0)
+        return std::unique_ptr<LVZipArc>();
     lvsize_t bytesRead = 0;
     if (stream->Read(hdr, hdrSize, &bytesRead)!=LVERR_OK || bytesRead!=hdrSize)
-        return NULL;
-    stream->SetPos(0);
+        return std::unique_ptr<LVZipArc>();
+    if (stream->SetPos(0) != 0)
+        return std::unique_ptr<LVZipArc>();
     // detect arc type
     if (hdr[0]!='P' || hdr[1]!='K' || hdr[2]!=3 || hdr[3]!=4)
-        return NULL;
-    LVZipArc * arc = new LVZipArc( stream );
+        return std::unique_ptr<LVZipArc>();
+    std::unique_ptr<LVZipArc> arc(new LVZipArc(stream));
     int itemCount = arc->ReadContents();
     if ( itemCount > 0 && arc->isAltReadingMethod() ) {
         CRLog::warn("Zip file truncated: going on with possibly partial content.");
@@ -502,8 +504,7 @@ LVArcContainerBase *LVZipArc::OpenArchieve(LVStreamRef stream)
     if ( itemCount <= 0 )
     {
         CRLog::error("Zip file corrupted or invalid: processing failure.");
-        delete arc;
-        return NULL;
+        return std::unique_ptr<LVZipArc>();
     }
     return arc;
 }

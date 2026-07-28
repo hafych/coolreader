@@ -194,3 +194,14 @@ legacy owning `LVPtrVector` adopts it through `Add()`. Enumeration errors roll
 back the complete candidate, while failed `stat()` calls skip the affected
 entry instead of publishing uninitialized metadata. The parent pointer remains
 an explicitly non-owning compatibility view.
+
+Archive probing keeps ZIP and optional RAR container candidates in
+`unique_ptr` until `LVContainerRef` adopts a successful parse. ZIP entry
+metadata likewise remains scoped until the legacy owning item list accepts it;
+failed normal/alternative parser attempts therefore release every partial
+entry with the candidate. A position guard holds only a non-owning stream view
+anchored by the function's `LVStreamRef` and restores the caller position after
+successful and failed format probes. `LVArcContainerBase` cannot be copied, its
+`LVStreamRef` retains archive bytes for later entry creation, and each opened
+entry retains the source it needs after the container itself is released. The
+archive parent pointer remains an explicitly non-owning compatibility view.

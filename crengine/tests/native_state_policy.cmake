@@ -67,6 +67,11 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilestream.cpp" FILE_STREAM_SO
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvfilestream.h" FILE_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdirectorycontainer.cpp" DIRECTORY_CONTAINER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdirectorycontainer.h" DIRECTORY_CONTAINER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvarccontainerbase.h" ARCHIVE_CONTAINER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvziparc.cpp" ZIP_ARCHIVE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvziparc.h" ZIP_ARCHIVE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvrararc.cpp" RAR_ARCHIVE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvrararc.h" RAR_ARCHIVE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.cpp" MEMORY_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.h" MEMORY_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvstreamutils.cpp" STREAM_UTILS_SOURCE)
@@ -1706,6 +1711,93 @@ forbid_source_text(
   "${DIRECTORY_CONTAINER_SOURCE}"
   "delete dir"
   "directory factory failure must not require manual deletion"
+)
+
+# --- archive-container factory, item and stream-state ownership ---
+require_source_text(
+  "${ARCHIVE_CONTAINER_HEADER}"
+  "LVArcContainerBase(const LVArcContainerBase &) = delete"
+  "archive containers must not copy their owning stream and item list"
+)
+require_source_text(
+  "${ZIP_ARCHIVE_HEADER}"
+  "static std::unique_ptr<LVZipArc> OpenArchieve"
+  "ZIP factories must return scoped ownership"
+)
+require_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "std::unique_ptr<LVCommonContainerItemInfo> item"
+  "ZIP entry metadata must stay scoped until list adoption"
+)
+require_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "m_list.add(item.release())"
+  "ZIP entry ownership must transfer only at the owning list boundary"
+)
+require_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "std::unique_ptr<LVZipArc> arc"
+  "ZIP factory candidates must remain scope-owned during parser retry"
+)
+require_source_text(
+  "${RAR_ARCHIVE_HEADER}"
+  "static std::unique_ptr<LVRarArc> OpenArchieve"
+  "RAR factory parity must preserve scoped ownership"
+)
+require_source_text(
+  "${RAR_ARCHIVE_SOURCE}"
+  "std::unique_ptr<LVRarArc> arc"
+  "RAR factory candidates must remain scope-owned"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "class LVStreamPositionGuard"
+  "archive probing must scope caller stream-position state"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "_stream->Seek(_position, LVSEEK_SET, NULL)"
+  "archive probing must restore caller stream position"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "std::unique_ptr<LVZipArc> zip"
+  "ZIP candidates must stay scoped until the container reference boundary"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "return LVContainerRef(zip.release())"
+  "ZIP ownership must transfer only into LVContainerRef"
+)
+forbid_source_text(
+  "${ZIP_ARCHIVE_HEADER}"
+  "static LVArcContainerBase * OpenArchieve"
+  "ZIP factories must not return implicit raw ownership"
+)
+forbid_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "LVCommonContainerItemInfo *item = new"
+  "ZIP entries must not regress to implicit raw ownership"
+)
+forbid_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "LVZipArc * arc = new"
+  "ZIP factory rollback must remain automatic"
+)
+forbid_source_text(
+  "${ZIP_ARCHIVE_SOURCE}"
+  "delete arc"
+  "ZIP factory failure must not require manual deletion"
+)
+forbid_source_text(
+  "${RAR_ARCHIVE_SOURCE}"
+  "LVRarArc * arc = new"
+  "RAR factory rollback must remain automatic"
+)
+forbid_source_text(
+  "${RAR_ARCHIVE_SOURCE}"
+  "delete arc"
+  "RAR factory failure must not require manual deletion"
 )
 
 # --- lvstring: string literal interning tables ---

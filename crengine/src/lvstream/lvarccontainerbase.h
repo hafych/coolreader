@@ -28,6 +28,8 @@
 class LVArcContainerBase : public LVNamedContainer
 {
 protected:
+    // Explicitly non-owning compatibility view; archive containers currently
+    // do not publish a parent container.
     LVContainer * m_parent;
     LVStreamRef m_stream;
     unsigned m_containerDepth;
@@ -74,6 +76,8 @@ public:
         , m_containerDepth(stream.isNull() ? 1 : stream->GetContainerDepth() + 1)
     {
     }
+    LVArcContainerBase(const LVArcContainerBase &) = delete;
+    LVArcContainerBase &operator=(const LVArcContainerBase &) = delete;
     virtual ~LVArcContainerBase()
     {
         SetName(NULL);

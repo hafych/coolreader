@@ -29,6 +29,8 @@
 
 #include "lvarccontainerbase.h"
 
+#include <memory>
+
 class LVZipArc : public LVArcContainerBase
 {
 protected:
@@ -36,15 +38,18 @@ protected:
     bool m_alt_reading_method = false;
 public:
     LVZipArc( LVStreamRef stream );
-    virtual ~LVZipArc();
+    ~LVZipArc() override = default;
+    LVZipArc(const LVZipArc &) = delete;
+    LVZipArc &operator=(const LVZipArc &) = delete;
 
-    bool isAltReadingMethod() { return m_alt_reading_method; }
+    bool isAltReadingMethod() const { return m_alt_reading_method; }
     void setAltReadingMethod() { m_alt_reading_method = true; }
 
-    virtual LVStreamRef OpenStream( const char32_t * fname, lvopen_mode_t /*mode*/ );
-    virtual int ReadContents();
+    LVStreamRef OpenStream(
+            const char32_t * fname, lvopen_mode_t /*mode*/ ) override;
+    int ReadContents() override;
 
-    static LVArcContainerBase * OpenArchieve( LVStreamRef stream );
+    static std::unique_ptr<LVZipArc> OpenArchieve( LVStreamRef stream );
 };
 
 #endif  // (USE_ZLIB==1)

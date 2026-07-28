@@ -190,6 +190,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   and not-yet-adopted item metadata. Enumeration errors roll back partial
   containers, failed metadata reads are skipped safely, and scan handles are
   closed before a successfully populated container is returned.
+- ZIP and optional RAR container factories now keep parser candidates and ZIP
+  entry metadata under scoped ownership until reference/list adoption. Failed
+  normal and fallback parsing releases partial entries automatically, archive
+  probes restore the caller stream position, and opened entries retain their
+  source independently of the container.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.
