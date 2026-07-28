@@ -73,6 +73,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/pdbfmt_internal.h" PDB_FORMAT_INTERNAL_HE
 file(READ "${SOURCE_ROOT}/crengine/include/crconcurrent.h" CONCURRENCY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/crlog.h" LOG_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/crlog.cpp" LOG_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextlinequeue.h" TEXT_LINE_QUEUE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextlinequeue.cpp" TEXT_LINE_QUEUE_SOURCE)
@@ -991,6 +993,93 @@ forbid_source_text(
   "${PDB_FORMAT_SOURCE}"
   "delete container"
   "PDB factory failure must not require manual container deletion"
+)
+
+# --- process logger: scoped ownership and synchronized publication/dispatch ---
+require_source_text(
+  "${LOG_SOURCE}"
+  "std::unique_ptr<CRLog> &loggerOwner()"
+  "the process logger must have an explicit ownership boundary"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "static std::unique_ptr<CRLog> owner"
+  "the process logger owner must have function-local lifetime"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "std::recursive_mutex &loggerMutex()"
+  "logger lifecycle and dispatch must share a recursive mutex"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "static std::recursive_mutex mutex"
+  "the logger mutex must have function-local lifetime"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "if (CRLOG == logger)"
+  "publishing the active logger again must remain idempotent"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "std::unique_ptr<CRLog> replacement(logger)"
+  "logger replacement must adopt the candidate before teardown"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "owner.reset();"
+  "logger replacement must release the previous owner under the lifecycle lock"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "CRLOG = owner.get();"
+  "the legacy logger pointer must remain a borrowed owner view"
+)
+require_source_text(
+  "${LOG_SOURCE}"
+  "std::lock_guard<std::recursive_mutex> guard(loggerMutex())"
+  "logger access must remain synchronized"
+)
+require_source_text(
+  "${LOG_HEADER}"
+  "replaces logger instance, taking ownership of logger"
+  "the logger compatibility API must document ownership transfer"
+)
+require_source_text(
+  "${LOG_HEADER}"
+  "non-owning compatibility view of the scoped process logger"
+  "the legacy logger pointer must document its borrowed status"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "static int testLoggerOwnershipAndConcurrency()"
+  "logger ownership must retain native lifecycle regression coverage"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "logger dispatch was not serialized across threads"
+  "logger regression must retain concurrent dispatch coverage"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "idempotent logger publication destroyed its owner"
+  "logger regression must retain idempotent publication coverage"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "logger clear did not release exactly one owner"
+  "logger regression must retain exact teardown coverage"
+)
+forbid_source_text(
+  "${LOG_SOURCE}"
+  "delete CRLOG"
+  "the process logger must not regress to manual owner deletion"
+)
+forbid_source_text(
+  "${LOG_SOURCE}"
+  "CRLOG = logger;"
+  "logger publication must not bypass scoped ownership"
 )
 
 # --- legacy engine locks: fallback, RAII ownership and quiescent lifecycle ---

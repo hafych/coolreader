@@ -61,7 +61,7 @@ public:
     static void info( const char * msg, ... );
     static void debug( const char * msg, ... );
     static void trace( const char * msg, ... );
-    /// sets logger instance
+    /// replaces logger instance, taking ownership of logger
     static void setLogger( CRLog * logger );
     virtual ~CRLog();
 
@@ -75,6 +75,7 @@ protected:
     CRLog();
     virtual void log( const char * level, const char * msg, va_list args ) = 0;
     log_level curr_level;
+    /// non-owning compatibility view of the scoped process logger
     static CRLog * CRLOG;
 };
 

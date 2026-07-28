@@ -1,5 +1,6 @@
 #include "lvthread.h"
 #include "crconcurrent.h"
+#include "crlog.h"
 #include "crrecursionguard.h"
 #include "lvdocview.h"
 #include "lvstreamutils.h"
@@ -91,6 +92,111 @@ static int testMutexAcrossThreads() {
     worker.join();
     if (!entered.load(std::memory_order_acquire))
         return fail("LVMutex did not release the waiting thread");
+    return 0;
+}
+
+class CountingLogger : public CRLog {
+private:
+    static std::atomic<int> s_destroyed;
+    int _messages;
+
+protected:
+    void log(const char *, const char *, va_list) override
+    {
+        ++_messages;
+    }
+
+public:
+    CountingLogger()
+        : _messages(0)
+    {
+    }
+
+    ~CountingLogger() override
+    {
+        s_destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    int messages() const
+    {
+        return _messages;
+    }
+
+    void resetMessages()
+    {
+        _messages = 0;
+    }
+
+    static int destroyed()
+    {
+        return s_destroyed.load(std::memory_order_relaxed);
+    }
+
+    static void resetDestroyed()
+    {
+        s_destroyed.store(0, std::memory_order_relaxed);
+    }
+};
+
+std::atomic<int> CountingLogger::s_destroyed(0);
+
+static int testLoggerOwnershipAndConcurrency()
+{
+    CRLog::setLogger(NULL);
+    CountingLogger::resetDestroyed();
+
+    CountingLogger *first = new CountingLogger();
+    CRLog::setLogger(first);
+    CRLog::setLogLevel(CRLog::LL_TRACE);
+    first->resetMessages();
+
+    static const int workerCount = 6;
+    static const int iterations = 1000;
+    std::atomic<int> ready(0);
+    std::atomic<bool> start(false);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0; workerIndex < workerCount; ++workerIndex) {
+        workers.emplace_back([&ready, &start]() {
+            ready.fetch_add(1, std::memory_order_release);
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            for (int iteration = 0; iteration < iterations; ++iteration)
+                CRLog::debug("logger message %d", iteration);
+        });
+    }
+    while (ready.load(std::memory_order_acquire) < workerCount)
+        std::this_thread::yield();
+    start.store(true, std::memory_order_release);
+    for (std::thread &worker : workers)
+        worker.join();
+    if (first->messages() != workerCount * iterations) {
+        CRLog::setLogger(NULL);
+        return fail("logger dispatch was not serialized across threads");
+    }
+
+    CRLog::setLogger(first);
+    if (CountingLogger::destroyed() != 0) {
+        CRLog::setLogger(NULL);
+        return fail("idempotent logger publication destroyed its owner");
+    }
+
+    CountingLogger *second = new CountingLogger();
+    CRLog::setLogger(second);
+    if (CountingLogger::destroyed() != 1) {
+        CRLog::setLogger(NULL);
+        return fail("logger replacement did not release its previous owner");
+    }
+    CRLog::info("replacement logger");
+    if (second->messages() != 1) {
+        CRLog::setLogger(NULL);
+        return fail("logger replacement did not publish its new owner");
+    }
+
+    CRLog::setLogger(NULL);
+    CRLog::setLogger(NULL);
+    if (CountingLogger::destroyed() != 2)
+        return fail("logger clear did not release exactly one owner");
     return 0;
 }
 
@@ -782,6 +888,8 @@ int main() {
     if (testThreadCompletion() != 0)
         return 1;
     if (testMutexAcrossThreads() != 0)
+        return 1;
+    if (testLoggerOwnershipAndConcurrency() != 0)
         return 1;
     if (testQueueOwnership() != 0)
         return 1;

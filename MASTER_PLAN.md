@@ -151,7 +151,8 @@ DRM или ограничений доступа, подбор/получени�
   queue nodes, thread-executor monitor/thread/task ownership и font-cache
   registered/instance entry ownership, embedded-font definition/list ownership
   и transactional cache deserialization, а также plain-text line-queue item
-  ownership и non-null parser borrow. Остальные участки мигрируются отдельными
+  ownership и non-null parser borrow, process-wide logger ownership и
+  synchronized lifecycle/dispatch. Остальные участки мигрируются отдельными
   bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

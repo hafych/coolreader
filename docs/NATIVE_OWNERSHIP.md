@@ -541,3 +541,15 @@ erasure destroys removed owners automatically and preserves the file-relative
 index of retained lines. The native regression checks append/removal/index
 invariants directly and parses a 2400-line document across repeated queue
 batches.
+
+The process-wide `CRLog` instance is owned by a function-local `unique_ptr`;
+the legacy static pointer is only a borrowed compatibility view. Logger
+replacement adopts its candidate before releasing the previous owner, treats
+publication of the active pointer as an idempotent operation, and clears the
+borrowed view from the base destructor. Lifecycle, level access and message
+dispatch share a function-local recursive mutex. Recursion is required because
+the file logger emits its final message from its destructor while replacement
+still holds the lifecycle lock; function-local initialization order also keeps
+that mutex alive through owner teardown at process exit. The thread regression
+serializes six concurrent writers and verifies exact destruction counts for
+same-pointer publication, replacement and repeated clear.

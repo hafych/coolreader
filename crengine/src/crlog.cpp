@@ -33,6 +33,10 @@
 #include <time.h>
 #include <stdio.h>
 
+#include <memory>
+#include <mutex>
+#include <utility>
+
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
 extern "C" {
 #include <windows.h>
@@ -41,17 +45,36 @@ extern "C" {
 
 class CRFileLogger;
 
+namespace {
+std::recursive_mutex &loggerMutex()
+{
+    static std::recursive_mutex mutex;
+    return mutex;
+}
+
+std::unique_ptr<CRLog> &loggerOwner()
+{
+    static std::unique_ptr<CRLog> owner;
+    return owner;
+}
+}
+
 CRLog * CRLog::CRLOG = NULL;
 void CRLog::setLogger( CRLog * logger )
 {
-	if ( CRLOG!=NULL ) {
-		delete CRLOG;
-	}
-	CRLOG = logger;
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
+    if (CRLOG == logger)
+        return;
+    std::unique_ptr<CRLog> replacement(logger);
+    std::unique_ptr<CRLog> &owner = loggerOwner();
+    owner.reset();
+    owner = std::move(replacement);
+    CRLOG = owner.get();
 }
 
 void CRLog::setLogLevel( CRLog::log_level level )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG )
 		return;
 	warn( "Changing log level from %d to %d", (int)CRLOG->curr_level, (int)level );
@@ -60,6 +83,7 @@ void CRLog::setLogLevel( CRLog::log_level level )
 
 CRLog::log_level CRLog::getLogLevel()
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG )
 		return LL_INFO;
 	return CRLOG->curr_level;
@@ -67,6 +91,7 @@ CRLog::log_level CRLog::getLogLevel()
 
 bool CRLog::isLogLevelEnabled( CRLog::log_level level )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG )
 		return false;
 	return (CRLOG->curr_level >= level);
@@ -74,6 +99,7 @@ bool CRLog::isLogLevelEnabled( CRLog::log_level level )
 
 void CRLog::fatal( const char * msg, ... )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG )
 		return;
 	va_list args;
@@ -84,6 +110,7 @@ void CRLog::fatal( const char * msg, ... )
 
 void CRLog::error( const char * msg, ... )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG || CRLOG->curr_level<LL_ERROR )
 		return;
 	va_list args;
@@ -94,6 +121,7 @@ void CRLog::error( const char * msg, ... )
 
 void CRLog::warn( const char * msg, ... )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG || CRLOG->curr_level<LL_WARN )
 		return;
 	va_list args;
@@ -104,6 +132,7 @@ void CRLog::warn( const char * msg, ... )
 
 void CRLog::info( const char * msg, ... )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG || CRLOG->curr_level<LL_INFO )
 		return;
 	va_list args;
@@ -114,6 +143,7 @@ void CRLog::info( const char * msg, ... )
 
 void CRLog::debug( const char * msg, ... )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG || CRLOG->curr_level<LL_DEBUG )
 		return;
 	va_list args;
@@ -124,6 +154,7 @@ void CRLog::debug( const char * msg, ... )
 
 void CRLog::trace( const char * msg, ... )
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
 	if ( !CRLOG || CRLOG->curr_level<LL_TRACE )
 		return;
 	va_list args;
@@ -139,6 +170,9 @@ CRLog::CRLog()
 
 CRLog::~CRLog()
 {
+    std::lock_guard<std::recursive_mutex> guard(loggerMutex());
+    if (CRLOG == this)
+        CRLOG = NULL;
 }
 
 
