@@ -488,3 +488,13 @@ paragraph and list property pointers remain short-lived views bounded by their
 active style element. The in-memory ODT regression verifies metadata, language,
 paragraph/list style publication, cleanup after a depth-rejected style document
 with a valid prefix, and a successful repeated import in the same view.
+
+Skin loaders adopt each parsed XML document immediately into a `unique_ptr` and
+move it into the skin only after parsing succeeds. Simple/container skin
+factories and skin-list items remain scope-owned until their legacy intrusive or
+owning-list publication boundary accepts them. Background-icon and toolbar-
+button candidates enter intrusive refs before any property lookup, so both the
+successful item and the sentinel candidate that ends each list have automatic
+teardown. Regression coverage verifies parsed menu/icon/button publication,
+depth-rejected DOM cleanup, a clean repeated load after rejection, and the
+directory plus skin-list factory boundaries.

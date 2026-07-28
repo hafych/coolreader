@@ -34,7 +34,9 @@
 #include "../include/lvdrawstatesaver.h"
 #include "../include/lvstreamutils.h"
 
+#include <memory>
 #include <mutex>
+#include <utility>
 
 // uncomment to trace skin XML access errors / not found elements
 //#define TRACE_SKIN_ERRORS
@@ -275,7 +277,7 @@ class CRSkinImpl : public CRSkinContainer
 {
 protected:
     LVContainerRef _container;
-    LVAutoPtr<ldomDocument> _doc;
+    std::unique_ptr<ldomDocument> _doc;
     LVCacheMap<lString32,LVImageSourceRef> _imageCache;
     LVCacheMap<lString32,CRRectSkinRef> _rectCache;
     LVCacheMap<lString32,CRScrollSkinRef> _scrollCache;
@@ -504,12 +506,12 @@ bool CRSkinImpl::open( LVContainerRef container )
         CRLog::error("cannot open skin: cr3skin.xml not found");
         return false;
     }
-    ldomDocument * doc = LVParseXMLStream( stream );
+    std::unique_ptr<ldomDocument> doc(LVParseXMLStream(stream));
     if ( !doc ) {
         CRLog::error("cannot open skin: error while parsing cr3skin.xml");
         return false;
     }
-    _doc = doc;
+    _doc = std::move(doc);
     _container = container;
     return true;
 }
@@ -517,12 +519,12 @@ bool CRSkinImpl::open( LVContainerRef container )
 bool CRSkinImpl::open( lString8 simpleXml )
 {
     LVStreamRef stream = LVCreateStringStream( simpleXml );
-    ldomDocument * doc = LVParseXMLStream( stream );
+    std::unique_ptr<ldomDocument> doc(LVParseXMLStream(stream));
     if ( !doc ) {
         CRLog::error("cannot open skin: error while parsing skin xml");
         return false;
     }
-    _doc = doc;
+    _doc = std::move(doc);
     return true;
 }
 
@@ -777,13 +779,11 @@ CRIconListRef CRSkinContainer::readIcons( const lChar32 * path, bool * r )
     CRIconListRef list = CRIconListRef(new CRIconList() );
     for ( int i=1; i<16; i++ ) {
         lString32 p = lString32(path) << "[" << fmt::decimal(i) << "]";
-        CRIconSkin * icon = new CRIconSkin();
-        if ( readIconSkin(p.c_str(), icon ) )
-            list->add( CRIconSkinRef(icon) );
-        else {
-            delete icon;
+        CRIconSkinRef icon(new CRIconSkin());
+        if ( readIconSkin(p.c_str(), icon.get()) )
+            list->add(icon);
+        else
             break;
-        }
     }
     if ( list->length()==0 ) {
 #ifdef TRACE_SKIN_ERRORS
@@ -800,12 +800,11 @@ CRIconListRef CRSkinContainer::readIcons( const lChar32 * path, bool * r )
 /// open simple skin, without image files, from string
 CRSkinRef LVOpenSimpleSkin( const lString8 & xml )
 {
-    CRSkinImpl * skin = new CRSkinImpl();
-    CRSkinRef res( skin );
+    std::unique_ptr<CRSkinImpl> skin(new CRSkinImpl());
     if ( !skin->open( xml ) )
         return CRSkinRef();
     //CRLog::trace("skin xml opened ok");
-    return res;
+    return CRSkinRef(skin.release());
 }
 
 /// opens skin from directory or .zip file
@@ -824,12 +823,11 @@ CRSkinRef LVOpenSkin( const lString32 & pathname )
             return CRSkinRef();
         }
     }
-    CRSkinImpl * skin = new CRSkinImpl();
-    CRSkinRef res( skin );
+    std::unique_ptr<CRSkinImpl> skin(new CRSkinImpl());
     if ( !skin->open( container ) )
         return CRSkinRef();
     CRLog::trace("skin container %s opened ok", LCSTR(pathname) );
-    return res;
+    return CRSkinRef(skin.release());
 }
 
 // default parameters
@@ -1884,13 +1882,11 @@ CRButtonListRef CRSkinContainer::readButtons( const lChar32 * path, bool * res )
     CRButtonListRef list = CRButtonListRef(new CRButtonList() );
     for ( int i=1; i<64; i++ ) {
         lString32 p = lString32(path) << "[" << fmt::decimal(i) << "]";
-        CRButtonSkin * button = new CRButtonSkin();
-        if ( readButtonSkin(p.c_str(), button ) )
-            list->add( LVRef<CRButtonSkin>(button) );
-        else {
-            delete button;
+        LVRef<CRButtonSkin> button(new CRButtonSkin());
+        if ( readButtonSkin(p.c_str(), button.get()) )
+            list->add(button);
+        else
             break;
-        }
     }
     if ( list->length()==0 ) {
 #ifdef TRACE_SKIN_ERRORS
@@ -2083,11 +2079,11 @@ CRSkinListItem * CRSkinListItem::init( lString32 baseDir, lString32 fileName )
     CRSkinRef skin = LVOpenSkin( baseDir + fileName );
     if ( skin.isNull() )
         return NULL;
-    CRSkinListItem * item = new CRSkinListItem();
+    std::unique_ptr<CRSkinListItem> item(new CRSkinListItem());
     item->_baseDir = baseDir;
     item->_fileName = fileName;
     //item->_name = skin->get
-    return item;
+    return item.release();
 }
 
 CRSkinRef CRSkinListItem::getSkin()

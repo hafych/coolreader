@@ -4283,3 +4283,95 @@ forbid_source_text(
   "odtImportContext *"
   "ODT parse handlers must not use nullable context pointers"
 )
+
+# --- Skin DOM and factory/icon/button parse candidates ---
+require_source_text(
+  "${SKIN_SOURCE}"
+  "std::unique_ptr<ldomDocument> _doc"
+  "skin XML documents must remain scope-owned"
+)
+require_source_text(
+  "${SKIN_SOURCE}"
+  "std::unique_ptr<ldomDocument> doc(LVParseXMLStream(stream))"
+  "skin XML parse results must enter their owner immediately"
+)
+require_source_text(
+  "${SKIN_SOURCE}"
+  "CRIconSkinRef icon(new CRIconSkin())"
+  "skin icon candidates must remain in their intrusive owner"
+)
+require_source_text(
+  "${SKIN_SOURCE}"
+  "LVRef<CRButtonSkin> button(new CRButtonSkin())"
+  "skin button candidates must remain in their intrusive owner"
+)
+require_source_text(
+  "${SKIN_SOURCE}"
+  "std::unique_ptr<CRSkinImpl> skin(new CRSkinImpl())"
+  "skin factory candidates must remain scope-owned until publication"
+)
+require_source_text(
+  "${SKIN_SOURCE}"
+  "return CRSkinRef(skin.release())"
+  "skin factories must publish only successfully opened candidates"
+)
+require_source_text(
+  "${SKIN_SOURCE}"
+  "std::unique_ptr<CRSkinListItem> item(new CRSkinListItem())"
+  "skin-list candidates must remain scope-owned until legacy publication"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testSkinOwnership()"
+  "skin ownership must retain end-to-end native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "skin DOM survived a rejected parse"
+  "skin ownership regression must retain failed-DOM cleanup coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "rejected skin parse retained shared ownership state"
+  "skin ownership regression must retain repeated-load coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "skin container/list owners did not publish valid state"
+  "skin ownership regression must retain directory/list factory coverage"
+)
+forbid_source_text(
+  "${SKIN_SOURCE}"
+  "LVAutoPtr<ldomDocument> _doc"
+  "skin XML ownership must not regress to the legacy auto pointer"
+)
+forbid_source_text(
+  "${SKIN_SOURCE}"
+  "ldomDocument * doc = LVParseXMLStream"
+  "skin XML parsing must not expose a raw owning document"
+)
+forbid_source_text(
+  "${SKIN_SOURCE}"
+  "CRIconSkin * icon = new CRIconSkin()"
+  "skin icon candidates must not use manual cleanup"
+)
+forbid_source_text(
+  "${SKIN_SOURCE}"
+  "CRButtonSkin * button = new CRButtonSkin()"
+  "skin button candidates must not use manual cleanup"
+)
+forbid_source_text(
+  "${SKIN_SOURCE}"
+  "CRSkinImpl * skin = new CRSkinImpl()"
+  "skin factory candidates must not use raw ownership"
+)
+forbid_source_text(
+  "${SKIN_SOURCE}"
+  "delete icon"
+  "skin icon candidate teardown must remain automatic"
+)
+forbid_source_text(
+  "${SKIN_SOURCE}"
+  "delete button"
+  "skin button candidate teardown must remain automatic"
+)

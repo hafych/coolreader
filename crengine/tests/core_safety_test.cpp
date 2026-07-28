@@ -994,6 +994,133 @@ static int testBoundedObservableDecodedImageCache() {
     return 0;
 }
 
+static int testSkinOwnership() {
+    const std::string validXml =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<CR3Skin>"
+            "<menu id=\"owned-menu\" min-item-count=\"2\""
+            " max-item-count=\"4\" show-shortcuts=\"true\">"
+            "<background color=\"#112233\"/>"
+            "<item><background color=\"#445566\"/></item>"
+            "</menu>"
+            "<toolbar id=\"owned-toolbar\">"
+            "<background color=\"#010203\"/>"
+            "<button><background color=\"#778899\"/></button>"
+            "<button><background color=\"#aabbcc\"/></button>"
+            "</toolbar>"
+            "</CR3Skin>";
+    CRSkinRef skin = LVOpenSimpleSkin(lString8(validXml.c_str()));
+    if (skin.isNull())
+        return fail("skin ownership fixture did not open");
+
+    CRMenuSkinRef menu = skin->getMenuSkin(U"#owned-menu");
+    CRToolBarSkinRef toolbar =
+            skin->getToolBarSkin(U"#owned-toolbar");
+    CRButtonListRef buttons =
+            toolbar.isNull() ? CRButtonListRef() : toolbar->getButtons();
+    if (menu.isNull()
+            || menu->getMinItemCount() != 2
+            || menu->getMaxItemCount() != 4
+            || !menu->getShowShortcuts()
+            || menu->getBackgroundColor() != 0x112233
+            || menu->getItemSkin().isNull()
+            || menu->getItemSkin()->getBackgroundColor() != 0x445566
+            || buttons.isNull()
+            || buttons->length() != 2
+            || buttons->get(0).isNull()
+            || buttons->get(0)->getBackgroundColor() != 0x778899
+            || buttons->get(1).isNull()
+            || buttons->get(1)->getBackgroundColor() != 0xaabbcc)
+        return fail("skin intrusive owners did not publish parsed candidates");
+
+    std::string rejectedXml =
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<CR3Skin><menu id=\"rejected\">"
+            "<background color=\"#abcdef\"/></menu>";
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        rejectedXml += "<node>";
+    for (unsigned i = 0;
+            i <= ParseBudgetLimits::defaults().maxXmlDepth; ++i)
+        rejectedXml += "</node>";
+    rejectedXml += "</CR3Skin>";
+    if (!LVOpenSimpleSkin(lString8(rejectedXml.c_str())).isNull())
+        return fail("skin DOM survived a rejected parse");
+
+    CRSkinRef repeated =
+            LVOpenSimpleSkin(lString8(validXml.c_str()));
+    CRToolBarSkinRef repeatedToolbar = repeated.isNull()
+            ? CRToolBarSkinRef()
+            : repeated->getToolBarSkin(U"#owned-toolbar");
+    CRButtonListRef repeatedButtons = repeatedToolbar.isNull()
+            ? CRButtonListRef()
+            : repeatedToolbar->getButtons();
+    if (repeated.isNull()
+            || repeatedToolbar.isNull()
+            || repeatedButtons.isNull()
+            || repeatedButtons->length() != 2)
+        return fail("rejected skin parse retained shared ownership state");
+
+    char rootTemplate[] = "/tmp/coolreader-skin-test-XXXXXX";
+    char *root = mkdtemp(rootTemplate);
+    if (!root)
+        return fail("skin container fixture could not create its root");
+    const std::string rootPath(root);
+    const std::string skinPath = rootPath + "/owned-skin";
+    const std::string xmlPath = skinPath + "/cr3skin.xml";
+    auto cleanup = [&]() {
+        unlink(xmlPath.c_str());
+        rmdir(skinPath.c_str());
+        rmdir(rootPath.c_str());
+    };
+    if (mkdir(skinPath.c_str(), 0700) != 0) {
+        cleanup();
+        return fail("skin container fixture could not create its directory");
+    }
+    int xmlFd = open(xmlPath.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (xmlFd < 0
+            || write(xmlFd, validXml.data(), validXml.size())
+                    != static_cast<ssize_t>(validXml.size())) {
+        if (xmlFd >= 0)
+            close(xmlFd);
+        cleanup();
+        return fail("skin container fixture XML setup failed");
+    }
+    close(xmlFd);
+
+    const lString32 baseDir = Utf8ToUnicode(
+            lString8((rootPath + "/").c_str()));
+    const lString32 skinName(U"owned-skin");
+    const char *containerError = NULL;
+    {
+        CRSkinRef containerSkin = LVOpenSkin(
+                Utf8ToUnicode(lString8(skinPath.c_str())));
+        std::unique_ptr<CRSkinListItem> listItem(
+                CRSkinListItem::init(baseDir, skinName));
+        CRSkinRef listedSkin = listItem
+                ? listItem->getSkin()
+                : CRSkinRef();
+        CRToolBarSkinRef listedToolbar = listedSkin.isNull()
+                ? CRToolBarSkinRef()
+                : listedSkin->getToolBarSkin(U"#owned-toolbar");
+        CRButtonListRef listedButtons = listedToolbar.isNull()
+                ? CRButtonListRef()
+                : listedToolbar->getButtons();
+        if (containerSkin.isNull()
+                || listItem.get() == NULL
+                || listedSkin.isNull()
+                || listedToolbar.isNull()
+                || listedButtons.isNull()
+                || listedButtons->length() != 2)
+            containerError =
+                    "skin container/list owners did not publish valid state";
+    }
+    cleanup();
+    if (containerError)
+        return fail(containerError);
+    return 0;
+}
+
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
 static int testBoundedObservablePageImageCache() {
     LVDocViewImageCache cache;
@@ -5924,6 +6051,8 @@ int main() {
     if (testBoundedObservableGlyphCache() != 0)
         return 1;
     if (testBoundedObservableDecodedImageCache() != 0)
+        return 1;
+    if (testSkinOwnership() != 0)
         return 1;
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
     if (testBoundedObservablePageImageCache() != 0)
