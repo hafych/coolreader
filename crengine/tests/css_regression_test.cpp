@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <memory>
+#include <string>
 
 static int fail(const char *message)
 {
@@ -48,6 +49,86 @@ static int testDeclarationUnitsAndPageBreaks()
             || style.page_break_after != css_pb_page
             || style.page_break_inside != css_pb_avoid)
         return fail("CSS page-break aliases changed during parsing");
+    return 0;
+}
+
+static int testStylesheetOwnershipAndRollback()
+{
+    LVCssDeclaration declaration;
+    const char *valid =
+            "{ color: #112233; font-size: 18px; }";
+    if (!declaration.parse(valid, 20200824))
+        return fail("CSS ownership declaration did not parse");
+    const lUInt32 validHash = declaration.getHash();
+    css_style_rec_t validStyle;
+    declaration.apply(&validStyle);
+    if (validHash == 0
+            || validStyle.color.type != css_val_color
+            || validStyle.color.value != 0x112233)
+        return fail("CSS ownership declaration changed values");
+
+    const char *truncated =
+            "{ color: #445566; font-size: 24px;";
+    if (declaration.parse(truncated, 20200824)
+            || declaration.getHash() != validHash)
+        return fail("truncated CSS declaration replaced committed data");
+    css_style_rec_t rollbackStyle;
+    declaration.apply(&rollbackStyle);
+    if (rollbackStyle.color.type != css_val_color
+            || rollbackStyle.color.value != 0x112233)
+        return fail("truncated CSS declaration changed applied data");
+
+    const char *empty = "{ }";
+    if (!declaration.parse(empty, 20200824)
+            || !declaration.empty()
+            || declaration.getHash() != 0)
+        return fail("empty CSS declaration did not release old data");
+
+    ldomDocument document;
+    LVStyleSheet stylesheet(&document);
+    if (!stylesheet.parse(
+                ".base, p > span:first-child "
+                "{ color: #123456; }"))
+        return fail("CSS ownership stylesheet did not parse");
+    const lUInt32 baseHash = stylesheet.getHash();
+    LVStyleSheet copied(stylesheet);
+    if (baseHash == 0 || copied.getHash() != baseHash)
+        return fail("CSS selector deep copy changed its hash");
+    stylesheet.push();
+    if (!stylesheet.parse(
+                ".extra { font-weight: bold; }")
+            || stylesheet.getHash() == baseHash)
+        return fail("CSS snapshot mutation did not publish");
+    if (!stylesheet.pop()
+            || stylesheet.getHash() != baseHash
+            || stylesheet.pop())
+        return fail("CSS snapshot restore changed selector ownership");
+    stylesheet.clear();
+    if (stylesheet.getHash() != 0
+            || copied.getHash() != baseHash)
+        return fail("CSS copy shared selector-chain ownership");
+
+    std::string longCss;
+    const int selectorCount = 4096;
+    longCss.reserve(
+            static_cast<size_t>(selectorCount) * 3 + 32);
+    for (int i = 0; i < selectorCount; ++i) {
+        if (i)
+            longCss += ',';
+        longCss += ".x";
+    }
+    longCss += "{ display: block; }";
+    LVStyleSheet longSheet(&document);
+    if (!longSheet.parse(longCss.c_str()))
+        return fail("long CSS selector chain did not parse");
+    const lUInt32 longHash = longSheet.getHash();
+    LVStyleSheet longCopy(longSheet);
+    longSheet.push();
+    if (!longSheet.pop()
+            || longHash == 0
+            || longSheet.getHash() != longHash
+            || longCopy.getHash() != longHash)
+        return fail("long CSS selector chain did not copy or restore");
     return 0;
 }
 
@@ -137,6 +218,9 @@ static int testCascadeSpecificityAndInheritance()
 int main()
 {
     int result = testDeclarationUnitsAndPageBreaks();
+    if (result != 0)
+        return result;
+    result = testStylesheetOwnershipAndRollback();
     if (result != 0)
         return result;
 

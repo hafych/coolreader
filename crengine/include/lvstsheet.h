@@ -42,6 +42,9 @@
 #include "lvstyles.h"
 #include "textlang.h"
 
+#include <memory>
+#include <vector>
+
 class lxmlDocBase;
 struct ldomNode;
 
@@ -71,14 +74,13 @@ struct ldomNode;
 */
 class LVCssDeclaration {
 private:
-    int * _data;
+    std::vector<int> _data;
 public:
     void apply( css_style_rec_t * style );
-    bool empty() { return _data==NULL; }
+    bool empty() const { return _data.empty(); }
     bool parse( const char * & decl, lUInt32 domVersionRequested, bool higher_importance=false, lxmlDocBase * doc=NULL, lString32 codeBase=lString32::empty_str );
     lUInt32 getHash();
-    LVCssDeclaration() : _data(NULL) { }
-    ~LVCssDeclaration() { if (_data) delete[] _data; }
+    LVCssDeclaration() = default;
 };
 
 typedef LVRef<LVCssDeclaration> LVCssDeclRef;
@@ -114,18 +116,23 @@ class LVCssSelectorRule
     LVCssSelectorRuleType _type;
     lUInt16 _id;
     lUInt16 _attrid;
-    LVCssSelectorRule * _next;
+    std::unique_ptr<LVCssSelectorRule> _next;
     lString32 _value;
 public:
     LVCssSelectorRule(LVCssSelectorRuleType type)
-    : _type(type), _id(0), _attrid(0), _next(NULL)
+    : _type(type), _id(0), _attrid(0), _next()
     { }
-    LVCssSelectorRule( LVCssSelectorRule & v );
+    LVCssSelectorRule( const LVCssSelectorRule &v );
     void setId( lUInt16 id ) { _id = id; }
     void setAttr( lUInt16 id, lString32 value ) { _attrid = id; _value = value; }
-    LVCssSelectorRule * getNext() { return _next; }
-    void setNext(LVCssSelectorRule * next) { _next = next; }
-    ~LVCssSelectorRule() { if (_next) delete _next; }
+    LVCssSelectorRule * getNext() const { return _next.get(); }
+    void setNext(std::unique_ptr<LVCssSelectorRule> next) {
+        _next = std::move(next);
+    }
+    std::unique_ptr<LVCssSelectorRule> takeNext() {
+        return std::move(_next);
+    }
+    ~LVCssSelectorRule();
     /// check condition for node
     bool check( const ldomNode * & node );
     /// check next rules for node
@@ -152,15 +159,21 @@ private:
     LVCssDeclRef _decl;
     int _specificity;
     int _pseudo_elem; // from enum LVCssSelectorPseudoElement, or 0
-    LVCssSelector * _next;
-    LVCssSelectorRule * _rules;
-    void insertRuleStart( LVCssSelectorRule * rule );
-    void insertRuleAfterStart( LVCssSelectorRule * rule );
+    std::unique_ptr<LVCssSelector> _next;
+    std::unique_ptr<LVCssSelectorRule> _rules;
+    void insertRuleStart(
+            std::unique_ptr<LVCssSelectorRule> rule );
+    void insertRuleAfterStart(
+            std::unique_ptr<LVCssSelectorRule> rule );
 public:
-    LVCssSelector( LVCssSelector & v );
-    LVCssSelector() : _id(0), _specificity(0), _pseudo_elem(0),  _next(NULL), _rules(NULL) { }
-    LVCssSelector(int specificity) : _id(0), _specificity(specificity), _pseudo_elem(0), _next(NULL), _rules(NULL) { }
-    ~LVCssSelector() { if (_next) delete _next; if (_rules) delete _rules; }
+    LVCssSelector( const LVCssSelector &v );
+    LVCssSelector()
+        : _id(0), _specificity(0), _pseudo_elem(0),
+          _next(), _rules() { }
+    LVCssSelector(int specificity)
+        : _id(0), _specificity(specificity), _pseudo_elem(0),
+          _next(), _rules() { }
+    ~LVCssSelector();
     bool parse( const char * &str, lxmlDocBase * doc );
     lUInt16 getElementNameId() { return _id; }
     bool check( const ldomNode * node ) const;
@@ -181,8 +194,13 @@ public:
     }
     void setDeclaration( LVCssDeclRef decl ) { _decl = decl; }
     int getSpecificity() { return _specificity; }
-    LVCssSelector * getNext() { return _next; }
-    void setNext(LVCssSelector * next) { _next = next; }
+    LVCssSelector * getNext() const { return _next.get(); }
+    void setNext(std::unique_ptr<LVCssSelector> next) {
+        _next = std::move(next);
+    }
+    std::unique_ptr<LVCssSelector> takeNext() {
+        return std::move(_next);
+    }
     lUInt32 getHash();
 };
 
@@ -197,59 +215,33 @@ public:
     \sa LVCssDeclaration
 */
 class LVStyleSheet {
+    typedef std::unique_ptr<LVCssSelector> SelectorOwner;
+    typedef std::vector<SelectorOwner> SelectorList;
+    struct Snapshot {
+        int selectorCount;
+        SelectorList selectors;
+    };
+
     lxmlDocBase * _doc;
 
     int _selector_count;
-    LVArray <int> _selector_count_stack;
     lString8 _charset;
 
-    LVPtrVector <LVCssSelector> _selectors;
-    LVPtrVector <LVPtrVector <LVCssSelector> > _stack;
-    LVPtrVector <LVCssSelector> * dup()
-    {
-        LVPtrVector <LVCssSelector> * res = new LVPtrVector <LVCssSelector>();
-        res->reserve( _selectors.length() );
-        for ( int i=0; i<_selectors.length(); i++ ) {
-            LVCssSelector * selector = _selectors[i];
-            if ( selector )
-                res->add( new LVCssSelector(*selector) );
-            else
-                res->add(NULL);
-        }
-        return res;
-    }
-
-    void set(LVPtrVector<LVCssSelector> & v );
+    SelectorList _selectors;
+    std::vector<Snapshot> _stack;
+    SelectorList dup() const;
+    void set(const SelectorList &selectors);
 public:
 
 
     // save current state of stylesheet
-    void push()
-    {
-        _selector_count_stack.add( _selector_count );
-        _stack.add( dup() );
-    }
+    void push();
     // restore previously saved state
-    bool pop()
-    {
-        // Restore original counter (so we don't overflow the 19 bits
-        // of _specificity reserved for storing selector order, so up
-        // to 524288, when we meet a book with 600 DocFragments each
-        // including a 1000 selectors stylesheet).
-        if ( !_selector_count_stack.empty() )
-            _selector_count = _selector_count_stack.remove( _selector_count_stack.length()-1 );
-        LVPtrVector <LVCssSelector> * v = _stack.pop();
-        if ( !v )
-            return false;
-        set( *v );
-        delete v;
-        return true;
-    }
+    bool pop();
 
     /// remove all rules from stylesheet
     void clear() {
         _selector_count = 0;
-        _selector_count_stack.clear();
         _selectors.clear();
         _stack.clear();
     }
@@ -258,7 +250,7 @@ public:
     /// constructor
     LVStyleSheet( lxmlDocBase * doc = NULL ) : _doc(doc), _selector_count(0) { }
     /// copy constructor
-    LVStyleSheet( LVStyleSheet & sheet );
+    LVStyleSheet( const LVStyleSheet &sheet );
     /// parse stylesheet, compile and add found rules to sheet
     bool parse( const char * str, bool higher_importance=false, lString32 codeBase=lString32::empty_str );
     /// parse @charset rule

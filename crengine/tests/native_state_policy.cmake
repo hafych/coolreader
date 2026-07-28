@@ -8,6 +8,9 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstsheet.cpp" STYLESHEET_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/wolutil.cpp" WOL_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/wolutil.h" WOL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrend.h" RENDER_HEADER)
@@ -1277,6 +1280,108 @@ forbid_source_text(
   "${WOL_SOURCE}"
   "LVOpenFileStream( \"test.dat\""
   "WOL decoding must not write an implicit debug artifact"
+)
+
+# --- CSS declaration, selector-chain and snapshot ownership ---
+require_source_text(
+  "${STYLESHEET_HEADER}"
+  "std::vector<int> _data;"
+  "CSS compiled declarations must use container ownership"
+)
+require_source_text(
+  "${STYLESHEET_HEADER}"
+  "std::unique_ptr<LVCssSelectorRule> _next;"
+  "CSS rule chains must own their next link explicitly"
+)
+require_source_text(
+  "${STYLESHEET_HEADER}"
+  "std::unique_ptr<LVCssSelector> _next;"
+  "CSS selector chains must own their next link explicitly"
+)
+require_source_text(
+  "${STYLESHEET_HEADER}"
+  "std::unique_ptr<LVCssSelectorRule> _rules;"
+  "CSS selectors must own their rule chain explicitly"
+)
+require_source_text(
+  "${STYLESHEET_HEADER}"
+  "std::vector<Snapshot> _stack;"
+  "CSS stylesheet snapshots must keep count and selectors together"
+)
+require_source_text(
+  "${STYLESHEET_SOURCE}"
+  "_data.swap(parsedData);"
+  "CSS declarations must publish only after complete parsing"
+)
+require_source_text(
+  "${STYLESHEET_SOURCE}"
+  "LVCssSelectorRule::~LVCssSelectorRule()"
+  "CSS rule chains must have bounded iterative teardown"
+)
+require_source_text(
+  "${STYLESHEET_SOURCE}"
+  "LVCssSelector::~LVCssSelector()"
+  "CSS selector chains must have bounded iterative teardown"
+)
+require_source_text(
+  "${STYLESHEET_SOURCE}"
+  "Snapshot snapshot = std::move(_stack.back());"
+  "CSS snapshot restore must transfer one coherent state"
+)
+require_source_text(
+  "${STYLESHEET_SOURCE}"
+  "selector = item->takeNext();"
+  "CSS selector publication must transfer each owned chain link"
+)
+require_source_text(
+  "${CSS_REGRESSION_SOURCE}"
+  "truncated CSS declaration replaced committed data"
+  "CSS declaration rollback must retain regression coverage"
+)
+require_source_text(
+  "${CSS_REGRESSION_SOURCE}"
+  "const int selectorCount = 4096;"
+  "CSS long-chain copy and teardown must retain regression coverage"
+)
+forbid_source_text(
+  "${STYLESHEET_HEADER}"
+  "int * _data;"
+  "CSS declarations must not regress to owning raw arrays"
+)
+forbid_source_text(
+  "${STYLESHEET_HEADER}"
+  "LVCssSelectorRule * _next;"
+  "CSS rule chains must not regress to owning raw links"
+)
+forbid_source_text(
+  "${STYLESHEET_HEADER}"
+  "LVCssSelector * _next;"
+  "CSS selector chains must not regress to owning raw links"
+)
+forbid_source_text(
+  "${STYLESHEET_HEADER}"
+  "LVCssSelectorRule * _rules;"
+  "CSS selectors must not regress to owning raw rule chains"
+)
+forbid_source_text(
+  "${STYLESHEET_HEADER}"
+  "LVPtrVector <LVCssSelector> _selectors;"
+  "CSS selector buckets must retain direct RAII ownership"
+)
+forbid_source_text(
+  "${STYLESHEET_HEADER}"
+  "_selector_count_stack"
+  "CSS snapshot state must not split across parallel stacks"
+)
+forbid_source_text(
+  "${STYLESHEET_SOURCE}"
+  "_data = new int["
+  "CSS declaration allocation must remain container-managed"
+)
+forbid_source_text(
+  "${STYLESHEET_SOURCE}"
+  "delete selector;"
+  "CSS parse rollback must remain automatic"
 )
 
 # --- default stream region buffer ownership and rollback ---

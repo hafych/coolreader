@@ -3100,23 +3100,31 @@ bool LVCssDeclaration::parse( const char * &decl, lUInt32 domVersionRequested, b
         next_property( decl );
     }
 
-    // store parsed result
+    std::vector<int> parsedData;
     if (buf.pos()) {
         buf<<(lUInt32) cssd_stop; // add end marker
-        int sz = buf.pos()/4;
-        _data = new int[sz];
+        if (buf.error() || (buf.pos() % sizeof(int)) != 0)
+            return false;
+        const int size =
+                buf.pos() / static_cast<int>(sizeof(int));
+        parsedData.resize(static_cast<size_t>(size));
         // Could that cause problem with different endianess?
-        buf.copyTo( (lUInt8*)_data, buf.pos() );
+        if (!buf.copyTo(
+                    reinterpret_cast<lUInt8 *>(
+                            parsedData.data()),
+                    buf.pos()))
+            return false;
         // Alternative:
         //   buf.setPos(0);
-        //   for (int i=0; i<sz; i++)
-        //      buf >> _data[i];
+        //   for (int i=0; i<size; i++)
+        //      buf >> parsedData[i];
     }
 
     // skip }
     skip_spaces( decl );
     if (*decl == '}') {
         decl++;
+        _data.swap(parsedData);
         return true;
     }
     return false;
@@ -3132,9 +3140,9 @@ static css_length_t read_length( int * &data )
 
 void LVCssDeclaration::apply( css_style_rec_t * style )
 {
-    if (!_data)
+    if (_data.empty())
         return;
-    int * p = _data;
+    int * p = _data.data();
     for (;;)
     {
         lUInt32 prop_code = *p++;
@@ -3417,9 +3425,9 @@ void LVCssDeclaration::apply( css_style_rec_t * style )
 }
 
 lUInt32 LVCssDeclaration::getHash() {
-    if (!_data)
+    if (_data.empty())
         return 0;
-    int * p = _data;
+    int * p = _data.data();
     lUInt32 hash = 0;
     for (;*p != cssd_stop;p++)
         hash = hash * 31 + *p;
@@ -3998,7 +4006,7 @@ bool LVCssSelector::check( const ldomNode * node ) const
         return true;
     // check additional rules
     const ldomNode * n = node;
-    LVCssSelectorRule * rule = _rules;
+    LVCssSelectorRule * rule = _rules.get();
     do {
         if ( !rule->check(n) )
             return false;
@@ -4079,7 +4087,8 @@ bool parse_attr_value( const char * &str, char * buf, char stop_char=']' )
     return parse_attr_value( str, buf, parse_trailing_i, stop_char );
 }
 
-LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
+static std::unique_ptr<LVCssSelectorRule> parse_attr(
+        const char * &str, lxmlDocBase *doc)
 {
     // We should not skip_spaces() here: it's invalid just after one of '.#:'
     // and we should keep the one after the parsed value as its presence or not
@@ -4092,8 +4101,9 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         // E.class
         str++;
         if (!parse_ident( str, attrvalue ))
-            return NULL;
-        LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_class);
+            return std::unique_ptr<LVCssSelectorRule>();
+        std::unique_ptr<LVCssSelectorRule> rule(
+                new LVCssSelectorRule(cssrt_class));
         lString32 s( attrvalue );
         // s.lowercase(); // className should be case sensitive
         rule->setAttr(attr_class, s);
@@ -4102,8 +4112,9 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         // E#id
         str++;
         if (!parse_ident( str, attrvalue ))
-            return NULL;
-        LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_id);
+            return std::unique_ptr<LVCssSelectorRule>();
+        std::unique_ptr<LVCssSelectorRule> rule(
+                new LVCssSelectorRule(cssrt_id));
         lString32 s( attrvalue );
         rule->setAttr(attr_id, s);
         return rule;
@@ -4114,24 +4125,25 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
             // pseudo element (double ::, eg: E::first-line) are not supported,
             // except ::before/after which are handled in LVCssSelector::parse()
             str--;
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         }
         int n = parse_name( str, css_pseudo_classes, -1 );
         if (n == -1) { // not one of out supported pseudo classes
             str--; // LVCssSelector::parse() will also check for :before/after with a single ':'
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         }
         attrvalue[0] = 0;
         if (*str=='(') { // parse () content
             str++;
             if ( !parse_attr_value( str, attrvalue, ')') )
-                return NULL;
+                return std::unique_ptr<LVCssSelectorRule>();
             // We don't parse the value here, it may have specific meaning
             // per pseudo-class type
             // But for the ones we handle, we only compare strings to a fixed set of target
             // values, so trim() and lowercase() below to avoid doing it on each check.
         }
-        LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_pseudoclass);
+        std::unique_ptr<LVCssSelectorRule> rule(
+                new LVCssSelectorRule(cssrt_pseudoclass));
         lString32 s( attrvalue );
         s.trim().lowercase();
         if ( n == csspc_nth_child || n == csspc_nth_of_type || n == csspc_nth_last_child || n == csspc_nth_last_of_type ) {
@@ -4153,12 +4165,12 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         }
         return rule;
     } else if (*str != '[') // We're looking for an attribute selector after here
-        return NULL;
+        return std::unique_ptr<LVCssSelectorRule>();
     str++;
     // We may find and skip spaces inside [...]
     skip_spaces( str );
     if (!parse_ident( str, attrname ))
-        return NULL;
+        return std::unique_ptr<LVCssSelectorRule>();
     skip_spaces( str );
     attrvalue[0] = 0;
     bool parse_trailing_i = false;
@@ -4172,7 +4184,7 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         str++;
         parse_trailing_i = true; // reset to false if value does not end with " i"
         if (!parse_attr_value( str, attrvalue, parse_trailing_i))
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         if (parse_trailing_i)
             st = cssrt_attreq_i;
         else
@@ -4183,7 +4195,7 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         str+=2;
         parse_trailing_i = true;
         if (!parse_attr_value( str, attrvalue, parse_trailing_i))
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         if (parse_trailing_i)
             st = cssrt_attrhas_i;
         else
@@ -4194,7 +4206,7 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         str+=2;
         parse_trailing_i = true;
         if (!parse_attr_value( str, attrvalue, parse_trailing_i))
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         if (parse_trailing_i)
             st = cssrt_attrstarts_word_i;
         else
@@ -4205,7 +4217,7 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         str+=2;
         parse_trailing_i = true;
         if (!parse_attr_value( str, attrvalue, parse_trailing_i))
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         if (parse_trailing_i)
             st = cssrt_attrstarts_i;
         else
@@ -4216,7 +4228,7 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         str+=2;
         parse_trailing_i = true;
         if (!parse_attr_value( str, attrvalue, parse_trailing_i))
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         if (parse_trailing_i)
             st = cssrt_attrends_i;
         else
@@ -4227,7 +4239,7 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
         str+=2;
         parse_trailing_i = true;
         if (!parse_attr_value( str, attrvalue, parse_trailing_i))
-            return NULL;
+            return std::unique_ptr<LVCssSelectorRule>();
         if (parse_trailing_i)
             st = cssrt_attrcontains_i;
         else
@@ -4235,9 +4247,10 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
     }
     else
     {
-        return NULL;
+        return std::unique_ptr<LVCssSelectorRule>();
     }
-    LVCssSelectorRule * rule = new LVCssSelectorRule(st);
+    std::unique_ptr<LVCssSelectorRule> rule(
+            new LVCssSelectorRule(st));
     lString32 s( attrvalue );
     if (parse_trailing_i) { // cssrt_attr*_i met
         s.lowercase();
@@ -4247,20 +4260,22 @@ LVCssSelectorRule * parse_attr( const char * &str, lxmlDocBase * doc )
     return rule;
 }
 
-void LVCssSelector::insertRuleStart( LVCssSelectorRule * rule )
+void LVCssSelector::insertRuleStart(
+        std::unique_ptr<LVCssSelectorRule> rule)
 {
-    rule->setNext( _rules );
-    _rules = rule;
+    rule->setNext(std::move(_rules));
+    _rules = std::move(rule);
 }
 
-void LVCssSelector::insertRuleAfterStart( LVCssSelectorRule * rule )
+void LVCssSelector::insertRuleAfterStart(
+        std::unique_ptr<LVCssSelectorRule> rule)
 {
     if ( !_rules ) {
-        _rules = rule;
+        _rules = std::move(rule);
         return;
     }
-    rule->setNext( _rules->getNext() );
-    _rules->setNext( rule );
+    rule->setNext(_rules->takeNext());
+    _rules->setNext(std::move(rule));
 }
 
 bool LVCssSelector::parse( const char * &str, lxmlDocBase * doc )
@@ -4343,7 +4358,8 @@ bool LVCssSelector::parse( const char * &str, lxmlDocBase * doc )
         if (check_attribute_rules) {
             while ( *str == '[' || *str=='.' || *str=='#' || *str==':' )
             {
-                LVCssSelectorRule * rule = parse_attr( str, doc );
+                std::unique_ptr<LVCssSelectorRule> rule =
+                        parse_attr(str, doc);
                 if (!rule) {
                     // Might be one of our supported pseudo elements, which should
                     // start with "::" but might start with a single ":".
@@ -4366,18 +4382,8 @@ bool LVCssSelector::parse( const char * &str, lxmlDocBase * doc )
                     }
                     return false;
                 }
-                insertRuleStart( rule ); //insertRuleAfterStart
-                //insertRuleAfterStart( rule ); //insertRuleAfterStart
                 _specificity += rule->getWeight();
-
-                /*
-                if ( _id!=0 ) {
-                    LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_parent);
-                    rule->setId(_id);
-                    insertRuleStart( rule );
-                    _id=0;
-                }
-                */
+                insertRuleStart(std::move(rule));
 
                 // We should not skip spaces here: combining multiple classnames or
                 // attributes is to be done only when there is no space in between
@@ -4393,39 +4399,43 @@ bool LVCssSelector::parse( const char * &str, lxmlDocBase * doc )
         if (*str == '>')
         {
             str++;
-            LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_parent);
+            std::unique_ptr<LVCssSelectorRule> rule(
+                    new LVCssSelectorRule(cssrt_parent));
             rule->setId(_id);
-            insertRuleStart( rule );
             _specificity += rule->getWeight();
+            insertRuleStart(std::move(rule));
             _id=0;
             continue;
         }
         else if (*str == '+')
         {
             str++;
-            LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_predecessor);
+            std::unique_ptr<LVCssSelectorRule> rule(
+                    new LVCssSelectorRule(cssrt_predecessor));
             rule->setId(_id);
-            insertRuleStart( rule );
             _specificity += rule->getWeight();
+            insertRuleStart(std::move(rule));
             _id=0;
             continue;
         }
         else if (*str == '~')
         {
             str++;
-            LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_predsibling);
+            std::unique_ptr<LVCssSelectorRule> rule(
+                    new LVCssSelectorRule(cssrt_predsibling));
             rule->setId(_id);
-            insertRuleStart( rule );
             _specificity += rule->getWeight();
+            insertRuleStart(std::move(rule));
             _id=0;
             continue;
         }
         else if (css_is_alpha( *str ) || (*str == '.') || (*str == '#') || (*str == '*') )
         {
-            LVCssSelectorRule * rule = new LVCssSelectorRule(cssrt_ancessor);
+            std::unique_ptr<LVCssSelectorRule> rule(
+                    new LVCssSelectorRule(cssrt_ancessor));
             rule->setId(_id);
-            insertRuleStart( rule );
             _specificity += rule->getWeight();
+            insertRuleStart(std::move(rule));
             _id=0;
             continue;
         }
@@ -4494,50 +4504,129 @@ void LVCssSelector::applyToPseudoElement( const ldomNode * node, css_style_rec_t
     return;
 }
 
-LVCssSelectorRule::LVCssSelectorRule( LVCssSelectorRule & v )
+LVCssSelectorRule::LVCssSelectorRule(
+        const LVCssSelectorRule &v)
 : _type(v._type), _id(v._id), _attrid(v._attrid)
-, _next(NULL)
+, _next()
 , _value( v._value )
 {
-    if ( v._next )
-        _next = new LVCssSelectorRule( *v._next );
-}
-
-LVCssSelector::LVCssSelector( LVCssSelector & v )
-: _id(v._id), _decl(v._decl), _specificity(v._specificity), _pseudo_elem(v._pseudo_elem), _next(NULL), _rules(NULL)
-{
-    if ( v._next )
-        _next = new LVCssSelector( *v._next );
-    if ( v._rules )
-        _rules = new LVCssSelectorRule( *v._rules );
-}
-
-void LVStyleSheet::set(LVPtrVector<LVCssSelector> & v  )
-{
-    _selectors.clear();
-    if ( !v.size() )
-        return;
-    _selectors.reserve( v.size() );
-    for ( int i=0; i<v.size(); i++ ) {
-        LVCssSelector * selector = v[i];
-        if ( selector )
-            _selectors.add( new LVCssSelector( *selector ) );
-        else
-            _selectors.add( NULL );
+    LVCssSelectorRule *tail = this;
+    for (const LVCssSelectorRule *source = v._next.get();
+            source; source = source->_next.get()) {
+        std::unique_ptr<LVCssSelectorRule> clone(
+                new LVCssSelectorRule(source->_type));
+        clone->_id = source->_id;
+        clone->_attrid = source->_attrid;
+        clone->_value = source->_value;
+        tail->_next = std::move(clone);
+        tail = tail->_next.get();
     }
 }
 
-LVStyleSheet::LVStyleSheet( LVStyleSheet & sheet )
-:   _doc( sheet._doc )
+LVCssSelectorRule::~LVCssSelectorRule()
 {
-    set( sheet._selectors );
-    _selector_count = sheet._selector_count;
-    _charset = sheet._charset;
+    while (_next) {
+        std::unique_ptr<LVCssSelectorRule> next =
+                std::move(_next);
+        _next = std::move(next->_next);
+    }
+}
+
+LVCssSelector::LVCssSelector( const LVCssSelector &v )
+: _id(v._id)
+, _decl(v._decl)
+, _specificity(v._specificity)
+, _pseudo_elem(v._pseudo_elem)
+, _next()
+, _rules(v._rules
+        ? std::unique_ptr<LVCssSelectorRule>(
+                new LVCssSelectorRule(*v._rules))
+        : std::unique_ptr<LVCssSelectorRule>())
+{
+    LVCssSelector *tail = this;
+    for (const LVCssSelector *source = v._next.get();
+            source; source = source->_next.get()) {
+        std::unique_ptr<LVCssSelector> clone(
+                new LVCssSelector());
+        clone->_id = source->_id;
+        clone->_decl = source->_decl;
+        clone->_specificity = source->_specificity;
+        clone->_pseudo_elem = source->_pseudo_elem;
+        if (source->_rules) {
+            clone->_rules.reset(
+                    new LVCssSelectorRule(
+                            *source->_rules));
+        }
+        tail->_next = std::move(clone);
+        tail = tail->_next.get();
+    }
+}
+
+LVCssSelector::~LVCssSelector()
+{
+    while (_next) {
+        std::unique_ptr<LVCssSelector> next =
+                std::move(_next);
+        _next = std::move(next->_next);
+    }
+}
+
+LVStyleSheet::SelectorList LVStyleSheet::dup() const
+{
+    SelectorList duplicate(_selectors.size());
+    for (size_t i = 0; i < _selectors.size(); ++i) {
+        if (_selectors[i]) {
+            duplicate[i].reset(
+                    new LVCssSelector(*_selectors[i]));
+        }
+    }
+    return duplicate;
+}
+
+void LVStyleSheet::set(const SelectorList &selectors)
+{
+    SelectorList duplicate(selectors.size());
+    for (size_t i = 0; i < selectors.size(); ++i) {
+        if (selectors[i]) {
+            duplicate[i].reset(
+                    new LVCssSelector(*selectors[i]));
+        }
+    }
+    _selectors.swap(duplicate);
+}
+
+void LVStyleSheet::push()
+{
+    Snapshot snapshot;
+    snapshot.selectorCount = _selector_count;
+    snapshot.selectors = dup();
+    _stack.push_back(std::move(snapshot));
+}
+
+bool LVStyleSheet::pop()
+{
+    if (_stack.empty())
+        return false;
+    Snapshot snapshot = std::move(_stack.back());
+    _stack.pop_back();
+    _selector_count = snapshot.selectorCount;
+    _selectors = std::move(snapshot.selectors);
+    return true;
+}
+
+LVStyleSheet::LVStyleSheet( const LVStyleSheet &sheet )
+: _doc(sheet._doc)
+, _selector_count(sheet._selector_count)
+, _charset(sheet._charset)
+, _selectors()
+, _stack()
+{
+    set(sheet._selectors);
 }
 
 void LVStyleSheet::apply( const ldomNode * node, css_style_rec_t * style )
 {
-    if (!_selectors.length())
+    if (_selectors.empty())
         return; // no rules!
         
     lUInt16 id = node->getNodeId();
@@ -4558,8 +4647,13 @@ void LVStyleSheet::apply( const ldomNode * node, css_style_rec_t * style )
     // first checked agains all <p>).
     // To see which selectors apply to a <p>, we must iterate thru both chains,
     // checking and applying them in the order of specificity/parsed position.
-    LVCssSelector * selector_0 = _selectors[0];
-    LVCssSelector * selector_id = id>0 && id<_selectors.length() ? _selectors[id] : NULL;
+    LVCssSelector *selector_0 = _selectors[0].get();
+    LVCssSelector *selector_id =
+            id > 0
+                    && static_cast<size_t>(id)
+                            < _selectors.size()
+            ? _selectors[id].get()
+            : NULL;
 
     for (;;)
     {
@@ -4603,49 +4697,58 @@ lUInt32 LVCssSelectorRule::getHash()
 
 lUInt32 LVCssSelector::getHash()
 {
-    lUInt32 hash = 0;
     lUInt32 nextHash = 0;
-
-    if (_next)
-        nextHash = _next->getHash();
-    for (LVCssSelectorRule * p = _rules; p; p = p->getNext()) {
-        lUInt32 ruleHash = p->getHash();
-        hash = hash * 31 + ruleHash;
+    std::vector<const LVCssSelector *> chain;
+    for (const LVCssSelector *selector = this;
+            selector; selector = selector->getNext()) {
+        chain.push_back(selector);
     }
-    hash = hash * 31 + nextHash;
-    hash = hash * 31 + _specificity;
-    hash = hash * 31 + _pseudo_elem;
-    if (!_decl.isNull())
-        hash = hash * 31 + _decl->getHash();
+    for (std::vector<const LVCssSelector *>::reverse_iterator it =
+                chain.rbegin();
+            it != chain.rend(); ++it) {
+        const LVCssSelector *selector = *it;
+        lUInt32 hash = 0;
+        for (LVCssSelectorRule *rule =
+                    selector->_rules.get();
+                rule; rule = rule->getNext()) {
+            hash = hash * 31 + rule->getHash();
+        }
+        hash = hash * 31 + nextHash;
+        hash = hash * 31 + selector->_specificity;
+        hash = hash * 31 + selector->_pseudo_elem;
+        if (!selector->_decl.isNull())
+            hash = hash * 31 + selector->_decl->getHash();
+        nextHash = hash;
+    }
     //CRLog::trace("selector hash: %8x", hash);
-    return hash;
+    return nextHash;
 }
 
 /// calculate hash
 lUInt32 LVStyleSheet::getHash()
 {
     lUInt32 hash = 0;
-    for ( int i=0; i<_selectors.length(); i++ ) {
+    for (size_t i = 0; i < _selectors.size(); ++i) {
         if ( _selectors[i] )
-            hash = hash * 31 + _selectors[i]->getHash() + i*15324;
+            hash = hash * 31 + _selectors[i]->getHash()
+                    + static_cast<lUInt32>(i) * 15324;
     }
-    //CRLog::trace("LVStyleSheet::getHash() selector count: %d  hash: %x", _selectors.length(), hash);
+    //CRLog::trace("LVStyleSheet::getHash() selector count: %d  hash: %x", _selectors.size(), hash);
     return hash;
 }
 
 bool LVStyleSheet::parse( const char * str, bool higher_importance, lString32 codeBase )
 {
-    if ( !_doc ) {
+    if ( !_doc || !str ) {
         // We can't parse anything if no _doc to get element name ids from
         return false;
     }
-    LVCssSelector * selector = NULL;
-    LVCssSelector * prev_selector;
+    std::unique_ptr<LVCssSelector> selector;
     lUInt32 domVersionRequested = _doc->getDOMVersionRequested();
     for (;*str;)
     {
         // new rule
-        prev_selector = NULL;
+        selector.reset();
         bool err = false;
         for (;*str;)
         {
@@ -4656,9 +4759,11 @@ bool LVStyleSheet::parse( const char * str, bool higher_importance, lString32 co
             // Have selector count number make the initial value
             // of _specificity, so order of selectors is preserved
             // when applying selectors with the same CSS specificity.
-            selector = new LVCssSelector(_selector_count);
+            std::unique_ptr<LVCssSelector> current(
+                    new LVCssSelector(_selector_count));
             _selector_count += 1; // = +WEIGHT_SELECTOR_ORDER
-            selector->setNext( prev_selector );
+            current->setNext(std::move(selector));
+            selector = std::move(current);
             if ( !selector->parse(str, _doc) )
             {
                 err = true;
@@ -4669,7 +4774,6 @@ bool LVStyleSheet::parse( const char * str, bool higher_importance, lString32 co
                 if ( *str == ',' )
                 {
                     str++;
-                    prev_selector = selector;
                     continue; // next selector
                 }
             }
@@ -4682,16 +4786,15 @@ bool LVStyleSheet::parse( const char * str, bool higher_importance, lString32 co
             else
             {
                 // set decl to selectors
-                for (LVCssSelector * p = selector; p; p=p->getNext())
+                for (LVCssSelector * p = selector.get();
+                        p; p=p->getNext())
                     p->setDeclaration( decl );
             }
             break;
         }
         if (err)
         {
-            // error:
-            // delete chain of selectors
-            delete selector;
+            selector.reset();
             // ignore current rule
             skip_until_end_of_rule( str );
         }
@@ -4699,31 +4802,35 @@ bool LVStyleSheet::parse( const char * str, bool higher_importance, lString32 co
         {
             // Ok:
             // place rules to sheet
-            for (LVCssSelector * p = selector; p;  )
-            {
-                LVCssSelector * item = p;
-                p=p->getNext();
+            while (selector) {
+                std::unique_ptr<LVCssSelector> item =
+                        std::move(selector);
+                selector = item->takeNext();
                 lUInt16 id = item->getElementNameId();
-                if (_selectors.length()<=id)
-                    _selectors.set(id, NULL);
+                if (_selectors.size() <= id)
+                    _selectors.resize(
+                            static_cast<size_t>(id) + 1);
+                SelectorOwner &head = _selectors[id];
                 // insert with specificity sorting
-                if ( _selectors[id] == NULL 
-                    || _selectors[id]->getSpecificity() > item->getSpecificity() )
+                if ( !head
+                    || head->getSpecificity()
+                            > item->getSpecificity() )
                 {
                     // insert as first item
-                    item->setNext( _selectors[id] );
-                    _selectors[id] = item;
+                    item->setNext(std::move(head));
+                    head = std::move(item);
                 }
                 else
                 {
                     // insert as internal item
-                    for (LVCssSelector * p = _selectors[id]; p; p = p->getNext() )
+                    for (LVCssSelector *p = head.get();
+                            p; p = p->getNext())
                     {
                         if ( p->getNext() == NULL
                             || p->getNext()->getSpecificity() > item->getSpecificity() )
                         {
-                            item->setNext( p->getNext() );
-                            p->setNext( item );
+                            item->setNext(p->takeNext());
+                            p->setNext(std::move(item));
                             break;
                         }
                     }
@@ -4731,7 +4838,7 @@ bool LVStyleSheet::parse( const char * str, bool higher_importance, lString32 co
             }
         }
     }
-    return _selectors.length() > 0;
+    return !_selectors.empty();
 }
 
 bool LVStyleSheet::parseCharsetRule( const char * &str )

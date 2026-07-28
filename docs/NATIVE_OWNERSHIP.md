@@ -276,6 +276,16 @@ copy/assignment duplicate storage instead of sharing a raw owner.
 and `clear()` releases the list without manual deletion. The page splitter's
 existing indexing, serialization and link-order contracts remain unchanged.
 
+Compiled CSS declarations own instruction words in `std::vector` and swap a
+candidate into place only after the complete declaration and closing brace
+have parsed, so malformed replacement text preserves the committed rules.
+Selector and selector-rule links use `unique_ptr`; deep copies and hash walks
+are iterative, and explicit destructors unlink before deleting so long chains
+cannot recurse through teardown. `LVStyleSheet` buckets own their chain heads
+directly, while each push snapshot combines the selector count and deep-copied
+buckets in one move-only object. Regression coverage includes declaration
+rollback, independent clear/copy, snapshot restore and a 4096-selector chain.
+
 `LVRefCache` and `LVIndexedRefCache` own bucket roots and collision links
 through vectors of `unique_ptr`. Collision teardown unlinks iteratively, while
 the indexed cache keeps only non-owning node views in vector-backed index

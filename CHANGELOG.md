@@ -251,6 +251,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   WOL reader image/cover results return explicit `unique_ptr` ownership,
   validate exact stream ranges and no longer write an implicit `test.dat`;
   round-trip regression covers overflow rollback and decoded page bytes.
+- Compiled CSS declarations now publish vector storage only after a complete
+  closing brace. Selector/rule chains own links with `unique_ptr`, copy and
+  teardown iteratively, and stylesheet push/pop moves one coherent snapshot
+  instead of maintaining parallel raw-owner stacks. Regressions cover
+  truncated-declaration rollback, independent copies and 4096 selectors.
 - Cache-file ZSTD/zlib contexts and reusable codec chunks now have explicit
   RAII ownership. Pack, unpack, validation and block I/O use bounded
   transactional vectors; corrupt frames preserve prior results, codec errors
