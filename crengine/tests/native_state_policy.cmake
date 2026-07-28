@@ -3502,6 +3502,21 @@ require_source_text(
   "rendered page footnotes must publish only after complete decoding"
 )
 require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "std::unique_ptr<LVRendLineInfo> lineCandidate"
+  "live page-split lines must remain scoped until owning-vector publication"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "std::unique_ptr<LVRendPageInfo> page"
+  "live rendered pages must remain scoped while their payload is assembled"
+)
+require_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "page_list->add(page.release())"
+  "live rendered pages must cross one explicit owning-list boundary"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "rendered page truncation replaced committed state"
   "rendered page deserialization must retain truncation rollback coverage"
@@ -3521,10 +3536,30 @@ require_source_text(
   "rendered page-list retained stale nonlinear-flow state"
   "rendered page-list publication must retain derived-state coverage"
 )
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "live page-split candidates lost overflow-line ownership"
+  "live page splitting must retain candidate publication coverage"
+)
 forbid_source_text(
   "${PAGE_SPLITTER_SOURCE}"
   "LVRendPageInfo * item = new LVRendPageInfo()"
   "rendered page-list candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "LVRendPageInfo * page = new LVRendPageInfo"
+  "live rendered-page candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "LVRendLineInfo * line = new LVRendLineInfo"
+  "live rendered-line candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${PAGE_SPLITTER_SOURCE}"
+  "last = new LVRendLineInfo"
+  "virtual split-line candidates must not begin as raw owners"
 )
 
 # --- reference-cache bucket, index and export ownership ---

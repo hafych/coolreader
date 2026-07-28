@@ -30,6 +30,7 @@
 #include "../include/lvtinydom.h"
 #include "../include/crlog.h"
 #include "../include/serialbuf.h"
+#include <memory>
 #include <time.h>
 
 // Uncomment for debugging page splitting algorithm:
@@ -178,8 +179,11 @@ void LVRendPageContext::AddLine( int starty, int endy, int flags )
     #endif
     if ( curr_note!=NULL )
         flags |= RN_SPLIT_FOOT_NOTE;
-    LVRendLineInfo * line = new LVRendLineInfo(starty, endy, flags, current_flow);
-    lines.add( line );
+    std::unique_ptr<LVRendLineInfo> lineCandidate =
+            std::make_unique<LVRendLineInfo>(
+                    starty, endy, flags, current_flow);
+    LVRendLineInfo *line = lineCandidate.get();
+    lines.add(lineCandidate.release());
     if ( curr_note != NULL ) {
         //CRLog::trace("adding line to note (%d)", line->start);
         curr_note->addLine( line );
@@ -345,7 +349,9 @@ public:
                     footheight, h+footheight+FOOTNOTE_MARGIN_REM*doc_font_size);
             printf(" [rtl l:%d/%d fl:%d/%d]\n", nb_lines_rtl, nb_lines, nb_footnotes_lines_rtl, nb_footnotes_lines);
         #endif
-        LVRendPageInfo * page = new LVRendPageInfo(start, h, page_list->length());
+        std::unique_ptr<LVRendPageInfo> page =
+                std::make_unique<LVRendPageInfo>(
+                        start, h, page_list->length());
         lastpageend = start + h;
         if ( footnotes.length()>0 ) {
             page->footnotes.add( footnotes );
@@ -367,7 +373,7 @@ public:
             current_flow = pagestart->flow;
         page->flow = current_flow;
         ResetLineAccount(true);
-        page_list->add(page);
+        page_list->add(page.release());
     }
     int currentFootnoteHeight()
     {
@@ -432,7 +438,9 @@ public:
             if (did_slice)
                 AccountLine(line);
             // Greater than page height: we need to cut
-            LVRendPageInfo * page = new LVRendPageInfo(slice_start, page_h, page_list->length());
+            std::unique_ptr<LVRendPageInfo> page =
+                    std::make_unique<LVRendPageInfo>(
+                            slice_start, page_h, page_list->length());
             #ifdef DEBUG_PAGESPLIT
                 printf("PS: ==== SPLITTED AS PAGE %d: %d > %d h=%d\n",
                     page_list->length(), slice_start, slice_start+page_h, page_h);
@@ -440,11 +448,15 @@ public:
             page->flags |= getLineTypeFlags();
             page->flow = line->flow;
             ResetLineAccount();
-            page_list->add(page);
+            page_list->add(page.release());
             slice_start += page_h;
             lastpageend = slice_start;
-            last = new LVRendLineInfo(slice_start, line->getEnd(), line->flags, line->flow);
-            own_lines.add( last ); // so we can have it 'delete'd in Finalize()
+            std::unique_ptr<LVRendLineInfo> lineCandidate =
+                    std::make_unique<LVRendLineInfo>(
+                            slice_start, line->getEnd(),
+                            line->flags, line->flow);
+            last = lineCandidate.get();
+            own_lines.add(lineCandidate.release());
             pageend = last;
             did_slice = true;
         }
@@ -517,8 +529,11 @@ public:
                 // the backward spans over multiple past lines which had
                 // SPLIT_AUTO - but we can't change the past...)
                 lUInt16 flags = line->flags & ~RN_SPLIT_BEFORE_ALWAYS & RN_SPLIT_BEFORE_AVOID;
-                line = new LVRendLineInfo(last->getEnd(), line->getEnd(), flags);
-                own_lines.add( line ); // so we can have it 'delete'd in Finalize()
+                std::unique_ptr<LVRendLineInfo> lineCandidate =
+                        std::make_unique<LVRendLineInfo>(
+                                last->getEnd(), line->getEnd(), flags);
+                line = lineCandidate.get();
+                own_lines.add(lineCandidate.release());
             }
             unsigned flgSplit = CalcSplitFlag( last->getSplitAfter(), line->getSplitBefore() );
             //bool flgFit = currentHeight( next ? next : line ) <= page_h;

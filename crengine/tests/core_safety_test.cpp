@@ -4395,6 +4395,22 @@ static int testPaginationAuxiliaryOwnership() {
                 || moveAssigned.getLinksCount() != 2)
             return fail("rendered line clear invalidated moved link lists");
     }
+
+    {
+        LVRendPageList pages;
+        LVRendPageContext context(&pages, 100, 16, true);
+        context.AddLine(0, 250, RN_SPLIT_AUTO);
+        context.Finalize();
+        if (pages.length() != 3
+                || pages[0]->start != 0 || pages[0]->height != 100
+                || pages[1]->start != 100 || pages[1]->height != 100
+                || pages[2]->start != 200 || pages[2]->height != 50
+                || pages[0]->index != 0
+                || pages[1]->index != 1
+                || pages[2]->index != 2)
+            return fail(
+                    "live page-split candidates lost overflow-line ownership");
+    }
     return 0;
 }
 

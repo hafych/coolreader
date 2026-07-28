@@ -412,7 +412,10 @@ footer, each page enters a `unique_ptr`, and the complete candidate list swaps
 into place only after nested decoding and the late CRC succeed. Failed or
 oversized snapshots preserve both the committed pages and nonlinear-flow
 state; a successful linear snapshot clears stale derived state. The page
-splitter's indexing, serialization and link-order contracts remain unchanged.
+splitter also retains every newly assembled page and virtual line in an
+operation-scoped `unique_ptr` until the owning page/line vector accepts it,
+including overflow slicing and cropped forward-line paths. Its indexing,
+serialization and link-order contracts remain unchanged.
 
 Compiled CSS declarations own instruction words in `std::vector` and swap a
 candidate into place only after the complete declaration and closing brace
