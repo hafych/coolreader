@@ -1749,6 +1749,12 @@ static int testDomChunkStorageOwnership() {
     return 0;
 }
 
+static int testDomNodePartOwnership() {
+    if (!LVRunDomNodePartOwnershipRegression())
+        return fail("DOM node-part ownership regression failed");
+    return 0;
+}
+
 static int descendingString32Comparator(
         lString32 &left, lString32 &right) {
     return right.compare(left);
@@ -4640,6 +4646,8 @@ int main() {
     if (testDomBlobOwnership() != 0)
         return 1;
     if (testDomChunkStorageOwnership() != 0)
+        return 1;
+    if (testDomNodePartOwnership() != 0)
         return 1;
     if (testRtfTextBufferOwnership() != 0)
         return 1;

@@ -130,7 +130,8 @@ DRM или ограничений доступа, подбор/получени�
   Word/PDB transient import buffers/factory candidates, cache-file ZSTD/zlib
   contexts/chunk output/block scratch and bounded transactional index
   snapshots/publication, DOM blob payload/item/index storage,
-  DOM text-storage chunk resident buffers/cache transitions,
+  DOM text-storage chunk resident buffers/cache transitions and persistent
+  node-part catalogs/cache loading,
   reference-cache
   buckets/index exports and bounded map slots, longjmp-safe PNG rows/pixels,
   JPEG pool/error lifecycle, а также draw mark list. Остальные участки

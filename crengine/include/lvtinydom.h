@@ -45,6 +45,7 @@
 #define __LV_TINYDOM_H_INCLUDED__
 
 #include <atomic>
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -406,6 +407,11 @@ public:
 
 // forward declaration
 struct ldomNode;
+struct ldomNodePartDeleter {
+    void operator()(ldomNode *part) const noexcept;
+};
+typedef std::unique_ptr<ldomNode, ldomNodePartDeleter>
+        ldomNodePartOwner;
 
 // About these #define TNC_PART_* :
 // A ldomNode unique reference is defined by:
@@ -414,7 +420,7 @@ struct ldomNode;
 //        unsigned _dataIndex:24; // index of node in document's storage and type
 //    };
 // The 24 bits of _dataIndex are used that way:
-//        return &(_elemList[index>>TNC_PART_INDEX_SHIFT][(index>>4)&TNC_PART_MASK]);
+//        return &(_elemList[index>>TNC_PART_INDEX_SHIFT].get()[(index>>4)&TNC_PART_MASK]);
 //        #define TNTYPE  (_handle._dataIndex&0x0F)
 //        #define TNINDEX (_handle._dataIndex&(~0x0E))
 //   24>15 10bits (1024 values) : index in the first-level _elemList[TNC_PART_COUNT]
@@ -442,19 +448,22 @@ struct ldomNode;
 #define TNC_PART_INDEX_SHIFT (TNC_PART_SHIFT+4)
 #define TNC_PART_LEN (1<<TNC_PART_SHIFT)
 #define TNC_PART_MASK (TNC_PART_LEN-1)
+typedef std::array<ldomNodePartOwner, TNC_PART_COUNT>
+        ldomNodePartList;
 /// storage of ldomNode
 class tinyNodeCollection
 {
     friend struct ldomNode;
     friend class tinyElement;
     friend class ldomDocument;
+    friend bool LVRunDomNodePartOwnershipRegression();
 private:
     int _textCount;
     lUInt32 _textNextFree;
-    ldomNode * _textList[TNC_PART_COUNT];
+    ldomNodePartList _textList;
     int _elemCount;
     lUInt32 _elemNextFree;
-    ldomNode * _elemList[TNC_PART_COUNT];
+    ldomNodePartList _elemList;
     LVIndexedRefCache<css_style_ref_t> _styles;
     LVIndexedRefCache<font_ref_t> _fonts;
     int _tinyElementCount;
@@ -517,9 +526,13 @@ protected:
     bool updateLoadedStyles( bool enabled );
     lUInt32 calcStyleHash(bool already_rendered);
     bool saveNodeData();
-    bool saveNodeData( lUInt16 type, ldomNode ** list, int nodecount );
+    bool saveNodeData(
+            lUInt16 type, const ldomNodePartList &list,
+            int nodecount );
     bool loadNodeData();
-    bool loadNodeData( lUInt16 type, ldomNode ** list, int nodecount );
+    bool loadNodeData(
+            lUInt16 type, ldomNodePartList &list,
+            int nodecount );
 
     bool hasRenderData() { return _rectStorage.hasChunks(); }
 
@@ -540,6 +553,8 @@ protected:
     /// creates empty collection
     tinyNodeCollection();
     tinyNodeCollection( tinyNodeCollection & v );
+    void destroyNodeParts(
+            ldomNodePartList &list, int nodecount );
 
 public:
 

@@ -19,4 +19,7 @@ bool LVRunBlobCacheRegression();
 /// Native regression seam for DOM chunk ownership and cache transitions.
 bool LVRunDomChunkStorageRegression();
 
+/// Native regression seam for DOM node-part ownership and load rollback.
+bool LVRunDomNodePartOwnershipRegression();
+
 #endif

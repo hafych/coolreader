@@ -250,8 +250,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   RAII ownership. Pack, unpack, validation and block I/O use bounded
   transactional vectors; corrupt frames preserve prior results, codec errors
   do not invalidate reusable state, and completed blocks move directly into
-  serialization buffers while legacy DOM storage keeps an explicit
-  malloc-compatible transfer boundary.
+  serialization buffers or persistent DOM owners without a malloc-return read
+  boundary.
 - Cache-file index reads and writes now use bounded typed snapshots instead of
   owning raw arrays. Loads validate every record and reject duplicate live
   keys before atomically swapping the owning index, free-list views and lookup
@@ -267,6 +267,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   resident-byte accounting changes exactly once per transition. Raw data views
   are bounds-checked in every build; native regressions cover fixed and dynamic
   chunks plus mismatched-index rollback.
+- Persistent DOM element/text node-part catalogs now use fixed arrays of
+  `unique_ptr` owners with a malloc-compatible deleter. Cache loads stage both
+  catalogs, validate address-space bounds and every part, then clean and swap
+  only after complete success; truncated later parts preserve the old DOM.
 - Native reference caches now own bucket roots and collision chains through
   vectors of `unique_ptr`, keep indexed metadata in vector storage and export
   serialized indexes with explicit ownership. Index restoration is

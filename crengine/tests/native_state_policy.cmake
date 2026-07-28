@@ -2406,6 +2406,63 @@ forbid_source_text(
   "cache-file index snapshot teardown must remain automatic"
 )
 
+# --- persistent DOM node-part ownership and cache loading ---
+require_source_text(
+  "${DOM_HEADER}"
+  "typedef std::unique_ptr<ldomNode, ldomNodePartDeleter>"
+  "DOM node parts must use explicit malloc-compatible RAII ownership"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "typedef std::array<ldomNodePartOwner, TNC_PART_COUNT>"
+  "DOM node-part catalogs must own every block automatically"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "void ldomNodePartDeleter::operator()"
+  "DOM node-part allocation must have one matching free boundary"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<lUInt8> serializedPart"
+  "DOM node-part cache reads must use scoped vector storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "ldomNodePartList elemList;\n    ldomNodePartList textList;"
+  "DOM node-part loads must stage both catalogs in RAII candidates"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "destroyNodeParts(_elemList, _elemCount);\n    destroyNodeParts(_textList, _textCount);\n    _elemList.swap(elemList);\n    _textList.swap(textList);"
+  "DOM node-part catalogs must publish only after complete validation"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "maximumNodeCount"
+  "DOM node-part indexes must enforce their address-space bound"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "ldomNode * _textList[TNC_PART_COUNT]"
+  "DOM text-node parts must not regress to owning raw catalogs"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "ldomNode * _elemList[TNC_PART_COUNT]"
+  "DOM element-node parts must not regress to owning raw catalogs"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "realloc(buf, TNC_PART_LEN * sizeof(ldomNode))"
+  "DOM node-part restoration must not transfer realloc ownership"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "lUInt8 * &buf, int &size"
+  "cache-file reads must not expose malloc-owned result buffers"
+)
+
 # --- DOM blob payload and index ownership ---
 require_source_text(
   "${DOM_HEADER}"

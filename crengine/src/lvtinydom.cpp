@@ -854,8 +854,6 @@ public:
     bool create( LVStreamRef stream );
     /// writes block to file
     bool write( lUInt16 type, lUInt16 dataIndex, const lUInt8 * buf, int size, bool compress );
-    /// reads and allocates block in memory
-    bool read( lUInt16 type, lUInt16 dataIndex, lUInt8 * &buf, int &size );
     /// reads a block into caller-owned storage
     bool read( lUInt16 type, lUInt16 dataIndex, std::vector<lUInt8> &data );
     /// reads and validates block
@@ -1286,14 +1284,7 @@ LVStreamRef CacheFile::readStream(lUInt16 type, lUInt16 index)
 {
     CacheFileItem * block = findBlock(type, index);
     if (block && block->_dataSize) {
-#if 0
-        lUInt8 * buf = NULL;
-        int size = 0;
-        if (read(type, index, buf, size))
-            return LVCreateMemoryStream(buf, size);
-#else
         return LVStreamRef(new LVStreamFragment(_stream, block->_blockFilePos, block->_dataSize));
-#endif
     }
     return LVStreamRef();
 }
@@ -1453,32 +1444,6 @@ bool CacheFile::readBlock(
         return false;
     }
     data.swap(candidate);
-    return true;
-}
-
-// reads and allocates a malloc-compatible block for legacy storage owners
-bool CacheFile::read(
-        lUInt16 type, lUInt16 dataIndex,
-        lUInt8 * &buf, int &size)
-{
-    buf = NULL;
-    size = 0;
-    std::vector<lUInt8> data;
-    if (!readBlock(type, dataIndex, data)
-            || data.size()
-                    > static_cast<size_t>(
-                            std::numeric_limits<int>::max()))
-        return false;
-    if (data.empty())
-        return true;
-
-    std::unique_ptr<lUInt8, decltype(&free)> storage(
-            static_cast<lUInt8 *>(malloc(data.size())), &free);
-    if (!storage)
-        return false;
-    memcpy(storage.get(), data.data(), data.size());
-    size = static_cast<int>(data.size());
-    buf = storage.release();
     return true;
 }
 
@@ -2196,14 +2161,9 @@ bool LVRunCacheFileCodecRegression(
                 CBT_TEXT_DATA, 2, input.data(),
                 static_cast<int>(input.size()), true))
         return false;
-    lUInt8 *legacy = NULL;
-    int legacySize = 0;
-    if (!file.read(CBT_TEXT_DATA, 2, legacy, legacySize))
-        return false;
-    std::unique_ptr<lUInt8, decltype(&free)> legacyOwner(
-            legacy, &free);
-    return legacySize == static_cast<int>(input.size())
-            && memcmp(legacyOwner.get(), input.data(), input.size()) == 0;
+    std::vector<lUInt8> direct;
+    return file.read(CBT_TEXT_DATA, 2, direct)
+            && direct == input;
 }
 
 bool LVRunCacheFileIndexRegression()
@@ -3375,6 +3335,11 @@ struct ElementDataStorageItem : public DataStorageItemHeader {
 // tinyNodeCollection implementation
 //=================================================================
 
+void ldomNodePartDeleter::operator()(ldomNode *part) const noexcept
+{
+    free(part);
+}
+
 tinyNodeCollection::tinyNodeCollection()
 : _textCount(0)
 , _textNextFree(0)
@@ -3413,8 +3378,6 @@ tinyNodeCollection::tinyNodeCollection()
 ,_docFlags(DOC_FLAG_DEFAULTS)
 ,_fontMap(113)
 {
-    memset( _textList, 0, sizeof(_textList) );
-    memset( _elemList, 0, sizeof(_elemList) );
     // _docIndex assigned in ldomDocument constructor
 }
 
@@ -3457,8 +3420,6 @@ tinyNodeCollection::tinyNodeCollection( tinyNodeCollection & v )
 ,_stylesheet(v._stylesheet)
 ,_fontMap(113)
 {
-    memset( _textList, 0, sizeof(_textList) );
-    memset( _elemList, 0, sizeof(_elemList) );
     // _docIndex assigned in ldomDocument constructor
 }
 
@@ -3687,63 +3648,61 @@ lUInt16 tinyNodeCollection::getNodeFontIndex( lUInt32 dataIndex )
     return info._fontIndex;
 }
 
-bool tinyNodeCollection::loadNodeData(lUInt16 type, ldomNode ** list, int nodecount)
+bool tinyNodeCollection::loadNodeData(
+        lUInt16 type, ldomNodePartList &list, int nodecount)
 {
-    int count = ((nodecount + TNC_PART_LEN - 1) >> TNC_PART_SHIFT);
-    for (lUInt16 i=0; i<count; i++) {
+    const int count =
+            ((nodecount + TNC_PART_LEN - 1) >> TNC_PART_SHIFT);
+    if (nodecount <= 0 || count > TNC_PART_COUNT)
+        return false;
+    for (int i=0; i<count; i++) {
         int offs = i*TNC_PART_LEN;
         int sz = TNC_PART_LEN;
         if (offs + sz > nodecount) {
             sz = nodecount - offs;
         }
 
-        lUInt8 * p;
-        int buflen;
-        if (!_cacheFile->read( type, i, p, buflen ))
+        std::vector<lUInt8> serializedPart;
+        if (!_cacheFile->read( type, i, serializedPart ))
             return false;
-        if (!p || (unsigned)buflen != sizeof(ldomNode) * sz)
+        const size_t serializedSize =
+                sizeof(ldomNode) * static_cast<size_t>(sz);
+        if (serializedPart.size() != serializedSize || list[i])
             return false;
-        ldomNode * buf = (ldomNode *)p;
-        if (sz == TNC_PART_LEN)
-            list[i] = buf;
-        else {
-            // buf contains `sz' ldomNode items
-            // _elemList, _textList (as `list' argument) must always be TNC_PART_LEN size
-            // add into `list' zero filled (TNC_PART_LEN - sz) items
-            list[i] = (ldomNode *)realloc(buf, TNC_PART_LEN * sizeof(ldomNode));
-            if (NULL == list[i]) {
-                //free(buf);
-                CRLog::error("Not enough memory!");
-                return false;
-            }
-            memset( list[i] + sz, 0, (TNC_PART_LEN - sz) * sizeof(ldomNode) );
+        ldomNodePartOwner part(
+                static_cast<ldomNode *>(
+                        calloc(TNC_PART_LEN, sizeof(ldomNode))));
+        if (!part) {
+            CRLog::error("Not enough memory for cached node part");
+            return false;
         }
+        memcpy(part.get(), serializedPart.data(), serializedSize);
         for (int j=0; j<sz; j++) {
-            list[i][j].setDocumentIndex( _docIndex );
+            part.get()[j].setDocumentIndex( _docIndex );
             // validate loaded nodes: all non-null nodes should be marked as persistent, i.e. the actual node data: _data._pelem_addr, _data._ptext_addr,
             // NOT _data._elem_ptr, _data._text_ptr.
             // So we check this flag, but after setting document so that isNull() works correctly.
             // If the node is not persistent now, then _data._elem_ptr will be used, which then generate SEGFAULT.
-            if (!list[i][j].isNull() && !list[i][j].isPersistent()) {
+            if (!part.get()[j].isNull()
+                    && !part.get()[j].isPersistent()) {
                 CRLog::error("Invalid cached node, flag PERSISTENT are NOT set: segment=%d, index=%d", i, j);
-                // list[i] will be freed in the caller method.
                 return false;
             }
-            if ( list[i][j].isElement() ) {
-                // will be set by loadStyles/updateStyles
-                //list[i][j]._data._pelem._styleIndex = 0;
-                setNodeFontIndex( list[i][j]._handle._dataIndex, 0 );
-                //list[i][j]._data._pelem._fontIndex = 0;
-            }
         }
+        list[i] = std::move(part);
     }
     return true;
 }
 
-bool tinyNodeCollection::saveNodeData( lUInt16 type, ldomNode ** list, int nodecount )
+bool tinyNodeCollection::saveNodeData(
+        lUInt16 type, const ldomNodePartList &list,
+        int nodecount )
 {
-    int count = ((nodecount+TNC_PART_LEN-1) >> TNC_PART_SHIFT);
-    for (lUInt16 i=0; i<count; i++) {
+    const int count =
+            ((nodecount+TNC_PART_LEN-1) >> TNC_PART_SHIFT);
+    if (nodecount <= 0 || count > TNC_PART_COUNT)
+        return false;
+    for (int i=0; i<count; i++) {
         if (!list[i])
             continue;
         int offs = i*TNC_PART_LEN;
@@ -3752,7 +3711,7 @@ bool tinyNodeCollection::saveNodeData( lUInt16 type, ldomNode ** list, int nodec
             sz = nodecount - offs;
         }
         ldomNode buf[TNC_PART_LEN];
-        memcpy(buf, list[i], sizeof(ldomNode) * sz);
+        memcpy(buf, list[i].get(), sizeof(ldomNode) * sz);
         for (int j = 0; j < sz; j++) {
             buf[j].setDocumentIndex(_docIndex);
             // On 64bits builds, this serialized ldomNode may have some
@@ -3798,41 +3757,131 @@ bool tinyNodeCollection::loadNodeData()
     if ( magic != NODE_INDEX_MAGIC ) {
         return false;
     }
-    if ( elemcount<=0 )
+    const lInt32 maximumNodeCount =
+            (TNC_PART_COUNT << TNC_PART_SHIFT) - 1;
+    if ( elemcount<=0 || elemcount > maximumNodeCount )
         return false;
-    if ( textcount<=0 )
+    if ( textcount<=0 || textcount > maximumNodeCount )
         return false;
-    ldomNode * elemList[TNC_PART_COUNT] = { 0 };
-    ldomNode * textList[TNC_PART_COUNT] = { 0 };
+    ldomNodePartList elemList;
+    ldomNodePartList textList;
     if ( !loadNodeData( CBT_ELEM_NODE, elemList, elemcount+1 ) ) {
-        for ( int i=0; i<TNC_PART_COUNT; i++ )
-            if ( elemList[i] )
-                free( elemList[i] );
         return false;
     }
     if ( !loadNodeData( CBT_TEXT_NODE, textList, textcount+1 ) ) {
-        for ( int i=0; i<TNC_PART_COUNT; i++ )
-            if ( textList[i] )
-                free( textList[i] );
-        // Also clean elemList previously successfully loaded, to avoid mem leak
-        for ( int i=0; i<TNC_PART_COUNT; i++ )
-            if ( elemList[i] )
-                free( elemList[i] );
         return false;
     }
-    for ( int i=0; i<TNC_PART_COUNT; i++ ) {
-        if ( _elemList[i] )
-            free( _elemList[i] );
-        if ( _textList[i] )
-            free( _textList[i] );
-    }
-    memcpy( _elemList, elemList, sizeof(elemList) );
-    memcpy( _textList, textList, sizeof(textList) );
+
+    destroyNodeParts(_elemList, _elemCount);
+    destroyNodeParts(_textList, _textCount);
+    _elemList.swap(elemList);
+    _textList.swap(textList);
     _elemCount = elemcount;
     _textCount = textcount;
+
+    const int elemPartCount =
+            ((_elemCount + 1 + TNC_PART_LEN - 1)
+                    >> TNC_PART_SHIFT);
+    for (int i = 0; i < elemPartCount; ++i) {
+        ldomNode *part = _elemList[i].get();
+        const int firstNode = i * TNC_PART_LEN;
+        const int partNodeCount =
+                std::min(
+                        TNC_PART_LEN,
+                        _elemCount + 1 - firstNode);
+        for (int j = 0; j < partNodeCount; ++j) {
+            if (part[j].isElement())
+                setNodeFontIndex(
+                        part[j]._handle._dataIndex, 0);
+        }
+    }
     return true;
 }
 #endif  // BUILD_LITE!=1
+
+bool LVRunDomNodePartOwnershipRegression()
+{
+#if BUILD_LITE!=1
+    class NodePartTestCollection : public tinyNodeCollection {
+    public:
+        ContinuousOperationResult swapToCache(
+                CRTimerUtil &) override {
+            return CR_DONE;
+        }
+        bool openFromCache(
+                CacheLoadingCallback *,
+                LVDocViewCallback *) override {
+            return false;
+        }
+        ContinuousOperationResult updateMap(
+                CRTimerUtil &,
+                LVDocViewCallback *) override {
+            return CR_DONE;
+        }
+    };
+    NodePartTestCollection collection;
+    collection._docIndex = 0;
+    ldomNode *sentinel = collection.allocTinyNode(0);
+    ldomNode *sentinelPart = collection._textList[0].get();
+    if (!sentinel || !sentinelPart
+            || collection._textCount != 1
+            || collection._elemCount != 0)
+        return false;
+
+    LVStreamRef cacheStream = LVCreateMemoryStream();
+    std::unique_ptr<CacheFile> cache(
+            new CacheFile(1, CacheCompressionNone));
+    if (cacheStream.isNull() || !cache->create(cacheStream))
+        return false;
+    SerialBuf nodeIndex(12, true);
+    nodeIndex << static_cast<lUInt32>(NODE_INDEX_MAGIC)
+            << static_cast<lUInt32>(1)
+            << static_cast<lUInt32>(1);
+    std::vector<lUInt8> serializedNodes(
+            sizeof(ldomNode) * 2, 0);
+    if (nodeIndex.error()
+            || !cache->write(
+                    CBT_NODE_INDEX, nodeIndex, false)
+            || !cache->write(
+                    CBT_ELEM_NODE, 0,
+                    serializedNodes.data(),
+                    static_cast<int>(
+                            serializedNodes.size()), false)
+            || !cache->write(
+                    CBT_TEXT_NODE, 0,
+                    serializedNodes.data(),
+                    static_cast<int>(
+                            serializedNodes.size() - 1), false))
+        return false;
+    collection._cacheFile = cache.release();
+
+    if (collection.loadNodeData()
+            || collection._textList[0].get() != sentinelPart
+            || collection._elemList[0]
+            || collection._textCount != 1
+            || collection._elemCount != 0)
+        return false;
+
+    if (!collection._cacheFile->write(
+                CBT_TEXT_NODE, 0,
+                serializedNodes.data(),
+                static_cast<int>(
+                        serializedNodes.size()), false)
+            || !collection.loadNodeData()
+            || !collection._elemList[0]
+            || !collection._textList[0]
+            || collection._textList[0].get() == sentinelPart
+            || collection._elemCount != 1
+            || collection._textCount != 1)
+        return false;
+    return collection._elemList[0].get()[0].isNull()
+            && collection._elemList[0].get()[1].isNull()
+            && collection._textList[0].get()[0].isNull()
+            && collection._textList[0].get()[1].isNull();
+#else
+    return true;
+#endif
+}
 
 /// get ldomNode instance pointer
 ldomNode * tinyNodeCollection::getTinyNode( lUInt32 index )
@@ -3840,9 +3889,13 @@ ldomNode * tinyNodeCollection::getTinyNode( lUInt32 index )
     if ( !index )
         return NULL;
     if ( index & 1 ) // element
-        return &(_elemList[index>>TNC_PART_INDEX_SHIFT][(index>>4)&TNC_PART_MASK]);
+        return &(_elemList[
+                index>>TNC_PART_INDEX_SHIFT].get()[
+                (index>>4)&TNC_PART_MASK]);
     else // text
-        return &(_textList[index>>TNC_PART_INDEX_SHIFT][(index>>4)&TNC_PART_MASK]);
+        return &(_textList[
+                index>>TNC_PART_INDEX_SHIFT].get()[
+                (index>>4)&TNC_PART_MASK]);
 }
 
 /// allocate new tiny node
@@ -3863,10 +3916,21 @@ ldomNode * tinyNodeCollection::allocTinyNode( int type )
             int idx = _elemCount >> TNC_PART_SHIFT;
             if (idx >= TNC_PART_COUNT)
                 crFatalError(1003, "allocTinyNode: can't create any more element nodes (hard limit)");
-            ldomNode * part = _elemList[idx];
+            ldomNode * part = _elemList[idx].get();
             if ( !part ) {
-                part = (ldomNode*)calloc(TNC_PART_LEN, sizeof(*part));
-                _elemList[idx] = part;
+                ldomNodePartOwner allocated(
+                        static_cast<ldomNode *>(
+                                calloc(
+                                        TNC_PART_LEN,
+                                        sizeof(ldomNode))));
+                if (!allocated) {
+                    crFatalError(
+                            -1,
+                            "Cannot allocate element node part");
+                    return NULL;
+                }
+                part = allocated.get();
+                _elemList[idx] = std::move(allocated);
             }
             res = &part[_elemCount & TNC_PART_MASK];
             res->setDocumentIndex( _docIndex );
@@ -3886,10 +3950,23 @@ ldomNode * tinyNodeCollection::allocTinyNode( int type )
             _textCount++;
             if (_textCount >= (TNC_PART_COUNT << TNC_PART_SHIFT))
                 crFatalError(1003, "allocTinyNode: can't create any more text nodes (hard limit)");
-            ldomNode * part = _textList[_textCount >> TNC_PART_SHIFT];
+            const int partIndex =
+                    _textCount >> TNC_PART_SHIFT;
+            ldomNode * part = _textList[partIndex].get();
             if ( !part ) {
-                part = (ldomNode*)calloc(TNC_PART_LEN, sizeof(*part));
-                _textList[ _textCount >> TNC_PART_SHIFT ] = part;
+                ldomNodePartOwner allocated(
+                        static_cast<ldomNode *>(
+                                calloc(
+                                        TNC_PART_LEN,
+                                        sizeof(ldomNode))));
+                if (!allocated) {
+                    crFatalError(
+                            -1,
+                            "Cannot allocate text node part");
+                    return NULL;
+                }
+                part = allocated.get();
+                _textList[partIndex] = std::move(allocated);
             }
             res = &part[_textCount & TNC_PART_MASK];
             res->setDocumentIndex( _docIndex );
@@ -3906,7 +3983,8 @@ void tinyNodeCollection::recycleTinyNode( lUInt32 index )
     if ( index & 1 ) {
         // element
         index >>= 4;
-        ldomNode * part = _elemList[index >> TNC_PART_SHIFT];
+        ldomNode * part =
+                _elemList[index >> TNC_PART_SHIFT].get();
         ldomNode * p = &part[index & TNC_PART_MASK];
         p->_handle._dataIndex = 0; // indicates NULL node
         p->_data._nextFreeIndex = _elemNextFree;
@@ -3915,7 +3993,8 @@ void tinyNodeCollection::recycleTinyNode( lUInt32 index )
     } else {
         // text
         index >>= 4;
-        ldomNode * part = _textList[index >> TNC_PART_SHIFT];
+        ldomNode * part =
+                _textList[index >> TNC_PART_SHIFT].get();
         ldomNode * p = &part[index & TNC_PART_MASK];
         p->_handle._dataIndex = 0; // indicates NULL node
         p->_data._nextFreeIndex = _textNextFree;
@@ -3925,34 +4004,35 @@ void tinyNodeCollection::recycleTinyNode( lUInt32 index )
     _nodeStyleHash = 0;
 }
 
+void tinyNodeCollection::destroyNodeParts(
+        ldomNodePartList &list, int nodecount)
+{
+    if (nodecount < 0)
+        return;
+    const int lastPart = std::min(
+            TNC_PART_COUNT - 1,
+            nodecount >> TNC_PART_SHIFT);
+    for (int partindex = 0;
+            partindex <= lastPart; ++partindex) {
+        ldomNode *part = list[partindex].get();
+        if ( part ) {
+            int n0 = TNC_PART_LEN * partindex;
+            for ( int i=0;
+                    i<TNC_PART_LEN && n0+i<=nodecount; i++ )
+                part[i].onCollectionDestroy();
+            list[partindex].reset();
+        }
+    }
+}
+
 tinyNodeCollection::~tinyNodeCollection()
 {
 #if BUILD_LITE!=1
     if ( _cacheFile )
         delete _cacheFile;
 #endif
-    // clear all elem parts
-    for ( int partindex = 0; partindex<=(_elemCount>>TNC_PART_SHIFT); partindex++ ) {
-        ldomNode * part = _elemList[partindex];
-        if ( part ) {
-            int n0 = TNC_PART_LEN * partindex;
-            for ( int i=0; i<TNC_PART_LEN && n0+i<=_elemCount; i++ )
-                part[i].onCollectionDestroy();
-            free(part);
-            _elemList[partindex] = NULL;
-        }
-    }
-    // clear all text parts
-    for ( int partindex = 0; partindex<=(_textCount>>TNC_PART_SHIFT); partindex++ ) {
-        ldomNode * part = _textList[partindex];
-        if ( part ) {
-            int n0 = TNC_PART_LEN * partindex;
-            for ( int i=0; i<TNC_PART_LEN && n0+i<=_textCount; i++ )
-                part[i].onCollectionDestroy();
-            free(part);
-            _textList[partindex] = NULL;
-        }
-    }
+    destroyNodeParts(_elemList, _elemCount);
+    destroyNodeParts(_textList, _textCount);
     // document unregistered in ldomDocument destructor
 }
 
@@ -3963,7 +4043,7 @@ void tinyNodeCollection::persist( CRTimerUtil & maxTime )
     CRLog::info("lxmlDocBase::persist() invoked - converting all nodes to persistent objects");
     // elements
     for ( int partindex = 0; partindex<=(_elemCount>>TNC_PART_SHIFT); partindex++ ) {
-        ldomNode * part = _elemList[partindex];
+        ldomNode * part = _elemList[partindex].get();
         if ( part ) {
             int n0 = TNC_PART_LEN * partindex;
             for ( int i=0; i<TNC_PART_LEN && n0+i<=_elemCount; i++ )
@@ -3979,7 +4059,7 @@ void tinyNodeCollection::persist( CRTimerUtil & maxTime )
         return;
     // texts
     for ( int partindex = 0; partindex<=(_textCount>>TNC_PART_SHIFT); partindex++ ) {
-        ldomNode * part = _textList[partindex];
+        ldomNode * part = _textList[partindex].get();
         if ( part ) {
             int n0 = TNC_PART_LEN * partindex;
             for ( int i=0; i<TNC_PART_LEN && n0+i<=_textCount; i++ )
@@ -5993,7 +6073,7 @@ void tinyNodeCollection::dropStyles()
         if ( offs + sz > _elemCount+1 ) {
             sz = _elemCount+1 - offs;
         }
-        ldomNode * buf = _elemList[i];
+        ldomNode * buf = _elemList[i].get();
         for ( int j=0; j<sz; j++ ) {
             if ( buf[j].isElement() ) {
                 setNodeStyleIndex( buf[j]._handle._dataIndex, 0 );
@@ -6014,7 +6094,7 @@ int tinyNodeCollection::calcFinalBlocks()
         if ( offs + sz > _elemCount+1 ) {
             sz = _elemCount+1 - offs;
         }
-        ldomNode * buf = _elemList[i];
+        ldomNode * buf = _elemList[i].get();
         for ( int j=0; j<sz; j++ ) {
             if ( buf[j].isElement() ) {
                 int rm = buf[j].getRendMethod();
@@ -16560,7 +16640,7 @@ lUInt32 tinyNodeCollection::calcStyleHash(bool already_rendered)
             if ( offs + sz > _elemCount+1 ) {
                 sz = _elemCount+1 - offs;
             }
-            ldomNode * buf = _elemList[i];
+            ldomNode * buf = _elemList[i].get();
             if ( !buf ) continue; // avoid clang-tidy warning
             for ( int j=0; j<sz; j++ ) {
                 if ( buf[j].isElement() ) {
@@ -16644,7 +16724,7 @@ bool tinyNodeCollection::validateDocument()
         if ( offs + sz > _elemCount+1 ) {
             sz = _elemCount+1 - offs;
         }
-        ldomNode * buf = _elemList[i];
+        ldomNode * buf = _elemList[i].get();
         for ( int j=0; j<sz; j++ ) {
             buf[j].setDocumentIndex( _docIndex );
             if ( buf[j].isElement() ) {
@@ -16688,7 +16768,7 @@ bool tinyNodeCollection::updateLoadedStyles( bool enabled )
         if ( offs + sz > _elemCount+1 ) {
             sz = _elemCount+1 - offs;
         }
-        ldomNode * buf = _elemList[i];
+        ldomNode * buf = _elemList[i].get();
         for ( int j=0; j<sz; j++ ) {
             buf[j].setDocumentIndex( _docIndex );
             if ( buf[j].isElement() ) {
@@ -20735,10 +20815,8 @@ void testCacheFile()
     CRLog::info("Starting CacheFile unit test");
     lUInt8 data1[] = {'T', 'e', 's', 't', 'd', 'a', 't', 'a', 1, 2, 3, 4, 5, 6, 7};
     lUInt8 data2[] = {'T', 'e', 's', 't', 'd', 'a', 't', 'a', '2', 1, 2, 3, 4, 5, 6, 7};
-    lUInt8 * buf1;
-    lUInt8 * buf2;
-    int sz1;
-    int sz2;
+    std::vector<lUInt8> buf1;
+    std::vector<lUInt8> buf2;
     lString32 fn(TEST_FILE_NAME);
 
     {
@@ -20772,23 +20850,23 @@ void testCacheFile()
         MYASSERT(f.write(CBT_TEXT_DATA, 1, data1, sizeof(data1), true)==true, "write 1");
         MYASSERT(f.write(CBT_ELEM_DATA, 3, data2, sizeof(data2), false)==true, "write 2");
 
-        MYASSERT(f.read(CBT_TEXT_DATA, 1, buf1, sz1)==true, "read 1");
-        MYASSERT(f.read(CBT_ELEM_DATA, 3, buf2, sz2)==true, "read 2");
-        MYASSERT(sz1==sizeof(data1), "read 1 size");
-        MYASSERT(!memcmp(buf1, data1, sizeof(data1)), "read 1 content");
-        MYASSERT(sz2==sizeof(data2), "read 2 size");
-        MYASSERT(!memcmp(buf2, data2, sizeof(data2)), "read 2 content");
+        MYASSERT(f.read(CBT_TEXT_DATA, 1, buf1)==true, "read 1");
+        MYASSERT(f.read(CBT_ELEM_DATA, 3, buf2)==true, "read 2");
+        MYASSERT(buf1.size()==sizeof(data1), "read 1 size");
+        MYASSERT(!memcmp(buf1.data(), data1, sizeof(data1)), "read 1 content");
+        MYASSERT(buf2.size()==sizeof(data2), "read 2 size");
+        MYASSERT(!memcmp(buf2.data(), data2, sizeof(data2)), "read 2 content");
     }
     // write
     {
         CacheFile f;
         MYASSERT(f.open(fn)==true, "Wrong failed open result");
-        MYASSERT(f.read(CBT_TEXT_DATA, 1, buf1, sz1)==true, "read 1");
-        MYASSERT(f.read(CBT_ELEM_DATA, 3, buf2, sz2)==true, "read 2");
-        MYASSERT(sz1==sizeof(data1), "read 1 size");
-        MYASSERT(!memcmp(buf1, data1, sizeof(data1)), "read 1 content");
-        MYASSERT(sz2==sizeof(data2), "read 2 size");
-        MYASSERT(!memcmp(buf2, data2, sizeof(data2)), "read 2 content");
+        MYASSERT(f.read(CBT_TEXT_DATA, 1, buf1)==true, "read 1");
+        MYASSERT(f.read(CBT_ELEM_DATA, 3, buf2)==true, "read 2");
+        MYASSERT(buf1.size()==sizeof(data1), "read 1 size");
+        MYASSERT(!memcmp(buf1.data(), data1, sizeof(data1)), "read 1 content");
+        MYASSERT(buf2.size()==sizeof(data2), "read 2 size");
+        MYASSERT(!memcmp(buf2.data(), data2, sizeof(data2)), "read 2 content");
     }
 
     CRLog::info("Finished CacheFile unit test");

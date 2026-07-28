@@ -85,12 +85,12 @@ their vector-backed output chunks. Pack, unpack, validation and block I/O build
 operation-scoped vectors and publish results only after a complete codec frame,
 size check and CRC check succeed. A corrupt frame leaves the caller's previous
 result intact, and a later reset can safely reuse the same context because
-error paths no longer call `deflateEnd()` or `inflateEnd()`. `SerialBuf` and
-DOM text-storage chunks accept completed cache blocks through vector storage;
-the remaining persistent DOM node-array consumer retains an explicit
-malloc-compatible ownership boundary. Regression coverage exercises
-multi-chunk ZSTD/zlib round trips, reuse, corruption recovery,
-cleanup/recreation and the vector, serialization and legacy read boundaries.
+error paths no longer call `deflateEnd()` or `inflateEnd()`. `SerialBuf`, DOM
+text-storage chunks and persistent node-part loading accept completed cache
+blocks through vector storage; no malloc-return CacheFile read boundary
+remains. Regression coverage exercises multi-chunk ZSTD/zlib round trips,
+reuse, corruption recovery, cleanup/recreation and the direct-vector and
+serialization read boundaries.
 
 Cache-file index serialization uses bounded `vector<CacheFileItem>` snapshots.
 On load, every record and live block key is validated before candidate owning
@@ -122,6 +122,16 @@ can be updated. Fixed raw-data access and node-item views enforce their byte
 ranges in every build. Regression coverage follows both fixed and dynamically
 allocated chunks through eviction and restore, verifies exact accounting and
 rejects a mismatched indexed size without publishing bytes.
+
+Persistent DOM element/text node parts retain their required calloc-compatible
+layout but each block is owned by `unique_ptr` with one `free` deleter, and the
+4096-slot catalogs are fixed `std::array` owners. Cache restoration reads each
+part into scoped vector bytes, adopts only a full-size validated block and
+stages both catalogs before touching the live DOM. Once both candidates
+succeed, existing node payloads follow `onCollectionDestroy()` and the
+catalogs swap without relocating any node. Count bounds match the encoded
+28-bit address space. Regression coverage verifies that a truncated later part
+preserves the prior catalog and that a corrected cache replaces both catalogs.
 
 Temporary draw mark lists and SVG decoder input/output buffers also use
 standard RAII containers. These operation-scoped resources cannot outlive
