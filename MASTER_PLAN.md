@@ -119,7 +119,7 @@ DRM или ограничений доступа, подбор/получени�
   cached-stream slots, parser read/charset buffers, RTF text/destination
   ownership и draw mark list. Остальные участки мигрируются отдельными
   bounded-пакетами.
-- [-] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
+- [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для
   MathML-стилей; mutex для interning-таблиц cs8/cs32; IS_FIRST_BODY перенесён
@@ -127,8 +127,8 @@ DRM или ограничений доступа, подбор/получени�
   single-threaded lifecycle-компонентами с поддержкой повторной инициализации;
   ~15 read-only глобалов переведены в const; Antiword bridge использует
   per-import context и сериализованные entry points. Все паттерны закреплены
-  в `native_state_policy.cmake`.
-  Осталось: crconcurrent mutex-указатели (MEDIUM, провайдер не подключён).
+  в `native_state_policy.cmake`; legacy crconcurrent guards имеют встроенный
+  recursive-mutex fallback, RAII ownership и quiescent setup/shutdown.
 - [x] Добавить differential/regression tests для pagination, bookmarks, selection,
   search и восстановления позиции.
 - [x] Ввести ограниченный cache manager с наблюдаемыми hit/miss/eviction counters

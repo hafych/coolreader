@@ -50,6 +50,7 @@ public:
     }
 };
 
+/// non-owning provider view; update only during quiescent engine lifecycle
 extern CRConcurrencyProvider * concurrencyProvider;
 
 

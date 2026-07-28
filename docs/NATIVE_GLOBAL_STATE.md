@@ -106,3 +106,11 @@ third-party C callbacks do not accept user data. `DetectWordFormat()` and
 including its own option globals. Concurrent fixture imports therefore cannot
 cross-write documents or stream adapters, and all callback views are restored
 on early return.
+
+The legacy engine guard pointers are non-owning compatibility views backed by
+private `std::unique_ptr<CRMutex>` owners. Recursive standard mutexes provide an
+active fallback when no platform concurrency provider is connected. A custom
+provider setup publishes all six mutexes atomically or rolls back all
+candidates; repeated setup and shutdown are idempotent. Setup, provider
+replacement and `CRShutdownEngineConcurrency()` are quiescent lifecycle
+operations and must not race engine users.

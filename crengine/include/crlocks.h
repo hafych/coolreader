@@ -71,6 +71,8 @@ public:
 };
 
 
+// Non-owning compatibility views. CRSetupEngineConcurrency() and
+// CRShutdownEngineConcurrency() are quiescent lifecycle operations.
 extern CRMutex * _refMutex;
 extern CRMutex * _fontMutex;
 extern CRMutex * _fontManMutex;
@@ -91,7 +93,9 @@ extern CRMutex * _crengineMutex;
 // use CRENGINE_GUARD to acquire crengine drawing lock
 #define CRENGINE_GUARD CRGuard _crengineGuard(_crengineMutex); CR_UNUSED(_crengineMutex);
 
-/// call to create mutexes for different parts of CoolReader engine
+/// installs provider mutexes, or restores the built-in fallback
 void CRSetupEngineConcurrency();
+/// quiescent teardown for engine mutexes
+void CRShutdownEngineConcurrency();
 
 #endif // CRLOCKS_H

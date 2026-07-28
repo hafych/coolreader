@@ -168,6 +168,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   scoped per-import context while serializing the third-party library; real
   Word fixture imports are covered concurrently, and sequential lists reset
   their state correctly.
+- Legacy engine guard mutexes now have built-in recursive fallbacks and
+  private RAII owners. Provider setup is all-or-nothing, partial failure rolls
+  back safely, and quiescent shutdown clears non-owning views before teardown.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

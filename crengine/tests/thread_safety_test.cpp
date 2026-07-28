@@ -1,4 +1,5 @@
 #include "lvthread.h"
+#include "crconcurrent.h"
 #include "crrecursionguard.h"
 #include "lvdocview.h"
 #include "lvstreamutils.h"
@@ -7,6 +8,7 @@
 #include <atomic>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 #include <sched.h>
 #include <string>
 #include <thread>
@@ -15,6 +17,11 @@
 static const char INTERNED_TEXT_8[] = "thread-safe-interning-8";
 static const char INTERNED_TEXT_32_NARROW[] = "thread-safe-interning-32-narrow";
 static const lChar32 INTERNED_TEXT_32_WIDE[] = U"thread-safe-interning-32-wide";
+
+static std::atomic<int> concurrencyMutexCreated(0);
+static std::atomic<int> concurrencyMutexDestroyed(0);
+static std::atomic<int> concurrencyMutexAcquired(0);
+static std::atomic<int> concurrencyMutexReleased(0);
 
 static int fail(const char *message) {
     std::fprintf(stderr, "%s\n", message);
@@ -82,6 +89,196 @@ static int testMutexAcrossThreads() {
     worker.join();
     if (!entered.load(std::memory_order_acquire))
         return fail("LVMutex did not release the waiting thread");
+    return 0;
+}
+
+class CountingConcurrencyMutex : public CRMutex {
+private:
+    std::recursive_mutex m_mutex;
+
+public:
+    CountingConcurrencyMutex()
+    {
+        concurrencyMutexCreated.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    ~CountingConcurrencyMutex() override
+    {
+        concurrencyMutexDestroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void acquire() override
+    {
+        m_mutex.lock();
+        concurrencyMutexAcquired.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void release() override
+    {
+        concurrencyMutexReleased.fetch_add(1, std::memory_order_relaxed);
+        m_mutex.unlock();
+    }
+};
+
+class CountingConcurrencyProvider : public CRConcurrencyProvider {
+private:
+    int m_createCalls;
+    int m_failAt;
+
+public:
+    explicit CountingConcurrencyProvider(int failAt = -1)
+        : m_createCalls(0)
+        , m_failAt(failAt)
+    {
+    }
+
+    CRMutex *createMutex() override
+    {
+        int call = m_createCalls++;
+        return call == m_failAt ? NULL : new CountingConcurrencyMutex();
+    }
+
+    CRMonitor *createMonitor() override
+    {
+        return NULL;
+    }
+
+    CRThread *createThread(CRRunnable *) override
+    {
+        return NULL;
+    }
+
+    void executeGui(CRRunnable *task) override
+    {
+        delete task;
+    }
+
+    void executeGui(CRRunnable *task, int) override
+    {
+        delete task;
+    }
+
+    void sleepMs(int) override
+    {
+    }
+};
+
+static void resetConcurrencyMutexCounters()
+{
+    concurrencyMutexCreated.store(0, std::memory_order_relaxed);
+    concurrencyMutexDestroyed.store(0, std::memory_order_relaxed);
+    concurrencyMutexAcquired.store(0, std::memory_order_relaxed);
+    concurrencyMutexReleased.store(0, std::memory_order_relaxed);
+}
+
+static bool engineMutexViewsAreNull()
+{
+    return _refMutex == NULL
+            && _fontMutex == NULL
+            && _fontManMutex == NULL
+            && _fontGlyphCacheMutex == NULL
+            && _fontLocalGlyphCacheMutex == NULL
+            && _crengineMutex == NULL;
+}
+
+static bool engineMutexViewsAreReady()
+{
+    return _refMutex != NULL
+            && _fontMutex != NULL
+            && _fontManMutex != NULL
+            && _fontGlyphCacheMutex != NULL
+            && _fontLocalGlyphCacheMutex != NULL
+            && _crengineMutex != NULL;
+}
+
+static bool engineRefMutexExcludesThreads()
+{
+    std::atomic<int> active(0);
+    std::atomic<bool> overlapped(false);
+    std::vector<std::thread> workers;
+    for (int workerIndex = 0; workerIndex < 4; ++workerIndex) {
+        workers.emplace_back([&active, &overlapped]() {
+            for (int iteration = 0; iteration < 1000; ++iteration) {
+                CRGuard guard(_refMutex);
+                CR_UNUSED(guard);
+                if (active.fetch_add(
+                            1, std::memory_order_relaxed) != 0) {
+                    overlapped.store(true, std::memory_order_relaxed);
+                }
+                std::this_thread::yield();
+                active.fetch_sub(1, std::memory_order_relaxed);
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+    return !overlapped.load(std::memory_order_relaxed);
+}
+
+static int testEngineConcurrencyLifecycle()
+{
+    if (!engineMutexViewsAreReady() || !engineRefMutexExcludesThreads())
+        return fail("built-in engine mutex fallback is not active");
+    CRShutdownEngineConcurrency();
+    concurrencyProvider = NULL;
+    resetConcurrencyMutexCounters();
+
+    CountingConcurrencyProvider provider;
+    concurrencyProvider = &provider;
+    CRSetupEngineConcurrency();
+    CRSetupEngineConcurrency();
+    CRMutex *mutexes[] = {
+        _refMutex,
+        _fontMutex,
+        _fontManMutex,
+        _fontGlyphCacheMutex,
+        _fontLocalGlyphCacheMutex,
+        _crengineMutex
+    };
+    for (CRMutex *mutex : mutexes) {
+        if (mutex == NULL) {
+            CRShutdownEngineConcurrency();
+            concurrencyProvider = NULL;
+            return fail("engine mutex setup published a null slot");
+        }
+        CRGuard guard(mutex);
+        CR_UNUSED(guard);
+    }
+    if (concurrencyMutexCreated.load(std::memory_order_relaxed) != 6
+            || concurrencyMutexAcquired.load(std::memory_order_relaxed) != 6
+            || concurrencyMutexReleased.load(std::memory_order_relaxed) != 6) {
+        CRShutdownEngineConcurrency();
+        concurrencyProvider = NULL;
+        return fail("engine mutex setup was not idempotent");
+    }
+
+    CRShutdownEngineConcurrency();
+    CRShutdownEngineConcurrency();
+    concurrencyProvider = NULL;
+    if (!engineMutexViewsAreNull()
+            || concurrencyMutexDestroyed.load(
+                    std::memory_order_relaxed) != 6) {
+        return fail("engine mutex shutdown did not clear owned slots");
+    }
+
+    resetConcurrencyMutexCounters();
+    CountingConcurrencyProvider failingProvider(2);
+    concurrencyProvider = &failingProvider;
+    CRSetupEngineConcurrency();
+    concurrencyProvider = NULL;
+    if (!engineMutexViewsAreNull()
+            || concurrencyMutexCreated.load(
+                    std::memory_order_relaxed) != 5
+            || concurrencyMutexDestroyed.load(
+                    std::memory_order_relaxed) != 5) {
+        CRShutdownEngineConcurrency();
+        return fail("partial engine mutex setup did not roll back");
+    }
+    CRShutdownEngineConcurrency();
+    concurrencyProvider = NULL;
+    CRSetupEngineConcurrency();
+    if (!engineMutexViewsAreReady())
+        return fail("engine mutex fallback did not restart after shutdown");
     return 0;
 }
 
@@ -269,6 +466,8 @@ int main() {
     if (testThreadCompletion() != 0)
         return 1;
     if (testMutexAcrossThreads() != 0)
+        return 1;
+    if (testEngineConcurrencyLifecycle() != 0)
         return 1;
     if (testThreadLocalRecursionLimit() != 0)
         return 1;

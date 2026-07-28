@@ -19,6 +19,9 @@
  ***************************************************************************/
 
 #include <stdlib.h>
+#include <memory>
+#include <mutex>
+#include <utility>
 #include "crconcurrent.h"
 #include "lvptrvec.h"
 #include "lvstring.h"
@@ -31,26 +34,172 @@ CRMutex * _fontGlyphCacheMutex = NULL;
 CRMutex * _fontLocalGlyphCacheMutex = NULL;
 CRMutex * _crengineMutex = NULL;
 
-void CRSetupEngineConcurrency() {
-    if (!concurrencyProvider) {
-    	CRLog::error("CRSetupEngineConcurrency() : No concurrency provider is set");
-        return;
+CRConcurrencyProvider * concurrencyProvider = NULL;
+
+namespace {
+
+class CRStdMutex : public CRMutex {
+private:
+    std::recursive_mutex m_mutex;
+
+public:
+    void acquire() override
+    {
+        m_mutex.lock();
     }
-    if (!_refMutex)
-        _refMutex = concurrencyProvider->createMutex();
-    if (!_fontMutex)
-        _fontMutex = concurrencyProvider->createMutex();
-    if (!_fontManMutex)
-        _fontManMutex = concurrencyProvider->createMutex();
-    if (!_fontGlyphCacheMutex)
-        _fontGlyphCacheMutex = concurrencyProvider->createMutex();
-    if (!_fontLocalGlyphCacheMutex)
-        _fontLocalGlyphCacheMutex = concurrencyProvider->createMutex();
-    if (!_crengineMutex)
-    	_crengineMutex = concurrencyProvider->createMutex();
+
+    void release() override
+    {
+        m_mutex.unlock();
+    }
+};
+
+std::mutex g_concurrencyLifecycleMutex;
+std::unique_ptr<CRMutex> g_refMutexOwner;
+std::unique_ptr<CRMutex> g_fontMutexOwner;
+std::unique_ptr<CRMutex> g_fontManMutexOwner;
+std::unique_ptr<CRMutex> g_fontGlyphCacheMutexOwner;
+std::unique_ptr<CRMutex> g_fontLocalGlyphCacheMutexOwner;
+std::unique_ptr<CRMutex> g_crengineMutexOwner;
+bool g_usingFallbackMutexes = false;
+
+bool engineMutexesReady()
+{
+    return g_refMutexOwner
+            && g_fontMutexOwner
+            && g_fontManMutexOwner
+            && g_fontGlyphCacheMutexOwner
+            && g_fontLocalGlyphCacheMutexOwner
+            && g_crengineMutexOwner;
 }
 
-CRConcurrencyProvider * concurrencyProvider = NULL;
+void clearEngineMutexViews()
+{
+    _refMutex = NULL;
+    _fontMutex = NULL;
+    _fontManMutex = NULL;
+    _fontGlyphCacheMutex = NULL;
+    _fontLocalGlyphCacheMutex = NULL;
+    _crengineMutex = NULL;
+}
+
+void publishEngineMutexViews()
+{
+    _refMutex = g_refMutexOwner.get();
+    _fontMutex = g_fontMutexOwner.get();
+    _fontManMutex = g_fontManMutexOwner.get();
+    _fontGlyphCacheMutex = g_fontGlyphCacheMutexOwner.get();
+    _fontLocalGlyphCacheMutex = g_fontLocalGlyphCacheMutexOwner.get();
+    _crengineMutex = g_crengineMutexOwner.get();
+}
+
+void createFallbackEngineMutexes()
+{
+    g_refMutexOwner.reset(new CRStdMutex());
+    g_fontMutexOwner.reset(new CRStdMutex());
+    g_fontManMutexOwner.reset(new CRStdMutex());
+    g_fontGlyphCacheMutexOwner.reset(new CRStdMutex());
+    g_fontLocalGlyphCacheMutexOwner.reset(new CRStdMutex());
+    g_crengineMutexOwner.reset(new CRStdMutex());
+    g_usingFallbackMutexes = true;
+    publishEngineMutexViews();
+}
+
+class EngineMutexBootstrap {
+public:
+    EngineMutexBootstrap()
+    {
+        createFallbackEngineMutexes();
+    }
+
+    ~EngineMutexBootstrap()
+    {
+        clearEngineMutexViews();
+    }
+};
+
+EngineMutexBootstrap g_engineMutexBootstrap;
+
+} // namespace
+
+void CRSetupEngineConcurrency()
+{
+    CRConcurrencyProvider *provider = NULL;
+    {
+        std::lock_guard<std::mutex> guard(g_concurrencyLifecycleMutex);
+        if (engineMutexesReady()
+                && (!g_usingFallbackMutexes || !concurrencyProvider))
+            return;
+        provider = concurrencyProvider;
+    }
+
+    std::unique_ptr<CRMutex> refMutex(
+            provider ? provider->createMutex() : new CRStdMutex());
+    std::unique_ptr<CRMutex> fontMutex(
+            provider ? provider->createMutex() : new CRStdMutex());
+    std::unique_ptr<CRMutex> fontManMutex(
+            provider ? provider->createMutex() : new CRStdMutex());
+    std::unique_ptr<CRMutex> fontGlyphCacheMutex(
+            provider ? provider->createMutex() : new CRStdMutex());
+    std::unique_ptr<CRMutex> fontLocalGlyphCacheMutex(provider
+            ? provider->createMutex() : new CRStdMutex());
+    std::unique_ptr<CRMutex> crengineMutex(
+            provider ? provider->createMutex() : new CRStdMutex());
+    if (!refMutex || !fontMutex || !fontManMutex
+            || !fontGlyphCacheMutex || !fontLocalGlyphCacheMutex
+            || !crengineMutex) {
+        CRLog::error(
+                "CRSetupEngineConcurrency() : Cannot create engine mutexes");
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(g_concurrencyLifecycleMutex);
+    if (engineMutexesReady() && !g_usingFallbackMutexes)
+        return;
+    if (provider != concurrencyProvider) {
+        CRLog::error(
+                "CRSetupEngineConcurrency() : Provider changed during setup");
+        return;
+    }
+    clearEngineMutexViews();
+    g_refMutexOwner = std::move(refMutex);
+    g_fontMutexOwner = std::move(fontMutex);
+    g_fontManMutexOwner = std::move(fontManMutex);
+    g_fontGlyphCacheMutexOwner = std::move(fontGlyphCacheMutex);
+    g_fontLocalGlyphCacheMutexOwner =
+            std::move(fontLocalGlyphCacheMutex);
+    g_crengineMutexOwner = std::move(crengineMutex);
+    g_usingFallbackMutexes = provider == NULL;
+    publishEngineMutexViews();
+}
+
+void CRShutdownEngineConcurrency()
+{
+    std::unique_ptr<CRMutex> refMutex;
+    std::unique_ptr<CRMutex> fontMutex;
+    std::unique_ptr<CRMutex> fontManMutex;
+    std::unique_ptr<CRMutex> fontGlyphCacheMutex;
+    std::unique_ptr<CRMutex> fontLocalGlyphCacheMutex;
+    std::unique_ptr<CRMutex> crengineMutex;
+    {
+        std::lock_guard<std::mutex> guard(g_concurrencyLifecycleMutex);
+        clearEngineMutexViews();
+        refMutex = std::move(g_refMutexOwner);
+        fontMutex = std::move(g_fontMutexOwner);
+        fontManMutex = std::move(g_fontManMutexOwner);
+        fontGlyphCacheMutex = std::move(g_fontGlyphCacheMutexOwner);
+        fontLocalGlyphCacheMutex =
+                std::move(g_fontLocalGlyphCacheMutexOwner);
+        crengineMutex = std::move(g_crengineMutexOwner);
+        g_usingFallbackMutexes = false;
+    }
+    refMutex.reset();
+    fontMutex.reset();
+    fontManMutex.reset();
+    fontGlyphCacheMutex.reset();
+    fontLocalGlyphCacheMutex.reset();
+    crengineMutex.reset();
+}
 
 CRThreadExecutor::CRThreadExecutor() : _stopped(false) {
     _monitor = concurrencyProvider->createMonitor();

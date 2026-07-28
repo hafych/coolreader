@@ -21,6 +21,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvhtmlparser.cpp" HTML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvxmlparser.cpp" XML_PARSER_SOURCE)
@@ -466,6 +468,58 @@ forbid_source_text(
   "${WORD_FORMAT_SOURCE}"
   "static int image_index"
   "Word image numbering must remain operation-local"
+)
+
+# --- legacy engine locks: fallback, RAII ownership and quiescent lifecycle ---
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "class CRStdMutex : public CRMutex"
+  "engine guards must have a built-in mutex fallback"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "std::recursive_mutex m_mutex"
+  "built-in engine locks must preserve recursive legacy semantics"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "std::unique_ptr<CRMutex> g_refMutexOwner"
+  "engine reference mutex must have explicit ownership"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "std::unique_ptr<CRMutex> g_crengineMutexOwner"
+  "engine drawing mutex must have explicit ownership"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "std::mutex g_concurrencyLifecycleMutex"
+  "engine mutex setup and teardown must be serialized"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "void CRShutdownEngineConcurrency()"
+  "engine mutex ownership must have explicit quiescent teardown"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "clearEngineMutexViews();"
+  "engine mutex views must be cleared before owner teardown"
+)
+require_source_text(
+  "${LOCKS_HEADER}"
+  "Non-owning compatibility views"
+  "legacy engine mutex pointers must document non-owning status"
+)
+forbid_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "_refMutex = concurrencyProvider->createMutex()"
+  "engine mutex provider results must not publish raw ownership"
+)
+forbid_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "if (!_refMutex)"
+  "engine mutex setup must not use partial raw-pointer initialization"
 )
 
 # --- parser format detection: operation-scoped decoded buffers ---
