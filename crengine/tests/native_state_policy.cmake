@@ -4133,6 +4133,114 @@ forbid_source_text(
   "ChangeInfo * ci = new"
   "change record factory rollback must remain automatic"
 )
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "std::unique_ptr<CRBookmark> candidate(new CRBookmark(ptr))"
+  "shortcut bookmark replacement must keep its candidate scope-owned"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "_bookmarks.set(i, candidate.release())"
+  "shortcut replacement must use the owning pointer-vector boundary"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "if (bookmarkCount == INT_MAX)
+        throw std::length_error(\"shortcut bookmark list overflow\");
+    _bookmarks.reserve(bookmarkCount + 1)"
+  "new shortcut publication must reserve before releasing its candidate"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "std::unique_ptr<CRFileHistRecord> candidate"
+  "new history records must remain scope-owned until publication"
+)
+require_source_text(
+  "${HISTORY_SOURCE}"
+  "_records.insert(0, candidate.release())"
+  "history record ownership must transfer only after reserved publication"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "std::unique_ptr<ldomXRange> n_range"
+  "bookmark highlight ranges must remain scoped until list adoption"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "std::unique_ptr<CRBookmark> candidate(new CRBookmark())"
+  "range bookmark creation must keep its candidate scope-owned"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "std::unique_ptr<CRBookmark> candidate(new CRBookmark(p))"
+  "page bookmark creation must keep its candidate scope-owned"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "LVPtrVector<CRBookmark> candidate;
+    candidate.reserve(bookmarks.length())"
+  "bookmark-list replacement must build a bounded candidate snapshot"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "rec->getBookmarks().swap(candidate)"
+  "bookmark-list replacement must publish with a no-throw swap"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "std::unique_ptr<CRBookmark> removed"
+  "removed bookmarks must retain scoped ownership through range updates"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "shortcut replacement leaked or duplicated its owner"
+  "shortcut replacement ownership must retain rendered regression coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "bookmark list replacement shared or lost ownership"
+  "bookmark-list ownership must retain rendered regression coverage"
+)
+require_source_text(
+  "${DOCUMENT_REGRESSION_SOURCE}"
+  "bookmark removal corrupted independent owners"
+  "bookmark removal ownership must retain rendered regression coverage"
+)
+forbid_source_text(
+  "${HISTORY_SOURCE}"
+  "_bookmarks[i] = bmk"
+  "shortcut replacement must not bypass owning slot replacement"
+)
+forbid_source_text(
+  "${HISTORY_SOURCE}"
+  "CRBookmark * bmk = new CRBookmark"
+  "history bookmark candidates must not use raw ownership"
+)
+forbid_source_text(
+  "${HISTORY_SOURCE}"
+  "CRFileHistRecord * rec = new CRFileHistRecord"
+  "history record candidates must not use raw ownership"
+)
+forbid_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "ldomXRange *n_range = new"
+  "bookmark highlight candidates must not use raw ownership"
+)
+forbid_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "CRBookmark * bmk = new CRBookmark"
+  "view bookmark candidates must not use raw ownership"
+)
+forbid_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "CRBookmark * bm = new CRBookmark"
+  "page bookmark candidates must not use raw ownership"
+)
+forbid_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "delete bm"
+  "bookmark removal teardown must remain automatic"
+)
 
 # --- global i18n translator ownership and publication ---
 require_source_text(

@@ -35,7 +35,9 @@
 #include "../include/lvxmlutils.h"
 #include "../include/crlog.h"
 
+#include <climits>
 #include <memory>
+#include <stdexcept>
 
 void CRFileHist::clear()
 {
@@ -389,16 +391,21 @@ CRBookmark * CRFileHistRecord::setShortcutBookmark( int shortcut, ldomXPointer p
 {
     if ( ptr.isNull() )
         return NULL;
-    CRBookmark * bmk = new CRBookmark( ptr );
+    std::unique_ptr<CRBookmark> candidate(new CRBookmark(ptr));
+    CRBookmark * bmk = candidate.get();
     bmk->setType( bmkt_pos );
     bmk->setShortcut( shortcut );
     for ( int i=0; i<_bookmarks.length(); i++ ) {
         if ( _bookmarks[i]->getShortcut() == shortcut ) {
-            _bookmarks[i] = bmk;
+            _bookmarks.set(i, candidate.release());
             return bmk;
         }
     }
-    _bookmarks.insert( 0, bmk );
+    const int bookmarkCount = _bookmarks.length();
+    if (bookmarkCount == INT_MAX)
+        throw std::length_error("shortcut bookmark list overflow");
+    _bookmarks.reserve(bookmarkCount + 1);
+    _bookmarks.insert(0, candidate.release());
     return bmk;
 }
 
@@ -569,7 +576,9 @@ CRFileHistRecord * CRFileHist::savePosition( lString32 fpathname, size_t sz,
         _records[0]->setLastTime( (time_t)time(0) );
         return _records[0];
     }
-    CRFileHistRecord * rec = new CRFileHistRecord();
+    std::unique_ptr<CRFileHistRecord> candidate(
+            new CRFileHistRecord());
+    CRFileHistRecord * rec = candidate.get();
     rec->setTitle( title );
     rec->setAuthor( author );
     rec->setSeries( series );
@@ -580,7 +589,11 @@ CRFileHistRecord * CRFileHist::savePosition( lString32 fpathname, size_t sz,
     rec->setLastTime( (time_t)time(0) );
     rec->setDOMversion( gDOMVersionCurrent );
 
-    _records.insert( 0, rec );
+    const int recordCount = _records.length();
+    if (recordCount == INT_MAX)
+        throw std::length_error("history record list overflow");
+    _records.reserve(recordCount + 1);
+    _records.insert(0, candidate.release());
     //CRLog::trace("CRFileHist::savePosition - exit");
     return rec;
 }

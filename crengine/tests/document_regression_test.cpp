@@ -4,6 +4,7 @@
 #include "lvtinydom.h"
 #include "lvstreamutils.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -153,6 +154,16 @@ struct RenderedDocumentSnapshot {
     int restoredPage = -1;
 };
 
+class DocumentRegressionView : public LVDocView {
+public:
+    DocumentRegressionView() : LVDocView(16, true) {
+    }
+
+    int bookmarkRangeCount() const {
+        return m_bmkRanges.length();
+    }
+};
+
 static int snapshotRenderedDocument(
         RenderedDocumentSnapshot &snapshot) {
     const std::string fixture = createRenderedFixture();
@@ -164,7 +175,7 @@ static int snapshotRenderedDocument(
     if (stream.isNull())
         return fail("rendered document fixture stream was not created");
 
-    LVDocView view(16, true);
+    DocumentRegressionView view;
     view.setShowCover(false);
     view.setPageHeaderInfo(0);
     view.setPageMargins(lvRect(8, 8, 8, 8));
@@ -246,6 +257,60 @@ static int snapshotRenderedDocument(
             || document->getSelections()[0]->getRangeText(' ', 1000)
                     != selectionText)
         return fail("rendered selection was not retained by the document");
+
+    CRBookmark *rangeBookmark = view.saveRangeBookmark(
+            selection, bmkt_comment, U"Range note");
+    CRBookmark *pageBookmark =
+            view.saveCurrentPageBookmark(U"Page note");
+    CRFileHistRecord *record = view.getCurrentFileHistRecord();
+    if (!rangeBookmark || !pageBookmark || !record
+            || record->getBookmarks().length() != 2
+            || view.bookmarkRangeCount() != 1)
+        return fail("bookmark candidates did not publish complete ranges");
+
+    CRBookmark *firstShortcut =
+            view.saveCurrentPageShortcutBookmark(7);
+    const int shortcutCount = record->getBookmarks().length();
+    if (!view.goToPage(std::min(
+                view.getCurPage() + 1, view.getPageCount() - 1)))
+        return fail("shortcut replacement page was not reachable");
+    CRBookmark *replacedShortcut =
+            view.saveCurrentPageShortcutBookmark(7);
+    if (!firstShortcut || !replacedShortcut
+            || firstShortcut == replacedShortcut
+            || record->getBookmarks().length() != shortcutCount
+            || record->getShortcutBookmark(7) != replacedShortcut)
+        return fail("shortcut replacement leaked or duplicated its owner");
+
+    LVPtrVector<CRBookmark> replacements;
+    replacements.reserve(2);
+    std::unique_ptr<CRBookmark> rangeReplacement(
+            new CRBookmark(*rangeBookmark));
+    replacements.add(rangeReplacement.release());
+    std::unique_ptr<CRBookmark> pageReplacement(
+            new CRBookmark(*pageBookmark));
+    replacements.add(pageReplacement.release());
+    view.setBookmarkList(replacements);
+    if (record->getBookmarks().length() != 2
+            || record->getBookmarks()[0] == replacements[0]
+            || record->getBookmarks()[1] == replacements[1]
+            || record->getBookmarks()[0]->getCommentText()
+                    != U"Range note"
+            || record->getBookmarks()[1]->getCommentText()
+                    != U"Page note"
+            || view.bookmarkRangeCount() != 1)
+        return fail("bookmark list replacement shared or lost ownership");
+
+    CRBookmark *removed = record->getBookmarks()[0];
+    CRBookmark missing;
+    if (!view.removeBookmark(removed)
+            || view.removeBookmark(&missing)
+            || record->getBookmarks().length() != 1
+            || replacements.length() != 2
+            || replacements[0]->getCommentText() != U"Range note"
+            || view.bookmarkRangeCount() != 0)
+        return fail("bookmark removal corrupted independent owners");
+
     view.clearSelection();
     if (!document->getSelections().empty())
         return fail("rendered selection did not clear");

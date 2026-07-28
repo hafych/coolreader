@@ -61,7 +61,9 @@
 #include "../include/fb3fmt.h"
 #include "../include/docxfmt.h"
 #include "../include/odtfmt.h"
+#include <climits>
 #include <memory>
+#include <stdexcept>
 
 /// to show page bounds rectangles
 //#define SHOW_PAGE_RECT
@@ -3473,6 +3475,7 @@ void LVDocView::updateBookMarksRanges()
     CRFileHistRecord * rec = m_highlightBookmarks ? getCurrentFileHistRecord() : NULL;
     if (rec) {
         LVPtrVector<CRBookmark> &bookmarks = rec->getBookmarks();
+        ranges.reserve(bookmarks.length());
         for (int i = 0; i < bookmarks.length(); i++) {
             CRBookmark * bmk = bookmarks[i];
             int t = bmk->getType();
@@ -3489,7 +3492,8 @@ void LVDocView::updateBookMarksRanges()
                 lvPoint ept = ep.toPoint();
                 if (ept.y < 0)
                     continue;
-                ldomXRange *n_range = new ldomXRange(p, ep);
+                std::unique_ptr<ldomXRange> n_range(
+                        new ldomXRange(p, ep));
                 if (!n_range->isNull()) {
                     int flags = 1;
                     if (t == bmkt_pos)
@@ -3499,9 +3503,8 @@ void LVDocView::updateBookMarksRanges()
                     if (t == bmkt_correction)
                         flags = 8;
                     n_range->setFlags(flags);
-                    ranges.add(n_range);
-                } else
-                    delete n_range;
+                    ranges.add(n_range.release());
+                }
             }
         }
     }
@@ -3563,11 +3566,10 @@ void LVDocView::updateBookMarksRanges()
                     if (!sp.isNull()) {
                         ldomXRange bmk_range(sp, ep);
 
-                        ldomXRange *n_range = new ldomXRange(*page, bmk_range);
+                        std::unique_ptr<ldomXRange> n_range(
+                                new ldomXRange(*page, bmk_range));
                         if (!n_range->isNull())
-                            ranges.add(n_range);
-                        else
-                            delete n_range;
+                            ranges.add(n_range.release());
                     }
                 }
             }
@@ -5770,7 +5772,8 @@ CRBookmark * LVDocView::saveRangeBookmark(ldomXRange & range, bmk_type type,
 	CRFileHistRecord * rec = getCurrentFileHistRecord();
 	if (!rec)
 		return NULL;
-	CRBookmark * bmk = new CRBookmark();
+	std::unique_ptr<CRBookmark> candidate(new CRBookmark());
+	CRBookmark * bmk = candidate.get();
 	bmk->setType(type);
 	bmk->setStartPos(range.getStart().toString());
 	if (!range.getEnd().isNull())
@@ -5787,7 +5790,11 @@ CRBookmark * LVDocView::saveRangeBookmark(ldomXRange & range, bmk_type type,
 	bmk->setPosText(postext);
 	bmk->setCommentText(comment);
 	bmk->setTitleText(CRBookmark::getChapterName(range.getStart()));
-	rec->getBookmarks().add(bmk);
+	const int bookmarkCount = rec->getBookmarks().length();
+	if (bookmarkCount == INT_MAX)
+		throw std::length_error("bookmark list overflow");
+	rec->getBookmarks().reserve(bookmarkCount + 1);
+	rec->getBookmarks().add(candidate.release());
         updateBookMarksRanges();
 #if 0
         if (m_highlightBookmarks && !range.getEnd().isNull())
@@ -5803,11 +5810,14 @@ void LVDocView::setBookmarkList(LVPtrVector<CRBookmark> & bookmarks)
     CRFileHistRecord * rec = getCurrentFileHistRecord();
     if (!rec)
         return;
-    LVPtrVector<CRBookmark>  & v = rec->getBookmarks();
-    v.clear();
+    LVPtrVector<CRBookmark> candidate;
+    candidate.reserve(bookmarks.length());
     for (int i=0; i<bookmarks.length(); i++) {
-        v.add(new CRBookmark(*bookmarks[i]));
+        std::unique_ptr<CRBookmark> clone(
+                new CRBookmark(*bookmarks[i]));
+        candidate.add(clone.release());
     }
+    rec->getBookmarks().swap(candidate);
     updateBookMarksRanges();
 }
 
@@ -5816,32 +5826,11 @@ bool LVDocView::removeBookmark(CRBookmark * bm) {
 	CRFileHistRecord * rec = getCurrentFileHistRecord();
 	if (!rec)
 		return false;
-	bm = rec->getBookmarks().remove(bm);
-	if (bm) {
+	std::unique_ptr<CRBookmark> removed(
+	        rec->getBookmarks().remove(bm));
+	if (removed) {
         updateBookMarksRanges();
-        delete bm;
 		return true;
-#if 0
-            if (m_highlightBookmarks && bm->getType() == bmkt_comment || bm->getType() == bmkt_correction) {
-                int by = m_doc->createXPointer(bm->getStartPos()).toPoint().y;
-                int page_index = m_pages.FindNearestPage(by, 0);
-                bool updateRanges = false;
-
-                if (page_index > 0 && page_index < m_bookmarksPercents.length()) {
-                    LVBookMarkPercentInfo *bmi = m_bookmarksPercents[page_index];
-                    int percent = bm->getPercent();
-
-                    for (int i = 0; bmi != NULL && i < bmi->length(); i++) {
-                        if ((updateRanges = bmi->get(i) == percent))
-                            bmi->remove(i);
-                    }
-                }
-                if (updateRanges)
-                    updateBookMarksRanges();
-            }
-            delete bm;
-            return true;
-#endif
 	} else {
 		return false;
 	}
@@ -6002,7 +5991,8 @@ CRBookmark * LVDocView::saveCurrentPageBookmark(lString32 comment) {
 	ldomXPointer p = getBookmark();
 	if (p.isNull())
 		return NULL;
-	CRBookmark * bm = new CRBookmark(p);
+	std::unique_ptr<CRBookmark> candidate(new CRBookmark(p));
+	CRBookmark * bm = candidate.get();
 	lString32 titleText;
 	lString32 posText;
 	bm->setType(bmkt_pos);
@@ -6020,7 +6010,11 @@ CRBookmark * LVDocView::saveCurrentPageBookmark(lString32 comment) {
 		percent = 10000;
 	bm->setPercent(percent);
 	bm->setCommentText(comment);
-	rec->getBookmarks().add(bm);
+	const int bookmarkCount = rec->getBookmarks().length();
+	if (bookmarkCount == INT_MAX)
+		throw std::length_error("bookmark list overflow");
+	rec->getBookmarks().reserve(bookmarkCount + 1);
+	rec->getBookmarks().add(candidate.release());
         updateBookMarksRanges();
 	return bm;
 }

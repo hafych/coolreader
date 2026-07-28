@@ -450,6 +450,19 @@ the legacy raw-return boundary transfers ownership. Regression coverage also
 round-trips escaped synchronization text, ensuring decoding reads the encoded
 input rather than uninitialized output storage.
 
+Interactive bookmark mutation follows the same ownership boundary. Range,
+page and shortcut bookmark candidates stay in `unique_ptr` until the owning
+record has reserved their slot. Shortcut replacement uses the pointer
+vector's owning `set()` operation, releasing the previous bookmark exactly
+once instead of overwriting its raw slot. Whole-list replacement clones a
+bounded candidate list and publishes it with `swap`, while removal retains the
+transferred owner through highlight-range rebuilding. Highlight
+`ldomXRange` candidates are likewise scoped until the owning range list adopts
+them, and newly created history records remain scoped until reserved list
+publication. The rendered document regression covers range/page creation,
+shortcut replacement without list growth, independent list cloning and
+removal with rebuilt highlights.
+
 The common XML and HTML document factories keep both the candidate
 `ldomDocument` and parser scope-owned, releasing the document only through the
 legacy raw-return API after format detection and parsing succeed. OPC packages
