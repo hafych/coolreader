@@ -30,6 +30,7 @@
 #include "crlog.h"
 
 #include <png.h>
+#include <vector>
 
 static void lvpng_error_func (png_structp png, png_const_charp msg)
 {
@@ -55,21 +56,26 @@ static void lvpng_read_func(png_structp png, png_bytep buf, png_size_t len)
 
 
 LVPngImageSource::LVPngImageSource( ldomNode * node, LVStreamRef stream )
-        : LVNodeImageSource(node, stream)
+        : LVNodeImageSource(node, stream), _decodeStarted(false)
 {
 }
 
-LVPngImageSource::~LVPngImageSource()
+void LVPngImageSource::clearDecodeBuffers()
 {
+    std::vector<lUInt8 *>().swap(_decodeRows);
+    std::vector<lUInt8>().swap(_decodePixels);
 }
 
 void LVPngImageSource::Compact()
 {
+    clearDecodeBuffers();
 }
 
 bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
 {
     bool res = false;
+    clearDecodeBuffers();
+    _decodeStarted = false;
     png_structp png_ptr = NULL;
     png_infop info_ptr = NULL;
     _stream->SetPos( 0 );
@@ -78,22 +84,24 @@ bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
     if ( !png_ptr )
         return false;
 
+    info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr) {
+        png_destroy_read_struct(&png_ptr, NULL, NULL);
+        return false;
+    }
+
     if (setjmp(png_jmpbuf(png_ptr))) {
         _width = 0;
         _height = 0;
-        if (png_ptr)
-        {
-            png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-        }
-        if (callback)
+        clearDecodeBuffers();
+        if (callback && _decodeStarted)
             callback->OnEndDecode(this, true); // error!
+        _decodeStarted = false;
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         return false;
     }
 
     //
-    info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr)
-        lvpng_error_func(png_ptr, "cannot create png info struct");
     png_set_read_fn(png_ptr,
         (void*)this, lvpng_read_func);
     png_read_info( png_ptr, info_ptr );
@@ -110,6 +118,7 @@ bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
 
     if ( callback )
     {
+        _decodeStarted = true;
         callback->OnStartDecode(this);
 
         //int png_transforms = PNG_TRANSFORM_STRIP_16 | PNG_TRANSFORM_INVERT_ALPHA;
@@ -161,26 +170,25 @@ bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
 
         png_set_interlace_handling(png_ptr);
         png_read_update_info(png_ptr,info_ptr);//update after set
-        png_bytep *image=NULL;
         size_t rowbytes = png_get_rowbytes(png_ptr, info_ptr);
-        size_t index_size = sizeof(png_bytep)*height;
-        image = (png_bytep*)malloc(index_size           // array of pointers
-                                 + height*rowbytes);    // image data
-        if (image) {
-            for (size_t y = 0; y < height; y++)
-                image[y] = (png_bytep)image + index_size + y*rowbytes;
-            png_read_image(png_ptr,image);
-            for (lUInt32 y = 0; y < height; y++)
-                callback->OnLineDecoded( this, y,  (lUInt32*) image[y] );
-            png_read_end(png_ptr, info_ptr);
+        if (rowbytes == 0
+                || static_cast<size_t>(height)
+                        > _decodePixels.max_size() / rowbytes)
+            png_error(png_ptr, "decoded PNG buffer is too large");
+        _decodePixels.resize(static_cast<size_t>(height) * rowbytes);
+        _decodeRows.resize(height);
+        for (size_t y = 0; y < height; y++)
+            _decodeRows[y] = _decodePixels.data() + y * rowbytes;
+        png_read_image(png_ptr, _decodeRows.data());
+        for (lUInt32 y = 0; y < height; y++)
+            callback->OnLineDecoded(
+                    this, y, reinterpret_cast<lUInt32 *>(_decodeRows[y]));
+        png_read_end(png_ptr, info_ptr);
 
-            free(image);
-            res = true;
-        } else {
-            _width = 0;
-            _height = 0;
-        }
-        callback->OnEndDecode(this, !res);
+        res = true;
+        callback->OnEndDecode(this, false);
+        _decodeStarted = false;
+        clearDecodeBuffers();
     } else {
         res = true;
     }

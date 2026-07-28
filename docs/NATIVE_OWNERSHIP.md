@@ -82,6 +82,13 @@ operation scope; the unused raw frame array and its mismatched scalar deletion
 were removed. Repeated decode and invalid-dimension paths are covered by the
 native ownership regression.
 
+The PNG decoder keeps pixel storage and row-pointer views in member
+`std::vector` containers because libpng reports fatal decode errors with
+`longjmp`. The members survive that C error boundary and are released on both
+success and failure. A separate started flag ensures `OnEndDecode(errors=true)`
+is emitted only after `OnStartDecode()`, including repeated truncated-IDAT
+failures.
+
 XPM parsed rows, palettes and decode rows, plus dummy and draw-buffer conversion
 rows, use standard containers. `LVDrawBufImgSource` keeps a non-owning
 compatibility view and, only when requested by its legacy factory, a

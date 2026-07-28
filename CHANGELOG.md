@@ -154,6 +154,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   draw mark collection and SVG/GIF/XPM image decoding now use scoped RAII
   ownership instead of manual temporary-buffer cleanup; encoding probes also
   restore stream position on every exit.
+- PNG pixel and row-view storage now survives libpng `longjmp` errors through
+  member RAII containers; repeated truncated-IDAT failures release buffers and
+  preserve a balanced decode callback lifecycle.
 - Unpacked image snapshots now own grayscale, RGB565 and 32-bit pixels through
   RAII containers, eliminating the legacy 16-bit teardown leak; repeat-decode
   regressions cover every storage depth, while failed predecode rolls back to

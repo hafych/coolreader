@@ -27,12 +27,18 @@
 
 #include "lvnodeimagesource.h"
 
+#include <vector>
+
 class LVPngImageSource : public LVNodeImageSource
 {
-protected:
+    std::vector<lUInt8> _decodePixels;
+    std::vector<lUInt8 *> _decodeRows;
+    bool _decodeStarted;
+
+    void clearDecodeBuffers();
 public:
     LVPngImageSource( ldomNode * node, LVStreamRef stream );
-    virtual ~LVPngImageSource();
+    virtual ~LVPngImageSource() = default;
     virtual void   Compact();
     virtual bool   Decode( LVImageDecoderCallback * callback );
     static bool CheckPattern( const lUInt8 * buf, int len );

@@ -24,6 +24,9 @@
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
 #endif
+#if (USE_LIBPNG==1)
+#include "../src/lvimg/lvpngimagesource.h"
+#endif
 
 #include <atomic>
 #include <cerrno>
@@ -1226,6 +1229,7 @@ public:
     int starts = 0;
     int lines = 0;
     int ends = 0;
+    int errorEnds = 0;
 
     void OnStartDecode(LVImageSource *) override
     {
@@ -1241,7 +1245,9 @@ public:
 
     void OnEndDecode(LVImageSource *, bool errors) override
     {
-        if (!errors)
+        if (errors)
+            ++errorEnds;
+        else
             ++ends;
     }
 };
@@ -1274,6 +1280,51 @@ public:
         return false;
     }
 };
+
+#if (USE_LIBPNG==1)
+static int testPngDecoderOwnership() {
+    static const unsigned char validPng[] = {
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+        0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+        0x42, 0x60, 0x82
+    };
+    LVImageSourceRef image = LVCreateStreamImageSource(
+            LVCreateMemoryStream(
+                    const_cast<unsigned char *>(validPng),
+                    static_cast<int>(sizeof(validPng)), true, LVOM_READ));
+    if (image.isNull() || image->GetWidth() != 1 || image->GetHeight() != 1)
+        return fail("PNG decoder rejected a valid 1x1 image");
+
+    CountingImageDecodeCallback callback;
+    if (!image->Decode(&callback) || !image->Decode(&callback))
+        return fail("PNG decoder could not reuse its RAII buffers");
+    if (callback.starts != 2 || callback.lines != 2
+            || callback.ends != 2 || callback.errorEnds != 0)
+        return fail("PNG decoder callback lifecycle is incomplete");
+
+    static const std::size_t truncatedSize = 46;
+    LVPngImageSource truncated(
+            NULL,
+            LVCreateMemoryStream(
+                    const_cast<unsigned char *>(validPng),
+                    static_cast<int>(truncatedSize), true, LVOM_READ));
+    CountingImageDecodeCallback errorCallback;
+    if (truncated.Decode(&errorCallback)
+            || truncated.Decode(&errorCallback))
+        return fail("PNG decoder accepted a truncated IDAT");
+    if (errorCallback.starts != 2
+            || errorCallback.ends != 0
+            || errorCallback.errorEnds != 2)
+        return fail("truncated PNG escaped the callback error lifecycle");
+    return 0;
+}
+#endif
 
 #if (USE_GIF==1)
 static int testGifDecoderOwnership() {
@@ -2191,6 +2242,10 @@ int main() {
         return 1;
     if (testParserFormatDetectionBuffers() != 0)
         return 1;
+#if (USE_LIBPNG==1)
+    if (testPngDecoderOwnership() != 0)
+        return 1;
+#endif
 #if (USE_GIF==1)
     if (testGifDecoderOwnership() != 0)
         return 1;

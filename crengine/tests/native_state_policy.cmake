@@ -38,6 +38,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOU
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.h" GIF_FRAME_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.cpp" PNG_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.h" PNG_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.cpp" DRAWBUF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.h" DRAWBUF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdummyimagesource.h" DUMMY_IMAGE_HEADER)
@@ -731,6 +733,53 @@ forbid_source_text(
   "${GIF_FRAME_SOURCE}"
   "new unsigned char"
   "GIF frame decoder must not use owning byte arrays"
+)
+
+# --- PNG decoder: longjmp-safe row and pixel ownership ---
+require_source_text(
+  "${PNG_IMAGE_HEADER}"
+  "std::vector<lUInt8> _decodePixels"
+  "PNG decoded pixels must have longjmp-safe member ownership"
+)
+require_source_text(
+  "${PNG_IMAGE_HEADER}"
+  "std::vector<lUInt8 *> _decodeRows"
+  "PNG row views must have longjmp-safe member ownership"
+)
+require_source_text(
+  "${PNG_IMAGE_HEADER}"
+  "bool _decodeStarted"
+  "PNG callback teardown must track a completed start"
+)
+require_source_text(
+  "${PNG_IMAGE_SOURCE}"
+  "png_read_image(png_ptr, _decodeRows.data())"
+  "libpng must decode into RAII-owned row storage"
+)
+require_source_text(
+  "${PNG_IMAGE_SOURCE}"
+  "if (callback && _decodeStarted)"
+  "PNG error teardown must follow a started callback lifecycle"
+)
+require_source_text(
+  "${PNG_IMAGE_SOURCE}"
+  "clearDecodeBuffers();"
+  "PNG decode buffers must be released on every lifecycle"
+)
+forbid_source_text(
+  "${PNG_IMAGE_SOURCE}"
+  "png_bytep *image"
+  "PNG decoder must not own a raw packed row allocation"
+)
+forbid_source_text(
+  "${PNG_IMAGE_SOURCE}"
+  "malloc("
+  "PNG row and pixel allocation must remain container-managed"
+)
+forbid_source_text(
+  "${PNG_IMAGE_SOURCE}"
+  "free(image)"
+  "PNG error cleanup must remain automatic"
 )
 
 # --- synthetic/draw-buffer/XPM image sources ---
