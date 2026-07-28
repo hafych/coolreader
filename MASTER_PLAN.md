@@ -119,8 +119,8 @@ DRM или ограничений доступа, подбор/получени�
   cached-stream slots, parser read/charset buffers, RTF text/destination
   ownership, TCR dictionary/index/decoded buffers, unpacked 8/16/32-bit pixel
   storage, scaled-image maps/RGBA snapshots, default stream-region buffers и
-  longjmp-safe PNG rows/pixels, а также draw mark list. Остальные участки
-  мигрируются отдельными bounded-пакетами.
+  longjmp-safe PNG rows/pixels, JPEG pool/error lifecycle, а также draw mark
+  list. Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

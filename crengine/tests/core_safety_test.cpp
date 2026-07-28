@@ -27,7 +27,11 @@
 #if (USE_LIBPNG==1)
 #include "../src/lvimg/lvpngimagesource.h"
 #endif
+#if (USE_LIBJPEG==1)
+#include "../src/lvimg/lvjpegimagesource.h"
+#endif
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cstdlib>
@@ -35,6 +39,7 @@
 #include <cstring>
 #include <cstdint>
 #include <fcntl.h>
+#include <memory>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -1281,6 +1286,156 @@ public:
     }
 };
 
+#if (USE_LIBJPEG==1)
+static std::vector<unsigned char> buildJpegFixture() {
+    static const int width = 128;
+    static const int height = 128;
+    jpeg_compress_struct encoder;
+    jpeg_error_mgr error;
+    std::memset(&encoder, 0, sizeof(encoder));
+    encoder.err = jpeg_std_error(&error);
+    jpeg_create_compress(&encoder);
+
+    unsigned char *encoded = NULL;
+    unsigned long encodedSize = 0;
+    jpeg_mem_dest(&encoder, &encoded, &encodedSize);
+    encoder.image_width = width;
+    encoder.image_height = height;
+    encoder.input_components = 3;
+    encoder.in_color_space = JCS_RGB;
+    jpeg_set_defaults(&encoder);
+    jpeg_set_quality(&encoder, 90, TRUE);
+    jpeg_start_compress(&encoder, TRUE);
+
+    std::vector<unsigned char> row(width * 3);
+    while (encoder.next_scanline < encoder.image_height) {
+        const int y = static_cast<int>(encoder.next_scanline);
+        for (int x = 0; x < width; ++x) {
+            row[x * 3] = static_cast<unsigned char>((x * 17 + y * 3) & 0xff);
+            row[x * 3 + 1] =
+                    static_cast<unsigned char>((x * 5 + y * 19) & 0xff);
+            row[x * 3 + 2] =
+                    static_cast<unsigned char>((x * 23 + y * 7) & 0xff);
+        }
+        JSAMPROW scanline = row.data();
+        jpeg_write_scanlines(&encoder, &scanline, 1);
+    }
+    jpeg_finish_compress(&encoder);
+    std::unique_ptr<unsigned char, decltype(&std::free)> encodedOwner(
+            encoded, &std::free);
+    std::vector<unsigned char> result(
+            encodedOwner.get(), encodedOwner.get() + encodedSize);
+    jpeg_destroy_compress(&encoder);
+    return result;
+}
+
+class FailingJpegStream : public LVStream {
+private:
+    std::vector<unsigned char> _bytes;
+    lvpos_t _pos;
+    int _readCalls;
+
+public:
+    explicit FailingJpegStream(const std::vector<unsigned char> &bytes)
+        : _bytes(bytes), _pos(0), _readCalls(0)
+    {
+    }
+
+    lvopen_mode_t GetMode() override { return LVOM_READ; }
+
+    lverror_t Seek(lvoffset_t offset, lvseek_origin_t origin,
+            lvpos_t *newPos) override
+    {
+        lvoffset_t target = offset;
+        if (origin == LVSEEK_CUR)
+            target += static_cast<lvoffset_t>(_pos);
+        else if (origin == LVSEEK_END)
+            target += static_cast<lvoffset_t>(_bytes.size());
+        if (target < 0
+                || static_cast<std::size_t>(target) > _bytes.size())
+            return LVERR_FAIL;
+        _pos = static_cast<lvpos_t>(target);
+        if (origin == LVSEEK_SET && _pos == 0)
+            _readCalls = 0;
+        if (newPos)
+            *newPos = _pos;
+        return LVERR_OK;
+    }
+
+    lverror_t GetSize(lvsize_t *size) override
+    {
+        *size = _bytes.size();
+        return LVERR_OK;
+    }
+
+    lverror_t SetSize(lvsize_t) override { return LVERR_FAIL; }
+
+    lverror_t Read(void *buffer, lvsize_t count,
+            lvsize_t *bytesRead) override
+    {
+        ++_readCalls;
+        if (_readCalls > 1) {
+            if (bytesRead)
+                *bytesRead = 0;
+            return LVERR_FAIL;
+        }
+        const std::size_t available = _bytes.size()
+                - static_cast<std::size_t>(_pos);
+        const std::size_t amount = std::min(
+                static_cast<std::size_t>(count), available);
+        std::memcpy(buffer, _bytes.data() + _pos, amount);
+        _pos += amount;
+        if (bytesRead)
+            *bytesRead = amount;
+        return LVERR_OK;
+    }
+
+    lverror_t Write(const void *, lvsize_t,
+            lvsize_t *bytesWritten) override
+    {
+        if (bytesWritten)
+            *bytesWritten = 0;
+        return LVERR_FAIL;
+    }
+
+    bool Eof() override { return _pos >= _bytes.size(); }
+};
+
+static int testJpegDecoderOwnership() {
+    std::vector<unsigned char> jpeg = buildJpegFixture();
+    if (jpeg.size() <= 4096)
+        return fail("generated JPEG did not span two source buffers");
+
+    LVImageSourceRef image = LVCreateStreamImageSource(
+            LVCreateMemoryStream(
+                    jpeg.data(), static_cast<int>(jpeg.size()),
+                    true, LVOM_READ));
+    if (image.isNull()
+            || image->GetWidth() != 128
+            || image->GetHeight() != 128)
+        return fail("JPEG decoder rejected its generated fixture");
+
+    CountingImageDecodeCallback callback;
+    if (!image->Decode(&callback) || !image->Decode(&callback))
+        return fail("JPEG decoder could not reuse its pool-owned buffers");
+    if (callback.starts != 2 || callback.lines != 256
+            || callback.ends != 2 || callback.errorEnds != 0)
+        return fail("JPEG decoder callback lifecycle is incomplete");
+
+    LVJpegImageSource failing(
+            NULL, LVStreamRef(new FailingJpegStream(jpeg)));
+    CountingImageDecodeCallback errorCallback;
+    if (failing.Decode(&errorCallback)
+            || failing.Decode(&errorCallback))
+        return fail("JPEG decoder accepted a failed source refill");
+    if (errorCallback.starts != 2
+            || errorCallback.ends != 0
+            || errorCallback.errorEnds != 2)
+        return fail("failed JPEG escaped the callback error lifecycle");
+    return 0;
+}
+#endif
+
 #if (USE_LIBPNG==1)
 static int testPngDecoderOwnership() {
     static const unsigned char validPng[] = {
@@ -2242,6 +2397,10 @@ int main() {
         return 1;
     if (testParserFormatDetectionBuffers() != 0)
         return 1;
+#if (USE_LIBJPEG==1)
+    if (testJpegDecoderOwnership() != 0)
+        return 1;
+#endif
 #if (USE_LIBPNG==1)
     if (testPngDecoderOwnership() != 0)
         return 1;

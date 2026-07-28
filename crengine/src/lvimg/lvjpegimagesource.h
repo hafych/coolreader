@@ -48,6 +48,8 @@ class LVJpegImageSource : public LVNodeImageSource
 {
     my_error_mgr jerr;
     jpeg_decompress_struct cinfo;
+    bool _decompressCreated;
+    bool _decodeStarted;
 public:
     LVJpegImageSource( ldomNode * node, LVStreamRef stream );
     virtual ~LVJpegImageSource() {}

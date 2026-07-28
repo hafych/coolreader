@@ -40,6 +40,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.h" GIF_FRAME_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.cpp" PNG_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.h" PNG_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvjpegimagesource.cpp" JPEG_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvjpegimagesource.h" JPEG_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.cpp" DRAWBUF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdrawbufimgsource.h" DRAWBUF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvdummyimagesource.h" DUMMY_IMAGE_HEADER)
@@ -780,6 +782,82 @@ forbid_source_text(
   "${PNG_IMAGE_SOURCE}"
   "free(image)"
   "PNG error cleanup must remain automatic"
+)
+
+# --- JPEG decoder: libjpeg-pool ownership across longjmp ---
+require_source_text(
+  "${JPEG_IMAGE_HEADER}"
+  "bool _decompressCreated"
+  "JPEG decompressor teardown must track construction"
+)
+require_source_text(
+  "${JPEG_IMAGE_HEADER}"
+  "bool _decodeStarted"
+  "JPEG callback teardown must track a completed start"
+)
+require_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "JPOOL_PERMANENT"
+  "JPEG source manager and input bytes must use the libjpeg permanent pool"
+)
+require_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "alloc_sarray"
+  "JPEG scanline storage must use the libjpeg image pool"
+)
+require_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "alloc_large"
+  "JPEG converted rows must use the libjpeg image pool"
+)
+require_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "jpeg_finish_decompress"
+  "JPEG success teardown must finish decompression"
+)
+require_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "if (callback && _decodeStarted)"
+  "JPEG error teardown must follow a started callback lifecycle"
+)
+string(FIND "${JPEG_IMAGE_SOURCE}"
+  "if (setjmp(jerr.setjmp_buffer))" JPEG_SETJMP_POSITION)
+string(FIND "${JPEG_IMAGE_SOURCE}" "jpeg_create_decompress" JPEG_CREATE_POSITION)
+if(JPEG_SETJMP_POSITION EQUAL -1
+    OR JPEG_CREATE_POSITION EQUAL -1
+    OR JPEG_SETJMP_POSITION GREATER JPEG_CREATE_POSITION)
+  message(FATAL_ERROR
+    "JPEG error boundary must be installed before decompressor creation")
+endif()
+forbid_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "new cr_jpeg_source_mgr"
+  "JPEG source-manager ownership must remain pool-managed"
+)
+forbid_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "new JOCTET"
+  "JPEG input bytes must remain pool-managed"
+)
+forbid_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "new lUInt8"
+  "JPEG scanline storage must remain pool-managed"
+)
+forbid_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "new lUInt32"
+  "JPEG converted rows must remain pool-managed"
+)
+forbid_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "delete[]"
+  "JPEG decoder teardown must remain pool-managed"
+)
+forbid_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "cr_jpeg_src_free"
+  "JPEG source-manager teardown must remain part of jpeg_destroy_decompress"
 )
 
 # --- synthetic/draw-buffer/XPM image sources ---

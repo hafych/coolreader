@@ -194,9 +194,15 @@ cr_jpeg_src (j_decompress_ptr cinfo, LVStream * stream)
      * manager serially with the same JPEG object.  Caveat programmer.
      */
     if (cinfo->src == NULL) { /* first time for this JPEG object? */
-        src = new cr_jpeg_source_mgr();
+        src = (cr_jpeg_source_mgr *)
+                (*cinfo->mem->alloc_small)(
+                        (j_common_ptr)cinfo, JPOOL_PERMANENT,
+                        sizeof(cr_jpeg_source_mgr));
         cinfo->src = (struct jpeg_source_mgr *) src;
-        src->buffer = new JOCTET[INPUT_BUF_SIZE];
+        src->buffer = (JOCTET *)
+                (*cinfo->mem->alloc_small)(
+                        (j_common_ptr)cinfo, JPOOL_PERMANENT,
+                        INPUT_BUF_SIZE * sizeof(JOCTET));
     }
 
     src = (cr_jpeg_source_mgr *) cinfo->src;
@@ -208,18 +214,6 @@ cr_jpeg_src (j_decompress_ptr cinfo, LVStream * stream)
     src->stream = stream;
     src->pub.bytes_in_buffer = 0; /* forces fill_input_buffer on first read */
     src->pub.next_input_byte = NULL; /* until buffer loaded */
-}
-
-GLOBAL(void)
-cr_jpeg_src_free (j_decompress_ptr cinfo)
-{
-    cr_jpeg_source_mgr * src = (cr_jpeg_source_mgr *) cinfo->src;
-    if ( src && src->buffer )
-    {
-        delete[] src->buffer;
-        src->buffer = NULL;
-    }
-    delete src;
 }
 
 
@@ -277,7 +271,8 @@ cr_jpeg_error (j_common_ptr cinfo)
 
 
 LVJpegImageSource::LVJpegImageSource(ldomNode *node, LVStreamRef stream)
-    : LVNodeImageSource(node, stream)
+    : LVNodeImageSource(node, stream),
+      _decompressCreated(false), _decodeStarted(false)
 {
     //CRLog::trace("creating LVJpegImageSource");
     
@@ -295,6 +290,8 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
 {
     //CRLog::trace("LVJpegImageSource::decode called");
     memset(&cinfo, 0, sizeof(jpeg_decompress_struct));
+    _decompressCreated = false;
+    _decodeStarted = false;
     /* Step 1: allocate and initialize JPEG decompression object */
     
     /* We use our private extension JPEG error handler.
@@ -306,28 +303,29 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
     cinfo.err = jpeg_std_error(&jerr.pub);
     jerr.pub.error_exit = cr_jpeg_error;
     
-    /* Now we can initialize the JPEG decompression object. */
-    jpeg_create_decompress(&cinfo);
-    
-    lUInt8 * buffer = NULL;
-    lUInt32 * row = NULL;
-    
     if (setjmp(jerr.setjmp_buffer)) {
         CRLog::error("JPEG setjmp error handling");
         /* If we get here, the JPEG code has signaled an error.
          * We need to clean up the JPEG object, close the input file, and return.
          */
-        if ( buffer )
-            delete[] buffer;
-        if ( row )
-            delete[] row;
+        _width = 0;
+        _height = 0;
+        if (callback && _decodeStarted)
+            callback->OnEndDecode(this, true);
+        _decodeStarted = false;
         CRLog::debug("JPEG decoder cleanup");
-        cr_jpeg_src_free (&cinfo);
-        jpeg_destroy_decompress(&cinfo);
+        if (_decompressCreated)
+            jpeg_destroy_decompress(&cinfo);
+        _decompressCreated = false;
         return false;
     }
+
+    /* Now we can initialize the JPEG decompression object. */
+    _decompressCreated = true;
+    jpeg_create_decompress(&cinfo);
     
-    _stream->SetPos( 0 );
+    if (_stream->SetPos(0) != 0)
+        ERREXIT(&cinfo, JERR_FILE_READ);
     /* Step 2: specify data source (eg, a file) */
     cr_jpeg_src( &cinfo, _stream.get() );
     /* Step 3: read file parameters with jpeg_read_header() */
@@ -345,6 +343,7 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
     
     if ( callback )
     {
+        _decodeStarted = true;
         callback->OnStartDecode(this);
         /* Step 4: set parameters for decompression */
         
@@ -359,8 +358,15 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
         /* We can ignore the return value since suspension is not possible
                  * with the stdio data source.
                  */
-        buffer = new lUInt8 [ cinfo.output_width * cinfo.output_components ];
-        row = new lUInt32 [ cinfo.output_width ];
+        JDIMENSION rowStride =
+                cinfo.output_width * cinfo.output_components;
+        JSAMPARRAY scanline =
+                (*cinfo.mem->alloc_sarray)(
+                        (j_common_ptr)&cinfo, JPOOL_IMAGE, rowStride, 1);
+        lUInt32 * row = (lUInt32 *)
+                (*cinfo.mem->alloc_large)(
+                        (j_common_ptr)&cinfo, JPOOL_IMAGE,
+                        cinfo.output_width * sizeof(lUInt32));
         /* Step 6: while (scan lines remain to be read) */
         /*           jpeg_read_scanlines(...); */
         
@@ -373,9 +379,10 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
                      * Here the array is only one element long, but you could ask for
                      * more than one scanline at a time if that's more convenient.
                      */
-            (void) jpeg_read_scanlines(&cinfo, &buffer, 1);
+            if (jpeg_read_scanlines(&cinfo, scanline, 1) != 1)
+                ERREXIT(&cinfo, JERR_CANT_SUSPEND);
             /* Assume put_scanline_someplace wants a pointer and sample count. */
-            lUInt8 * p = buffer;
+            lUInt8 * p = scanline[0];
             for (int x=0; x<(int)cinfo.output_width; x++)
             {
                 row[x] = (((lUInt32)p[0])<<16) | (((lUInt32)p[1])<<8) | (((lUInt32)p[2])<<0);
@@ -383,15 +390,13 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
             }
             callback->OnLineDecoded( this, y, row );
         }
+        (void) jpeg_finish_decompress(&cinfo);
         callback->OnEndDecode(this, false);
+        _decodeStarted = false;
     }
-    
-    if ( buffer )
-        delete[] buffer;
-    if ( row )
-        delete[] row;
-    cr_jpeg_src_free (&cinfo);
+
     jpeg_destroy_decompress(&cinfo);
+    _decompressCreated = false;
     return true;
 }
 

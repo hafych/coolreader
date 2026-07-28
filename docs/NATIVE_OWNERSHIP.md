@@ -89,6 +89,13 @@ success and failure. A separate started flag ensures `OnEndDecode(errors=true)`
 is emitted only after `OnStartDecode()`, including repeated truncated-IDAT
 failures.
 
+The JPEG decoder installs its `setjmp` boundary before decompressor creation.
+Its source manager and input bytes use libjpeg's permanent pool, while the
+scanline and converted output row use the image pool; all are released by
+`jpeg_destroy_decompress()` on success or fatal `longjmp`. Member lifecycle
+flags make partial decompressor teardown and `OnEndDecode(errors=true)`
+explicit, and successful decoding completes with `jpeg_finish_decompress()`.
+
 XPM parsed rows, palettes and decode rows, plus dummy and draw-buffer conversion
 rows, use standard containers. `LVDrawBufImgSource` keeps a non-owning
 compatibility view and, only when requested by its legacy factory, a

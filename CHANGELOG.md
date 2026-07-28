@@ -157,6 +157,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - PNG pixel and row-view storage now survives libpng `longjmp` errors through
   member RAII containers; repeated truncated-IDAT failures release buffers and
   preserve a balanced decode callback lifecycle.
+- JPEG source, input, scanline and converted-row storage now uses libjpeg
+  lifecycle pools behind a pre-creation `setjmp` boundary; fatal refill errors
+  and successful finishes both release state with balanced callbacks.
 - Unpacked image snapshots now own grayscale, RGB565 and 32-bit pixels through
   RAII containers, eliminating the legacy 16-bit teardown leak; repeat-decode
   regressions cover every storage depth, while failed predecode rolls back to
