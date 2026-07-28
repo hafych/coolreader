@@ -174,6 +174,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   preserving readonly borrowed aliases. Their factories publish only
   successfully initialized streams, growth arithmetic is checked, and reopen
   plus repeated close are rollback-safe.
+- Block write-cache payloads and LRU links now use RAII containers and
+  `unique_ptr` ownership. Failed eviction or flush retains dirty blocks for
+  retry, repeated flush keeps the bounded count coherent, and invalid cache
+  dimensions are rejected by the factory.
 - ZIP inflate/CRC buffers and cached-stream slots now use explicit RAII
   ownership; missing-checksum CRC fallback restores the caller's stream
   position, and cache eviction transfers slot ownership safely.

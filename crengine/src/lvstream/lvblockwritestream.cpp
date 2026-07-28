@@ -24,46 +24,45 @@
 #include "crtimerutil.h"
 #include "crlog.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstring>
+#include <limits>
+#include <memory>
+#include <new>
 #include <stdio.h>
+#include <utility>
 
 
 #define TRACE_BLOCK_WRITE_STREAM 0
 
 
 LVBlockWriteStream::Block::Block(lvpos_t start, lvpos_t end, int block_size)
-    : block_start( start/block_size*block_size ), block_end( end )
+    : block_start(block_size > 0 ? start / block_size * block_size : 0),
+      block_end(end)
     , modified_start((lvpos_t)-1), modified_end((lvpos_t)-1)
-    , size( block_size ), next(NULL)
+    , buf(block_size > 0 ? static_cast<std::size_t>(block_size) : 0),
+      size(block_size)
 {
-    buf = (lUInt8*)calloc(size, sizeof(*buf));
-    if ( buf ) {
-        //            modified_start = 0;
-        //            modified_end = size;
-    }
-    else {
-        CRLog::error("buffer allocation failed");
-    }
 }
 
-LVBlockWriteStream::Block::~Block()
-{
-    free(buf);
-}
-
-void LVBlockWriteStream::Block::save(const lUInt8 *ptr, lvpos_t pos, lvsize_t len)
+bool LVBlockWriteStream::Block::save(
+        const lUInt8 *ptr, lvpos_t pos, lvsize_t len)
 {
 #if TRACE_BLOCK_WRITE_STREAM
     CRLog::trace("block %x save %x, %x", (int)block_start, (int)pos, (int)len);
 #endif
-    int offset = (int)(pos - block_start);
-    if (offset > size || offset < 0 || (int)len > size || offset + (int)len > size) {
+    if (!ptr || pos < block_start
+            || pos - block_start > static_cast<lvpos_t>(size)
+            || len > static_cast<lvsize_t>(size)
+            || len > static_cast<lvsize_t>(
+                    size - static_cast<int>(pos - block_start))) {
         CRLog::error("Unaligned access to block %x", (int)block_start);
+        return false;
     }
-    for (unsigned i = 0; i < len; i++ ) {
+    const std::size_t offset =
+            static_cast<std::size_t>(pos - block_start);
+    for (lvsize_t i = 0; i < len; i++ ) {
         lUInt8 ch1 = buf[offset+i];
-        if ( pos+i>block_end || ch1!=ptr[i] ) {
+        if ( pos+i >= block_end || ch1!=ptr[i] ) {
             buf[offset+i] = ptr[i];
             if ( modified_start==(lvpos_t)-1 ) {
                 modified_start = pos + i;
@@ -73,12 +72,12 @@ void LVBlockWriteStream::Block::save(const lUInt8 *ptr, lvpos_t pos, lvsize_t le
                     modified_start = pos+i;
                 if ( modified_end<pos+i+1)
                     modified_end = pos+i+1;
-                if ( block_end<pos+i+1)
-                    block_end = pos+i+1;
             }
+            if ( block_end<pos+i+1)
+                block_end = pos+i+1;
         }
     }
-    
+    return true;
 }
 
 
@@ -104,16 +103,20 @@ lverror_t LVBlockWriteStream::readBlock(LVBlockWriteStream::Block *block)
         end = ssize;
     if ( end<=start )
         return LVERR_OK;
-    _baseStream->SetPos( start );
+    if (_baseStream->SetPos(start) != start)
+        return LVERR_FAIL;
     lvsize_t bytesRead = 0;
     block->block_end = end;
 #if TRACE_BLOCK_WRITE_STREAM
     CRLog::trace("block %x filling from stream %x, %x", (int)block->block_start, (int)block->block_start, (int)(block->block_end-block->block_start));
 #endif
-    res = _baseStream->Read( block->buf, end-start, &bytesRead );
-    if ( res!=LVERR_OK )
+    res = _baseStream->Read(
+            block->buf.data(), end-start, &bytesRead );
+    if ( res!=LVERR_OK || bytesRead != end-start ) {
         CRLog::error("Error while reading block %x from file of size %x", block->block_start, ssize);
-    return res;
+        return LVERR_FAIL;
+    }
+    return LVERR_OK;
 }
 
 lverror_t LVBlockWriteStream::writeBlock(LVBlockWriteStream::Block *block)
@@ -122,40 +125,63 @@ lverror_t LVBlockWriteStream::writeBlock(LVBlockWriteStream::Block *block)
 #if TRACE_BLOCK_WRITE_STREAM
         CRLog::trace("WRITE BLOCK %x (%x, %x)", (int)block->block_start, (int)block->modified_start, (int)(block->modified_end-block->modified_start));
 #endif
-        _baseStream->SetPos( block->modified_start );
+        if (_baseStream->SetPos(block->modified_start)
+                != block->modified_start) {
+            lvsize_t baseSize = 0;
+            if (_baseStream->GetSize(&baseSize) != LVERR_OK
+                    || block->modified_start <= baseSize
+                    || _baseStream->SetSize(block->modified_start)
+                            != LVERR_OK
+                    || _baseStream->SetPos(block->modified_start)
+                            != block->modified_start)
+                return LVERR_FAIL;
+        }
         if (block->modified_end > _size) {
             block->modified_end = block->block_end;
         }
-        lvpos_t bytesWritten = 0;
-        lverror_t res = _baseStream->Write( block->buf + (block->modified_start-block->block_start), block->modified_end-block->modified_start, &bytesWritten );
-        if ( res==LVERR_OK ) {
-            if (_size < block->modified_end)
-                _size = block->modified_end;
-        }
+        const lvsize_t writeSize =
+                block->modified_end - block->modified_start;
+        lvsize_t bytesWritten = 0;
+        lverror_t res = _baseStream->Write(
+                block->buf.data()
+                        + (block->modified_start-block->block_start),
+                writeSize, &bytesWritten );
+        if ( res!=LVERR_OK || bytesWritten != writeSize )
+            return LVERR_FAIL;
+        if (_size < block->modified_end)
+            _size = block->modified_end;
         block->modified_end = block->modified_start = (lvpos_t)-1;
-        return res;
+        return LVERR_OK;
     } else
         return LVERR_OK;
 }
 
-LVBlockWriteStream::Block *LVBlockWriteStream::newBlock(lvpos_t start, int len)
+std::unique_ptr<LVBlockWriteStream::Block>
+LVBlockWriteStream::newBlock(lvpos_t start, int len)
 {
-    Block * b = new Block( start, start+len, _blockSize );
-    return b;
+    try {
+        return std::make_unique<Block>(
+                start, start + len, _blockSize);
+    } catch (const std::bad_alloc &) {
+        CRLog::error("block write-cache allocation failed");
+        return std::unique_ptr<Block>();
+    }
 }
 
 LVBlockWriteStream::Block *LVBlockWriteStream::findBlock(lvpos_t pos)
 {
-    for ( Block ** p = &_firstBlock; *p; p=&(*p)->next ) {
-        Block * item = *p;
+    for (std::unique_ptr<Block> *link = &_firstBlock;
+            link->get(); link = &(*link)->next) {
+        Block * item = link->get();
         if ( item->containsPos(pos) ) {
-            if ( item!=_firstBlock ) {
+            if ( item!=_firstBlock.get() ) {
 #if TRACE_BLOCK_WRITE_STREAM
                 dumpBlocks("before reorder");
 #endif
-                *p = item->next;
-                item->next = _firstBlock;
-                _firstBlock = item;
+                std::unique_ptr<Block> found = std::move(*link);
+                *link = std::move(found->next);
+                found->next = std::move(_firstBlock);
+                _firstBlock = std::move(found);
 #if TRACE_BLOCK_WRITE_STREAM
                 dumpBlocks("after reorder");
                 CRLog::trace("found block %x (%x, %x)", (int)item->block_start, (int)item->modified_start, (int)(item->modified_end-item->modified_start));
@@ -170,66 +196,84 @@ LVBlockWriteStream::Block *LVBlockWriteStream::findBlock(lvpos_t pos)
 bool LVBlockWriteStream::readFromCache(void *buf, lvpos_t pos, lvsize_t count)
 {
     Block * p = findBlock( pos );
-    if ( p ) {
+    if ( p && buf
+            && count <= static_cast<lvsize_t>(
+                    p->size - static_cast<int>(pos - p->block_start))) {
 #if TRACE_BLOCK_WRITE_STREAM
         CRLog::trace("read from cache block %x (%x, %x)", (int)p->block_start, (int)pos, (int)(count));
 #endif
-        memcpy( buf, p->buf + (pos-p->block_start), count );
+        std::memcpy(
+                buf, p->buf.data() + (pos-p->block_start), count );
         return true;
     }
     return false;
 }
 
+lverror_t LVBlockWriteStream::evictLastBlock()
+{
+    if (!_firstBlock)
+        return LVERR_OK;
+    std::unique_ptr<Block> *last = &_firstBlock;
+    while ((*last)->next)
+        last = &(*last)->next;
+    if (writeBlock(last->get()) != LVERR_OK)
+        return LVERR_FAIL;
+    last->reset();
+    _count--;
+    return LVERR_OK;
+}
+
 lverror_t LVBlockWriteStream::writeToCache(const void *buf, lvpos_t pos, lvsize_t count)
 {
+    if (!buf || count == 0
+            || count > std::numeric_limits<lvpos_t>::max() - pos)
+        return LVERR_FAIL;
+    const lvpos_t endPos = pos + count;
     Block * p = findBlock( pos );
     if ( p ) {
 #if TRACE_BLOCK_WRITE_STREAM
         CRLog::trace("saving data to existing block %x (%x, %x)", (int)p->block_start, (int)pos, (int)count);
 #endif
-        p->save( (const lUInt8 *)buf, pos, count );
-        if ( pos + count > _size )
-            _size = pos + count;
+        if (!p->save(static_cast<const lUInt8 *>(buf), pos, count))
+            return LVERR_FAIL;
+        if ( endPos > _size )
+            _size = endPos;
         return LVERR_OK;
     }
 #if TRACE_BLOCK_WRITE_STREAM
     CRLog::trace("Block %x not found in cache", pos);
 #endif
-    if ( _count>=_blockCount-1 ) {
-        // remove last
-        for ( Block * p = _firstBlock; p; p=p->next ) {
-            if ( p->next && !p->next->next ) {
+    if (_count >= _blockCount) {
 #if TRACE_BLOCK_WRITE_STREAM
-                dumpBlocks("before remove last");
-                CRLog::trace("dropping block %x (%x, %x)", (int)p->next->block_start, (int)p->next->modified_start, (int)(p->next->modified_end-p->next->modified_start));
+        dumpBlocks("before remove last");
 #endif
-                writeBlock( p->next );
-                delete p->next;
-                _count--;
-                p->next = NULL;
+        if (evictLastBlock() != LVERR_OK)
+            return LVERR_FAIL;
 #if TRACE_BLOCK_WRITE_STREAM
-                dumpBlocks("after remove last");
+        dumpBlocks("after remove last");
 #endif
-            }
-        }
     }
-    p = newBlock( pos, count );
+    std::unique_ptr<Block> candidate =
+            newBlock(pos, static_cast<int>(count));
+    if (!candidate)
+        return LVERR_FAIL;
+    p = candidate.get();
 #if TRACE_BLOCK_WRITE_STREAM
     CRLog::trace("creating block %x", (int)p->block_start);
 #endif
     if ( readBlock( p )!=LVERR_OK ) {
-        delete p;
         return LVERR_FAIL;
     }
 #if TRACE_BLOCK_WRITE_STREAM
     CRLog::trace("saving data to new block %x (%x, %x)", (int)p->block_start, (int)pos, (int)count);
 #endif
-    p->save( (const lUInt8 *)buf, pos, count );
-    p->next = _firstBlock;
-    _firstBlock = p;
+    if (!p->save(static_cast<const lUInt8 *>(buf), pos, count))
+        return LVERR_FAIL;
+    candidate->next = std::move(_firstBlock);
+    _firstBlock = std::move(candidate);
     _count++;
-    if ( pos + count > _size ) {
-        _size = pos + count;
+    if ( endPos > _size ) {
+        _size = endPos;
         p->modified_start = p->block_start;
         p->modified_end = p->block_end;
     }
@@ -246,23 +290,18 @@ lverror_t LVBlockWriteStream::Flush(bool sync, CRTimerUtil &timeout)
 #if TRACE_BLOCK_WRITE_STREAM
     CRLog::trace("flushing unsaved blocks");
 #endif
-    lverror_t res = LVERR_OK;
-    for ( Block * p = _firstBlock; p; ) {
-        Block * tmp = p;
-        if ( writeBlock(p)!=LVERR_OK )
-            res = LVERR_FAIL;
-        p = p->next;
-        delete tmp;
+    while (_firstBlock) {
+        if (writeBlock(_firstBlock.get()) != LVERR_OK)
+            return LVERR_FAIL;
+        std::unique_ptr<Block> flushed = std::move(_firstBlock);
+        _firstBlock = std::move(flushed->next);
+        _count--;
         if (!sync && timeout.expired()) {
             //CRLog::trace("LVBlockWriteStream::flush - timeout expired");
-            _firstBlock = p;
             return LVERR_OK;
         }
-        
     }
-    _firstBlock = NULL;
-    _baseStream->Flush( sync );
-    return res;
+    return _baseStream->Flush(sync);
 }
 
 LVBlockWriteStream::~LVBlockWriteStream()
@@ -271,7 +310,8 @@ LVBlockWriteStream::~LVBlockWriteStream()
 }
 
 LVBlockWriteStream::LVBlockWriteStream(LVStreamRef baseStream, int blockSize, int blockCount)
-    : _baseStream( baseStream ), _blockSize( blockSize ), _blockCount( blockCount ), _firstBlock(NULL), _count(0)
+    : _baseStream( baseStream ), _blockSize( blockSize ),
+      _blockCount( blockCount ), _count(0)
 {
     _pos = _baseStream->GetPos();
     _size = _baseStream->GetSize();
@@ -326,7 +366,7 @@ lverror_t LVBlockWriteStream::SetSize(lvsize_t size)
 void LVBlockWriteStream::dumpBlocks(const char *context)
 {
     lString8 buf;
-    for ( Block * p = _firstBlock; p; p = p->next ) {
+    for ( Block * p = _firstBlock.get(); p; p = p->next.get() ) {
         char s[1000];
         snprintf(s, 999, "%x ", (int)p->block_start);
         s[999] = 0;
@@ -344,14 +384,13 @@ lverror_t LVBlockWriteStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRe
     // slice by block bounds
     lvsize_t bytesRead = 0;
     lverror_t res = LVERR_OK;
-    if ( _pos > _size ) {
-        if ( nBytesRead )
-            *nBytesRead = bytesRead;
+    if (nBytesRead)
+        *nBytesRead = 0;
+    if ((!buf && count > 0) || _blockSize <= 0 || _pos > _size)
         return LVERR_FAIL;
-    }
-    if ( _pos + count > _size )
-        count = (int)(_size - _pos);
-    while ( (int)count>0 && res==LVERR_OK ) {
+    if (count > _size - _pos)
+        count = _size - _pos;
+    while (count>0 && res==LVERR_OK) {
         lvpos_t blockSpaceLeft = _blockSize - (_pos % _blockSize);
         if ( blockSpaceLeft > count )
             blockSpaceLeft = count;
@@ -375,8 +414,11 @@ lverror_t LVBlockWriteStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRe
 #if TRACE_BLOCK_WRITE_STREAM
             CRLog::trace("direct reading from stream (%x, %x)", (int)_pos, (int)blockSpaceLeft);
 #endif
-            _baseStream->SetPos(_pos);
-            res = _baseStream->Read(buf, blockSpaceLeft, &blockBytesRead);
+            if (_baseStream->SetPos(_pos) != _pos)
+                res = LVERR_FAIL;
+            else
+                res = _baseStream->Read(
+                        buf, blockSpaceLeft, &blockBytesRead);
         }
         if ( res!=LVERR_OK )
             break;
@@ -388,7 +430,7 @@ lverror_t LVBlockWriteStream::Read(void *buf, lvsize_t count, lvsize_t *nBytesRe
         if ( !blockBytesRead )
             break;
     }
-    if ( nBytesRead && res==LVERR_OK )
+    if ( nBytesRead )
         *nBytesRead = bytesRead;
     return res;
 }
@@ -400,10 +442,14 @@ lverror_t LVBlockWriteStream::Write(const void *buf, lvsize_t count, lvsize_t *n
     dumpBlocks("before write");
 #endif
     // slice by block bounds
-    lvsize_t bytesRead = 0;
+    lvsize_t bytesWritten = 0;
     lverror_t res = LVERR_OK;
-    //if ( _pos + count > _size )
-    //    count = _size - _pos;
+    if (nBytesWritten)
+        *nBytesWritten = 0;
+    if ((!buf && count > 0)
+            || _blockSize <= 0 || _blockCount <= 0
+            || count > std::numeric_limits<lvpos_t>::max() - _pos)
+        return LVERR_FAIL;
     while ( count>0 && res==LVERR_OK ) {
         lvpos_t blockSpaceLeft = _blockSize - (_pos % _blockSize);
         if ( blockSpaceLeft > count )
@@ -420,14 +466,14 @@ lverror_t LVBlockWriteStream::Write(const void *buf, lvsize_t count, lvsize_t *n
         count -= blockBytesWritten;
         buf = ((char*)buf) + blockBytesWritten;
         _pos += blockBytesWritten;
-        bytesRead += blockBytesWritten;
+        bytesWritten += blockBytesWritten;
         if ( _pos>_size )
             _size = _pos;
         if ( !blockBytesWritten )
             break;
     }
-    if ( nBytesWritten && res==LVERR_OK )
-        *nBytesWritten = bytesRead;
+    if ( nBytesWritten )
+        *nBytesWritten = bytesWritten;
 #if TRACE_BLOCK_WRITE_STREAM
     dumpBlocks("after write");
 #endif

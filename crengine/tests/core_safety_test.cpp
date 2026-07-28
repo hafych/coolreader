@@ -2076,6 +2076,119 @@ static int testMemoryStreamOwnership() {
     return 0;
 }
 
+class FailOnceMemoryStream : public LVMemoryStream {
+private:
+    bool _failNextWrite;
+
+public:
+    FailOnceMemoryStream()
+        : _failNextWrite(false)
+    {
+    }
+
+    void failNextWrite()
+    {
+        _failNextWrite = true;
+    }
+
+    lverror_t Write(const void *buf, lvsize_t count,
+            lvsize_t *bytesWritten) override
+    {
+        if (_failNextWrite) {
+            _failNextWrite = false;
+            if (bytesWritten)
+                *bytesWritten = 0;
+            return LVERR_FAIL;
+        }
+        return LVMemoryStream::Write(buf, count, bytesWritten);
+    }
+};
+
+static int testBlockWriteStreamOwnership() {
+    std::vector<unsigned char> payload(24);
+    for (std::size_t i = 0; i < payload.size(); ++i)
+        payload[i] = static_cast<unsigned char>(0x30 + i);
+
+    LVStreamRef base = LVCreateMemoryStream();
+    LVStreamRef buffered = LVCreateBlockWriteStream(base, 8, 2);
+    lvsize_t bytesWritten = 0;
+    if (buffered.isNull()
+            || buffered->Write(
+                    payload.data(), payload.size(), &bytesWritten) != LVERR_OK
+            || bytesWritten != payload.size())
+        return fail("block write stream rejected multi-block cache growth");
+
+    std::vector<unsigned char> cachedRead(payload.size());
+    lvsize_t bytesRead = 0;
+    if (buffered->SetPos(0) != 0
+            || buffered->Read(
+                    cachedRead.data(), cachedRead.size(), &bytesRead)
+                    != LVERR_OK
+            || bytesRead != cachedRead.size()
+            || cachedRead != payload)
+        return fail("block write stream did not merge cached and flushed data");
+    if (buffered->Flush(true) != LVERR_OK
+            || !verifyStreamRange(base, payload, 0, payload.size()))
+        return fail("block write stream did not flush its RAII block chain");
+
+    std::vector<unsigned char> replacement(13, 0xa7);
+    std::copy(
+            replacement.begin(), replacement.end(), payload.begin() + 5);
+    if (buffered->SetPos(5) != 5
+            || buffered->Write(
+                    replacement.data(), replacement.size(), &bytesWritten)
+                    != LVERR_OK
+            || bytesWritten != replacement.size()
+            || buffered->Flush(true) != LVERR_OK
+            || !verifyStreamRange(base, payload, 0, payload.size()))
+        return fail("block write stream could not reuse its cache after flush");
+
+    std::unique_ptr<FailOnceMemoryStream> flakyOwner =
+            std::make_unique<FailOnceMemoryStream>();
+    FailOnceMemoryStream *flakyRaw = flakyOwner.get();
+    LVStreamRef flakyBase(flakyOwner.release());
+    if (flakyRaw->Create() != LVERR_OK)
+        return fail("block write rollback fixture could not initialize");
+    LVStreamRef rollback = LVCreateBlockWriteStream(flakyBase, 4, 1);
+    static const unsigned char first[] = {1, 2, 3, 4};
+    static const unsigned char second[] = {5, 6, 7, 8};
+    if (rollback.isNull()
+            || rollback->Write(
+                    first, sizeof(first), &bytesWritten) != LVERR_OK
+            || bytesWritten != sizeof(first))
+        return fail("block write rollback fixture could not cache a block");
+    flakyRaw->failNextWrite();
+    bytesWritten = 99;
+    if (rollback->Write(
+                second, sizeof(second), &bytesWritten) != LVERR_FAIL
+            || bytesWritten != 0
+            || rollback->GetPos() != sizeof(first))
+        return fail("failed block eviction reported committed bytes");
+    if (rollback->Flush(true) != LVERR_OK
+            || rollback->Write(
+                    second, sizeof(second), &bytesWritten) != LVERR_OK
+            || bytesWritten != sizeof(second)
+            || rollback->Flush(true) != LVERR_OK)
+        return fail("failed block eviction did not retain dirty storage");
+    const std::vector<unsigned char> rollbackExpected =
+            {1, 2, 3, 4, 5, 6, 7, 8};
+    if (!verifyStreamRange(
+            flakyBase, rollbackExpected, 0, rollbackExpected.size()))
+        return fail("block eviction rollback lost dirty data");
+
+    LVStreamRef readOnly = LVCreateMemoryStream(
+            payload.data(), static_cast<int>(payload.size()),
+            true, LVOM_READ);
+    LVStreamRef passThrough =
+            LVCreateBlockWriteStream(readOnly, 8, 2);
+    if (passThrough.get() != readOnly.get())
+        return fail("block write factory wrapped a readonly stream");
+    if (!LVCreateBlockWriteStream(base, 0, 2).isNull()
+            || !LVCreateBlockWriteStream(base, 8, 0).isNull())
+        return fail("block write factory accepted invalid cache bounds");
+    return 0;
+}
+
 static int testDefaultStreamBufferOwnership() {
     std::vector<unsigned char> payload(12);
     for (std::size_t i = 0; i < payload.size(); ++i)
@@ -2562,6 +2675,8 @@ int main() {
     if (testImageSourceOwnership() != 0)
         return 1;
     if (testMemoryStreamOwnership() != 0)
+        return 1;
+    if (testBlockWriteStreamOwnership() != 0)
         return 1;
     if (testDefaultStreamBufferOwnership() != 0)
         return 1;

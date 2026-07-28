@@ -155,3 +155,13 @@ creation or copying succeeds, so invalid sizes and short source reads cannot
 publish partial streams. Regression coverage includes multi-page growth,
 growth-overflow rollback, borrowed aliasing, deep copies, reopen/close and
 failed factory construction.
+
+`LVBlockWriteStream` owns each block payload through `std::vector` and its
+bounded LRU chain through nested `std::unique_ptr` links. New blocks stay in a
+local owner until preload and mutation succeed. Eviction and flush unlink a
+block only after the complete base-stream write succeeds; a short or failed
+write leaves dirty markers and ownership intact for retry. Full and timed
+flushes update the cached-block count as nodes leave the chain, and the factory
+rejects non-positive block dimensions. Regression coverage reads across
+cached/flushed blocks, reuses the cache after flush and retries a failed
+single-slot eviction without losing dirty bytes.

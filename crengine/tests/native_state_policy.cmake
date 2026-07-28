@@ -59,6 +59,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.cpp" TCR_STREAM_SOUR
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvtcrstream.h" TCR_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.cpp" DEFAULT_STREAM_BUFFER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvdefstreambuffer.h" DEFAULT_STREAM_BUFFER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvblockwritestream.cpp" BLOCK_WRITE_STREAM_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvblockwritestream.h" BLOCK_WRITE_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.cpp" MEMORY_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvmemorystream.h" MEMORY_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvstreamutils.cpp" STREAM_UTILS_SOURCE)
@@ -1251,6 +1253,83 @@ forbid_source_text(
   "${CACHED_STREAM_SOURCE}"
   "delete[] flags"
   "cached stream scratch cleanup must remain automatic"
+)
+
+# --- block write-cache buffer and LRU ownership ---
+require_source_text(
+  "${BLOCK_WRITE_STREAM_HEADER}"
+  "std::vector<lUInt8> buf"
+  "block write-cache payloads must use RAII storage"
+)
+require_source_text(
+  "${BLOCK_WRITE_STREAM_HEADER}"
+  "std::unique_ptr<Block> next"
+  "block write-cache links must transfer explicit ownership"
+)
+require_source_text(
+  "${BLOCK_WRITE_STREAM_HEADER}"
+  "std::unique_ptr<Block> _firstBlock"
+  "block write-cache root must own its chain"
+)
+require_source_text(
+  "${BLOCK_WRITE_STREAM_SOURCE}"
+  "std::make_unique<Block>("
+  "new write-cache blocks must start with scoped ownership"
+)
+require_source_text(
+  "${BLOCK_WRITE_STREAM_SOURCE}"
+  "if (writeBlock(last->get()) != LVERR_OK)"
+  "failed block eviction must retain dirty storage"
+)
+require_source_text(
+  "${BLOCK_WRITE_STREAM_SOURCE}"
+  "if (writeBlock(_firstBlock.get()) != LVERR_OK)"
+  "failed block flush must retain the dirty chain"
+)
+require_source_text(
+  "${BLOCK_WRITE_STREAM_SOURCE}"
+  "_count--"
+  "block write-cache removal must keep its bounded count coherent"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "std::make_unique<LVBlockWriteStream>"
+  "block write-stream factories must own candidates explicitly"
+)
+require_source_text(
+  "${STREAM_UTILS_SOURCE}"
+  "if (blockSize <= 0 || blockCount <= 0)"
+  "block write-stream factories must reject invalid cache bounds"
+)
+forbid_source_text(
+  "${BLOCK_WRITE_STREAM_HEADER}"
+  "lUInt8 * buf"
+  "block write-cache payloads must not regress to raw ownership"
+)
+forbid_source_text(
+  "${BLOCK_WRITE_STREAM_HEADER}"
+  "Block * next"
+  "block write-cache links must not regress to raw ownership"
+)
+forbid_source_text(
+  "${BLOCK_WRITE_STREAM_HEADER}"
+  "Block * _firstBlock"
+  "block write-cache root must not regress to raw ownership"
+)
+forbid_source_text(
+  "${BLOCK_WRITE_STREAM_SOURCE}"
+  "calloc("
+  "block write-cache allocation must remain container-managed"
+)
+forbid_source_text(
+  "${BLOCK_WRITE_STREAM_SOURCE}"
+  "free("
+  "block write-cache teardown must remain automatic"
+)
+forbid_source_text(
+  "${BLOCK_WRITE_STREAM_SOURCE}"
+  "delete "
+  "block write-cache rollback must remain scope-bound"
 )
 
 # --- owned and borrowed memory-stream storage ---

@@ -796,7 +796,12 @@ LVStreamRef LVCreateBlockWriteStream( LVStreamRef baseStream, int blockSize, int
 {
     if ( baseStream.isNull() || baseStream->GetMode()==LVOM_READ )
         return baseStream;
-    return LVStreamRef( new LVBlockWriteStream(baseStream, blockSize, blockCount) );
+    if (blockSize <= 0 || blockCount <= 0)
+        return LVStreamRef();
+    std::unique_ptr<LVBlockWriteStream> stream =
+            std::make_unique<LVBlockWriteStream>(
+                    baseStream, blockSize, blockCount);
+    return LVStreamRef(stream.release());
 }
 
 /// set container to handle filesystem access for paths started with ASSET_PATH_PREFIX (@ sign)

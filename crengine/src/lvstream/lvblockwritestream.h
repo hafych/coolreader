@@ -24,6 +24,9 @@
 
 #include "lvnamedstream.h"
 
+#include <memory>
+#include <vector>
+
 class LVBlockWriteStream : public LVNamedStream
 {
     LVStreamRef _baseStream;
@@ -38,32 +41,34 @@ class LVBlockWriteStream : public LVNamedStream
         lvpos_t block_end;
         lvpos_t modified_start;
         lvpos_t modified_end;
-        lUInt8 * buf;
+        std::vector<lUInt8> buf;
         int size;
-        Block * next;
+        std::unique_ptr<Block> next;
 
         Block( lvpos_t start, lvpos_t end, int block_size );
-        ~Block();
-        void save( const lUInt8 * ptr, lvpos_t pos, lvsize_t len );
+        bool save( const lUInt8 * ptr, lvpos_t pos, lvsize_t len );
         bool containsPos( lvpos_t pos )
         {
-            return pos>=block_start && pos<block_start+size;
+            return pos >= block_start
+                    && pos - block_start < static_cast<lvpos_t>(size);
         }
     };
 
     // list of blocks
-    Block * _firstBlock;
+    std::unique_ptr<Block> _firstBlock;
     int _count;
 
     /// set write bytes limit to call flush(true) automatically after writing of each sz bytes
-    void setAutoSyncSize(lvsize_t sz);
+    void setAutoSyncSize(lvsize_t sz) override;
 
     /// fills block with data existing in file
     lverror_t readBlock( Block * block );
 
     lverror_t writeBlock( Block * block );
 
-    Block * newBlock( lvpos_t start, int len );
+    std::unique_ptr<Block> newBlock( lvpos_t start, int len );
+
+    lverror_t evictLastBlock();
 
     /// find block, move to top if found
     Block * findBlock( lvpos_t pos );
@@ -74,41 +79,47 @@ class LVBlockWriteStream : public LVNamedStream
     // write block-aligned fragment to cache
     lverror_t writeToCache( const void * buf, lvpos_t pos, lvsize_t count );
 public:
-    virtual lverror_t Flush( bool sync );
+    lverror_t Flush( bool sync ) override;
     /// flushes unsaved data from buffers to file, with optional flush of OS buffers
-    virtual lverror_t Flush( bool sync, CRTimerUtil & timeout );
+    lverror_t Flush( bool sync, CRTimerUtil & timeout ) override;
 
-    virtual ~LVBlockWriteStream();
+    ~LVBlockWriteStream() override;
 
-    virtual const lChar32 * GetName()
+    const lChar32 * GetName() override
             { return _baseStream->GetName(); }
-    virtual lvopen_mode_t GetMode()
+    lvopen_mode_t GetMode() override
             { return _baseStream->GetMode(); }
 
     LVBlockWriteStream( LVStreamRef baseStream, int blockSize, int blockCount );
+    LVBlockWriteStream(const LVBlockWriteStream &) = delete;
+    LVBlockWriteStream &operator=(const LVBlockWriteStream &) = delete;
 
-    virtual lvpos_t GetSize()
+    lvsize_t GetSize() override
     {
         return _size;
     }
 
-    virtual lverror_t Seek( lvoffset_t offset, lvseek_origin_t origin, lvpos_t * pNewPos );
+    lverror_t Seek(
+            lvoffset_t offset, lvseek_origin_t origin,
+            lvpos_t * pNewPos ) override;
 
-    virtual lverror_t Tell( lvpos_t * pPos );
-    //virtual lverror_t   SetPos(lvpos_t p)
-    virtual lvpos_t   SetPos(lvpos_t p);
-    virtual lvpos_t   GetPos()
+    lverror_t Tell( lvpos_t * pPos ) override;
+    lvpos_t SetPos(lvpos_t p) override;
+    lvpos_t GetPos() override
     {
         return _pos;
     }
-    virtual lverror_t SetSize( lvsize_t size );
+    lverror_t SetSize( lvsize_t size ) override;
 
     void dumpBlocks( const char * context);
 
-    virtual lverror_t Read( void * buf, lvsize_t count, lvsize_t * nBytesRead );
+    lverror_t Read(
+            void * buf, lvsize_t count, lvsize_t * nBytesRead ) override;
 
-    virtual lverror_t Write( const void * buf, lvsize_t count, lvsize_t * nBytesWritten );
-    virtual bool Eof()
+    lverror_t Write(
+            const void * buf, lvsize_t count,
+            lvsize_t * nBytesWritten ) override;
+    bool Eof() override
     {
         return _pos >= _size;
     }
