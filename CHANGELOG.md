@@ -164,6 +164,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   recoverable truncated input before teardown and emits no document callbacks
   after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership
   through a LIFO owner stack, including malformed-group unwinding.
+- The Antiword bridge now keeps writer, layout and stream callback state in a
+  scoped per-import context while serializing the third-party library; real
+  Word fixture imports are covered concurrently, and sequential lists reset
+  their state correctly.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

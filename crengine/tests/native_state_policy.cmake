@@ -20,6 +20,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.h" GLYPH_CACHE_HE
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstring.cpp" LVSTRING_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvhtmlparser.cpp" HTML_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvxmlparser.cpp" XML_PARSER_SOURCE)
@@ -408,6 +409,63 @@ forbid_source_text(
   "${FREETYPE_FACE_SOURCE}"
   "extern int gammaIndex"
   "glyph rendering must use the synchronized font gamma API"
+)
+
+# --- Antiword bridge: serialized library and operation-local callback state ---
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "static thread_local WordImportContext *g_wordImportContext"
+  "Word import callback state must be isolated per calling thread"
+)
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "static thread_local LVStream *g_antiwordStream"
+  "Antiword stream adaptation must be isolated per calling thread"
+)
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "static std::mutex g_antiwordMutex"
+  "third-party Antiword entry points must be serialized"
+)
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "std::lock_guard<std::mutex> detectionLock(g_antiwordMutex)"
+  "Antiword format detection must hold the library mutex"
+)
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "std::lock_guard<std::mutex> importLock(g_antiwordMutex)"
+  "Antiword document import must hold the library mutex"
+)
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "WordImportContextGuard contextGuard(context)"
+  "Word import callback context must use scoped publication"
+)
+require_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "context.insideList = 0"
+  "Word list teardown must reset per-import list state"
+)
+forbid_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "static ldomDocumentWriter * writer"
+  "Word import must not publish a process-wide writer"
+)
+forbid_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "static LVStream * antiword_stream"
+  "Antiword stream adaptation must not use process-wide mutable state"
+)
+forbid_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "static bool inside_p"
+  "Word paragraph state must remain operation-local"
+)
+forbid_source_text(
+  "${WORD_FORMAT_SOURCE}"
+  "static int image_index"
+  "Word image numbering must remain operation-local"
 )
 
 # --- parser format detection: operation-scoped decoded buffers ---

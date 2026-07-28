@@ -98,3 +98,11 @@ cross-document state leakage during concurrent or re-entrant parsing.
 The cacheable-object ID counter uses `std::atomic<lUInt32>` with pre-increment,
 replacing an unsynchronized `static lUInt32`. MathML stylesheet lazy loading
 uses `std::call_once` instead of a check-then-act boolean.
+
+The Antiword bridge keeps writer, layout, list, image and stream state in a
+per-import context published through a scoped `thread_local` view because the
+third-party C callbacks do not accept user data. `DetectWordFormat()` and
+`ImportWordDocument()` both hold one process-wide mutex around Antiword calls,
+including its own option globals. Concurrent fixture imports therefore cannot
+cross-write documents or stream adapters, and all callback views are restored
+on early return.

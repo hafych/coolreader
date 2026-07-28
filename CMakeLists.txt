@@ -555,6 +555,7 @@ if(BUILD_TESTING AND UNIX)
   target_compile_definitions(thread_safety_test PRIVATE
     CR_USE_THREADS=1
     _LINUX=1
+    COOLREADER_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
   )
   target_link_libraries(thread_safety_test
     crengine qimagescale ${EXTRA_LIBS} ${STD_LIBS}

@@ -25,6 +25,7 @@
 #include "../include/lvstreamutils.h"
 #include "../include/lvtinydom.h"
 #include "../include/crlog.h"
+#include <mutex>
 
 //#ifndef ENABLE_ANTIWORD
 //#define ENABLE_ANTIWORD 1
@@ -61,34 +62,74 @@ extern "C" {
 #define TRACE(...)
 #endif
 
-static ldomDocumentWriter * writer = NULL;
-static ldomDocument * doc = NULL;
-static int image_index = 0;
-static bool inside_p = false;
-static bool inside_table = false;
-static int table_col_count = 0;
-static int inside_list = 0; // 0=none, 1=ul, 2=ol
-static int alignment = 0;
-static bool inside_li = false;
-static bool last_space_char = false;
-static short	sLeftIndent = 0;	/* Left indentation in twips */
-static short	sLeftIndent1 = 0;	/* First line left indentation in twips */
-static short	sRightIndent = 0;	/* Right indentation in twips */
-static int	    usBeforeIndent = 0;	/* Vertical indent before paragraph in twips */
-static int	    usAfterIndent = 0;	/* Vertical indent after paragraph in twips */
-//static ldomNode * body = NULL;
-//static ldomNode * head = NULL;
-
 // Antiword Output handling
 extern "C" {
 #include "antiword.h"
 }
 
-static conversion_type	eConversionType = conversion_unknown;
-static encoding_type	eEncoding = encoding_neutral;
-
 #define LFAIL(x) \
     if ((x)) crFatalError(1111, "assertion failed: " #x)
+
+struct WordImportContext {
+    explicit WordImportContext(ldomDocumentWriter *documentWriter)
+        : writer(documentWriter)
+        , imageIndex(0)
+        , insideParagraph(false)
+        , insideTable(false)
+        , tableColumnCount(0)
+        , insideList(0)
+        , alignment(0)
+        , insideListItem(false)
+        , lastSpaceChar(false)
+        , leftIndent(0)
+        , firstLineIndent(0)
+        , rightIndent(0)
+        , beforeIndent(0)
+        , afterIndent(0)
+    {
+    }
+
+    ldomDocumentWriter *writer;
+    int imageIndex;
+    bool insideParagraph;
+    bool insideTable;
+    int tableColumnCount;
+    int insideList; // 0=none, 1=ul, 2=ol
+    int alignment;
+    bool insideListItem;
+    bool lastSpaceChar;
+    short leftIndent;
+    short firstLineIndent;
+    short rightIndent;
+    int beforeIndent;
+    int afterIndent;
+};
+
+static thread_local WordImportContext *g_wordImportContext = NULL;
+static std::mutex g_antiwordMutex;
+
+static WordImportContext &wordImportContext()
+{
+    LFAIL(g_wordImportContext == NULL);
+    return *g_wordImportContext;
+}
+
+class WordImportContextGuard {
+private:
+    WordImportContext *m_previous;
+
+public:
+    explicit WordImportContextGuard(WordImportContext &context)
+        : m_previous(g_wordImportContext)
+    {
+        g_wordImportContext = &context;
+    }
+
+    ~WordImportContextGuard()
+    {
+        g_wordImportContext = m_previous;
+    }
+};
 
 
 static lString32 picasToPercent( const lChar32 * prop, int p, int minvalue, int maxvalue ) {
@@ -153,38 +194,32 @@ static void setOptions() {
 static void
 vPrologue1(diagram_type *pDiag, const char *szTask, const char * /*szFilename*/)
 {
-    //options_type	tOptions;
-
     LFAIL(pDiag == NULL);
     LFAIL(szTask == NULL || szTask[0] == '\0');
 
-    options_type tOptions;
-    vGetOptions(&tOptions);
-
-    eConversionType = tOptions.eConversionType;
-    eEncoding = tOptions.eEncoding;
+    WordImportContext &context = wordImportContext();
 
     TRACE("antiword::vPrologue1()");
     //vPrologueXML(pDiag, &tOptions);
 
     lString32 title("Word document");
-    writer->OnTagOpen(NULL, U"?xml");
-    writer->OnAttribute(NULL, U"version", U"1.0");
-    writer->OnAttribute(NULL, U"encoding", U"utf-8");
-    writer->OnEncoding(U"utf-8", NULL);
-    writer->OnTagBody();
-    writer->OnTagClose(NULL, U"?xml");
-    writer->OnTagOpenNoAttr(NULL, U"FictionBook");
+    context.writer->OnTagOpen(NULL, U"?xml");
+    context.writer->OnAttribute(NULL, U"version", U"1.0");
+    context.writer->OnAttribute(NULL, U"encoding", U"utf-8");
+    context.writer->OnEncoding(U"utf-8", NULL);
+    context.writer->OnTagBody();
+    context.writer->OnTagClose(NULL, U"?xml");
+    context.writer->OnTagOpenNoAttr(NULL, U"FictionBook");
     // DESCRIPTION
-    writer->OnTagOpenNoAttr(NULL, U"description");
-    writer->OnTagOpenNoAttr(NULL, U"title-info");
-    writer->OnTagOpenNoAttr(NULL, U"book-title");
-    writer->OnText(title.c_str(), title.length(), 0);
-    writer->OnTagClose(NULL, U"book-title");
-    writer->OnTagOpenNoAttr(NULL, U"title-info");
-    writer->OnTagClose(NULL, U"description");
+    context.writer->OnTagOpenNoAttr(NULL, U"description");
+    context.writer->OnTagOpenNoAttr(NULL, U"title-info");
+    context.writer->OnTagOpenNoAttr(NULL, U"book-title");
+    context.writer->OnText(title.c_str(), title.length(), 0);
+    context.writer->OnTagClose(NULL, U"book-title");
+    context.writer->OnTagOpenNoAttr(NULL, U"title-info");
+    context.writer->OnTagClose(NULL, U"description");
     // BODY
-    writer->OnTagOpenNoAttr(NULL, U"body");
+    context.writer->OnTagOpenNoAttr(NULL, U"body");
 } /* end of vPrologue1 */
 
 
@@ -194,12 +229,13 @@ vPrologue1(diagram_type *pDiag, const char *szTask, const char * /*szFilename*/)
 static void
 vEpilogue(diagram_type * /*pDiag*/)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vEpilogue()");
     //vEpilogueTXT(pDiag->pOutFile);
     //vEpilogueXML(pDiag);
-    if ( inside_p )
-        writer->OnTagClose(NULL, U"p");
-    writer->OnTagClose(NULL, U"body");
+    if ( context.insideParagraph )
+        context.writer->OnTagClose(NULL, U"p");
+    context.writer->OnTagClose(NULL, U"body");
 } /* end of vEpilogue */
 
 /*
@@ -297,13 +333,15 @@ void
 vMove2NextLine(diagram_type *pDiag, drawfile_fontref /*tFontRef*/,
     USHORT usFontSize)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vMove2NextLine()");
     LFAIL(pDiag == NULL);
     LFAIL(pDiag->pOutFile == NULL);
     LFAIL(usFontSize < MIN_FONT_SIZE || usFontSize > MAX_FONT_SIZE);
 
-    if ( (inside_p || inside_li) && !last_space_char )
-        writer->OnText(U" ", 1, 0);
+    if ( (context.insideParagraph || context.insideListItem)
+            && !context.lastSpaceChar )
+        context.writer->OnText(U" ", 1, 0);
     //writer->OnTagOpenAndClose(NULL, U"br");
     //vMove2NextLineXML(pDiag);
 } /* end of vMove2NextLine */
@@ -317,42 +355,43 @@ vSubstring2Diagram(diagram_type *pDiag,
     UCHAR /*ucFontColor*/, USHORT usFontstyle, drawfile_fontref /*tFontRef*/,
     USHORT usFontSize, USHORT /*usMaxFontSize*/)
 {
+    WordImportContext &context = wordImportContext();
     lString32 s( szString, (int)tStringLength);
 #ifdef _LINUX
     TRACE("antiword::vSubstring2Diagram(%s)", LCSTR(s));
 #else
     TRACE("antiword::vSubstring2Diagram()");
 #endif
-    s.trimDoubleSpaces(!last_space_char, true, false);
-    last_space_char = (s.lastChar()==' ');
+    s.trimDoubleSpaces(!context.lastSpaceChar, true, false);
+    context.lastSpaceChar = (s.lastChar()==' ');
 //    vSubstringXML(pDiag, szString, tStringLength, lStringWidth,
 //            usFontstyle);
-    if ( !inside_p && !inside_li ) {
-        writer->OnTagOpenNoAttr(NULL, U"p");
-        inside_p = true;
+    if ( !context.insideParagraph && !context.insideListItem ) {
+        context.writer->OnTagOpenNoAttr(NULL, U"p");
+        context.insideParagraph = true;
     }
     bool styleBold = bIsBold(usFontstyle);
     bool styleItalic = bIsItalic(usFontstyle);
     lString32 style;
 	style << fontSizeToPercent( U"font-size: ", usFontSize, 30, 300 );
     if ( !style.empty() ) {
-        writer->OnTagOpen(NULL, U"span");
-        writer->OnAttribute(NULL, U"style", style.c_str());
-        writer->OnTagBody();
+        context.writer->OnTagOpen(NULL, U"span");
+        context.writer->OnAttribute(NULL, U"style", style.c_str());
+        context.writer->OnTagBody();
     }
     if ( styleBold )
-        writer->OnTagOpenNoAttr(NULL, U"b");
+        context.writer->OnTagOpenNoAttr(NULL, U"b");
     if ( styleItalic )
-        writer->OnTagOpenNoAttr(NULL, U"i");
+        context.writer->OnTagOpenNoAttr(NULL, U"i");
     //=================
-    writer->OnText(s.c_str(), s.length(), 0);
+    context.writer->OnText(s.c_str(), s.length(), 0);
     //=================
     if ( styleItalic )
-        writer->OnTagClose(NULL, U"i");
+        context.writer->OnTagClose(NULL, U"i");
     if ( styleBold )
-        writer->OnTagClose(NULL, U"b");
+        context.writer->OnTagClose(NULL, U"b");
     if ( !style.empty() )
-        writer->OnTagClose(NULL, U"span");
+        context.writer->OnTagClose(NULL, U"span");
 
     pDiag->lXleft += lStringWidth;
 } /* end of vSubstring2Diagram */
@@ -369,6 +408,7 @@ void
 vStoreStyle(diagram_type *pDiag, output_type *pOutput,
     const style_block_type *pStyle)
 {
+    WordImportContext &context = wordImportContext();
     //size_t	tLen;
     //char	szString[120];
 
@@ -376,14 +416,16 @@ vStoreStyle(diagram_type *pDiag, output_type *pOutput,
     LFAIL(pOutput == NULL);
     LFAIL(pStyle == NULL);
 
-    alignment = pStyle->ucAlignment;
-    sLeftIndent = pStyle->sLeftIndent;	/* Left indentation in twips */
-    sLeftIndent1 = pStyle->sLeftIndent1;	/* First line left indentation in twips */
-    sRightIndent = pStyle->sRightIndent;	/* Right indentation in twips */
-    usBeforeIndent = pStyle->usBeforeIndent;	/* Vertical indent before paragraph in twips */
-    usAfterIndent = pStyle->usAfterIndent;	/* Vertical indent after paragraph in twips */
+    context.alignment = pStyle->ucAlignment;
+    context.leftIndent = pStyle->sLeftIndent;
+    context.firstLineIndent = pStyle->sLeftIndent1;
+    context.rightIndent = pStyle->sRightIndent;
+    context.beforeIndent = pStyle->usBeforeIndent;
+    context.afterIndent = pStyle->usAfterIndent;
 
-    TRACE("antiword::vStoreStyle(al=%d, li1=%d, li=%d, ri=%d)", alignment, sLeftIndent1, sLeftIndent, sRightIndent);
+    TRACE("antiword::vStoreStyle(al=%d, li1=%d, li=%d, ri=%d)",
+            context.alignment, context.firstLineIndent,
+            context.leftIndent, context.rightIndent);
     //styleBold = pStyle->style_block_tag
 
 } /* end of vStoreStyle */
@@ -394,9 +436,10 @@ vStoreStyle(diagram_type *pDiag, output_type *pOutput,
 void
 vStartOfParagraph1(diagram_type *pDiag, long /*lBeforeIndentation*/)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vStartOfParagraph1()");
     LFAIL(pDiag == NULL);
-    last_space_char = false;
+    context.lastSpaceChar = false;
 } /* end of vStartOfParagraph1 */
 
 /*
@@ -406,34 +449,41 @@ vStartOfParagraph1(diagram_type *pDiag, long /*lBeforeIndentation*/)
 void
 vStartOfParagraph2(diagram_type *pDiag)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vStartOfParagraph2()");
     LFAIL(pDiag == NULL);
 
     lString32 style;
-    if ( !inside_p && !inside_list && !inside_li ) {
-        writer->OnTagOpen(NULL, U"p");
-        if ( alignment==ALIGNMENT_CENTER )
+    if ( !context.insideParagraph
+            && !context.insideList && !context.insideListItem ) {
+        context.writer->OnTagOpen(NULL, U"p");
+        if ( context.alignment==ALIGNMENT_CENTER )
             style << "text-align: center; ";
-        else if ( alignment==ALIGNMENT_RIGHT )
+        else if ( context.alignment==ALIGNMENT_RIGHT )
             style << "text-align: right; ";
-        else if ( alignment==ALIGNMENT_JUSTIFY )
+        else if ( context.alignment==ALIGNMENT_JUSTIFY )
             style << "text-align: justify; text-indent: 1.3em; ";
         else
             style << "text-align: left; ";
-        //if ( sLeftIndent1!=0 )
-        //style << picasToPercent(U"text-indent: ", sLeftIndent1, 0, 20);
-        if ( sLeftIndent!=0 )
-            style << picasToPercent(U"margin-left: ", sLeftIndent, 0, 40);
-        if ( sRightIndent!=0 )
-            style << picasToPercent(U"margin-right: ", sRightIndent, 0, 30);
-        if ( usBeforeIndent!=0 )
-            style << picasToPx(U"margin-top: ", usBeforeIndent, 0, 20);
-        if ( usAfterIndent!=0 )
-            style << picasToPx(U"margin-bottom: ", usAfterIndent, 0, 20);
+        //if ( context.firstLineIndent!=0 )
+        //style << picasToPercent(
+        //        U"text-indent: ", context.firstLineIndent, 0, 20);
+        if ( context.leftIndent!=0 )
+            style << picasToPercent(
+                    U"margin-left: ", context.leftIndent, 0, 40);
+        if ( context.rightIndent!=0 )
+            style << picasToPercent(
+                    U"margin-right: ", context.rightIndent, 0, 30);
+        if ( context.beforeIndent!=0 )
+            style << picasToPx(
+                    U"margin-top: ", context.beforeIndent, 0, 20);
+        if ( context.afterIndent!=0 )
+            style << picasToPx(
+                    U"margin-bottom: ", context.afterIndent, 0, 20);
         if ( !style.empty() )
-            writer->OnAttribute(NULL, U"style", style.c_str());
-        writer->OnTagBody();
-        inside_p = true;
+            context.writer->OnAttribute(NULL, U"style", style.c_str());
+        context.writer->OnTagBody();
+        context.insideParagraph = true;
     }
     //vStartOfParagraphXML(pDiag, 1);
 } /* end of vStartOfParagraph2 */
@@ -445,15 +495,16 @@ void
 vEndOfParagraph(diagram_type *pDiag,
     drawfile_fontref /*tFontRef*/, USHORT usFontSize, long lAfterIndentation)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vEndOfParagraph()");
     LFAIL(pDiag == NULL);
     LFAIL(pDiag->pOutFile == NULL);
     LFAIL(usFontSize < MIN_FONT_SIZE || usFontSize > MAX_FONT_SIZE);
     LFAIL(lAfterIndentation < 0);
     //vEndOfParagraphXML(pDiag, 1);
-    if ( inside_p ) {
-        writer->OnTagClose(NULL, U"p");
-        inside_p = false;
+    if ( context.insideParagraph ) {
+        context.writer->OnTagClose(NULL, U"p");
+        context.insideParagraph = false;
     }
 } /* end of vEndOfParagraph */
 
@@ -483,24 +534,25 @@ vSetHeaders(diagram_type * /*pDiag*/, USHORT /*usIstd*/)
 void
 vStartOfList(diagram_type *pDiag, UCHAR ucNFC, BOOL bIsEndOfTable)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vStartOfList()");
 
     if ( bIsEndOfTable!=0 )
         vEndOfTable(pDiag);
 
-    if ( inside_list==0 ) {
+    if ( context.insideList==0 ) {
         switch( ucNFC ) {
         case LIST_BULLETS:
-            inside_list = 1;
-            writer->OnTagOpenNoAttr(NULL, U"ul");
+            context.insideList = 1;
+            context.writer->OnTagOpenNoAttr(NULL, U"ul");
             break;
         default:
-            inside_list = 2;
-            writer->OnTagOpenNoAttr(NULL, U"ol");
+            context.insideList = 2;
+            context.writer->OnTagOpenNoAttr(NULL, U"ol");
             break;
         }
     }
-    inside_li = false;
+    context.insideListItem = false;
 
     //vStartOfListXML(pDiag, ucNFC, bIsEndOfTable);
 } /* end of vStartOfList */
@@ -511,16 +563,18 @@ vStartOfList(diagram_type *pDiag, UCHAR ucNFC, BOOL bIsEndOfTable)
 void
 vEndOfList(diagram_type * /*pDiag*/)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vEndOfList()");
 
-    if ( inside_li ) {
-        writer->OnTagClose(NULL, U"li");
-        inside_li = false;
+    if ( context.insideListItem ) {
+        context.writer->OnTagClose(NULL, U"li");
+        context.insideListItem = false;
     }
-    if ( inside_list==1 )
-        writer->OnTagClose(NULL, U"ul");
-    else if ( inside_list==2 )
-        writer->OnTagClose(NULL, U"ol");
+    if ( context.insideList==1 )
+        context.writer->OnTagClose(NULL, U"ul");
+    else if ( context.insideList==2 )
+        context.writer->OnTagClose(NULL, U"ol");
+    context.insideList = 0;
 
     //vEndOfListXML(pDiag);
 } /* end of vEndOfList */
@@ -531,12 +585,13 @@ vEndOfList(diagram_type * /*pDiag*/)
 void
 vStartOfListItem(diagram_type * /*pDiag*/, BOOL /*bNoMarks*/)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vStartOfListItem()");
-    if ( inside_li ) {
-        writer->OnTagClose(NULL, U"li");
+    if ( context.insideListItem ) {
+        context.writer->OnTagClose(NULL, U"li");
     }
-    inside_li = true;
-    writer->OnTagOpenNoAttr(NULL, U"li");
+    context.insideListItem = true;
+    context.writer->OnTagOpenNoAttr(NULL, U"li");
     //vStartOfListItemXML(pDiag, bNoMarks);
 } /* end of vStartOfListItem */
 
@@ -546,11 +601,12 @@ vStartOfListItem(diagram_type * /*pDiag*/, BOOL /*bNoMarks*/)
 void
 vEndOfTable(diagram_type * /*pDiag*/)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::vEndOfTable()");
-    if ( inside_table ) {
-        writer->OnTagClose(NULL, U"table");
-        inside_table = false;
-		table_col_count = 0;
+    if ( context.insideTable ) {
+        context.writer->OnTagClose(NULL, U"table");
+        context.insideTable = false;
+        context.tableColumnCount = 0;
     }
 } /* end of vEndOfTable */
 
@@ -563,15 +619,16 @@ BOOL
 bAddTableRow(diagram_type * /*pDiag*/, char **aszColTxt,
     int iNbrOfColumns, const short *asColumnWidth, UCHAR /*ucBorderInfo*/)
 {
+    WordImportContext &context = wordImportContext();
     TRACE("antiword::bAddTableRow()");
 //        vAddTableRowXML(pDiag, aszColTxt,
 //                iNbrOfColumns, asColumnWidth,
 //                ucBorderInfo);
-	if ( table_col_count!=iNbrOfColumns ) {
-		if (inside_table)
-			writer->OnTagClose(NULL, U"table");
-		writer->OnTagOpenNoAttr(NULL, U"table");
-        inside_table = true;
+    if ( context.tableColumnCount!=iNbrOfColumns ) {
+        if (context.insideTable)
+            context.writer->OnTagClose(NULL, U"table");
+        context.writer->OnTagOpenNoAttr(NULL, U"table");
+        context.insideTable = true;
 		int totalWidth = 0;
 		int i;
 		for ( i=0; i<iNbrOfColumns; i++ )
@@ -579,50 +636,62 @@ bAddTableRow(diagram_type * /*pDiag*/, char **aszColTxt,
 		if ( totalWidth>0 ) {
 			for ( i=0; i<iNbrOfColumns; i++ ) {
 				int cw = asColumnWidth[i] * 100 / totalWidth;
-		        writer->OnTagOpen(NULL, U"col");
-				if ( cw>=0 )
-                    writer->OnAttribute(NULL, U"width", (lString32::itoa(cw) + "%").c_str());
-		        writer->OnTagBody();
-		        writer->OnTagClose(NULL, U"col");
+                context.writer->OnTagOpen(NULL, U"col");
+                if ( cw>=0 )
+                    context.writer->OnAttribute(
+                            NULL, U"width",
+                            (lString32::itoa(cw) + "%").c_str());
+                context.writer->OnTagBody();
+                context.writer->OnTagClose(NULL, U"col");
 			}
 		}
-		table_col_count = iNbrOfColumns;
+        context.tableColumnCount = iNbrOfColumns;
 	}
-    if (!inside_table) {
-        writer->OnTagOpenNoAttr(NULL, U"table");
-        inside_table = true;
+    if (!context.insideTable) {
+        context.writer->OnTagOpenNoAttr(NULL, U"table");
+        context.insideTable = true;
     }
-    writer->OnTagOpenNoAttr(NULL, U"tr");
+    context.writer->OnTagOpenNoAttr(NULL, U"tr");
     for ( int i=0; i<iNbrOfColumns; i++ ) {
-        writer->OnTagOpenNoAttr(NULL, U"td");
+        context.writer->OnTagOpenNoAttr(NULL, U"td");
         lString32 text = lString32(aszColTxt[i]);
-        writer->OnText(text.c_str(), text.length(), 0);
-        writer->OnTagClose(NULL, U"td");
+        context.writer->OnText(text.c_str(), text.length(), 0);
+        context.writer->OnTagClose(NULL, U"td");
     }
-    writer->OnTagClose(NULL, U"tr");
+    context.writer->OnTagClose(NULL, U"tr");
     return TRUE;
     //return FALSE;
 } /* end of bAddTableRow */
 
 
-static LVStream * antiword_stream = NULL;
+static thread_local LVStream *g_antiwordStream = NULL;
+
 class AntiwordStreamGuard {
+private:
+    LVStream *m_previous;
+
 public:
-    AntiwordStreamGuard(LVStreamRef stream) {
-        antiword_stream = stream.get();
+    explicit AntiwordStreamGuard(const LVStreamRef &stream)
+        : m_previous(g_antiwordStream)
+    {
+        g_antiwordStream = stream.get();
     }
-    ~AntiwordStreamGuard() {
-        antiword_stream = NULL;
+
+    ~AntiwordStreamGuard()
+    {
+        g_antiwordStream = m_previous;
     }
-    operator FILE * () {
-        return (FILE*)antiword_stream;
+
+    operator FILE * () const
+    {
+        return (FILE*)g_antiwordStream;
     }
 };
 
 void aw_rewind(FILE * pFile)
 {
-    if ( (void*)pFile==(void*)antiword_stream ) {
-        antiword_stream->SetPos(0);
+    if ( (void*)pFile==(void*)g_antiwordStream ) {
+        g_antiwordStream->SetPos(0);
     } else {
         rewind(pFile);
     }
@@ -630,8 +699,8 @@ void aw_rewind(FILE * pFile)
 
 int aw_getc(FILE * pFile)
 {
-    if ( (void*)pFile==(void*)antiword_stream ) {
-        int b = antiword_stream->ReadByte();
+    if ( (void*)pFile==(void*)g_antiwordStream ) {
+        int b = g_antiwordStream->ReadByte();
         if ( b>=0 )
             return b;
         return EOF;
@@ -651,7 +720,7 @@ bReadBytes(UCHAR *aucBytes, size_t tMemb, ULONG ulOffset, FILE *pFile)
 {
     LFAIL(aucBytes == NULL || pFile == NULL || ulOffset > (ULONG)LONG_MAX);
 
-    if ( (void*)pFile==(void*)antiword_stream ) {
+    if ( (void*)pFile==(void*)g_antiwordStream ) {
         // use CoolReader stream
         LVStream * stream = (LVStream*)pFile;
         // default implementation from Antiword
@@ -691,6 +760,7 @@ BOOL
 bTranslateImage(diagram_type *pDiag, FILE *pFile, BOOL bMinimalInformation,
         ULONG ulFileOffsetImage, const imagedata_type *pImg)
 {
+    WordImportContext &context = wordImportContext();
     options_type    tOptions;
 
     DBG_MSG("bTranslateImage");
@@ -737,12 +807,14 @@ bTranslateImage(diagram_type *pDiag, FILE *pFile, BOOL bMinimalInformation,
             // add Image BLOB
             lString32 name(BLOB_NAME_PREFIX); // U"@blob#"
             name << "image";
-            name << fmt::decimal(image_index++);
+            name << fmt::decimal(context.imageIndex++);
             name << (pImg->eImageType==imagetype_is_jpeg ? ".jpg" : ".png");
-            writer->OnBlob(name, pucJpeg, len);
-            writer->OnTagOpen(LXML_NS_NONE, U"img");
-            writer->OnAttribute(LXML_NS_NONE, U"src", name.c_str());
-            writer->OnTagClose(LXML_NS_NONE, U"img", true);
+            context.writer->OnBlob(name, pucJpeg, len);
+            context.writer->OnTagOpen(LXML_NS_NONE, U"img");
+            context.writer->OnAttribute(
+                    LXML_NS_NONE, U"src", name.c_str());
+            context.writer->OnTagClose(
+                    LXML_NS_NONE, U"img", true);
 
             free(pucJpeg);
             return TRUE;
@@ -764,6 +836,7 @@ bTranslateImage(diagram_type *pDiag, FILE *pFile, BOOL bMinimalInformation,
 
 bool DetectWordFormat( LVStreamRef stream )
 {
+    std::lock_guard<std::mutex> detectionLock(g_antiwordMutex);
     AntiwordStreamGuard file(stream);
 
     setOptions();
@@ -787,22 +860,10 @@ bool DetectWordFormat( LVStreamRef stream )
 
 bool ImportWordDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCallback * /*progressCallback*/, CacheLoadingCallback * /*formatCallback*/ )
 {
+    std::lock_guard<std::mutex> importLock(g_antiwordMutex);
     AntiwordStreamGuard file(stream);
 
     setOptions();
-
-	inside_p = false;
-	inside_table = false;
-	table_col_count = 0;
-	inside_list = 0; // 0=none, 1=ul, 2=ol
-	alignment = 0;
-	inside_li = false;
-    last_space_char = false;
-	sLeftIndent = 0;	/* Left indentation in twips */
-	sLeftIndent1 = 0;	/* First line left indentation in twips */
-	sRightIndent = 0;	/* Right indentation in twips */
-	usBeforeIndent = 0;	/* Vertical indent before paragraph in twips */
-	usAfterIndent = 0;	/* Vertical indent after paragraph in twips */
 
     BOOL bResult = 0;
     diagram_type	*pDiag;
@@ -827,11 +888,8 @@ bool ImportWordDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
 
     ldomDocumentWriter w(m_doc);
-    writer = &w;
-    doc = m_doc;
-    image_index = 0;
-
-
+    WordImportContext context(&w);
+    WordImportContextGuard contextGuard(context);
 
     pDiag = pCreateDiagram("cr3", "filename.doc");
     if (pDiag == NULL) {
@@ -840,9 +898,6 @@ bool ImportWordDocument( LVStreamRef stream, ldomDocument * m_doc, LVDocViewCall
 
     bResult = bWordDecryptor(file, lFilesize, pDiag);
     vDestroyDiagram(pDiag);
-
-    doc = NULL;
-    writer = NULL;
 
 #ifdef _DEBUG
 #define SAVE_COPY_OF_LOADED_DOCUMENT 1//def _DEBUG

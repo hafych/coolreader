@@ -125,10 +125,10 @@ DRM или ограничений доступа, подбор/получени�
   MathML-стилей; mutex для interning-таблиц cs8/cs32; IS_FIRST_BODY перенесён
   в документ; custom chunk/block/ref-count pools явно оставлены
   single-threaded lifecycle-компонентами с поддержкой повторной инициализации;
-  ~15 read-only глобалов переведены в const. Все паттерны закреплены
+  ~15 read-only глобалов переведены в const; Antiword bridge использует
+  per-import context и сериализованные entry points. Все паттерны закреплены
   в `native_state_policy.cmake`.
-  Осталось: crconcurrent mutex-указатели (MEDIUM, провайдер не подключён),
-  wordfmt.cpp static-переменные (LOW, однопоточный конвертер).
+  Осталось: crconcurrent mutex-указатели (MEDIUM, провайдер не подключён).
 - [x] Добавить differential/regression tests для pagination, bookmarks, selection,
   search и восстановления позиции.
 - [x] Ввести ограниченный cache manager с наблюдаемыми hit/miss/eviction counters

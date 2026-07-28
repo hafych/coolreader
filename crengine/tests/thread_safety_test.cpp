@@ -1,11 +1,15 @@
 #include "lvthread.h"
 #include "crrecursionguard.h"
 #include "lvdocview.h"
+#include "lvstreamutils.h"
+#include "wordfmt.h"
 
 #include <atomic>
 #include <cstdio>
 #include <memory>
 #include <sched.h>
+#include <string>
+#include <thread>
 #include <vector>
 
 static const char INTERNED_TEXT_8[] = "thread-safe-interning-8";
@@ -206,6 +210,61 @@ static int testPageImageCacheMissReleasesMutex() {
     return 0;
 }
 
+static bool importWordFixture(const char *fixturePath) {
+    LVStreamRef detectionStream = LVOpenFileStream(fixturePath, LVOM_READ);
+    if (detectionStream.isNull() || !DetectWordFormat(detectionStream))
+        return false;
+
+    LVStreamRef importStream = LVOpenFileStream(fixturePath, LVOM_READ);
+    if (importStream.isNull())
+        return false;
+    std::unique_ptr<ldomDocument> document(new ldomDocument());
+    if (!ImportWordDocument(
+                importStream, document.get(), NULL, NULL))
+        return false;
+    ldomNode *root = document->getRootNode();
+    return root != NULL && root->getChildCount() > 0;
+}
+
+static int testConcurrentWordImport() {
+#if ENABLE_ANTIWORD==1
+    const std::string fixturePath =
+            std::string(COOLREADER_SOURCE_DIR)
+            + "/thirdparty_unman/antiword/Docs/testdoc.doc";
+    if (!importWordFixture(fixturePath.c_str()))
+        return fail("baseline Antiword fixture import failed");
+
+    static const int workerCount = 4;
+    static const int iterations = 3;
+    std::atomic<int> ready(0);
+    std::atomic<bool> start(false);
+    std::atomic<bool> valid(true);
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+    for (int workerIndex = 0; workerIndex < workerCount; ++workerIndex) {
+        workers.emplace_back([&fixturePath, &ready, &start, &valid]() {
+            ready.fetch_add(1, std::memory_order_release);
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            for (int iteration = 0; iteration < iterations; ++iteration) {
+                if (!importWordFixture(fixturePath.c_str())) {
+                    valid.store(false, std::memory_order_release);
+                    return;
+                }
+            }
+        });
+    }
+    while (ready.load(std::memory_order_acquire) < workerCount)
+        std::this_thread::yield();
+    start.store(true, std::memory_order_release);
+    for (std::thread &worker : workers)
+        worker.join();
+    if (!valid.load(std::memory_order_acquire))
+        return fail("concurrent Antiword imports shared mutable context");
+#endif
+    return 0;
+}
+
 int main() {
     if (testThreadCompletion() != 0)
         return 1;
@@ -215,5 +274,7 @@ int main() {
         return 1;
     if (testStringLiteralInterningAcrossThreads() != 0)
         return 1;
-    return testPageImageCacheMissReleasesMutex();
+    if (testPageImageCacheMissReleasesMutex() != 0)
+        return 1;
+    return testConcurrentWordImport();
 }
