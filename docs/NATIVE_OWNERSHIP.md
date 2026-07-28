@@ -284,6 +284,15 @@ collection owns collision buckets as nested vectors; copies retain independent
 indices, while deserialization validates magic, count and CRC in a complete
 candidate and swaps string owners and lookup buckets together.
 
+The desktop custom string-chunk allocator preserves its fixed-size freelist
+ABI, while a bounded array of `unique_ptr` now owns every allocated slice.
+Each slice likewise owns its malloc-backed chunk array through a matching
+deleter; `pChunks`, `pEnd` and `pFree` are internal borrowed cursors. Storage is
+a function-local lifecycle object created by the first dependent string, so it
+outlives that string's static teardown. A local regression instance forces
+slice growth, verifies freelist reuse, performs repeated clear, and reinitializes
+8-, 16- and 32-bit chunk paths under sanitizers.
+
 `LDOMNameIdMap` owns every name/id item exactly once through a vector of
 `unique_ptr`; its sorted name vector is a non-owning lookup index into those
 stable items. Per-element CSS defaults are also private `unique_ptr` copies.

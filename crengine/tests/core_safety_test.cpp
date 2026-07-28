@@ -3213,6 +3213,14 @@ static int testStringCollectionOwnership() {
     return 0;
 }
 
+#if (LDOM_USE_OWN_MEM_MAN == 1)
+static int testStringChunkStorageOwnership() {
+    if (!LVRunStringChunkStorageOwnershipRegression())
+        return fail("string chunk slice ownership regression failed");
+    return 0;
+}
+#endif
+
 static int testNameIdMapOwnership() {
     css_elem_def_props_t props = {
         true, false, css_d_block, css_ws_normal
@@ -6899,6 +6907,10 @@ int main() {
         return 1;
     if (testStringCollectionOwnership() != 0)
         return 1;
+#if (LDOM_USE_OWN_MEM_MAN == 1)
+    if (testStringChunkStorageOwnership() != 0)
+        return 1;
+#endif
     if (testNameIdMapOwnership() != 0)
         return 1;
     if (testHashTableOwnership() != 0)

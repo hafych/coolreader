@@ -40,7 +40,12 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <time.h>
+#include <array>
+#include <cstdlib>
+#include <memory>
 #include <mutex>
+#include <new>
+#include <vector>
 
 #if !defined(__SYMBIAN32__) && defined(_WIN32)
 extern "C" {
@@ -177,14 +182,27 @@ const lString32 & cs32(const lChar32 * str) {
 //================================================================================
 // memory allocation slice
 //================================================================================
+struct lstring_chunk_array_deleter_t {
+    void operator()(lstring8_chunk_t *chunks) const
+    {
+        std::free(chunks);
+    }
+};
+
 struct lstring_chunk_slice_t {
-    lstring8_chunk_t * pChunks; // first chunk
+    std::unique_ptr<
+            lstring8_chunk_t,
+            lstring_chunk_array_deleter_t> chunks;
+    lstring8_chunk_t * pChunks; // borrowed first chunk
     lstring8_chunk_t * pEnd;    // first free byte after last chunk
     lstring8_chunk_t * pFree;   // first free chunk
-    int used;
-    lstring_chunk_slice_t( int size )
+    explicit lstring_chunk_slice_t(int size)
+        : chunks(static_cast<lstring8_chunk_t *>(
+                std::malloc(sizeof(lstring8_chunk_t) * size))),
+          pChunks(chunks.get()), pEnd(NULL), pFree(NULL)
     {
-        pChunks = (lstring8_chunk_t *) malloc(sizeof(lstring8_chunk_t) * size);
+        if (pChunks == NULL)
+            throw std::bad_alloc();
         pEnd = pChunks + size;
         pFree = pChunks;
         for (lstring8_chunk_t * p = pChunks; p<pEnd; ++p)
@@ -194,10 +212,7 @@ struct lstring_chunk_slice_t {
         }
         (pEnd-1)->buf8 = NULL;
     }
-    ~lstring_chunk_slice_t()
-    {
-        free( pChunks );
-    }
+    ~lstring_chunk_slice_t() = default;
     inline lstring8_chunk_t * alloc_chunk()
     {
         lstring8_chunk_t * res = pFree;
@@ -272,113 +287,179 @@ struct lstring_chunk_slice_t {
 //#define FIRST_SLICE_SIZE 256
 //#define MAX_SLICE_COUNT  20
 #if (LDOM_USE_OWN_MEM_MAN == 1)
-static lstring_chunk_slice_t * slices[MAX_SLICE_COUNT];
-static int slices_count = 0;
-static bool slices_initialized = false;
-#endif
+class lstring_chunk_storage_t {
+private:
+    std::array<
+            std::unique_ptr<lstring_chunk_slice_t>,
+            MAX_SLICE_COUNT> _slices;
+    int _sliceCount;
 
-#if (LDOM_USE_OWN_MEM_MAN == 1)
-static void init_ls_storage()
+    void init()
+    {
+        if (_sliceCount != 0)
+            return;
+        _slices[0] =
+                std::make_unique<lstring_chunk_slice_t>(FIRST_SLICE_SIZE);
+        _sliceCount = 1;
+    }
+
+    lstring_chunk_slice_t *writableSlice()
+    {
+        init();
+        for (int i = _sliceCount - 1; i >= 0; --i) {
+            if (_slices[i]->pFree != NULL)
+                return _slices[i].get();
+        }
+        if (_sliceCount >= MAX_SLICE_COUNT)
+            crFatalError();
+        std::unique_ptr<lstring_chunk_slice_t> candidate =
+                std::make_unique<lstring_chunk_slice_t>(
+                        FIRST_SLICE_SIZE << (_sliceCount + 1));
+        lstring_chunk_slice_t *result = candidate.get();
+        _slices[_sliceCount++] = std::move(candidate);
+        return result;
+    }
+
+public:
+    lstring_chunk_storage_t() : _slices(), _sliceCount(0)
+    {
+    }
+
+    lstring_chunk_storage_t(
+            const lstring_chunk_storage_t &) = delete;
+    lstring_chunk_storage_t &operator=(
+            const lstring_chunk_storage_t &) = delete;
+    ~lstring_chunk_storage_t() = default;
+
+    lstring8_chunk_t *alloc8()
+    {
+        return writableSlice()->alloc_chunk();
+    }
+
+    lstring16_chunk_t *alloc16()
+    {
+        return writableSlice()->alloc_chunk16();
+    }
+
+    lstring32_chunk_t *alloc32()
+    {
+        return writableSlice()->alloc_chunk32();
+    }
+
+    bool free8(lstring8_chunk_t *chunk)
+    {
+        for (int i = _sliceCount - 1; i >= 0; --i) {
+            if (_slices[i]->free_chunk(chunk))
+                return true;
+        }
+        return false;
+    }
+
+    bool free16(lstring16_chunk_t *chunk)
+    {
+        for (int i = _sliceCount - 1; i >= 0; --i) {
+            if (_slices[i]->free_chunk16(chunk))
+                return true;
+        }
+        return false;
+    }
+
+    bool free32(lstring32_chunk_t *chunk)
+    {
+        for (int i = _sliceCount - 1; i >= 0; --i) {
+            if (_slices[i]->free_chunk32(chunk))
+                return true;
+        }
+        return false;
+    }
+
+    void clear()
+    {
+        for (int i = 0; i < _sliceCount; i++)
+            _slices[i].reset();
+        _sliceCount = 0;
+    }
+
+    int sliceCount() const
+    {
+        return _sliceCount;
+    }
+};
+
+static lstring_chunk_storage_t &stringChunkStorage()
 {
-    slices[0] = new lstring_chunk_slice_t( FIRST_SLICE_SIZE );
-    slices_count = 1;
-    slices_initialized = true;
+    static lstring_chunk_storage_t storage;
+    return storage;
 }
 
 void free_ls_storage()
 {
-    if (!slices_initialized)
-        return;
-    for (int i=0; i<slices_count; i++)
-    {
-        delete slices[i];
-    }
-    slices_count = 0;
-    slices_initialized = false;
+    stringChunkStorage().clear();
 }
 
-lstring8_chunk_t * lstring8_chunk_t::alloc()
+lstring8_chunk_t *lstring8_chunk_t::alloc()
 {
-    if (!slices_initialized)
-        init_ls_storage();
-    // search for existing slice
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->pFree != NULL)
-            return slices[i]->alloc_chunk();
-    }
-    // alloc new slice
-    if (slices_count >= MAX_SLICE_COUNT)
-        crFatalError();
-    lstring_chunk_slice_t * new_slice = new lstring_chunk_slice_t( FIRST_SLICE_SIZE << (slices_count+1) );
-    slices[slices_count++] = new_slice;
-    return slices[slices_count-1]->alloc_chunk();
+    return stringChunkStorage().alloc8();
 }
 
-void lstring8_chunk_t::free( lstring8_chunk_t * pChunk )
+void lstring8_chunk_t::free(lstring8_chunk_t *pChunk)
 {
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->free_chunk(pChunk))
-            return;
-    }
-    crFatalError(); // wrong pointer!!!
+    if (!stringChunkStorage().free8(pChunk))
+        crFatalError(); // wrong pointer!!!
 }
 
-lstring16_chunk_t * lstring16_chunk_t::alloc()
+lstring16_chunk_t *lstring16_chunk_t::alloc()
 {
-    if (!slices_initialized)
-        init_ls_storage();
-    // search for existing slice
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->pFree != NULL)
-            return slices[i]->alloc_chunk16();
-    }
-    // alloc new slice
-    if (slices_count >= MAX_SLICE_COUNT)
-        crFatalError();
-    lstring_chunk_slice_t * new_slice = new lstring_chunk_slice_t( FIRST_SLICE_SIZE << (slices_count+1) );
-    slices[slices_count++] = new_slice;
-    return slices[slices_count-1]->alloc_chunk16();
+    return stringChunkStorage().alloc16();
 }
 
-void lstring16_chunk_t::free( lstring16_chunk_t * pChunk )
+void lstring16_chunk_t::free(lstring16_chunk_t *pChunk)
 {
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->free_chunk16(pChunk))
-            return;
-    }
-    crFatalError(); // wrong pointer!!!
+    if (!stringChunkStorage().free16(pChunk))
+        crFatalError(); // wrong pointer!!!
 }
 
-lstring32_chunk_t * lstring32_chunk_t::alloc()
+lstring32_chunk_t *lstring32_chunk_t::alloc()
 {
-    if (!slices_initialized)
-        init_ls_storage();
-    // search for existing slice
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->pFree != NULL)
-            return slices[i]->alloc_chunk32();
-    }
-    // alloc new slice
-    if (slices_count >= MAX_SLICE_COUNT)
-        crFatalError();
-    lstring_chunk_slice_t * new_slice = new lstring_chunk_slice_t( FIRST_SLICE_SIZE << (slices_count+1) );
-    slices[slices_count++] = new_slice;
-    return slices[slices_count-1]->alloc_chunk32();
+    return stringChunkStorage().alloc32();
 }
 
-void lstring32_chunk_t::free( lstring32_chunk_t * pChunk )
+void lstring32_chunk_t::free(lstring32_chunk_t *pChunk)
 {
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->free_chunk32(pChunk))
-            return;
+    if (!stringChunkStorage().free32(pChunk))
+        crFatalError(); // wrong pointer!!!
+}
+
+bool LVRunStringChunkStorageOwnershipRegression()
+{
+    lstring_chunk_storage_t storage;
+    std::vector<lstring8_chunk_t *> chunks;
+    chunks.reserve(FIRST_SLICE_SIZE + 1);
+    for (int i = 0; i <= FIRST_SLICE_SIZE; i++)
+        chunks.push_back(storage.alloc8());
+    if (storage.sliceCount() != 2)
+        return false;
+    for (lstring8_chunk_t *chunk : chunks) {
+        if (!storage.free8(chunk))
+            return false;
     }
-    crFatalError(); // wrong pointer!!!
+    lstring8_chunk_t *reused = storage.alloc8();
+    if (reused != chunks.back() || !storage.free8(reused))
+        return false;
+
+    storage.clear();
+    storage.clear();
+    if (storage.sliceCount() != 0)
+        return false;
+    lstring16_chunk_t *chunk16 = storage.alloc16();
+    if (storage.sliceCount() != 1 || !storage.free16(chunk16))
+        return false;
+    storage.clear();
+    lstring32_chunk_t *chunk32 = storage.alloc32();
+    if (storage.sliceCount() != 1 || !storage.free32(chunk32))
+        return false;
+    storage.clear();
+    return storage.sliceCount() == 0;
 }
 #endif  // (LDOM_USE_OWN_MEM_MAN == 1)
 
@@ -893,12 +974,8 @@ void lString32::free()
     //assert(pchunk->buf32[pchunk->len]==0);
     ::free(pchunk->buf32);
 #if (LDOM_USE_OWN_MEM_MAN == 1)
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->free_chunk32(pchunk))
-            return;
-    }
-    crFatalError(); // wrong pointer!!!
+    if (!stringChunkStorage().free32(pchunk))
+        crFatalError(); // wrong pointer!!!
 #else
     ::free(pchunk);
 #endif
@@ -1695,12 +1772,8 @@ void lString16::free()
     //assert(pchunk->buf16[pchunk->len]==0);
     ::free(pchunk->buf16);
 #if (LDOM_USE_OWN_MEM_MAN == 1)
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->free_chunk16(pchunk))
-            return;
-    }
-    crFatalError(); // wrong pointer!!!
+    if (!stringChunkStorage().free16(pchunk))
+        crFatalError(); // wrong pointer!!!
 #else
     ::free(pchunk);
 #endif
@@ -2372,12 +2445,8 @@ void lString8::free()
         return;
     ::free(pchunk->buf8);
 #if (LDOM_USE_OWN_MEM_MAN == 1)
-    for (int i=slices_count-1; i>=0; --i)
-    {
-        if (slices[i]->free_chunk(pchunk))
-            return;
-    }
-    crFatalError(); // wrong pointer!!!
+    if (!stringChunkStorage().free8(pchunk))
+        crFatalError(); // wrong pointer!!!
 #else
     ::free(pchunk);
 #endif

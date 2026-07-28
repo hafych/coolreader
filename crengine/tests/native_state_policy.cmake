@@ -4318,6 +4318,63 @@ require_source_text(
   "cs32 interning access must hold the mutex"
 )
 
+# --- lvstring: custom chunk slice owner lifecycle ---
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "std::unique_ptr<lstring_chunk_slice_t>,"
+  "string chunk slices must use bounded exclusive ownership"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "lstring_chunk_array_deleter_t> chunks"
+  "string chunk arrays must use allocator-matched scoped ownership"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "std::unique_ptr<lstring_chunk_slice_t> candidate"
+  "new string chunk slices must remain scoped until publication"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "_slices[_sliceCount++] = std::move(candidate)"
+  "string chunk slice publication must transfer ownership"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "static lstring_chunk_storage_t storage"
+  "string chunk storage must follow first-dependent-use lifetime"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "bool LVRunStringChunkStorageOwnershipRegression()"
+  "string chunk ownership must expose its native regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "string chunk slice ownership regression failed"
+  "string chunk ownership must retain growth and lifecycle coverage"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "static lstring_chunk_slice_t * slices["
+  "string chunk slices must not use a raw owner table"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "new lstring_chunk_slice_t"
+  "string chunk slice allocation must remain scoped"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "delete slices[i]"
+  "string chunk slice teardown must remain automatic"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "free( pChunks )"
+  "string chunk backing arrays must remain allocator-managed"
+)
+
 # --- lvtinydom: per-document first-body flag ---
 require_source_text(
   "${DOM_HEADER}"

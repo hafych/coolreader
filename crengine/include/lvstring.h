@@ -1275,6 +1275,7 @@ bool splitIntegerList( lString32 s, lString32 delim, int & value1, int & value2 
 
 #if LDOM_USE_OWN_MEM_MAN==1
 void free_ls_storage();
+bool LVRunStringChunkStorageOwnershipRegression();
 #endif
 
 #endif  // __LV_STRING_H_INCLUDED__
