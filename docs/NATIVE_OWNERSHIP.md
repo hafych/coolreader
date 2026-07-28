@@ -63,6 +63,11 @@ non-owning `data()` views; they do not manage either allocation. A seek exposes
 only the number of bytes actually read, even when the retained vector capacity
 is larger than the short window available near end of file.
 
+The RTF importer also owns its accumulated text through `std::vector`. It
+flushes pending text before closing the generated document and calls
+`LVXMLParserCallback::OnStop()` only after all text and structural callbacks
+have completed, including recovery from a truncated final group.
+
 Cache-file serialization buffers, temporary draw mark lists and SVG decoder
 input/output buffers also use standard RAII containers. These operation-scoped
 resources cannot outlive their call and no longer rely on matching cleanup at

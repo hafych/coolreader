@@ -398,7 +398,7 @@ public:
 LVRtfParser::LVRtfParser( LVStreamRef stream, LVXMLParserCallback * callback )
     : LVFileParserBase(stream)
     , m_callback(callback)
-    , txtbuf(NULL)
+    , m_textPos(0)
     , imageIndex(0)
 {
     m_stack.setDestination(  new LVRtfDefDestination(*this) );
@@ -411,9 +411,7 @@ LVRtfDestination::LVRtfDestination( LVRtfParser & parser )
 }
 
 /// descructor
-LVRtfParser::~LVRtfParser()
-{
-}
+LVRtfParser::~LVRtfParser() = default;
 
 /// returns true if format is recognized by parser
 bool LVRtfParser::CheckFormat()
@@ -433,18 +431,19 @@ bool LVRtfParser::CheckFormat()
 
 void LVRtfParser::CommitText()
 {
-    if ( txtpos==0 || !txtbuf )
+    if ( m_textPos==0 || m_textBuffer.empty() )
         return;
-    txtbuf[txtpos] = 0;
+    m_textBuffer[m_textPos] = 0;
 #ifdef LOG_RTF_PARSING
     if ( CRLog::isLogLevelEnabled(CRLog::LL_TRACE ) ) {
-        lString32 s = txtbuf;
+        lString32 s = m_textBuffer.data();
         lString8 s8 = UnicodeToUtf8( s );
         CRLog::trace( "Text(%s)", s8.c_str() );
     }
 #endif
-    m_stack.getDestination()->OnText( txtbuf, txtpos, TXTFLG_RTF );
-    txtpos = 0;
+    m_stack.getDestination()->OnText(
+            m_textBuffer.data(), m_textPos, TXTFLG_RTF );
+    m_textPos = 0;
 }
 
 #define MAX_TXT_SIZE 65535
@@ -459,13 +458,11 @@ void LVRtfParser::AddChar8( lUInt8 ch )
 // m_buf_pos points to first byte of char
 void LVRtfParser::AddChar( lChar32 ch )
 {
-    if ( txtpos >= MAX_TXT_SIZE || ch==13 ) {
+    if ( m_textPos >= MAX_TXT_SIZE || ch==13 ) {
         CommitText();
         m_stack.getDestination()->OnAction(LVRtfDestination::RA_PARA);
     }
-    if ( txtpos==0 )
-        txtfstart = m_buf_fpos + m_buf_pos;
-    txtbuf[txtpos++] = ch;
+    m_textBuffer[m_textPos++] = ch;
 }
 
 #define MIN_BUF_DATA_SIZE 32768
@@ -484,9 +481,9 @@ static int charToHex( lUInt8 ch )
 /// parses input stream
 bool LVRtfParser::Parse()
 {
-    //m_conv_table = GetCharsetByte2UnicodeTable( U"cp1251" );
-
     bool errorFlag = false;
+    m_textBuffer.resize(MAX_TXT_SIZE + 1);
+    m_textPos = 0;
     m_callback->OnStart(this);
 
     // make fb2 document structure
@@ -515,9 +512,6 @@ bool LVRtfParser::Parse()
           //queue.DoTextImport( m_callback );
         //m_callback->OnTagClose( NULL, U"section" );
 
-    txtbuf = new lChar32[ MAX_TXT_SIZE+1 ];
-    txtpos = 0;
-    txtfstart = 0;
     char cwname[33];
     while ( !Eof() && !errorFlag && !m_stopped ) {
         // load next portion of data if necessary
@@ -639,15 +633,13 @@ bool LVRtfParser::Parse()
             m_buf_pos += (int)(p - (m_buf.data() + m_buf_pos));
         }
     }
-    m_callback->OnStop();
-    delete[] txtbuf;
-    txtbuf = NULL;
-
     CommitText();
     m_stack.getDestination()->OnAction(LVRtfDestination::RA_SECTION);
 
       m_callback->OnTagClose( NULL, U"body" );
     m_callback->OnTagClose( NULL, U"FictionBook" );
+    m_callback->OnStop();
+    m_textBuffer.clear();
 
     return !errorFlag;
 }

@@ -160,6 +160,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Shared parser read windows and charset conversion tables now use explicit
   RAII ownership; short reads near end of file expose only valid bytes instead
   of stale retained buffer capacity.
+- The RTF importer now owns its text accumulator through RAII, flushes
+  recoverable truncated input before teardown and emits no document callbacks
+  after `OnStop()`.
 - Font gamma selection now uses one atomic index and serialized glyph-cache
   invalidation.
 - Font antialiasing, hinting, kerning and shaping settings are now synchronized

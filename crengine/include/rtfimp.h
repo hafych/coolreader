@@ -32,6 +32,7 @@
 #include "lvfileparserbase.h"
 #include "crtxtenc.h"
 #include <string.h>
+#include <vector>
 
 #define PARAM_VALUE_NONE 0x7FFFFFFF
 
@@ -372,10 +373,8 @@ class LVRtfParser : public LVFileParserBase
 protected:
     LVXMLParserCallback * m_callback;
     LVRtfValueStack m_stack;
-    const lChar32 * m_conv_table; // charset conversion table for 8-bit encodings
-    lChar32 * txtbuf; /// text buffer
-    int txtpos; /// text chars
-    int txtfstart; /// text start file offset
+    std::vector<lChar32> m_textBuffer;
+    int m_textPos;
     int imageIndex;
     LVRtfValueStack & getStack() { return m_stack; }
     LVXMLParserCallback * getCallback() { return m_callback; }

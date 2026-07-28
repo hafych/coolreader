@@ -16,6 +16,7 @@
 #include "cri18n.h"
 #include "logredactor.h"
 #include "parsebudget.h"
+#include "rtfimp.h"
 #include "textlang.h"
 #include "../src/lvfont/lvfontglyphcache.h"
 #if (USE_GIF==1)
@@ -927,6 +928,78 @@ public:
     }
 };
 
+class RecordingRtfCallback : public NoOpXmlCallback {
+private:
+    void noteCallback()
+    {
+        if (stopped)
+            callbackAfterStop = true;
+    }
+
+public:
+    lString32 text;
+    bool stopped;
+    bool callbackAfterStop;
+    int stopCount;
+
+    RecordingRtfCallback()
+        : stopped(false)
+        , callbackAfterStop(false)
+        , stopCount(0)
+    {
+    }
+
+    void OnStart(LVFileFormatParser *parser) override
+    {
+        LVXMLParserCallback::OnStart(parser);
+        text.clear();
+        stopped = false;
+        callbackAfterStop = false;
+        stopCount = 0;
+    }
+
+    void OnStop() override
+    {
+        noteCallback();
+        stopped = true;
+        ++stopCount;
+    }
+
+    ldomNode *OnTagOpen(const lChar32 *, const lChar32 *) override
+    {
+        noteCallback();
+        return NULL;
+    }
+
+    void OnTagBody() override
+    {
+        noteCallback();
+    }
+
+    void OnTagClose(const lChar32 *, const lChar32 *, bool) override
+    {
+        noteCallback();
+    }
+
+    void OnAttribute(const lChar32 *, const lChar32 *,
+                     const lChar32 *) override
+    {
+        noteCallback();
+    }
+
+    void OnText(const lChar32 *value, int length, lUInt32) override
+    {
+        noteCallback();
+        text.append(value, length);
+    }
+
+    bool OnBlob(lString32, const lUInt8 *, int) override
+    {
+        noteCallback();
+        return true;
+    }
+};
+
 class AutoClosingDepthXmlCallback : public NoOpXmlCallback {
 private:
     int m_depth;
@@ -1038,6 +1111,30 @@ static int testParserOwnedBuffers() {
     parser.SetCharset(U"utf-8");
     if (parser.GetCharsetTable() != NULL)
         return fail("UTF-8 parser retained an obsolete charset table");
+    return 0;
+}
+
+static int testRtfTextBufferOwnership() {
+    RecordingRtfCallback callback;
+    bool recognized = false;
+    bool parsed = false;
+    {
+        LVRtfParser parser(memoryStream(
+                "{\\rtf1\\ansi trailing text"), &callback);
+        recognized = parser.CheckFormat();
+        parsed = parser.Parse();
+    }
+
+    if (!recognized)
+        return fail("RTF parser rejected a truncated RTF header");
+    if (!parsed)
+        return fail("RTF parser rejected a recoverable truncated document");
+    if (callback.text.pos(U"trailing text") < 0)
+        return fail("RTF parser discarded its final buffered text");
+    if (!callback.stopped || callback.stopCount != 1)
+        return fail("RTF parser did not finish its callback lifecycle once");
+    if (callback.callbackAfterStop)
+        return fail("RTF parser emitted callbacks after OnStop");
     return 0;
 }
 
@@ -1769,6 +1866,8 @@ int main() {
     if (testIniTranslatorOwnership() != 0)
         return 1;
     if (testParserOwnedBuffers() != 0)
+        return 1;
+    if (testRtfTextBufferOwnership() != 0)
         return 1;
     if (testParserFormatDetectionBuffers() != 0)
         return 1;

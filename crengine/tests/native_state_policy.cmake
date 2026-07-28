@@ -28,6 +28,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvfileparserbase.h" FILE_PARSER_HEADE
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvfileparserbase.cpp" FILE_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtextfilebase.h" TEXT_FILE_BASE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextfilebase.cpp" TEXT_FILE_BASE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/rtfimp.h" RTF_PARSER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/rtfimp.cpp" RTF_PARSER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
@@ -491,6 +493,41 @@ forbid_source_text(
   "${TEXT_FILE_BASE_SOURCE}"
   "delete[] m_conv_table"
   "parser charset-table teardown must remain automatic"
+)
+require_source_text(
+  "${RTF_PARSER_HEADER}"
+  "std::vector<lChar32> m_textBuffer"
+  "RTF text buffer must use RAII ownership"
+)
+require_source_text(
+  "${RTF_PARSER_SOURCE}"
+  "m_textBuffer.resize(MAX_TXT_SIZE + 1)"
+  "RTF parser must prepare its owned text buffer before parsing"
+)
+require_source_text(
+  "${RTF_PARSER_SOURCE}"
+  "m_textBuffer.data(), m_textPos, TXTFLG_RTF"
+  "RTF callbacks must receive a non-owning view of the text buffer"
+)
+forbid_source_text(
+  "${RTF_PARSER_HEADER}"
+  "lChar32 * txtbuf"
+  "RTF parser must not own a raw text buffer"
+)
+forbid_source_text(
+  "${RTF_PARSER_HEADER}"
+  "const lChar32 * m_conv_table"
+  "unused RTF charset-table pointer must not return"
+)
+forbid_source_text(
+  "${RTF_PARSER_SOURCE}"
+  "new lChar32[ MAX_TXT_SIZE"
+  "RTF text-buffer allocation must remain container-managed"
+)
+forbid_source_text(
+  "${RTF_PARSER_SOURCE}"
+  "delete[] txtbuf"
+  "RTF text-buffer teardown must remain automatic"
 )
 
 # --- GIF decoder: image/frame buffers and color tables ---
