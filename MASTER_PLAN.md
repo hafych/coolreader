@@ -128,7 +128,8 @@ DRM или ограничений доступа, подбор/получени�
   generic value-array, reference-vector, owning/borrowed pointer-vector and
   contiguous matrix-cell storage, pagination compact arrays/line-link lists,
   Word/PDB transient import buffers/factory candidates, cache-file ZSTD/zlib
-  contexts/chunk output/block scratch, reference-cache
+  contexts/chunk output/block scratch, DOM blob payload/item/index storage,
+  reference-cache
   buckets/index exports and bounded map slots, longjmp-safe PNG rows/pixels,
   JPEG pool/error lifecycle, а также draw mark list. Остальные участки
   мигрируются отдельными bounded-пакетами.

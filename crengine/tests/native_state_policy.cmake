@@ -2359,6 +2359,73 @@ forbid_source_text(
   "cache-file operations must not invalidate reusable zlib state"
 )
 
+# --- DOM blob payload and index ownership ---
+require_source_text(
+  "${DOM_HEADER}"
+  "std::vector<std::unique_ptr<ldomBlobItem> > _list"
+  "DOM blob items must use explicit RAII ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<lUInt8> _data"
+  "DOM blob payloads must use container-managed storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::vector<std::unique_ptr<ldomBlobItem> > candidate"
+  "DOM blob index loads must remain transactionally scoped"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_list.swap(candidate)"
+  "DOM blob indexes must publish only after complete validation"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "BLOB_CACHE_MAX_ITEMS"
+  "DOM blob indexes must enforce their 16-bit storage bound"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "if (size >= 4)"
+  "DOM blob diagnostics must guard their four-byte preview"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_list.reserve(index + 1)"
+  "DOM blob item capacity must be reserved before cache publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "if (!_cacheFile->write("
+  "DOM blob items must not publish after a failed cache write"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "if (res)\n        res = saveIndex();"
+  "DOM blob indexes must not publish after a payload write failure"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "LVPtrVector<ldomBlobItem> _list"
+  "DOM blob items must not regress to implicit raw ownership"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "lUInt8 * _data;"
+  "DOM blob payloads must not use an owning raw pointer"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete[] _data"
+  "DOM blob payload teardown must remain automatic"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_data = new lUInt8[size]"
+  "DOM blob payload allocation must remain container-managed"
+)
+
 # --- file-stream owned and borrowed OS resources ---
 require_source_text(
   "${FILE_STREAM_HEADER}"

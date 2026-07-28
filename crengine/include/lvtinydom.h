@@ -45,6 +45,8 @@
 #define __LV_TINYDOM_H_INCLUDED__
 
 #include <atomic>
+#include <memory>
+#include <vector>
 
 #include "lvmemman.h"
 #include "lvstring.h"
@@ -256,12 +258,15 @@ class ldomBlobItem;
 class ldomBlobCache
 {
     CacheFile * _cacheFile;
-    LVPtrVector<ldomBlobItem> _list;
+    std::vector<std::unique_ptr<ldomBlobItem> > _list;
     bool _changed;
     bool loadIndex();
     bool saveIndex();
 public:
     ldomBlobCache();
+    ~ldomBlobCache();
+    ldomBlobCache(const ldomBlobCache &) = delete;
+    ldomBlobCache &operator=(const ldomBlobCache &) = delete;
     void setCacheFile( CacheFile * cacheFile );
     ContinuousOperationResult saveToCache(CRTimerUtil & timeout);
     bool addBlob( const lUInt8 * data, int size, lString32 name );

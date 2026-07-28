@@ -91,6 +91,16 @@ storage consumers retain an explicit malloc-compatible ownership boundary.
 Regression coverage exercises multi-chunk ZSTD/zlib round trips, reuse,
 corruption recovery, cleanup/recreation and both cache read boundaries.
 
+DOM blob payloads live in `vector` storage, while the blob cache owns items as
+`vector<unique_ptr>`. Index loading builds a bounded candidate list and swaps
+it into place only after every name, size and 16-bit block index validates, so
+a truncated index cannot expose a partial cache. New items reserve their list
+slot before external cache writes and enter the list only after the payload or
+cache block succeeds. Small diagnostic blobs no longer trigger a four-byte
+out-of-bounds preview. Regression coverage follows RAM blobs into CacheFile,
+reopens them through the persisted index and rejects a deliberately truncated
+index without publishing its valid prefix.
+
 Temporary draw mark lists and SVG decoder input/output buffers also use
 standard RAII containers. These operation-scoped resources cannot outlive
 their call and no longer rely on matching cleanup at each return.

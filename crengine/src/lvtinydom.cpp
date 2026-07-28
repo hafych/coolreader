@@ -2059,41 +2059,65 @@ bool LVRunCacheFileCodecRegression(
 
 // BLOB storage
 
+static const size_t BLOB_CACHE_MAX_ITEMS =
+        static_cast<size_t>(std::numeric_limits<lUInt16>::max()) + 1;
+
 class ldomBlobItem {
     int _storageIndex;
     lString32 _name;
     int _size;
-    lUInt8 * _data;
+    std::vector<lUInt8> _data;
 public:
-    ldomBlobItem( lString32 name ) : _storageIndex(-1), _name(name), _size(0), _data(NULL) {
+    explicit ldomBlobItem(const lString32 &name)
+        : _storageIndex(-1), _name(name), _size(0), _data() {
+    }
+    ldomBlobItem(const ldomBlobItem &) = delete;
+    ldomBlobItem &operator=(const ldomBlobItem &) = delete;
+    ~ldomBlobItem() = default;
 
+    int getSize() const {
+        return _size;
     }
-    ~ldomBlobItem() {
-        if ( _data )
-            delete[] _data;
+    int getIndex() const {
+        return _storageIndex;
     }
-    int getSize() { return _size; }
-    int getIndex() { return _storageIndex; }
-    lUInt8 * getData() { return _data; }
-    lString32 getName() { return _name; }
-    void setIndex(int index, int size) {
-        if ( _data )
-            delete[] _data;
-        _data = NULL;
+    lUInt8 *getData() {
+        return _data.empty() ? NULL : _data.data();
+    }
+    const lUInt8 *getData() const {
+        return _data.empty() ? NULL : _data.data();
+    }
+    const lString32 &getName() const {
+        return _name;
+    }
+
+    bool setIndex(int index, int size) {
+        if (index < 0
+                || static_cast<size_t>(index)
+                        >= BLOB_CACHE_MAX_ITEMS
+                || size <= 0)
+            return false;
+        std::vector<lUInt8>().swap(_data);
         _storageIndex = index;
         _size = size;
+        return true;
     }
-    void setData( const lUInt8 * data, int size ) {
-        if ( _data )
-            delete[] _data;
-        if (data && size>0) {
-            _data = new lUInt8[size];
-            memcpy(_data, data, size);
-            _size = size;
-        } else {
-            _data = NULL;
-            _size = -1;
+
+    bool setData(const lUInt8 *data, int size) {
+        if (!data || size <= 0)
+            return false;
+        std::vector<lUInt8> candidate;
+        try {
+            candidate.assign(data, data + size);
+        } catch (const std::bad_alloc &) {
+            return false;
+        } catch (const std::length_error &) {
+            return false;
         }
+        _data.swap(candidate);
+        _storageIndex = -1;
+        _size = size;
+        return true;
     }
 };
 
@@ -2102,10 +2126,14 @@ ldomBlobCache::ldomBlobCache() : _cacheFile(NULL), _changed(false)
 
 }
 
+ldomBlobCache::~ldomBlobCache() = default;
+
 #define BLOB_INDEX_MAGIC "BLOBINDX"
 
 bool ldomBlobCache::loadIndex()
 {
+    if (!_cacheFile)
+        return false;
     bool res;
     SerialBuf buf(0, true);
     res = _cacheFile->read(CBT_BLOB_INDEX, buf);
@@ -2115,55 +2143,88 @@ bool ldomBlobCache::loadIndex()
     }
     if (!buf.checkMagic(BLOB_INDEX_MAGIC))
         return false;
-    lUInt32 len;
+    lUInt32 len = 0;
     buf >> len;
-    for ( lUInt32 i = 0; i<len; i++ ) {
-        lString32 name;
-        buf >> name;
-        lUInt32 size;
-        buf >> size;
-        if (buf.error())
-            break;
-        ldomBlobItem * item = new ldomBlobItem(name);
-        item->setIndex(i, size);
-        _list.add(item);
+    if (buf.error()
+            || static_cast<size_t>(len) > BLOB_CACHE_MAX_ITEMS
+            || len > static_cast<lUInt32>(buf.space() / 6))
+        return false;
+
+    std::vector<std::unique_ptr<ldomBlobItem> > candidate;
+    try {
+        candidate.reserve(len);
+        for (lUInt32 i = 0; i < len; i++) {
+            lString32 name;
+            buf >> name;
+            lUInt32 size = 0;
+            buf >> size;
+            if (buf.error() || size == 0
+                    || size > static_cast<lUInt32>(
+                            std::numeric_limits<int>::max()))
+                return false;
+            std::unique_ptr<ldomBlobItem> item =
+                    std::make_unique<ldomBlobItem>(name);
+            if (!item->setIndex(
+                        static_cast<int>(i),
+                        static_cast<int>(size)))
+                return false;
+            candidate.push_back(std::move(item));
+        }
+    } catch (const std::bad_alloc &) {
+        return false;
+    } catch (const std::length_error &) {
+        return false;
     }
-    res = !buf.error();
-    return res;
+    if (buf.error())
+        return false;
+    _list.swap(candidate);
+    _changed = false;
+    return true;
 }
 
 bool ldomBlobCache::saveIndex()
 {
-    bool res;
+    if (!_cacheFile || _list.size() > BLOB_CACHE_MAX_ITEMS)
+        return false;
     SerialBuf buf(0, true);
     buf.putMagic(BLOB_INDEX_MAGIC);
-    lUInt32 len = _list.length();
+    lUInt32 len = static_cast<lUInt32>(_list.size());
     buf << len;
-    for ( lUInt32 i = 0; i<len; i++ ) {
-        ldomBlobItem * item = _list[i];
+    for (lUInt32 i = 0; i < len; i++) {
+        ldomBlobItem *item = _list[i].get();
+        if (!item || item->getSize() <= 0
+                || static_cast<size_t>(
+                        UnicodeToUtf8(item->getName()).length())
+                        > std::numeric_limits<lUInt16>::max())
+            return false;
         buf << item->getName();
         buf << (lUInt32)item->getSize();
     }
-    res = _cacheFile->write( CBT_BLOB_INDEX, buf, false );
-    return res;
+    return !buf.error()
+            && _cacheFile->write(CBT_BLOB_INDEX, buf, false);
 }
 
 ContinuousOperationResult ldomBlobCache::saveToCache(CRTimerUtil & timeout)
 {
-    if (!_list.length() || !_changed || _cacheFile==NULL)
+    if (_list.empty() || !_changed || _cacheFile==NULL)
         return CR_DONE;
     bool res = true;
-    for ( int i=0; i<_list.length(); i++ ) {
-        ldomBlobItem * item = _list[i];
+    for (size_t i = 0; i < _list.size(); i++) {
+        ldomBlobItem *item = _list[i].get();
         if ( item->getData() ) {
-            res = _cacheFile->write(CBT_BLOB_DATA, i, item->getData(), item->getSize(), false) && res;
-            if (res)
-                item->setIndex(i, item->getSize());
+            const bool written = _cacheFile->write(
+                    CBT_BLOB_DATA, static_cast<lUInt16>(i),
+                    item->getData(), item->getSize(), false);
+            const bool committed = written
+                    && item->setIndex(
+                            static_cast<int>(i), item->getSize());
+            res = committed && res;
         }
         if (timeout.expired())
             return CR_TIMEOUT;
     }
-    res = saveIndex() && res;
+    if (res)
+        res = saveIndex();
     if ( res )
         _changed = false;
     return res ? CR_DONE : CR_ERROR;
@@ -2172,6 +2233,8 @@ ContinuousOperationResult ldomBlobCache::saveToCache(CRTimerUtil & timeout)
 void ldomBlobCache::setCacheFile( CacheFile * cacheFile )
 {
     _cacheFile = cacheFile;
+    if (!_cacheFile)
+        return;
     CRTimerUtil infinite;
     if (_list.empty())
         loadIndex();
@@ -2181,16 +2244,40 @@ void ldomBlobCache::setCacheFile( CacheFile * cacheFile )
 
 bool ldomBlobCache::addBlob( const lUInt8 * data, int size, lString32 name )
 {
-    CRLog::debug("ldomBlobCache::addBlob( %s, size=%d, [%02x,%02x,%02x,%02x] )", LCSTR(name), size, data[0], data[1], data[2], data[3]);
-    int index = _list.length();
-    ldomBlobItem * item = new ldomBlobItem(name);
-    if (_cacheFile != NULL) {
-        _cacheFile->write(CBT_BLOB_DATA, index, data, size, false);
-        item->setIndex(index, size);
+    if (!data || size <= 0
+            || static_cast<size_t>(UnicodeToUtf8(name).length())
+                    > std::numeric_limits<lUInt16>::max()
+            || _list.size() >= BLOB_CACHE_MAX_ITEMS)
+        return false;
+    if (size >= 4) {
+        CRLog::debug("ldomBlobCache::addBlob( %s, size=%d, [%02x,%02x,%02x,%02x] )", LCSTR(name), size, data[0], data[1], data[2], data[3]);
     } else {
-        item->setData(data, size);
+        CRLog::debug(
+                "ldomBlobCache::addBlob( %s, size=%d )",
+                LCSTR(name), size);
     }
-    _list.add(item);
+
+    const size_t index = _list.size();
+    std::unique_ptr<ldomBlobItem> item;
+    try {
+        item = std::make_unique<ldomBlobItem>(name);
+        _list.reserve(index + 1);
+    } catch (const std::bad_alloc &) {
+        return false;
+    } catch (const std::length_error &) {
+        return false;
+    }
+    if (_cacheFile != NULL) {
+        if (!_cacheFile->write(
+                    CBT_BLOB_DATA, static_cast<lUInt16>(index),
+                    data, size, false)
+                || !item->setIndex(static_cast<int>(index), size))
+            return false;
+    } else {
+        if (!item->setData(data, size))
+            return false;
+    }
+    _list.push_back(std::move(item));
     _changed = true;
     return true;
 }
@@ -2198,11 +2285,9 @@ bool ldomBlobCache::addBlob( const lUInt8 * data, int size, lString32 name )
 LVStreamRef ldomBlobCache::getBlob( lString32 name )
 {
     ldomBlobItem * item = NULL;
-    lUInt16 index = 0;
-    for ( int i=0; i<_list.length(); i++ ) {
+    for (size_t i = 0; i < _list.size(); i++) {
         if (_list[i]->getName() == name) {
-            item = _list[i];
-            index = i;
+            item = _list[i].get();
             break;
         }
     }
@@ -2210,12 +2295,93 @@ LVStreamRef ldomBlobCache::getBlob( lString32 name )
         if (item->getData()) {
             // RAM
             return LVCreateMemoryStream(item->getData(), item->getSize(), true);
-        } else {
+        } else if (_cacheFile && item->getIndex() >= 0) {
             // CACHE FILE
-            return _cacheFile->readStream(CBT_BLOB_DATA, index);
+            return _cacheFile->readStream(
+                    CBT_BLOB_DATA,
+                    static_cast<lUInt16>(item->getIndex()));
         }
     }
     return LVStreamRef();
+}
+
+static bool blobStreamMatches(
+        LVStreamRef stream, const std::vector<lUInt8> &expected)
+{
+    if (stream.isNull()
+            || stream->GetSize()
+                    != static_cast<lvsize_t>(expected.size()))
+        return false;
+    std::vector<lUInt8> actual;
+    if (!resizeCacheBuffer(actual, expected.size()))
+        return false;
+    lvsize_t bytesRead = 0;
+    return stream->Read(
+                    actual.data(),
+                    static_cast<lvsize_t>(actual.size()),
+                    &bytesRead)
+                    == LVERR_OK
+            && bytesRead == static_cast<lvsize_t>(actual.size())
+            && actual == expected;
+}
+
+bool LVRunBlobCacheRegression()
+{
+    const std::vector<lUInt8> oneByte = {0xA1};
+    const std::vector<lUInt8> threeBytes =
+            {0xB1, 0xB2, 0xB3};
+    ldomBlobCache blobs;
+    if (blobs.addBlob(NULL, 1, U"invalid")
+            || blobs.addBlob(oneByte.data(), 0, U"invalid")
+            || !blobs.addBlob(
+                    oneByte.data(),
+                    static_cast<int>(oneByte.size()), U"one")
+            || !blobs.addBlob(
+                    threeBytes.data(),
+                    static_cast<int>(threeBytes.size()), U"three")
+            || !blobStreamMatches(blobs.getBlob(U"one"), oneByte)
+            || !blobStreamMatches(
+                    blobs.getBlob(U"three"), threeBytes)
+            || !blobs.getBlob(U"missing").isNull())
+        return false;
+
+    LVStreamRef cacheStream = LVCreateMemoryStream();
+    CacheFile cacheFile(1, CacheCompressionNone);
+    if (cacheStream.isNull() || !cacheFile.create(cacheStream))
+        return false;
+    blobs.setCacheFile(&cacheFile);
+    if (!blobStreamMatches(blobs.getBlob(U"one"), oneByte)
+            || !blobStreamMatches(
+                    blobs.getBlob(U"three"), threeBytes))
+        return false;
+
+    ldomBlobCache restored;
+    restored.setCacheFile(&cacheFile);
+    if (!blobStreamMatches(restored.getBlob(U"one"), oneByte)
+            || !blobStreamMatches(
+                    restored.getBlob(U"three"), threeBytes))
+        return false;
+
+    LVStreamRef malformedStream = LVCreateMemoryStream();
+    CacheFile malformedFile(1, CacheCompressionNone);
+    if (malformedStream.isNull()
+            || !malformedFile.create(malformedStream)
+            || !malformedFile.write(
+                    CBT_BLOB_DATA, 0, oneByte.data(),
+                    static_cast<int>(oneByte.size()), false))
+        return false;
+    SerialBuf malformedIndex(0, true);
+    malformedIndex.putMagic(BLOB_INDEX_MAGIC);
+    malformedIndex << static_cast<lUInt32>(2);
+    malformedIndex << lString32(U"partial-entry");
+    malformedIndex << static_cast<lUInt32>(oneByte.size());
+    if (malformedIndex.error()
+            || !malformedFile.write(
+                    CBT_BLOB_INDEX, malformedIndex, false))
+        return false;
+    ldomBlobCache malformed;
+    malformed.setCacheFile(&malformedFile);
+    return malformed.getBlob(U"partial-entry").isNull();
 }
 
 #if BUILD_LITE!=1

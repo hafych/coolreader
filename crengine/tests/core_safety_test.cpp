@@ -1731,6 +1731,12 @@ static int testCacheFileCodecOwnership() {
     return 0;
 }
 
+static int testDomBlobOwnership() {
+    if (!LVRunBlobCacheRegression())
+        return fail("DOM blob ownership regression failed");
+    return 0;
+}
+
 static int descendingString32Comparator(
         lString32 &left, lString32 &right) {
     return right.compare(left);
@@ -4598,6 +4604,8 @@ int main() {
     if (testSerialBufOwnership() != 0)
         return 1;
     if (testCacheFileCodecOwnership() != 0)
+        return 1;
+    if (testDomBlobOwnership() != 0)
         return 1;
     if (testRtfTextBufferOwnership() != 0)
         return 1;
