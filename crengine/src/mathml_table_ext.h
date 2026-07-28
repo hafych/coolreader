@@ -66,10 +66,10 @@ void CCRTable::MathML_checkAndTweakTableElement() {
         }
 
         // Add 2 other rows
-        CCRTableRow * row2 = new CCRTableRow;
-        rows.add( row2 );
-        CCRTableRow * row3 = new CCRTableRow;
-        rows.add( row3 );
+        CCRTableRow * row2 = publishOwnedPointer(
+                rows, std::make_unique<CCRTableRow>());
+        CCRTableRow * row3 = publishOwnedPointer(
+                rows, std::make_unique<CCRTableRow>());
 
         // We want to move some of the cells to the other rows,
         // (and for <mmultiscripts> move those after <mprescripts/>
@@ -81,9 +81,11 @@ void CCRTable::MathML_checkAndTweakTableElement() {
         // In the 3rd row: subscripts
         row1->cells[0]->rowspan = 3;
         row1->cells[0]->valign = 1; // top, to not be baseline so to not be adjusted by renderCells()
-        CCRTableCell * vertical_strut = new CCRTableCell;
-        row2->cells.add(vertical_strut); // only cell present in row2
-        vertical_strut->row = row2;
+        std::unique_ptr<CCRTableCell> verticalStrut =
+                std::make_unique<CCRTableCell>();
+        verticalStrut->row = row2;
+        publishOwnedPointer(
+                row2->cells, std::move(verticalStrut)); // only cell present in row2
 
         bool next_is_sup = mathml_tweaked_element_name_id == el_msup; // (so also with el_mover)
         int insert_at = -1; // updated when <mprescripts> met
@@ -96,7 +98,7 @@ void CCRTable::MathML_checkAndTweakTableElement() {
                     i++; // keep it in row1 as a filler for the missing cell at top right
                 }
                 else {
-                    delete row1->cells.remove(i); // remove it
+                    row1->cells.erase(i, 1);
                 }
                 insert_at = 0; // next cells will be moved at start of rows
                 next_is_sup = false; // next is a sub
@@ -104,7 +106,10 @@ void CCRTable::MathML_checkAndTweakTableElement() {
             }
             if (next_is_sup) {
                 if (insert_at >= 0) {
-                    row1->cells.insert(insert_at, row1->cells.remove(i));
+                    std::unique_ptr<CCRTableCell> cell(
+                            row1->cells.remove(i));
+                    publishOwnedPointer(
+                            row1->cells, std::move(cell), insert_at);
                     i++;
                     // next will be sub that should be added in a new column on the right of this one
                     insert_at++;
@@ -115,17 +120,22 @@ void CCRTable::MathML_checkAndTweakTableElement() {
             }
             else {
                 // move subs to row3
-                CCRTableCell * cell = row1->cells.remove(i);
-                row3->cells.insert(insert_at, cell ); // insert() does append when index is -1
+                std::unique_ptr<CCRTableCell> cell(
+                        row1->cells.remove(i));
                 cell->row = row3;
+                publishOwnedPointer(
+                        row3->cells, std::move(cell), insert_at);
+                // insert() appends when index is -1
             }
             next_is_sup = !next_is_sup;
             if ( next_is_sup && insert_at >= 0 && i >= row1->cells.length() ) {
                 // No even number of elements after <prescripts/>:
                 // add a missing cell to not mess table layout
-                CCRTableCell * cell = new CCRTableCell;
+                std::unique_ptr<CCRTableCell> cell =
+                        std::make_unique<CCRTableCell>();
                 cell->row = row1;
-                row1->cells.insert(insert_at, cell);
+                publishOwnedPointer(
+                        row1->cells, std::move(cell), insert_at);
                 break;
             }
         }
@@ -144,32 +154,35 @@ void CCRTable::MathML_checkAndTweakTableElement() {
         mathml_tweaked_element_name_id = tableElementId;
 
         // Add a second row
-        CCRTableRow * row2 = new CCRTableRow;
-        rows.add( row2 );
+        CCRTableRow * row2 = publishOwnedPointer(
+                rows, std::make_unique<CCRTableRow>());
         if ( tableElementId == el_mover ) {
             // Move first child (base) in second row
-            CCRTableCell * cell = row1->cells.remove(0);
-            row2->cells.add(cell);
+            std::unique_ptr<CCRTableCell> cell(
+                    row1->cells.remove(0));
             cell->row = row2;
+            publishOwnedPointer(row2->cells, std::move(cell));
         }
         else if ( tableElementId == el_munder ) {
             // Move second child (under) in second row
-            CCRTableCell * cell = row1->cells.remove(1);
-            row2->cells.add(cell);
+            std::unique_ptr<CCRTableCell> cell(
+                    row1->cells.remove(1));
             cell->row = row2;
+            publishOwnedPointer(row2->cells, std::move(cell));
         }
         else { // munderover
             // Add a third row
-            CCRTableRow * row3 = new CCRTableRow;
-            rows.add( row3 );
+            CCRTableRow * row3 = publishOwnedPointer(
+                    rows, std::make_unique<CCRTableRow>());
             // Move second child (under) in third row
-            CCRTableCell * cell = row1->cells.remove(1);
-            row3->cells.add(cell);
+            std::unique_ptr<CCRTableCell> cell(
+                    row1->cells.remove(1));
             cell->row = row3;
+            publishOwnedPointer(row3->cells, std::move(cell));
             // Move first child (base) in second row
-            cell = row1->cells.remove(0);
-            row2->cells.add(cell);
+            cell.reset(row1->cells.remove(0));
             cell->row = row2;
+            publishOwnedPointer(row2->cells, std::move(cell));
             // So, first row contains the original third child (over)
         }
         rows_rendering_reordered = true;

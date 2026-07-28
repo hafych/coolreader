@@ -158,7 +158,8 @@ DRM или ограничений доступа, подбор/получени�
   GUI window/event queue ownership и lifecycle `CRDocViewWindow`, bookmark
   mutation/highlight-range candidates и transactional bookmark-list
   publication, render-flow float/shift publication и teardown, table-cell
-  page-context ownership и draw-time bookmark-range filters.
+  page-context ownership, draw-time bookmark-range filters и full CCRTable
+  row-group/row/column/cell graph publication, включая MathML table expansion.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

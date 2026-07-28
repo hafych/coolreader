@@ -133,7 +133,10 @@ static std::string createRenderedFixture() {
             "<table id=\"render-state-table\" "
             "style=\"float: left; width: 42%;\">"
             "<tr><td>Scoped render state in a floating single-column "
-            "table must survive nested layout and pagination.</td></tr>"
+            "table must survive nested layout and pagination. "
+            "<math xmlns=\"http://www.w3.org/1998/Math/MathML\">"
+            "<msubsup id=\"render-state-math\"><mi>x</mi><mi>i</mi>"
+            "<mn>2</mn></msubsup></math></td></tr>"
             "</table>";
     for (int index = 0; index < 80; index++) {
         fixture += "<p>Paragraph ";
@@ -203,6 +206,14 @@ static int snapshotRenderedDocument(
             || renderStateTable->getParentNode()->getNodeId()
                     != el_floatBox)
         return fail("render-state table did not enter the floated table path");
+    ldomNode *renderStateMath =
+            document->getElementById(U"render-state-math");
+    if (!renderStateMath
+            || renderStateMath->getRendMethod() != erm_table
+            || !renderStateMath->getParentNode()
+            || renderStateMath->getParentNode()->getNodeId()
+                    != el_inlineBox)
+        return fail("render-state MathML did not enter the table graph path");
 
     const int pageCount = view.getPageCount();
     if (pageCount < 8)

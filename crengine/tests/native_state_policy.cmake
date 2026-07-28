@@ -6,6 +6,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm_internal.h" FORMATTER_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtextfm.h" FORMATTER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvrend.cpp" RENDER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/mathml_table_ext.h" MATHML_TABLE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
@@ -364,12 +365,12 @@ require_source_text(
 )
 require_source_text(
   "${RENDER_SOURCE}"
-  "appendOwned(_floats, std::make_unique<BlockFloat>"
+  "publishOwnedPointer(_floats, std::make_unique<BlockFloat>"
   "render floats must enter scoped ownership before publication"
 )
 require_source_text(
   "${RENDER_SOURCE}"
-  "appendOwned(_shifts, std::make_unique<BlockShift>"
+  "publishOwnedPointer(_shifts, std::make_unique<BlockShift>"
   "render block shifts must enter scoped ownership before publication"
 )
 require_source_text(
@@ -421,6 +422,76 @@ forbid_source_text(
   "${RENDER_SOURCE}"
   "new ldomMarkedRangeList( bookmarks, rc )"
   "draw-time bookmark ranges must not regress to raw allocation"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "static T * publishOwnedPointer"
+  "render graph publication must retain its scoped-owner boundary"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "std::unique_ptr<CCRTableRowGroup> group"
+  "table row groups must enter scoped ownership before publication"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "std::unique_ptr<CCRTableRow> rowOwner"
+  "table rows must enter scoped ownership before publication"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "std::unique_ptr<CCRTableCell> cellOwner"
+  "table cells must enter scoped ownership before publication"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "rows.erase(i, 1)"
+  "discarded table rows must be released by their owning container"
+)
+require_source_text(
+  "${RENDER_SOURCE}"
+  "cols.erase(i, 1)"
+  "discarded table columns must be released by their owning container"
+)
+require_source_text(
+  "${MATHML_TABLE_SOURCE}"
+  "std::unique_ptr<CCRTableCell> verticalStrut"
+  "generated MathML cells must enter scoped ownership before publication"
+)
+require_source_text(
+  "${MATHML_TABLE_SOURCE}"
+  "publishOwnedPointer(row3->cells, std::move(cell))"
+  "moved MathML cells must cross owning containers through a scoped owner"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "currentRowGroup = new CCRTableRowGroup"
+  "table row groups must not be published from raw allocation"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "CCRTableCell * cell = new CCRTableCell"
+  "table cells must not be published from raw allocation"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete rows.remove"
+  "table rows must not use manual remove/delete teardown"
+)
+forbid_source_text(
+  "${RENDER_SOURCE}"
+  "delete cols.remove"
+  "table columns must not use manual remove/delete teardown"
+)
+forbid_source_text(
+  "${MATHML_TABLE_SOURCE}"
+  "new CCRTable"
+  "generated MathML table graph nodes must enter scoped ownership"
+)
+forbid_source_text(
+  "${MATHML_TABLE_SOURCE}"
+  "delete row1->cells.remove"
+  "discarded MathML cells must use owning-container erasure"
 )
 require_source_text(
   "${BITMAP_SOURCE}"

@@ -351,6 +351,19 @@ void collapse_border(css_style_ref_t & target_style, int & current_target_size,
     }
 }
 
+template <typename T>
+static T * publishOwnedPointer(
+        LVPtrVector<T> &destination,
+        std::unique_ptr<T> candidate,
+        int position = -1) {
+    if (destination.length() == INT_MAX)
+        throw std::length_error("render owner limit exceeded");
+    destination.reserve(destination.length() + 1);
+    T *borrowed = candidate.get();
+    destination.insert(position, candidate.release());
+    return borrowed;
+}
+
 class CCRTable {
 public:
     int table_width;
@@ -384,9 +397,11 @@ public:
 
     void ExtendCols( int ncols ) {
         while (cols.length()<ncols) {
-            CCRTableCol * col = new CCRTableCol;
+            std::unique_ptr<CCRTableCol> colOwner =
+                    std::make_unique<CCRTableCol>();
+            CCRTableCol * col = colOwner.get();
             col->index = cols.length();
-            cols.add(col);
+            publishOwnedPointer(cols, std::move(colOwner));
         }
     }
 
@@ -449,11 +464,13 @@ public:
                 case erm_table_header_group: // table header group
                 case erm_table_footer_group: // table footer group
                     if ( state==0 && currentRowGroup==NULL ) {
-                        currentRowGroup = new CCRTableRowGroup();
-                        currentRowGroup->elem = item;
-                        currentRowGroup->index = rowgroups.length();
-                        currentRowGroup->kind = rendMethod;
-                        rowgroups.add( currentRowGroup );
+                        std::unique_ptr<CCRTableRowGroup> group =
+                                std::make_unique<CCRTableRowGroup>();
+                        group->elem = item;
+                        group->index = rowgroups.length();
+                        group->kind = rendMethod;
+                        currentRowGroup = publishOwnedPointer(
+                                rowgroups, std::move(group));
                         LookupElem( item, item_direction, 0 );
                         currentRowGroup = NULL;
                     } else {
@@ -466,14 +483,17 @@ public:
                 case erm_table_row: // table row
                     {
                         // rows of table
-                        CCRTableRow * row = new CCRTableRow;
+                        std::unique_ptr<CCRTableRow> rowOwner =
+                                std::make_unique<CCRTableRow>();
+                        CCRTableRow * row = rowOwner.get();
                         row->elem = item;
                         if ( currentRowGroup ) {
-                            // add row to group
+                            // Keep a non-owning link to the group.
                             row->rowgroup = currentRowGroup;
-                            currentRowGroup->rows.add( row );
                         }
-                        rows.add( row );
+                        publishOwnedPointer(rows, std::move(rowOwner));
+                        if ( currentRowGroup )
+                            currentRowGroup->rows.add( row );
                         // What could <tr link="number"> have been in the past ?
                         // It's not mentioned in any HTML or FB2 spec,
                         // and row->linkindex is never used.
@@ -525,18 +545,23 @@ public:
                         // Table cells became either erm_block or erm_final depending on their content
 
                         if ( rows.length()==0 ) {
-                            CCRTableRow * row = new CCRTableRow;
+                            std::unique_ptr<CCRTableRow> rowOwner =
+                                    std::make_unique<CCRTableRow>();
+                            CCRTableRow * row = rowOwner.get();
                             row->elem = item;
                             if ( currentRowGroup ) {
-                                // add row to group
+                                // Keep a non-owning link to the group.
                                 row->rowgroup = currentRowGroup;
-                                currentRowGroup->rows.add( row );
                             }
-                            rows.add( row );
+                            publishOwnedPointer(rows, std::move(rowOwner));
+                            if ( currentRowGroup )
+                                currentRowGroup->rows.add( row );
                         }
 
 
-                        CCRTableCell * cell = new CCRTableCell;
+                        std::unique_ptr<CCRTableCell> cellOwner =
+                                std::make_unique<CCRTableCell>();
+                        CCRTableCell * cell = cellOwner.get();
                         cell->elem = item;
                         int cs=StrToIntPercent(item->getAttributeValue(attr_colspan).c_str());
                         if (cs>0 && cs<100) { // colspan=0 (span all remaining columns) not supported
@@ -619,7 +644,8 @@ public:
 
                         cell->direction = item_direction;
                         cell->row = rows[rows.length()-1];
-                        cell->row->cells.add( cell );
+                        publishOwnedPointer(
+                                cell->row->cells, std::move(cellOwner));
                         cell->row->numcols += cell->colspan;
                         ExtendCols( cell->row->numcols ); // update col count
                     }
@@ -836,9 +862,11 @@ public:
         while (maxy>i) {
             i++;
             // add new row (already filled)
-            CCRTableRow * nrow = new CCRTableRow;
+            std::unique_ptr<CCRTableRow> rowOwner =
+                    std::make_unique<CCRTableRow>();
+            CCRTableRow * nrow = rowOwner.get();
             nrow->index = i;
-            rows.insert(i, nrow);
+            publishOwnedPointer(rows, std::move(rowOwner), i);
         }
         // The above code has possibly added with ExtendCols() virtual columns
         // (that do not contain any cell) to 'cols' to account for colspan
@@ -877,10 +905,10 @@ public:
             if (rows[i]->rowgroup) {
                 rows[i]->rowgroup->rows.remove(rows[i]);
             }
-            delete rows.remove(i);
+            rows.erase(i, 1);
         }
         for (i=cols.length()-1; i>max_used_x; i--) {
-            delete cols.remove(i);
+            cols.erase(i, 1);
             // No need to adjust cols[x]->nrows, we don't use it from now
         }
 
@@ -5170,15 +5198,6 @@ private:
                     }
                 }
     };
-    template <typename T>
-    static void appendOwned(
-            LVPtrVector<T> &destination,
-            std::unique_ptr<T> candidate) {
-        if (destination.length() == INT_MAX)
-            throw std::length_error("render state item limit exceeded");
-        destination.reserve(destination.length() + 1);
-        destination.push(candidate.release());
-    }
     int direction; // flow inline direction (LTR/RTL)
     lInt32 lang_node_idx; // dataIndex of nearest upper node with a lang="" attribute (0 if none)
                     // We don't need to know its value in here, the idx of this node
@@ -6078,7 +6097,7 @@ public:
         // Don't new/delete to avoid too many malloc/free, keep and re-use/reset
         // the ones already created
         if ( _shifts.length() <= level ) {
-            appendOwned(_shifts, std::make_unique<BlockShift>(
+            publishOwnedPointer(_shifts, std::make_unique<BlockShift>(
                     direction, lang_node_idx, x_min, x_max,
                     usable_overflow_x_min, usable_overflow_x_max,
                     l_y, in_y_min, in_y_max, avoid_pb_inside));
@@ -6382,7 +6401,7 @@ public:
             fy = pos_y;
         int fx = 0;
         fy = getYWithAvailableWidth(fy, width, height, x_min, x_max, fx, is_right);
-        appendOwned(_floats, std::make_unique<BlockFloat>(
+        publishOwnedPointer(_floats, std::make_unique<BlockFloat>(
                 fx, fy, fx + width, fy + height,
                 is_right, level, true, node));
 
@@ -6414,7 +6433,7 @@ public:
         // (even if we didn't create a sublevel), let's add them with level+1
         // so they get correctly shifted when vertical margins collapse
         // in an outer level from the final node they come from.
-        appendOwned(_floats, std::make_unique<BlockFloat>(
+        publishOwnedPointer(_floats, std::make_unique<BlockFloat>(
                 fx, fy, fx + width, fy + height,
                 is_right, level + 1, false, node));
 

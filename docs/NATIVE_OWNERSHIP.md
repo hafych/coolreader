@@ -615,3 +615,13 @@ draw-time bookmark range filters are operation-scoped `unique_ptr` values.
 The rendered-document regression exercises a floating single-column table,
 pagination and an actual highlighted-page draw twice; the source policy keeps
 all three ownership boundaries from returning to manual teardown.
+
+`CCRTable` owns every row group, row, column and cell through its owning
+pointer vectors; the cross-links from groups to rows and from cells to rows
+and columns are borrowed views. A common publication helper keeps each new
+graph node in a `unique_ptr` until the destination has reserved its slot, and
+grid trimming uses owning-container erasure. MathML table expansion uses the
+same boundary for generated rows/cells and temporarily owns cells while
+moving them between rows. The rendered-document fixture verifies both the
+floating table path and a nested `msubsup` table graph under normal and
+sanitized execution.
