@@ -151,9 +151,8 @@ public:
     CRJinkeWindowManager( int dx, int dy )
     : CRGUIWindowManager(NULL)
     {
-        CRJinkeScreen * s = new CRJinkeScreen( dx, dy );
-        _screen = s;
-        _ownScreen = true;
+        setOwnedScreen( std::unique_ptr<CRGUIScreen>(
+                new CRJinkeScreen( dx, dy ) ) );
         instance = this;
     }
     // runs event loop

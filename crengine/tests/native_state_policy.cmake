@@ -8,6 +8,9 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvtextfm.h" FORMATTER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvrend.cpp" RENDER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvopc.h" OPC_HEADER)
@@ -30,6 +33,14 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/cr3jinke.cpp" JINKE_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3nanox.cpp" NANOX_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3pocketbook.cpp" POCKETBOOK_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3win.cpp" WIN_GUI_SOURCE)
+string(CONCAT GUI_PLATFORM_OWNERSHIP_SOURCE
+  "${QT_GUI_SOURCE}"
+  "${WIN_GUI_SOURCE}"
+  "${JINKE_SOURCE}"
+  "${XCB_GUI_SOURCE}"
+  "${POCKETBOOK_SOURCE}"
+  "${NANOX_SOURCE}"
+)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrend.h" RENDER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hyphman.cpp" HYPH_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/hyphman.h" HYPH_HEADER)
@@ -5017,4 +5028,156 @@ forbid_source_text(
   "${SKIN_SOURCE}"
   "delete button"
   "skin button candidate teardown must remain automatic"
+)
+
+require_source_text(
+  "${GUI_HEADER}"
+  "std::unique_ptr<CRGUIScreen> _ownedScreen"
+  "GUI window managers must keep an explicit screen owner"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "std::unique_ptr<CRGUIScreen> _ownedScreen;
+        LVPtrVector<CRGUIWindow, true> _windows;"
+  "the GUI screen owner must outlive dependent window state"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "Borrowed compatibility view, backed by _ownedScreen when non-null"
+  "the legacy GUI screen pointer must remain documented as borrowed"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "void setOwnedScreen( std::unique_ptr<CRGUIScreen> screen )"
+  "GUI screen adoption must use one explicit ownership boundary"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "_screen = screen.get();"
+  "GUI screen adoption must publish only an owner-backed view"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "_ownedScreen = std::move( screen );"
+  "GUI screen adoption must transfer exclusive ownership"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "void setBorrowedScreen( CRGUIScreen * screen )"
+  "GUI managers must distinguish borrowed screens explicitly"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "_ownedScreen.reset();"
+  "switching to a borrowed GUI screen must release the previous owner"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "CRGUIWindowManager( const CRGUIWindowManager & ) = delete"
+  "GUI screen ownership must not be shallow-copied"
+)
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
+  "Qt window managers must adopt their created screen"
+)
+require_source_text(
+  "${WIN_GUI_SOURCE}"
+  "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
+  "Win32 window managers must adopt their created screen"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
+  "Jinke window managers must adopt their created screen"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
+  "XCB window managers must adopt their created screen"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
+  "PocketBook window managers must adopt their created screen"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
+  "NanoX window managers must adopt a newly created screen"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "setBorrowedScreen( CRJinkeScreen::instance );"
+  "NanoX window managers must borrow an existing singleton screen"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testGuiScreenOwnership()"
+  "GUI screen ownership must retain native lifecycle coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI manager destroyed its borrowed screen"
+  "GUI screen regression must retain borrowed teardown coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI manager did not replace its owned screen"
+  "GUI screen regression must retain owned replacement coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI manager did not release ownership before borrowing"
+  "GUI screen regression must retain owned-to-borrowed coverage"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "_ownScreen"
+  "GUI screen ownership must not regress to a boolean side channel"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "delete _screen"
+  "GUI screen teardown must remain automatic"
+)
+forbid_source_text(
+  "${QT_GUI_SOURCE}"
+  "_ownScreen"
+  "Qt GUI screen ownership must not use the legacy boolean"
+)
+forbid_source_text(
+  "${WIN_GUI_SOURCE}"
+  "_ownScreen"
+  "Win32 GUI screen ownership must not use the legacy boolean"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "_ownScreen"
+  "Jinke GUI screen ownership must not use the legacy boolean"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "_ownScreen"
+  "XCB GUI screen ownership must not use the legacy boolean"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "_ownScreen"
+  "PocketBook GUI screen ownership must not use the legacy boolean"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "_ownScreen"
+  "NanoX GUI screen ownership must not use the legacy boolean"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "_screen = new CRJinkeScreen"
+  "NanoX GUI screen creation must not bypass the owner"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "_screen ="
+  "platform GUI managers must use explicit owned or borrowed screen transitions"
 )

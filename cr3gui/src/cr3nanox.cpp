@@ -799,13 +799,14 @@ public:
     {
         int bus_fd;
         
-        if ( CRJinkeScreen::instance==NULL )
-            _screen = new CRJinkeScreen( dx, dy );
-        else
-            _screen = CRJinkeScreen::instance;
+        if ( CRJinkeScreen::instance==NULL ) {
+            setOwnedScreen( std::unique_ptr<CRGUIScreen>(
+                    new CRJinkeScreen( dx, dy ) ) );
+        } else {
+            setBorrowedScreen( CRJinkeScreen::instance );
+        }
         if ( _screen ) {
             _wid = ((CRJinkeScreen*)_screen)->getWID();
-            _ownScreen = true;
             instance = this;
 
 #if ENABLE_DBUS_VIEWER_EVENTS==1

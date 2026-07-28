@@ -154,7 +154,8 @@ DRM или ограничений доступа, подбор/получени�
   ownership и non-null parser borrow, process-wide logger ownership и
   synchronized lifecycle/dispatch, persistent DOM CacheFile ownership и
   owner-backed storage/blob borrows, encoding double-character sparse-row и
-  output ownership. Остальные участки мигрируются отдельными bounded-пакетами.
+  output ownership, а также GUI window-manager screen owner/borrow lifecycle.
+  Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.
   Выполнено: атомарный счётчик cacheable object ID, `std::call_once` для

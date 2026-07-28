@@ -321,10 +321,9 @@ public:
     CRPocketBookWindowManager(int dx, int dy)
         : CRGUIWindowManager(NULL), _pbTable(32)
     {
-        CRPocketBookScreen * s = new CRPocketBookScreen(dx, dy);
+        setOwnedScreen( std::unique_ptr<CRGUIScreen>(
+                new CRPocketBookScreen( dx, dy ) ) );
         _orientation = pocketbook_orientations[GetOrientation()];
-        _screen = s;
-        _ownScreen = true;
         instance = this;
         initPocketBookActionsTable();
     }

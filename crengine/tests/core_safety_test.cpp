@@ -19,6 +19,7 @@
 #include "lvimagedecodercallback.h"
 #include "lvrend.h"
 #include "lvstreambuffer.h"
+#include "crgui.h"
 #include "crskin.h"
 #include "hist.h"
 #include "lvhtmlparser.h"
@@ -1190,6 +1191,117 @@ static int testSkinOwnership() {
     cleanup();
     if (containerError)
         return fail(containerError);
+    return 0;
+}
+
+class CountingGuiScreen : public CRGUIScreen {
+private:
+    std::atomic<int> &_destroyed;
+
+public:
+    explicit CountingGuiScreen(std::atomic<int> &destroyed)
+        : _destroyed(destroyed) {
+    }
+
+    ~CountingGuiScreen() override {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void setFullUpdateInterval(int) override {
+    }
+
+    LVDrawBuf *createCanvas(int, int) override {
+        return NULL;
+    }
+
+    bool setSize(int, int) override {
+        return false;
+    }
+
+    int getWidth() override {
+        return 0;
+    }
+
+    int getHeight() override {
+        return 0;
+    }
+
+    LVRef<LVDrawBuf> getCanvas() override {
+        return LVRef<LVDrawBuf>();
+    }
+
+    void draw(LVDrawBuf *, int, int) override {
+    }
+
+    void flush(bool) override {
+    }
+};
+
+class GuiScreenOwnershipWindowManager : public CRGUIWindowManager {
+public:
+    explicit GuiScreenOwnershipWindowManager(CRGUIScreen *screen)
+        : CRGUIWindowManager(screen) {
+    }
+
+    void ownScreen(std::unique_ptr<CRGUIScreen> screen) {
+        setOwnedScreen(std::move(screen));
+    }
+
+    void borrowScreen(CRGUIScreen *screen) {
+        setBorrowedScreen(screen);
+    }
+};
+
+static int testGuiScreenOwnership() {
+    std::atomic<int> destroyed(0);
+    {
+        std::unique_ptr<CountingGuiScreen> external(
+                new CountingGuiScreen(destroyed));
+        {
+            GuiScreenOwnershipWindowManager manager(external.get());
+            if (manager.getScreen() != external.get())
+                return fail("GUI manager did not publish its borrowed screen");
+        }
+        if (destroyed.load(std::memory_order_relaxed) != 0)
+            return fail("GUI manager destroyed its borrowed screen");
+        external.reset();
+    }
+    if (destroyed.load(std::memory_order_relaxed) != 1)
+        return fail("borrowed GUI screen owner did not retain teardown");
+
+    std::unique_ptr<CountingGuiScreen> external(
+            new CountingGuiScreen(destroyed));
+    {
+        GuiScreenOwnershipWindowManager manager(NULL);
+        CountingGuiScreen *first = new CountingGuiScreen(destroyed);
+        manager.ownScreen(std::unique_ptr<CRGUIScreen>(first));
+        if (manager.getScreen() != first)
+            return fail("GUI manager did not publish its owned screen");
+
+        CountingGuiScreen *second = new CountingGuiScreen(destroyed);
+        manager.ownScreen(std::unique_ptr<CRGUIScreen>(second));
+        if (manager.getScreen() != second
+                || destroyed.load(std::memory_order_relaxed) != 2)
+            return fail("GUI manager did not replace its owned screen");
+
+        manager.borrowScreen(external.get());
+        if (manager.getScreen() != external.get()
+                || destroyed.load(std::memory_order_relaxed) != 3)
+            return fail("GUI manager did not release ownership before borrowing");
+    }
+    if (destroyed.load(std::memory_order_relaxed) != 3)
+        return fail("GUI manager destroyed a replacement borrowed screen");
+    external.reset();
+    if (destroyed.load(std::memory_order_relaxed) != 4)
+        return fail("replacement borrowed screen owner did not retain teardown");
+
+    {
+        GuiScreenOwnershipWindowManager manager(NULL);
+        manager.ownScreen(std::unique_ptr<CRGUIScreen>(
+                new CountingGuiScreen(destroyed)));
+    }
+    if (destroyed.load(std::memory_order_relaxed) != 5)
+        return fail("GUI manager did not destroy its final owned screen");
     return 0;
 }
 
@@ -6256,6 +6368,8 @@ int main() {
     if (testBoundedObservableDecodedImageCache() != 0)
         return 1;
     if (testSkinOwnership() != 0)
+        return 1;
+    if (testGuiScreenOwnership() != 0)
         return 1;
 #if CR_ENABLE_PAGE_IMAGE_CACHE==1
     if (testBoundedObservablePageImageCache() != 0)

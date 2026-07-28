@@ -910,11 +910,9 @@ public:
     CRXCBWindowManager( int dx, int dy )
     : CRGUIWindowManager(NULL), keysyms(NULL)
     {
-        CRXCBScreen * s = new CRXCBScreen( dx, dy );
-        _screen = s;
+        setOwnedScreen( std::unique_ptr<CRGUIScreen>(
+                new CRXCBScreen( dx, dy ) ) );
         init_properties();
-        //_connection = s->getXcbConnection();
-        _ownScreen = true;
         cr_rotate_angle_t angle = readXCBScreenRotationAngle();
         if ( angle!=0 )
         CRLog::info("Setting rotation angle: %d", (int)angle );

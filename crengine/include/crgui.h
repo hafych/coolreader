@@ -29,6 +29,9 @@
 #include "lvdocview.h"
 #include "crskin.h"
 
+#include <memory>
+#include <utility>
+
 #if (COLOR_BACKBUFFER==1)
 #include "lvcolordrawbuf.h"
 #else
@@ -472,11 +475,13 @@ class CRGUIWindow
 class CRGUIWindowManager : public CRGUIStringTranslator
 {
     protected:
+        /// Exclusive screen owner, when the manager creates its screen.
+        /// Declared before dependent GUI state so it is destroyed last.
+        std::unique_ptr<CRGUIScreen> _ownedScreen;
         LVPtrVector<CRGUIWindow, true> _windows;
         LVPtrVector<CRGUIEvent, true> _events;
+        /// Borrowed compatibility view, backed by _ownedScreen when non-null.
         CRGUIScreen * _screen;
-        /// if true, we should delete screen in destructor
-        bool _ownScreen;
         LVRef<CRGUIStringTranslator> _i18n;
         int _postedCommand;
         int _postedCommandParam;
@@ -488,7 +493,25 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         cr_rotate_angle_t _orientation;
         LVRefVec<LVImageSource> m_batteryIcons;
         bool _stopFlag;
+
+        /// Replaces the current screen with an exclusively owned screen.
+        void setOwnedScreen( std::unique_ptr<CRGUIScreen> screen )
+        {
+            _screen = screen.get();
+            _ownedScreen = std::move( screen );
+        }
+
+        /// Replaces the current screen with a non-owning external view.
+        void setBorrowedScreen( CRGUIScreen * screen )
+        {
+            _screen = screen;
+            _ownedScreen.reset();
+        }
+
     public:
+        CRGUIWindowManager( const CRGUIWindowManager & ) = delete;
+        CRGUIWindowManager & operator=( const CRGUIWindowManager & ) = delete;
+
         /// forward events from system queue to application queue
         virtual void forwardSystemEvents( bool /*waitForEvent*/ ) { }
         /// post application event to message queue
@@ -622,7 +645,8 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         virtual int runEventLoop();
         /// constructor
         CRGUIWindowManager(CRGUIScreen * screen)
-        : _screen( screen ), _ownScreen(false)
+        : _ownedScreen()
+        , _screen( screen )
         , _postedCommand(0)
         , _postedCommandParam(0)
         ,_lastProgressUpdate(0)
@@ -641,8 +665,6 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         virtual ~CRGUIWindowManager()
         {
             closeAllWindows();
-            if ( _ownScreen )
-                delete _screen;
         }
 };
 

@@ -133,9 +133,8 @@ public:
         EV_PROCESS_CRGUI_EVENTS = QEvent::registerEventType();
         _window = new MainWindow(this);
         _window->setGeometry(0, 0, dx, dy);
-        CRQtScreen * s = new CRQtScreen( _window, dx, dy, bufDepth );
-        _screen = s;
-        _ownScreen = true;
+        setOwnedScreen( std::unique_ptr<CRGUIScreen>(
+                new CRQtScreen( _window, dx, dy, bufDepth ) ) );
         _window->show();
 //        cr_rotate_angle_t angle = readXCBScreenRotationAngle();
 //        if ( angle!=0 )
@@ -501,4 +500,3 @@ int main(int argc, char **argv)
 
     return res;
 }
-

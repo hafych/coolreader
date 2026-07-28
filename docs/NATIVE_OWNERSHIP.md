@@ -570,3 +570,13 @@ still holds the lifecycle lock; function-local initialization order also keeps
 that mutex alive through owner teardown at process exit. The thread regression
 serializes six concurrent writers and verifies exact destruction counts for
 same-pointer publication, replacement and repeated clear.
+
+`CRGUIWindowManager` keeps an optional exclusive `unique_ptr` screen owner and
+exposes the legacy raw `_screen` only as a borrowed compatibility view. The
+owner is declared before windows and events, so dependent GUI state is
+destroyed first. Protected owned/borrowed transition helpers replace the
+manual ownership flag, and copying the manager is disabled. Qt, Win32, Jinke,
+XCB and PocketBook managers adopt every screen they create; NanoX does the
+same for a new screen but explicitly borrows an already existing Jinke
+singleton. The native lifecycle regression verifies borrowed teardown, owned
+replacement, owned-to-borrowed transition and final destruction.

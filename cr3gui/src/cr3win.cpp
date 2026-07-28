@@ -157,9 +157,8 @@ public:
 
        g_hWnd = _hWnd;
 
-        CRWin32Screen * s = new CRWin32Screen( _hWnd, dx, dy );
-        _screen = s;
-        _ownScreen = true;
+        setOwnedScreen( std::unique_ptr<CRGUIScreen>(
+                new CRWin32Screen( _hWnd, dx, dy ) ) );
         instance = this;
     }
     // runs event loop
