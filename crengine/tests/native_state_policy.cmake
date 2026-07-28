@@ -108,6 +108,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvimagesource.h" IMAGE_SOURCE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvimagesource.cpp" IMAGE_SOURCE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvcolortransformimgsource.h" COLOR_TRANSFORM_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvcolortransformimgsource.cpp" COLOR_TRANSFORM_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvsvgimagesource.cpp" SVG_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
@@ -1784,6 +1785,58 @@ forbid_source_text(
   "${RTF_PARSER_SOURCE}"
   "m_stack.set( new LVRtf"
   "RTF destination creation must use explicit ownership transfer"
+)
+
+# --- SVG decoder: NanoSVG handles and bounded RGBA workspaces ---
+require_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "using NsvgImageOwner = std::unique_ptr<NSVGimage, NsvgImageDeleter>"
+  "parsed NanoSVG images must have operation-scoped owners"
+)
+require_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "std::unique_ptr<NSVGrasterizer, NsvgRasterizerDeleter>"
+  "NanoSVG rasterizers must have operation-scoped owners"
+)
+require_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "bool resizeRgbaBuffer("
+  "SVG raster workspaces must retain bounded allocation"
+)
+require_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "std::vector<unsigned char> pixels"
+  "SVG RGBA workspaces must use RAII storage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testSvgDecoderOwnership()"
+  "SVG ownership must retain native lifecycle regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "SVG callback unwind did not release its workspace"
+  "SVG regression must retain exceptional callback-unwind coverage"
+)
+forbid_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "malloc("
+  "SVG raster workspaces must not regress to manual allocation"
+)
+forbid_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "free(img)"
+  "SVG raster workspaces must not regress to manual teardown"
+)
+forbid_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "NSVGimage *image ="
+  "parsed SVG images must not use raw owner variables"
+)
+forbid_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "NSVGrasterizer *rast ="
+  "SVG rasterizers must not use raw owner variables"
 )
 
 # --- GIF decoder: image/frame buffers and color tables ---

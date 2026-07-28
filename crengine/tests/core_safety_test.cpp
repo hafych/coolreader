@@ -4424,6 +4424,61 @@ static int testGifDecoderOwnership() {
 }
 #endif
 
+#if (USE_NANOSVG==1)
+static int testSvgDecoderOwnership() {
+    const std::string svg =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" "
+            "width=\"4\" height=\"3\">"
+            "<rect width=\"4\" height=\"3\" fill=\"#2468ac\"/>"
+            "</svg>";
+    LVImageSourceRef image = LVCreateStreamImageSource(
+            LVCreateMemoryStream(
+                    const_cast<char *>(svg.data()),
+                    static_cast<int>(svg.size()), true, LVOM_READ));
+    if (image.isNull()
+            || image->GetWidth() != 6
+            || image->GetHeight() != 5)
+        return fail("SVG decoder rejected its bounded fixture");
+
+    CountingImageDecodeCallback callback;
+    if (!image->Decode(&callback))
+        return fail("SVG decoder did not rasterize its owned workspace");
+    bool callbackThrew = false;
+    try {
+        ThrowingImageDecodeCallback throwingCallback;
+        image->Decode(&throwingCallback);
+    } catch (const std::runtime_error &) {
+        callbackThrew = true;
+    }
+    if (!callbackThrew || !image->Decode(&callback))
+        return fail("SVG callback unwind did not release its workspace");
+    if (callback.starts != 2 || callback.lines != 10
+            || callback.ends != 2 || callback.errorEnds != 0)
+        return fail("SVG decoder callback lifecycle is incomplete");
+
+    std::vector<unsigned char> mutableSvg(
+            svg.begin(), svg.end());
+    mutableSvg.push_back(0);
+    int pngSize = -1;
+    unsigned char *png = convertSVGtoPNG(
+            mutableSvg.data(),
+            static_cast<int>(svg.size()), 2.0f, &pngSize);
+    if (!png || pngSize <= 8) {
+        std::free(png);
+        return fail("SVG to PNG conversion lost its RAII workspace");
+    }
+    std::free(png);
+
+    pngSize = -1;
+    if (convertSVGtoPNG(
+                mutableSvg.data(),
+                static_cast<int>(svg.size()), 0.0f, &pngSize)
+            || pngSize != 0)
+        return fail("SVG conversion accepted an invalid scale");
+    return 0;
+}
+#endif
+
 static int testDrawBufferStorageOwnership() {
     LVColorDrawBuf ownedColor(3, 2, 32);
     lUInt32 colorValue = 1;
@@ -6629,6 +6684,10 @@ int main() {
 #endif
 #if (USE_GIF==1)
     if (testGifDecoderOwnership() != 0)
+        return 1;
+#endif
+#if (USE_NANOSVG==1)
+    if (testSvgDecoderOwnership() != 0)
         return 1;
 #endif
     if (testDrawBufferStorageOwnership() != 0)

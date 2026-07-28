@@ -167,8 +167,11 @@ that adoption empties the candidate, preserves one owner/view identity and
 uses that cache through failed rollback and a successful repeated load.
 
 Temporary draw mark lists and SVG decoder input/output buffers also use
-standard RAII containers. These operation-scoped resources cannot outlive
-their call and no longer rely on matching cleanup at each return.
+standard RAII containers. Parsed NanoSVG images and rasterizers have
+`unique_ptr` owners with library deleters, while bounded RGBA vectors cover
+decode and PNG-conversion scratch. These operation-scoped resources cannot
+outlive their call, including when a decode callback throws. The PNG byte
+result remains the public raw ownership-transfer boundary for callers.
 
 The GIF decoder owns input, color-table, compressed-stream, decoded-frame and
 output-row storage through `std::vector`. A decoded frame has automatic

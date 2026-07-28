@@ -26,7 +26,10 @@
 #include "lvimagedecodercallback.h"
 
 // Support for SVG
+#include <cstring>
 #include <math.h>
+#include <limits>
+#include <memory>
 #include <stdio.h>
 #include <vector>
 #define NANOSVG_ALL_COLOR_KEYWORDS
@@ -37,6 +40,54 @@
 #include <nanosvg.h>
 #include <nanosvgrast.h>
 #include <stb_image_write.h> // for svg to png conversion
+
+namespace {
+
+struct NsvgImageDeleter {
+    void operator()(NSVGimage *image) const noexcept {
+        if (image)
+            nsvgDelete(image);
+    }
+};
+
+struct NsvgRasterizerDeleter {
+    void operator()(NSVGrasterizer *rasterizer) const noexcept {
+        if (rasterizer)
+            nsvgDeleteRasterizer(rasterizer);
+    }
+};
+
+using NsvgImageOwner = std::unique_ptr<NSVGimage, NsvgImageDeleter>;
+using NsvgRasterizerOwner =
+        std::unique_ptr<NSVGrasterizer, NsvgRasterizerDeleter>;
+
+bool resizeRgbaBuffer(
+        int width, int height,
+        std::vector<unsigned char> &buffer) {
+    if (width <= 0 || height <= 0)
+        return false;
+    if (width > std::numeric_limits<int>::max() / 4
+            || static_cast<std::size_t>(width)
+                    > std::numeric_limits<std::size_t>::max()
+                            / static_cast<std::size_t>(height))
+        return false;
+    const std::size_t pixelCount =
+            static_cast<std::size_t>(width)
+            * static_cast<std::size_t>(height);
+    if (pixelCount
+            > std::numeric_limits<std::size_t>::max() / 4)
+        return false;
+    try {
+        buffer.resize(pixelCount * 4);
+    } catch (const std::bad_alloc &) {
+        return false;
+    } catch (const std::length_error &) {
+        return false;
+    }
+    return true;
+}
+
+}
 
 LVSvgImageSource::LVSvgImageSource( ldomNode * node, LVStreamRef stream )
         : LVNodeImageSource(node, stream)
@@ -84,20 +135,28 @@ bool LVSvgImageSource::Decode( LVImageDecoderCallback * callback )
 
 int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int /*buf_size*/, LVImageDecoderCallback * callback)
 {
-    NSVGimage *image = NULL;
-    NSVGrasterizer *rast = NULL;
-    unsigned char* img = NULL;
     int w, h;
     bool res = false;
 
     // printf("SVG: parsing...\n");
-    image = nsvgParse((char*)buf, "px", 96.0f);
-    if (image == NULL) {
+    NsvgImageOwner image(nsvgParse((char*)buf, "px", 96.0f));
+    if (!image) {
         printf("SVG: could not parse SVG stream.\n");
-        nsvgDelete(image);
         return res;
     }
 
+    if (!std::isfinite(image->width)
+            || !std::isfinite(image->height)
+            || image->width <= 0 || image->height <= 0
+            || static_cast<double>(image->width)
+                    > static_cast<double>(
+                            std::numeric_limits<int>::max()) - 2.0
+            || static_cast<double>(image->height)
+                    > static_cast<double>(
+                            std::numeric_limits<int>::max()) - 2.0) {
+        printf("SVG: invalid image dimensions.\n");
+        return res;
+    }
     w = (int)image->width;
     h = (int)image->height;
     // The rasterizer (while antialiasing?) has a tendency to eat the last
@@ -119,7 +178,6 @@ int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int /*buf_size*/, LVI
         // But commented to not flood koreader's log for books with many such
         // svg images (crengine would log this at each page change)
         // printf("SVG: got image with zero supported shape.\n");
-        nsvgDelete(image);
         return res;
     }
 
@@ -127,66 +185,82 @@ int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int /*buf_size*/, LVI
         res = true;
     }
     else {
-        rast = nsvgCreateRasterizer();
-        if (rast == NULL) {
+        NsvgRasterizerOwner rasterizer(nsvgCreateRasterizer());
+        if (!rasterizer) {
             printf("SVG: could not init rasterizer.\n");
         }
         else {
-            img = (unsigned char*) malloc(w*h*4);
-            if (img == NULL) {
+            std::vector<unsigned char> pixels;
+            if (!resizeRgbaBuffer(w, h, pixels)) {
                 printf("SVG: could not alloc image buffer.\n");
             }
             else {
                 // printf("SVG: rasterizing image %d x %d\n", w, h);
-                nsvgRasterize(rast, image, 1, 1, 1, img, w, h, w*4); // offsets of 1 pixel, scale = 1
+                nsvgRasterize(
+                        rasterizer.get(), image.get(), 1, 1, 1,
+                        pixels.data(), w, h, w * 4); // offsets of 1 pixel, scale = 1
                 // stbi_write_png("/tmp/svg.png", w, h, 4, img, w*4); // for debug
                 callback->OnStartDecode(this);
-                lUInt32 * src = (lUInt32 *)img;
+                const unsigned char *src = pixels.data();
                 std::vector<lUInt32> row(_width);
                 for (int y=0; y<_height; y++) {
                     size_t px_count = _width;
                     lUInt32 * dst = row.data();
                     while (px_count--) {
                         // nanosvg outputs straight RGBA; lvimg expects BGRA, with inverted alpha,
-                        const lUInt32 cl = *src++ ^ 0xFF000000;
+                        lUInt32 cl;
+                        std::memcpy(&cl, src, sizeof(cl));
+                        src += sizeof(cl);
+                        cl ^= 0xFF000000;
                         *dst++ = ((cl<<16)&0x00FF0000) | ((cl>>16)&0x000000FF) | (cl&0xFF00FF00);
                     }
                     callback->OnLineDecoded( this, y, row.data() );
                 }
                 callback->OnEndDecode(this, false);
                 res = true;
-                free(img);
             }
         }
     }
-    nsvgDeleteRasterizer(rast);
-    nsvgDelete(image);
     return res;
 }
 
 // Convenience function to convert SVG image data to PNG
 unsigned char * convertSVGtoPNG(unsigned char *svg_data, int /*svg_data_size*/, float zoom_factor, int *png_data_len)
 {
-    NSVGimage *image = NULL;
-    NSVGrasterizer *rast = NULL;
-    unsigned char* img = NULL;
     int w, h, pw, ph;
-    unsigned char *png = NULL;
+    if (png_data_len)
+        *png_data_len = 0;
+    if (!svg_data || !png_data_len
+            || !std::isfinite(zoom_factor)
+            || zoom_factor <= 0
+            || static_cast<double>(zoom_factor)
+                    > static_cast<double>(
+                            std::numeric_limits<int>::max()))
+        return NULL;
 
     // printf("SVG: converting to PNG...\n");
-    image = nsvgParse((char*)svg_data, "px", 96.0f);
-    if (image == NULL) {
+    NsvgImageOwner image(
+            nsvgParse((char*)svg_data, "px", 96.0f));
+    if (!image) {
         printf("SVG: could not parse SVG stream.\n");
-        nsvgDelete(image);
-        return png;
+        return NULL;
     }
 
     if (! image->shapes) {
         printf("SVG: got image with zero supported shape.\n");
-        nsvgDelete(image);
-        return png;
+        return NULL;
     }
 
+    if (!std::isfinite(image->width)
+            || !std::isfinite(image->height)
+            || image->width <= 0 || image->height <= 0
+            || static_cast<double>(image->width)
+                    > static_cast<double>(
+                            std::numeric_limits<int>::max())
+            || static_cast<double>(image->height)
+                    > static_cast<double>(
+                            std::numeric_limits<int>::max()))
+        return NULL;
     w = (int)image->width;
     h = (int)image->height;
     // The rasterizer (while antialiasing?) has a tendency to eat some of the
@@ -194,27 +268,37 @@ unsigned char * convertSVGtoPNG(unsigned char *svg_data, int /*svg_data_size*/, 
     // each side, by increasing width and height with 2*N here, and using
     // offsets of N in nsvgRasterize. Using zoom_factor as N gives nice results.
     int offset = zoom_factor;
-    pw = w*zoom_factor + 2*offset;
-    ph = h*zoom_factor + 2*offset;
-    rast = nsvgCreateRasterizer();
-    if (rast == NULL) {
+    const double scaledWidth =
+            static_cast<double>(w) * zoom_factor + 2.0 * offset;
+    const double scaledHeight =
+            static_cast<double>(h) * zoom_factor + 2.0 * offset;
+    if (scaledWidth <= 0 || scaledHeight <= 0
+            || scaledWidth > std::numeric_limits<int>::max()
+            || scaledHeight > std::numeric_limits<int>::max())
+        return NULL;
+    pw = static_cast<int>(scaledWidth);
+    ph = static_cast<int>(scaledHeight);
+    NsvgRasterizerOwner rasterizer(nsvgCreateRasterizer());
+    if (!rasterizer) {
         printf("SVG: could not init rasterizer.\n");
     }
     else {
-        img = (unsigned char*) malloc(pw*ph*4);
-        if (img == NULL) {
+        std::vector<unsigned char> pixels;
+        if (!resizeRgbaBuffer(pw, ph, pixels)) {
             printf("SVG: could not alloc image buffer.\n");
         }
         else {
             // printf("SVG: rasterizing to png image %d x %d\n", pw, ph);
-            nsvgRasterize(rast, image, offset, offset, zoom_factor, img, pw, ph, pw*4);
-            png = stbi_write_png_to_mem(img, pw*4, pw, ph, 4, png_data_len);
-            free(img);
+            nsvgRasterize(
+                    rasterizer.get(), image.get(),
+                    offset, offset, zoom_factor,
+                    pixels.data(), pw, ph, pw * 4);
+            return stbi_write_png_to_mem(
+                    pixels.data(), pw * 4,
+                    pw, ph, 4, png_data_len);
         }
     }
-    nsvgDeleteRasterizer(rast);
-    nsvgDelete(image);
-    return png;
+    return NULL;
 }
 
 #endif  // (USE_NANOSVG==1)
