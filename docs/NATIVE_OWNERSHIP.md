@@ -55,6 +55,12 @@ reference or pre-reserved owning list accepts them. A sub-container snapshot
 regression verifies stripped names, independent values and later insertion
 without shared item ownership.
 
+Serialized CSS style records validate their input magic without mutating the
+buffer, decode into isolated record state, and publish only after the stored
+style hash matches. Publication preserves the live intrusive reference count,
+runtime flags and exclusive before/after pseudo-style owners because these
+fields are intentionally absent from the cache format.
+
 `HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
 transfer boundary, while `getDictList()` returns a non-owning pointer valid only

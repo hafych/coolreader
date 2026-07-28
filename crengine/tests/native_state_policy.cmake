@@ -25,6 +25,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/epubfmt.cpp" EPUB_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/tests/epub3_regression_test.cpp" EPUB3_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/odtfmt.cpp" ODT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstsheet.cpp" STYLESHEET_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvstyles.cpp" STYLE_RECORD_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstsheet.h" STYLESHEET_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvstyles.h" STYLE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/css_regression_test.cpp" CSS_REGRESSION_SOURCE)
@@ -5292,6 +5293,63 @@ forbid_source_text(
   "${PROPERTIES_SOURCE}"
   "bool CRPropAccessor::deserialize( SerialBuf & buf )\n{\n    clear();"
   "serialized property restore must not clear live state before validation"
+)
+
+# --- serialized style-record validation and publication ---
+require_source_text(
+  "${STYLE_RECORD_SOURCE}"
+  "if ( !buf.checkMagic(style_magic) )"
+  "style restore must validate rather than overwrite its input magic"
+)
+require_source_text(
+  "${STYLE_RECORD_SOURCE}"
+  "css_style_rec_t candidate"
+  "style restore must decode into isolated candidate state"
+)
+require_source_text(
+  "${STYLE_RECORD_SOURCE}"
+  "lUInt32 newhash = calcHash(candidate)"
+  "style restore must validate the candidate hash before publication"
+)
+require_source_text(
+  "${STYLE_RECORD_SOURCE}"
+  "candidate.refCount = refCount"
+  "style restore must preserve the intrusive live owner count"
+)
+require_source_text(
+  "${STYLE_RECORD_SOURCE}"
+  "candidate.pseudo_elem_before_style =\n            std::move(pseudo_elem_before_style)"
+  "style restore must preserve the live before-pseudo owner"
+)
+require_source_text(
+  "${STYLE_RECORD_SOURCE}"
+  "*this = std::move(candidate)"
+  "style restore must publish only its validated candidate"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testStyleRecordSerializationOwnership()"
+  "style restore must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "style record bad magic replaced committed state"
+  "style restore regression must retain input-magic coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "style record hash failure replaced committed state"
+  "style restore regression must retain late-validation rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "style record snapshot lost serialized or live-only state"
+  "style restore regression must retain publication and live-only ownership coverage"
+)
+forbid_source_text(
+  "${STYLE_RECORD_SOURCE}"
+  "bool css_style_rec_t::deserialize( SerialBuf & buf )\n{\n    if ( buf.error() )\n        return false;\n    buf.putMagic(style_magic);"
+  "style restore must never write its magic into the input buffer"
 )
 
 # --- XML/HTML document factories and FB3/OPC ownership ---

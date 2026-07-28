@@ -142,7 +142,8 @@ DRM или ограничений доступа, подбор/получени�
   payload/item/index storage,
   DOM text-storage chunk resident buffers/cache transitions and persistent
   node-part catalogs/cache loading, CSS declaration buffers,
-  selector/rule chains and stylesheet snapshots,
+  selector/rule chains, stylesheet snapshots и transactional style-record
+  restore,
   reference-cache
   buckets/index exports and bounded map slots, longjmp-safe PNG rows/pixels,
   JPEG pool/error lifecycle, draw mark list, history XML/file/bookmark parse

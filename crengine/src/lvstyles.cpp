@@ -29,6 +29,8 @@
 #include "../include/lvstyles.h"
 #include "../include/serialbuf.h"
 
+#include <utility>
+
 // #include <stdio.h>
 
 //DEFINE_NULL_REF( css_style_rec_t )
@@ -420,75 +422,86 @@ bool css_style_rec_t::deserialize( SerialBuf & buf )
 {
     if ( buf.error() )
         return false;
-    buf.putMagic(style_magic);
-    buf >> important[0];                                    //    lUInt32              important[0];
-    buf >> important[1];                                    //    lUInt32              important[1];
-    buf >> important[2];                                    //    lUInt32              important[2];
-    buf >> importance[0];                                   //    lUInt32              importance[0];
-    buf >> importance[1];                                   //    lUInt32              importance[1];
-    buf >> importance[2];                                   //    lUInt32              importance[2];
-    ST_GET_ENUM(css_display_t, display);                    //    css_display_t        display;
-    ST_GET_ENUM(css_white_space_t, white_space);            //    css_white_space_t    white_space;
-    ST_GET_ENUM(css_text_align_t, text_align);              //    css_text_align_t     text_align;
-    ST_GET_ENUM(css_text_align_t, text_align_last);         //    css_text_align_t     text_align_last;
-    ST_GET_ENUM(css_text_decoration_t, text_decoration);    //    css_text_decoration_t text_decoration;
-    ST_GET_ENUM(css_text_transform_t, text_transform);      //    css_text_transform_t text_transform;
-    ST_GET_LEN(vertical_align);                             //    css_length_t         vertical_align;
-    ST_GET_ENUM(css_font_family_t, font_family);            //    css_font_family_t    font_family;
-    buf >> font_name;                                       //    lString8             font_name;
-    ST_GET_LEN(font_size);                                  //    css_length_t         font_size;
-    ST_GET_ENUM(css_font_style_t, font_style);              //    css_font_style_t     font_style;
-    ST_GET_ENUM(css_font_weight_t, font_weight);            //    css_font_weight_t    font_weight;
-    ST_GET_LEN(font_features);                              //    css_length_t         font_features;
-    ST_GET_LEN(text_indent);                                //    css_length_t         text_indent;
-    ST_GET_LEN(line_height);                                //    css_length_t         line_height;
-    ST_GET_LEN(width);                                      //    css_length_t         width;
-    ST_GET_LEN(height);                                     //    css_length_t         height;
-    ST_GET_LEN(min_width);                                  //    css_length_t         min_width;
-    ST_GET_LEN(min_height);                                 //    css_length_t         min_height;
-    ST_GET_LEN(max_width);                                  //    css_length_t         max_width;
-    ST_GET_LEN(max_height);                                 //    css_length_t         max_height;
-    ST_GET_LEN4(margin);                                    //    css_length_t         margin[4]; ///< margin-left, -right, -top, -bottom
-    ST_GET_LEN4(padding);                                   //    css_length_t         padding[4]; ///< padding-left, -right, -top, -bottom
-    ST_GET_LEN(color);                                      //    css_length_t         color;
-    ST_GET_LEN(background_color);                           //    css_length_t         background_color;
-    ST_GET_LEN(letter_spacing);                             //    css_length_t         letter_spacing;
-    ST_GET_ENUM(css_page_break_t, page_break_before);       //    css_page_break_t     page_break_before;
-    ST_GET_ENUM(css_page_break_t, page_break_after);        //    css_page_break_t     page_break_after;
-    ST_GET_ENUM(css_page_break_t, page_break_inside);       //    css_page_break_t     page_break_inside;
-    ST_GET_ENUM(css_hyphenate_t, hyphenate);                //    css_hyphenate_t        hyphenate;
-    ST_GET_ENUM(css_list_style_type_t, list_style_type);    //    css_list_style_type_t list_style_type;
-    ST_GET_ENUM(css_list_style_position_t, list_style_position);//    css_list_style_position_t list_style_position;
-    ST_GET_ENUM(css_border_style_type_t ,border_style_top);
-    ST_GET_ENUM(css_border_style_type_t ,border_style_right);
-    ST_GET_ENUM(css_border_style_type_t ,border_style_bottom);
-    ST_GET_ENUM(css_border_style_type_t ,border_style_left);
-    ST_GET_LEN4(border_width);
-    ST_GET_LEN4(border_color);
-    buf>>background_image;
-    ST_GET_ENUM(css_background_repeat_value_t ,background_repeat);
-    ST_GET_ENUM(css_background_position_value_t ,background_position);
-    ST_GET_LEN(background_size[0]);
-    ST_GET_LEN(background_size[1]);
-    ST_GET_ENUM(css_border_collapse_value_t ,border_collapse);
-    ST_GET_LEN(border_spacing[0]);
-    ST_GET_LEN(border_spacing[1]);
-    ST_GET_ENUM(css_orphans_widows_value_t, orphans);
-    ST_GET_ENUM(css_orphans_widows_value_t, widows);
-    ST_GET_ENUM(css_float_t, float_);
-    ST_GET_ENUM(css_clear_t, clear);
-    ST_GET_ENUM(css_direction_t, direction);
-    ST_GET_ENUM(css_visibility_t, visibility);
-    ST_GET_ENUM(css_line_break_t, line_break);
-    ST_GET_ENUM(css_word_break_t, word_break);
-    buf>>content;
-    ST_GET_LEN(cr_hint);
+    if ( !buf.checkMagic(style_magic) )
+        return false;
+    css_style_rec_t candidate;
+    buf >> candidate.important[0];                          //    lUInt32              important[0];
+    buf >> candidate.important[1];                          //    lUInt32              important[1];
+    buf >> candidate.important[2];                          //    lUInt32              important[2];
+    buf >> candidate.importance[0];                         //    lUInt32              importance[0];
+    buf >> candidate.importance[1];                         //    lUInt32              importance[1];
+    buf >> candidate.importance[2];                         //    lUInt32              importance[2];
+    ST_GET_ENUM(css_display_t, candidate.display);          //    css_display_t        display;
+    ST_GET_ENUM(css_white_space_t, candidate.white_space);  //    css_white_space_t    white_space;
+    ST_GET_ENUM(css_text_align_t, candidate.text_align);    //    css_text_align_t     text_align;
+    ST_GET_ENUM(css_text_align_t, candidate.text_align_last);//    css_text_align_t     text_align_last;
+    ST_GET_ENUM(css_text_decoration_t, candidate.text_decoration);// css_text_decoration_t text_decoration;
+    ST_GET_ENUM(css_text_transform_t, candidate.text_transform);// css_text_transform_t text_transform;
+    ST_GET_LEN(candidate.vertical_align);                   //    css_length_t         vertical_align;
+    ST_GET_ENUM(css_font_family_t, candidate.font_family);  //    css_font_family_t    font_family;
+    buf >> candidate.font_name;                             //    lString8             font_name;
+    ST_GET_LEN(candidate.font_size);                        //    css_length_t         font_size;
+    ST_GET_ENUM(css_font_style_t, candidate.font_style);    //    css_font_style_t     font_style;
+    ST_GET_ENUM(css_font_weight_t, candidate.font_weight);  //    css_font_weight_t    font_weight;
+    ST_GET_LEN(candidate.font_features);                    //    css_length_t         font_features;
+    ST_GET_LEN(candidate.text_indent);                      //    css_length_t         text_indent;
+    ST_GET_LEN(candidate.line_height);                      //    css_length_t         line_height;
+    ST_GET_LEN(candidate.width);                            //    css_length_t         width;
+    ST_GET_LEN(candidate.height);                           //    css_length_t         height;
+    ST_GET_LEN(candidate.min_width);                        //    css_length_t         min_width;
+    ST_GET_LEN(candidate.min_height);                       //    css_length_t         min_height;
+    ST_GET_LEN(candidate.max_width);                        //    css_length_t         max_width;
+    ST_GET_LEN(candidate.max_height);                       //    css_length_t         max_height;
+    ST_GET_LEN4(candidate.margin);                          //    css_length_t         margin[4];
+    ST_GET_LEN4(candidate.padding);                         //    css_length_t         padding[4];
+    ST_GET_LEN(candidate.color);                            //    css_length_t         color;
+    ST_GET_LEN(candidate.background_color);                 //    css_length_t         background_color;
+    ST_GET_LEN(candidate.letter_spacing);                   //    css_length_t         letter_spacing;
+    ST_GET_ENUM(css_page_break_t, candidate.page_break_before);// css_page_break_t      page_break_before;
+    ST_GET_ENUM(css_page_break_t, candidate.page_break_after);// css_page_break_t       page_break_after;
+    ST_GET_ENUM(css_page_break_t, candidate.page_break_inside);// css_page_break_t      page_break_inside;
+    ST_GET_ENUM(css_hyphenate_t, candidate.hyphenate);      //    css_hyphenate_t      hyphenate;
+    ST_GET_ENUM(css_list_style_type_t, candidate.list_style_type);// css_list_style_type_t list_style_type;
+    ST_GET_ENUM(css_list_style_position_t, candidate.list_style_position);// css_list_style_position_t list_style_position;
+    ST_GET_ENUM(css_border_style_type_t, candidate.border_style_top);
+    ST_GET_ENUM(css_border_style_type_t, candidate.border_style_right);
+    ST_GET_ENUM(css_border_style_type_t, candidate.border_style_bottom);
+    ST_GET_ENUM(css_border_style_type_t, candidate.border_style_left);
+    ST_GET_LEN4(candidate.border_width);
+    ST_GET_LEN4(candidate.border_color);
+    buf >> candidate.background_image;
+    ST_GET_ENUM(css_background_repeat_value_t, candidate.background_repeat);
+    ST_GET_ENUM(css_background_position_value_t, candidate.background_position);
+    ST_GET_LEN(candidate.background_size[0]);
+    ST_GET_LEN(candidate.background_size[1]);
+    ST_GET_ENUM(css_border_collapse_value_t, candidate.border_collapse);
+    ST_GET_LEN(candidate.border_spacing[0]);
+    ST_GET_LEN(candidate.border_spacing[1]);
+    ST_GET_ENUM(css_orphans_widows_value_t, candidate.orphans);
+    ST_GET_ENUM(css_orphans_widows_value_t, candidate.widows);
+    ST_GET_ENUM(css_float_t, candidate.float_);
+    ST_GET_ENUM(css_clear_t, candidate.clear);
+    ST_GET_ENUM(css_direction_t, candidate.direction);
+    ST_GET_ENUM(css_visibility_t, candidate.visibility);
+    ST_GET_ENUM(css_line_break_t, candidate.line_break);
+    ST_GET_ENUM(css_word_break_t, candidate.word_break);
+    buf >> candidate.content;
+    ST_GET_LEN(candidate.cr_hint);
     lUInt32 hash = 0;
     buf >> hash;
     // printf("imp: %llx oldhash: %lx ", important, hash);
-    lUInt32 newhash = calcHash(*this);
+    lUInt32 newhash = calcHash(candidate);
     // printf("newhash: %lx\n", newhash);
-    if ( hash!=newhash )
+    if ( buf.error() || hash != newhash ) {
         buf.seterror();
-    return !buf.error();
+        return false;
+    }
+    candidate.refCount = refCount;
+    candidate.flags = flags;
+    candidate.pseudo_elem_before_style =
+            std::move(pseudo_elem_before_style);
+    candidate.pseudo_elem_after_style =
+            std::move(pseudo_elem_after_style);
+    *this = std::move(candidate);
+    return true;
 }

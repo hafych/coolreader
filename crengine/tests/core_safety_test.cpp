@@ -22,6 +22,7 @@
 #include "lvimagedecodercallback.h"
 #include "lvrend.h"
 #include "lvstreambuffer.h"
+#include "lvstyles.h"
 #include "crgui.h"
 #include "crskin.h"
 #include "hist.h"
@@ -3318,6 +3319,76 @@ static int testStringCollectionOwnership() {
             || restored.find(U"rollback-sentinel") < 0)
         return fail(
                 "hashed string deserialize accepted an oversized count");
+    return 0;
+}
+
+static int testStyleRecordSerializationOwnership() {
+    css_style_rec_t source;
+    source.important[0] = 0x10203040;
+    source.importance[1] = 0x01020304;
+    source.display = css_d_block;
+    source.font_name = "Owned Style Face";
+    source.font_size = css_length_t(css_val_screen_px, 27);
+    source.margin[0] = css_length_t(css_val_px, 13);
+    source.background_image = "images/background.png";
+    source.content = U"owned content";
+    SerialBuf serialized(1, true);
+    if (!source.serialize(serialized) || serialized.error())
+        return fail("style record fixture could not serialize");
+    const int serializedSize = serialized.pos();
+    std::vector<lUInt8> serializedBytes(
+            serialized.buf(), serialized.buf() + serializedSize);
+
+    css_style_rec_t committed;
+    committed.display = css_d_none;
+    committed.font_name = "Rollback Sentinel";
+    committed.AddRef();
+    committed.AddRef();
+    committed.flags = STYLE_REC_FLAG_MATCHED;
+    committed.pseudo_elem_before_style =
+            std::make_unique<css_style_rec_t>();
+    committed.pseudo_elem_after_style =
+            std::make_unique<css_style_rec_t>();
+    css_style_rec_t *beforeOwner =
+            committed.pseudo_elem_before_style.get();
+    css_style_rec_t *afterOwner =
+            committed.pseudo_elem_after_style.get();
+
+    std::vector<lUInt8> wrongMagic(serializedBytes);
+    wrongMagic[0] ^= 0x20;
+    SerialBuf wrongMagicInput(
+            wrongMagic.data(), static_cast<int>(wrongMagic.size()));
+    if (committed.deserialize(wrongMagicInput)
+            || committed.display != css_d_none
+            || committed.font_name != lString8("Rollback Sentinel")
+            || committed.getRefCount() != 2
+            || committed.pseudo_elem_before_style.get() != beforeOwner
+            || committed.pseudo_elem_after_style.get() != afterOwner)
+        return fail("style record bad magic replaced committed state");
+
+    std::vector<lUInt8> wrongHash(serializedBytes);
+    wrongHash.back() ^= 0x80;
+    SerialBuf wrongHashInput(
+            wrongHash.data(), static_cast<int>(wrongHash.size()));
+    if (committed.deserialize(wrongHashInput)
+            || committed.display != css_d_none
+            || committed.font_name != lString8("Rollback Sentinel")
+            || committed.getRefCount() != 2
+            || committed.pseudo_elem_before_style.get() != beforeOwner
+            || committed.pseudo_elem_after_style.get() != afterOwner)
+        return fail("style record hash failure replaced committed state");
+
+    SerialBuf validInput(
+            serializedBytes.data(), static_cast<int>(serializedBytes.size()));
+    if (!committed.deserialize(validInput)
+            || !(committed == source)
+            || committed.hash != source.hash
+            || committed.getRefCount() != 2
+            || committed.flags != STYLE_REC_FLAG_MATCHED
+            || committed.pseudo_elem_before_style.get() != beforeOwner
+            || committed.pseudo_elem_after_style.get() != afterOwner)
+        return fail(
+                "style record snapshot lost serialized or live-only state");
     return 0;
 }
 
@@ -7229,6 +7300,8 @@ int main() {
     if (testPropertyStreamOwnership() != 0)
         return 1;
     if (testStringCollectionOwnership() != 0)
+        return 1;
+    if (testStyleRecordSerializationOwnership() != 0)
         return 1;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
     if (testStringChunkStorageOwnership() != 0)
