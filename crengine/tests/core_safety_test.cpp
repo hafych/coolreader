@@ -2580,6 +2580,25 @@ static int testPropertyStreamOwnership() {
             || properties->hasProperty("#ignored"))
         return fail("property loader did not publish the parsed snapshot");
 
+    properties->setString("section.alpha", "one");
+    CRPropRef section = properties->getSubProps("section.");
+    CRPropRef sectionSnapshot = section->clone();
+    if (sectionSnapshot->getStringDef("alpha") != U"one"
+            || sectionSnapshot->getCount() != 1)
+        return fail("property sub-container clone did not publish its owners");
+    section->setString("beta", "two");
+    sectionSnapshot->setString("alpha", "snapshot");
+    if (sectionSnapshot->hasProperty("beta")
+            || properties->getStringDef("section.alpha") != U"one"
+            || section->getStringDef("beta") != U"two"
+            || sectionSnapshot->getStringDef("alpha") != U"snapshot")
+        return fail("property sub-container clone shared mutable item owners");
+    CRPropRef topLevelSnapshot = properties->clone();
+    topLevelSnapshot->setString("stable", "snapshot");
+    if (topLevelSnapshot->getStringDef("stable") != U"snapshot"
+            || properties->getStringDef("stable") != U"new")
+        return fail("property container clone lost independent revision state");
+
     lString32 largeValue;
     largeValue.append(12000, U'x');
     properties->setString("large", largeValue);

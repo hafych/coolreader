@@ -32,6 +32,8 @@
 #include "../include/lvstreamutils.h"
 #include <stdio.h>
 
+#include <climits>
+#include <memory>
 #include <vector>
 
 
@@ -206,15 +208,29 @@ protected:
     bool findItem( const char * name, int nameoffset, int start, int end, int & pos ) const;
     bool findItem( const char * name, int & pos ) const;
     void clear( int start, int end );
+    void insertOwnedItem(
+            int position, std::unique_ptr<CRPropItem> item)
+    {
+        if (_list.length() < INT_MAX)
+            _list.reserve(_list.length() + 1);
+        CRPropItem *itemView = item.get();
+        _list.insert(position, itemView);
+        item.release();
+    }
     CRPropContainer( const CRPropContainer & v )
-    : _list( v._list )
+        : _list(v._list), _revision(v._revision)
     {
     }
 public:
     /// get copy of property list
     virtual CRPropRef clone() const
     {
-        return CRPropRef( new CRPropContainer(*this) );
+        std::unique_ptr<CRPropContainer> candidate =
+                std::unique_ptr<CRPropContainer>(
+                        new CRPropContainer(*this));
+        CRPropRef result(candidate.get());
+        candidate.release();
+        return result;
     }
     /// returns true if specified property exists
     virtual bool hasProperty( const char * propName ) const
@@ -779,7 +795,9 @@ void CRPropContainer::setString( const char * propName, const lString32 &value )
 {
     int pos = 0;
     if ( _list.empty() || !findItem( propName, pos ) ) {
-        _list.insert( pos, new CRPropItem( propName, value ) );
+        insertOwnedItem(
+                pos, std::make_unique<CRPropItem>(
+                        propName, value));
         _revision++;
     } else {
         _list[pos]->setValue( value );
@@ -823,13 +841,19 @@ public:
     /// get copy of property list
     virtual CRPropRef clone() const
     {
-        CRPropContainer * v = new CRPropContainer();
+        std::unique_ptr<CRPropContainer> candidate =
+                std::make_unique<CRPropContainer>();
         int cnt = getCount();
-        v->_list.reserve(cnt);
+        candidate->_list.reserve(cnt);
         for ( int i=0; i<cnt; i++ ) {
-            v->_list.add( new CRPropItem( getName(i), getValue(i) ) );
+            candidate->insertOwnedItem(
+                    candidate->_list.length(),
+                    std::make_unique<CRPropItem>(
+                            getName(i), getValue(i)));
         }
-        return CRPropRef( v );
+        CRPropRef result(candidate.get());
+        candidate.release();
+        return result;
     }
     /// returns true if specified property exists
     virtual bool hasProperty( const char * propName ) const
@@ -893,7 +917,9 @@ public:
         sync();
         int pos = 0;
         if ( !_root->findItem( propName, _path.length(), _start, _end, pos ) ) {
-            _root->_list.insert( pos, new CRPropItem( (_path + propName).c_str(), value ) );
+            _root->insertOwnedItem(
+                    pos, std::make_unique<CRPropItem>(
+                            (_path + propName).c_str(), value));
             _root->_revision++;
             sync();
         } else {
@@ -914,13 +940,22 @@ public:
 /// get subpath container
 CRPropRef CRPropContainer::getSubProps( const char * path )
 {
-    return CRPropRef(new CRPropSubContainer(this, lString8(path)));
+    std::unique_ptr<CRPropSubContainer> candidate =
+            std::make_unique<CRPropSubContainer>(
+                    this, lString8(path));
+    CRPropRef result(candidate.get());
+    candidate.release();
+    return result;
 }
 
 /// factory function
 CRPropRef LVCreatePropsContainer()
 {
-    return CRPropRef(new CRPropContainer());
+    std::unique_ptr<CRPropContainer> candidate =
+            std::make_unique<CRPropContainer>();
+    CRPropRef result(candidate.get());
+    candidate.release();
+    return result;
 }
 
 const char * props_magic = "PRPS";

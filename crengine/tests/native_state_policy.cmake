@@ -5006,6 +5006,31 @@ require_source_text(
   "property saving must require an exact target write"
 )
 require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "void insertOwnedItem("
+  "property items must cross one explicit owning insertion boundary"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "_list.reserve(_list.length() + 1)"
+  "property item publication must reserve its owning list first"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "_list.insert(position, itemView);\n        item.release();"
+  "property item publication must transfer only after insertion"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "std::unique_ptr<CRPropContainer> candidate"
+  "property container clones and factories must stage scoped candidates"
+)
+require_source_text(
+  "${PROPERTIES_SOURCE}"
+  "_revision(v._revision)"
+  "property container clones must initialize their revision snapshot"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testPropertyStreamOwnership()"
   "property stream ownership must retain native regression coverage"
@@ -5019,6 +5044,21 @@ require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "property save accepted a short target write"
   "property regression must retain exact output coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "property sub-container clone did not publish its owners"
+  "property ownership must retain sub-container clone publication coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "property sub-container clone shared mutable item owners"
+  "property ownership must retain independent clone coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "property container clone lost independent revision state"
+  "property ownership must retain initialized top-level clone coverage"
 )
 forbid_source_text(
   "${PROPERTIES_SOURCE}"
@@ -5034,6 +5074,21 @@ forbid_source_text(
   "${PROPERTIES_SOURCE}"
   "LVPumpStream( targetStream, stream )"
   "property saving must not hide target write failures behind an unchecked pump"
+)
+forbid_source_text(
+  "${PROPERTIES_SOURCE}"
+  "_list.insert( pos, new CRPropItem"
+  "property item candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${PROPERTIES_SOURCE}"
+  "_list.add( new CRPropItem"
+  "property clone items must not begin as raw owners"
+)
+forbid_source_text(
+  "${PROPERTIES_SOURCE}"
+  "return CRPropRef(new CRProp"
+  "property factories must not publish raw candidates directly"
 )
 
 # --- XML/HTML document factories and FB3/OPC ownership ---

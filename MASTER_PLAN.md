@@ -145,8 +145,9 @@ DRM или ограничений доступа, подбор/получени�
   JPEG pool/error lifecycle, draw mark list, history XML/file/bookmark parse
   candidates, transactional snapshot publication и synchronization-record
   bookmark ownership, global i18n translator slots и GUI-side translation
-  candidates, bounded properties input/candidate snapshots и exact-write
-  settings output, XML/HTML document factories, OPC relation-table
+  candidates, bounded properties input/candidate snapshots, clone/item
+  publication и exact-write settings output, XML/HTML document factories,
+  OPC relation-table
   owner/index publication, FB3 description/parser state и CHM
   container/file/metadata/HTML parse ownership, а также EPUB encrypted-container,
   font-key snapshot, manifest-item и OPF/nav/NCX/page-map DOM ownership и

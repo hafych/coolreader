@@ -47,7 +47,10 @@ invalid stream modes preserve the prior properties. Escape decoding bounds a
 trailing backslash and comment lines cannot become settings. Saving stages the
 complete UTF-8 representation in an owned `lString8` and reports both target
 errors and short successful writes instead of hiding them behind an unchecked
-stream pump.
+stream pump. Container and sub-container clones, factories and newly inserted
+items remain in `unique_ptr` until the intrusive reference or pre-reserved
+owning list accepts them. A sub-container snapshot regression verifies stripped
+names, independent values and later insertion without shared item ownership.
 
 `HyphMan` now owns its dictionary list and data loader with `std::unique_ptr`.
 The legacy `setDataLoader(HyphDataLoader *)` call is an explicit ownership
