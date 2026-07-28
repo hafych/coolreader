@@ -2,6 +2,7 @@
 #include "lvstreamfragment.h"
 #include "lvarray.h"
 #include "lvhashtable.h"
+#include "lvrefcache.h"
 #include "lvstring8collection.h"
 #include "lvstring32hashedcollection.h"
 #include "lvthread.h"
@@ -171,6 +172,48 @@ public:
 };
 
 int ArrayTrackedValue::_destroyed = 0;
+
+class RefCacheTestValue {
+    int _value;
+    static int _liveCount;
+
+public:
+    explicit RefCacheTestValue(int value)
+        : _value(value) {
+        ++_liveCount;
+    }
+
+    RefCacheTestValue(const RefCacheTestValue &value)
+        : _value(value._value) {
+        ++_liveCount;
+    }
+
+    ~RefCacheTestValue() {
+        --_liveCount;
+    }
+
+    bool operator==(const RefCacheTestValue &value) const {
+        return _value == value._value;
+    }
+
+    int value() const {
+        return _value;
+    }
+
+    static int liveCount() {
+        return _liveCount;
+    }
+};
+
+int RefCacheTestValue::_liveCount = 0;
+
+typedef LVRef<RefCacheTestValue> RefCacheTestRef;
+
+static lUInt32 calcHash(RefCacheTestRef &value) {
+    if (!value.isNull() && value->value() == 99)
+        throw std::runtime_error("reference cache hash blocked");
+    return 1;
+}
 
 static int testMutex() {
     LVMutex mutex;
@@ -771,6 +814,15 @@ static int testBoundedObservableDecodedImageCache() {
             || stats.hits != 2 || stats.misses != 2
             || stats.evictions != 1)
         return fail("bounded cache counters are incorrect");
+    cache.reduceSize(-1);
+    cache.set(4, 40);
+    stats = cache.getStats();
+    if (stats.capacityItems != 0 || stats.itemCount != 0)
+        return fail("bounded cache accepted an invalid reduced capacity");
+    cache.restoreSize();
+    cache.set(4, 40);
+    if (!cache.get(4, value) || value != 40)
+        return fail("bounded cache failed after restoring vector storage");
 
     CRSkinRef skin = LVOpenSimpleSkin(
             lString8("<?xml version=\"1.0\"?><CR3Skin/>"));
@@ -1896,6 +1948,156 @@ static int testValueArrayOwnership() {
     }
     if (ArrayTrackedValue::destroyed() != 3)
         return fail("value array reference fixture escaped its lifecycle");
+    return 0;
+}
+
+static int testReferenceCacheOwnership() {
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("reference cache fixture started with live values");
+    {
+        LVRefCache<RefCacheTestRef> cache(0);
+        RefCacheTestRef empty;
+        cache.cacheIt(empty);
+
+        RefCacheTestRef first(new RefCacheTestValue(11));
+        RefCacheTestRef duplicate(new RefCacheTestValue(11));
+        RefCacheTestRef collision(new RefCacheTestValue(22));
+        cache.cacheIt(first);
+        cache.cacheIt(duplicate);
+        cache.cacheIt(collision);
+        if (duplicate.get() != first.get()
+                || collision.get() == first.get()
+                || RefCacheTestValue::liveCount() != 2)
+            return fail("reference cache did not canonicalize a collision");
+
+        first.Clear();
+        duplicate.Clear();
+        collision.Clear();
+        cache.gc();
+        if (RefCacheTestValue::liveCount() != 0)
+            return fail("reference cache GC retained a collision chain");
+    }
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("reference cache teardown leaked a value");
+
+    {
+        LVIndexedRefCache<RefCacheTestRef> cache(0);
+        RefCacheTestRef empty;
+        if (cache.cache(empty) != 0 || cache.length() != 0)
+            return fail("indexed reference cache stored a null value");
+
+        RefCacheTestRef first(new RefCacheTestValue(31));
+        RefCacheTestRef duplicate(new RefCacheTestValue(31));
+        RefCacheTestRef collision(new RefCacheTestValue(32));
+        const int firstIndex = cache.cache(first);
+        const int duplicateIndex = cache.cache(duplicate);
+        const int collisionIndex = cache.cache(collision);
+        if (firstIndex != 1 || duplicateIndex != firstIndex
+                || collisionIndex != 2
+                || duplicate.get() != first.get()
+                || cache.length() != 2)
+            return fail("indexed reference cache lost collision/index state");
+
+        cache.release(firstIndex);
+        if (cache.length() != 2 || cache.get(firstIndex).isNull())
+            return fail("indexed reference cache released a shared index early");
+        cache.release(firstIndex);
+        if (cache.length() != 1 || !cache.get(firstIndex).isNull())
+            return fail("indexed reference cache retained an unreferenced index");
+
+        RefCacheTestRef reused(new RefCacheTestValue(33));
+        if (cache.cache(reused) != firstIndex)
+            return fail("indexed reference cache did not reuse a free index");
+        if (!cache.addIndexRef(static_cast<lUInt16>(firstIndex)))
+            return fail("indexed reference cache rejected a live index");
+        cache.release(firstIndex);
+        cache.release(firstIndex);
+
+        lUInt16 holder = 0;
+        RefCacheTestRef held(new RefCacheTestValue(34));
+        if (!cache.cache(holder, held) || holder == 0)
+            return fail("indexed reference cache did not publish an index holder");
+        const int heldLength = cache.length();
+        if (cache.cache(holder, held) || cache.length() != heldLength)
+            return fail("indexed reference cache duplicated an index holder");
+        cache.release(holder);
+
+        cache.clear(-1);
+        if (cache.length() != 0 || !cache.get(collisionIndex).isNull())
+            return fail("indexed reference cache clear retained index views");
+    }
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("indexed reference cache teardown leaked a value");
+
+    {
+        LVArray<RefCacheTestRef> saved(5, RefCacheTestRef());
+        saved.set(1, RefCacheTestRef(new RefCacheTestValue(41)));
+        saved.set(3, RefCacheTestRef(new RefCacheTestValue(43)));
+        LVIndexedRefCache<RefCacheTestRef> cache(saved);
+        RefCacheTestRef restoredFirst = cache.get(1);
+        RefCacheTestRef restoredThird = cache.get(3);
+        if (cache.length() != 2
+                || restoredFirst.isNull() || restoredFirst->value() != 41
+                || restoredThird.isNull() || restoredThird->value() != 43)
+            return fail("indexed reference cache restore lost sparse entries");
+
+        std::unique_ptr<LVArray<RefCacheTestRef> > roundTrip =
+                cache.getIndex();
+        RefCacheTestRef roundTripFirst = roundTrip->get(1);
+        RefCacheTestRef roundTripThird = roundTrip->get(3);
+        if (roundTrip->length() != 5
+                || roundTripFirst.isNull() || roundTripFirst->value() != 41
+                || !roundTrip->get(2).isNull()
+                || roundTripThird.isNull() || roundTripThird->value() != 43
+                || !roundTrip->get(4).isNull())
+            return fail("indexed reference cache export lost sparse entries");
+
+        cache.release(1);
+        RefCacheTestRef replacementValue(new RefCacheTestValue(44));
+        if (cache.cache(replacementValue) != 1)
+            return fail("restored reference cache did not reuse a freed index");
+
+        LVArray<RefCacheTestRef> failingReplacement(4, RefCacheTestRef());
+        failingReplacement.set(
+                1, RefCacheTestRef(new RefCacheTestValue(71)));
+        failingReplacement.set(
+                2, RefCacheTestRef(new RefCacheTestValue(99)));
+        bool replacementThrew = false;
+        try {
+            cache.setIndex(failingReplacement);
+        } catch (const std::runtime_error &) {
+            replacementThrew = true;
+        }
+        RefCacheTestRef retainedFirst = cache.get(1);
+        RefCacheTestRef retainedThird = cache.get(3);
+        if (!replacementThrew || cache.length() != 2
+                || retainedFirst.isNull() || retainedFirst->value() != 44
+                || retainedThird.isNull() || retainedThird->value() != 43)
+            return fail("failed reference cache restore replaced committed state");
+
+        LVArray<RefCacheTestRef> replacement(3, RefCacheTestRef());
+        replacement.set(2, RefCacheTestRef(new RefCacheTestValue(52)));
+        cache.setIndex(replacement);
+        RefCacheTestRef replacementSecond = cache.get(2);
+        if (cache.length() != 1
+                || !cache.get(1).isNull()
+                || replacementSecond.isNull()
+                || replacementSecond->value() != 52)
+            return fail("indexed reference cache replacement mixed generations");
+        std::unique_ptr<LVArray<RefCacheTestRef> > replacedIndex =
+                cache.getIndex();
+        RefCacheTestRef exportedSecond = replacedIndex->get(2);
+        if (replacedIndex->length() != 3
+                || exportedSecond.isNull() || exportedSecond->value() != 52)
+            return fail("indexed reference cache replacement export failed");
+
+        cache.clear(3);
+        RefCacheTestRef afterClear(new RefCacheTestValue(61));
+        if (cache.cache(afterClear) != 1 || cache.length() != 1)
+            return fail("indexed reference cache failed after resized clear");
+    }
+    if (RefCacheTestValue::liveCount() != 0)
+        return fail("indexed reference cache round-trip leaked values");
     return 0;
 }
 
@@ -3719,6 +3921,8 @@ int main() {
     if (testHashTableOwnership() != 0)
         return 1;
     if (testValueArrayOwnership() != 0)
+        return 1;
+    if (testReferenceCacheOwnership() != 0)
         return 1;
     if (testSerialBufOwnership() != 0)
         return 1;

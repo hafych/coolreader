@@ -36,11 +36,16 @@
 #include "lvarray.h"
 #include "lvcache.h"
 
+#include <climits>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
 /*
     Object cache
 
     Requirements: 
-       sz parameter of constructor should be power of 2
        bool operator == (LVRef<T> & r1, LVRef<T> & r2 ) should be defined
        lUInt32 calcHash( LVRef<T> & r1 ) should be defined
 */
@@ -51,78 +56,93 @@ class LVRefCache {
     class LVRefCacheRec {
         ref_t style;
         lUInt32 hash;
-        LVRefCacheRec * next;
-        LVRefCacheRec(ref_t & s, lUInt32 h)
-            : style(s), hash(h), next(NULL) { }
+        std::unique_ptr<LVRefCacheRec> next;
+        LVRefCacheRec(const ref_t &s, lUInt32 h)
+            : style(s), hash(h), next() { }
         friend class LVRefCache< ref_t >;
     };
 
 private:
-    int size;
-    LVRefCacheRec ** table;
+    std::vector<std::unique_ptr<LVRefCacheRec> > table;
+
+    static int normalizedBucketCount(int requested)
+    {
+        if (requested <= 1)
+            return 1;
+        int count = 1;
+        while (count < requested) {
+            if (count > INT_MAX / 2)
+                throw std::length_error("LVRefCache bucket count overflow");
+            count <<= 1;
+        }
+        return count;
+    }
+
+    size_t bucketIndex(lUInt32 hash) const
+    {
+        return static_cast<size_t>(hash)
+                & (static_cast<size_t>(table.size()) - 1);
+    }
+
+    void clearBuckets()
+    {
+        for (size_t index = 0; index < table.size(); ++index) {
+            while (table[index]) {
+                std::unique_ptr<LVRefCacheRec> removed =
+                        std::move(table[index]);
+                table[index] = std::move(removed->next);
+            }
+        }
+    }
 
 public:
+    explicit LVRefCache(int sz)
+        : table(static_cast<size_t>(normalizedBucketCount(sz))) {
+    }
+
+    LVRefCache(const LVRefCache &) = delete;
+    LVRefCache &operator=(const LVRefCache &) = delete;
+
     // check whether equal object already exists if cache
     // if found, replace reference with cached value
     void cacheIt(ref_t & style)
     {
+        if (style.isNull())
+            return;
         lUInt32 hash = calcHash( style );
-        lUInt32 index = hash & (size - 1);
-        LVRefCacheRec **rr;
-        rr = &table[index];
-        while ( *rr != NULL )
-        {
-            if ( *(*rr)->style.get() == *style.get() )
-            {
-                style = (*rr)->style;
+        std::unique_ptr<LVRefCacheRec> *link = &table[bucketIndex(hash)];
+        while (*link) {
+            LVRefCacheRec *record = link->get();
+            if (record->hash == hash
+                    && *record->style.get() == *style.get()) {
+                style = record->style;
                 return;
             }
-            rr = &(*rr)->next;
+            link = &record->next;
         }
-        *rr = new LVRefCacheRec( style, hash );
+        link->reset(new LVRefCacheRec(style, hash));
     }
+
     // garbage collector: remove unused entries
     void gc()
     {
-        for (int index = 0; index < size; index++)
-        {
-            LVRefCacheRec **rr;
-            rr = &table[index];
-            while ( *rr != NULL )
-            {
-                if ( (*rr)->style.getRefCount() == 1 )
-                {
-                    LVRefCacheRec * r = (*rr);
-                    *rr = r->next;
-                    delete r;
-                }
-                else
-                {
-                    rr = &(*rr)->next;
+        for (size_t index = 0; index < table.size(); ++index) {
+            std::unique_ptr<LVRefCacheRec> *link = &table[index];
+            while (*link) {
+                if ((*link)->style.getRefCount() == 1) {
+                    std::unique_ptr<LVRefCacheRec> removed =
+                            std::move(*link);
+                    *link = std::move(removed->next);
+                } else {
+                    link = &(*link)->next;
                 }
             }
         }
     }
-    LVRefCache( int sz )
-    {
-        size = sz;
-        table = new LVRefCacheRec * [ sz ];
-        for( int i=0; i<sz; i++ )
-            table[i] = NULL;
-    }
+
     ~LVRefCache()
     {
-        LVRefCacheRec *r, *r2;
-        for ( int i=0; i < size; i++ )
-        {
-            for ( r = table[ i ]; r;  )
-            {
-                r2 = r;
-                r = r->next;
-                delete r2;
-            }
-        }
-        delete[] table;
+        clearBuckets();
     }
 };
 
@@ -134,85 +154,134 @@ class LVIndexedRefCache {
         int index;
         ref_t style;
         lUInt32 hash;
-        LVRefCacheRec * next;
-        LVRefCacheRec(ref_t & s, lUInt32 h)
-            : style(s), hash(h), next(NULL) { }
+        std::unique_ptr<LVRefCacheRec> next;
+        LVRefCacheRec(const ref_t &s, lUInt32 h)
+            : index(0), style(s), hash(h), next() { }
     };
 
     // index item
     struct LVRefCacheIndexRec {
         LVRefCacheRec * item;
         int refcount; // refcount, or next free index if item==NULL
+        LVRefCacheIndexRec()
+            : item(NULL), refcount(0) { }
     };
 
 private:
     int size;
-    LVRefCacheRec ** table;
-
-    LVRefCacheIndexRec * index;
-    int indexsize;
+    std::vector<std::unique_ptr<LVRefCacheRec> > table;
+    std::vector<LVRefCacheIndexRec> index;
     int nextindex;
     int freeindex;
     int numitems;
 
-    int indexItem( LVRefCacheRec * rec )
+    static int normalizedBucketCount(int requested)
     {
-        int n;
-        if ( freeindex ) {
-            n = freeindex;
-            freeindex = index[freeindex].refcount; // next free index
-        } else {
-            n = ++nextindex;
+        if (requested <= 1)
+            return 1;
+        int count = 1;
+        while (count < requested) {
+            if (count > INT_MAX / 2)
+                throw std::length_error(
+                        "LVIndexedRefCache bucket count overflow");
+            count <<= 1;
         }
-        if ( n>=indexsize ) {
-            // resize
-            if ( indexsize==0 )
-                indexsize = size/2;
-            else
-                indexsize *= 2;
-            index = cr_realloc( index, indexsize );
-            for ( int i=nextindex+1; i<indexsize; i++ ) {
-                index[i].item = NULL;
-                index[i].refcount = 0;
+        return count;
+    }
+
+    size_t bucketIndex(lUInt32 hash) const
+    {
+        return static_cast<size_t>(hash)
+                & (static_cast<size_t>(table.size()) - 1);
+    }
+
+    void clearBuckets()
+    {
+        for (size_t tableIndex = 0;
+                tableIndex < table.size(); ++tableIndex) {
+            while (table[tableIndex]) {
+                std::unique_ptr<LVRefCacheRec> removed =
+                        std::move(table[tableIndex]);
+                table[tableIndex] = std::move(removed->next);
             }
         }
-        rec->index = n;
-        index[n].item = rec;
-        index[n].refcount = 1;
+    }
+
+    void swap(LVIndexedRefCache &cache) noexcept
+    {
+        std::swap(size, cache.size);
+        table.swap(cache.table);
+        index.swap(cache.index);
+        std::swap(nextindex, cache.nextindex);
+        std::swap(freeindex, cache.freeindex);
+        std::swap(numitems, cache.numitems);
+    }
+
+    int allocateIndex()
+    {
+        int n = 0;
+        if (freeindex) {
+            n = freeindex;
+        } else {
+            if (nextindex == INT_MAX)
+                throw std::length_error(
+                        "LVIndexedRefCache index overflow");
+            n = nextindex + 1;
+        }
+
+        if (static_cast<size_t>(n) >= index.size()) {
+            size_t newSize = index.empty()
+                    ? static_cast<size_t>(size / 2)
+                    : index.size() * 2;
+            if (newSize < 2)
+                newSize = 2;
+            if (newSize <= static_cast<size_t>(n))
+                newSize = static_cast<size_t>(n) + 1;
+            if (newSize > static_cast<size_t>(INT_MAX))
+                throw std::length_error(
+                        "LVIndexedRefCache index storage overflow");
+            index.resize(newSize);
+        }
+
+        if (freeindex)
+            freeindex = index[n].refcount;
+        else
+            nextindex = n;
         return n;
     }
 
     // remove item from hash table
-    void removeItem( LVRefCacheRec * item )
+    bool removeItem(LVRefCacheRec *item)
     {
-        lUInt32 hash = item->hash;
-        lUInt32 tindex = hash & (size - 1);
-        LVRefCacheRec **rr = &table[tindex];
-        for ( ; *rr; rr = &(*rr)->next ) {
-            if ( *rr == item ) {
-                LVRefCacheRec * tmp = *rr;
-                *rr = (*rr)->next;
-                delete tmp;
-                numitems--;
-                return;
+        std::unique_ptr<LVRefCacheRec> *link =
+                &table[bucketIndex(item->hash)];
+        while (*link) {
+            if (link->get() == item) {
+                std::unique_ptr<LVRefCacheRec> removed =
+                        std::move(*link);
+                *link = std::move(removed->next);
+                --numitems;
+                return true;
             }
+            link = &(*link)->next;
         }
-        // not found!
+        return false;
     }
 
 public:
 
-    LVArray<ref_t> * getIndex()
+    std::unique_ptr<LVArray<ref_t> > getIndex() const
     {
-        LVArray<ref_t> * list = new LVArray<ref_t>(indexsize, ref_t());
-        for ( int i=1; i<indexsize; i++ ) {
-            if ( index[i].item )
-                list->set(i, index[i].item->style);
+        std::unique_ptr<LVArray<ref_t> > list(
+                new LVArray<ref_t>(static_cast<int>(index.size()), ref_t()));
+        for (size_t i = 1; i < index.size(); ++i) {
+            if (index[i].item)
+                list->set(static_cast<int>(i), index[i].item->style);
         }
         return list;
     }
 
-    int length()
+    int length() const
     {
         return numitems;
     }
@@ -226,11 +295,13 @@ public:
 
     void release( int n )
     {
-        if ( n<1 || n>nextindex )
+        if (n < 1 || n > nextindex
+                || static_cast<size_t>(n) >= index.size())
             return;
-        if ( index[n].item ) {
-            if ( (--index[n].refcount)<=0 ) {
-                removeItem( index[n].item );
+        if (index[n].item) {
+            if (index[n].refcount > 1) {
+                --index[n].refcount;
+            } else if (removeItem(index[n].item)) {
                 // next free
                 index[n].refcount = freeindex;
                 index[n].item = NULL;
@@ -240,9 +311,11 @@ public:
     }
 
     // get by index
-    ref_t get( int n )
+    ref_t get( int n ) const
     {
-        if ( n>0 && n<=nextindex && index[n].item )
+        if (n > 0 && n <= nextindex
+                && static_cast<size_t>(n) < index.size()
+                && index[n].item)
             return index[n].item->style;
         return ref_t();
     }
@@ -253,6 +326,11 @@ public:
     bool cache( lUInt16 &indexholder, ref_t & style)
     {
         int newindex = cache( style );
+        if (newindex > USHRT_MAX) {
+            release(newindex);
+            throw std::length_error(
+                    "LVIndexedRefCache index does not fit lUInt16");
+        }
         // printf("newindex: %d  /  provided indexholder: %d\n", newindex, (int)indexholder);
         if ( indexholder != newindex ) {
             release( indexholder );
@@ -274,7 +352,8 @@ public:
             // So, we just don't release it if the refcount is 1 (we were
             // asked to cache something: so don't drop it!)
             // printf("released: refcount for %d = %d\n", indexholder, this->index[indexholder].refcount);
-            if (this->index[indexholder].refcount > 1)
+            if (static_cast<size_t>(indexholder) < index.size()
+                    && this->index[indexholder].refcount > 1)
                 release( indexholder );
             return false;
             // This returned boolean seems not used anywhere, so it's not
@@ -286,7 +365,12 @@ public:
 
     bool addIndexRef( lUInt16 n )
     {
-        if ( n>0 && n<=nextindex && index[n].item ) {
+        if (n > 0 && n <= nextindex
+                && static_cast<size_t>(n) < index.size()
+                && index[n].item) {
+            if (index[n].refcount == INT_MAX)
+                throw std::length_error(
+                        "LVIndexedRefCache refcount overflow");
             index[n].refcount++;
             return true;
         } else
@@ -298,24 +382,40 @@ public:
     // returns index of item - use it to release reference
     int cache(ref_t & style)
     {
+        if (style.isNull())
+            return 0;
         lUInt32 hash = calcHash( style );
-        lUInt32 index = hash & (size - 1);
-        LVRefCacheRec **rr;
-        rr = &table[index];
-        while ( *rr != NULL )
-        {
-            if ( (*rr)->hash==hash && *(*rr)->style.get() == *style.get() )
-            {
-                style = (*rr)->style;
-                int n = (*rr)->index;
+        const size_t tableIndex = bucketIndex(hash);
+        std::unique_ptr<LVRefCacheRec> *link = &table[tableIndex];
+        while (*link) {
+            LVRefCacheRec *record = link->get();
+            if (record->hash == hash
+                    && *record->style.get() == *style.get()) {
+                int n = record->index;
+                if (index[n].refcount == INT_MAX)
+                    throw std::length_error(
+                            "LVIndexedRefCache refcount overflow");
+                style = record->style;
                 this->index[n].refcount++;
                 return n;
             }
-            rr = &(*rr)->next;
+            link = &record->next;
         }
-        *rr = new LVRefCacheRec( style, hash );
-        numitems++;
-        return indexItem( *rr );
+
+        if (numitems == INT_MAX)
+            throw std::length_error(
+                    "LVIndexedRefCache item count overflow");
+        std::unique_ptr<LVRefCacheRec> record(
+                new LVRefCacheRec(style, hash));
+        int n = allocateIndex();
+        record->index = n;
+        LVRefCacheRec *recordView = record.get();
+        record->next = std::move(table[tableIndex]);
+        table[tableIndex] = std::move(record);
+        index[n].item = recordView;
+        index[n].refcount = 1;
+        ++numitems;
+        return n;
     }
 
     // check whether equal object already exists if cache
@@ -323,26 +423,24 @@ public:
     // returns index of item - use it to release reference
     int find(ref_t & style)
     {
+        if (style.isNull())
+            return 0;
         lUInt32 hash = calcHash( style );
-        lUInt32 index = hash & (size - 1);
-        LVRefCacheRec **rr;
-        rr = &table[index];
-        while ( *rr != NULL )
-        {
-            if ( (*rr)->hash==hash && *(*rr)->style.get() == *style.get() )
-            {
-                int n = (*rr)->index;
-                return n;
-            }
-            rr = &(*rr)->next;
+        LVRefCacheRec *record = table[bucketIndex(hash)].get();
+        while (record) {
+            if (record->hash == hash
+                    && *record->style.get() == *style.get())
+                return record->index;
+            record = record->next.get();
         }
         return 0;
     }
 
     /// from index array
     LVIndexedRefCache( LVArray<ref_t> &list )
-    : index(NULL)
-    , indexsize(0)
+    : size(1)
+    , table(1)
+    , index()
     , nextindex(0)
     , freeindex(0)
     , numitems(0)
@@ -350,100 +448,76 @@ public:
         setIndex(list);
     }
 
-    int nearestPowerOf2( int n )
-    {
-        int res;
-        for ( res = 1; res<n; res<<=1 )
-            ;
-        return res;
-    }
-
     /// init from index array
     void setIndex( LVArray<ref_t> &list )
     {
-        clear();
-        size = nearestPowerOf2(list.length()>0 ? list.length() : 32);
-        if ( table )
-            delete[] table;
-        table = new LVRefCacheRec * [ size ];
-        for( int i=0; i<size; i++ )
-            table[i] = NULL;
-        indexsize = list.length();
-        nextindex = indexsize > 0 ? indexsize-1 : 0;
-        if ( indexsize ) {
-            index = cr_realloc( index, indexsize );
-            index[0].item = NULL;
-            index[0].refcount=0;
-            for ( int i=1; i<indexsize; i++ ) {
-                if ( list[i].isNull() ) {
-                    // add free node
-                    index[i].item = NULL;
-                    index[i].refcount = freeindex;
-                    freeindex = i;
-                } else {
-                    // add item
-                    lUInt32 hash = calcHash( list[i] );
-                    lUInt32 hindex = hash & (size - 1);
-                    LVRefCacheRec * rec = new LVRefCacheRec(list[i], hash);
-                    rec->index = i;
-                    rec->next = table[hindex];
-                    table[hindex] = rec;
-                    index[i].item = rec;
-                    index[i].refcount = 1;
-                    numitems++;
-                }
+        LVIndexedRefCache candidate(
+                list.length() > 0 ? list.length() : 32);
+        candidate.index.resize(static_cast<size_t>(list.length()));
+        candidate.nextindex = list.length() > 0 ? list.length() - 1 : 0;
+        for (int i = 1; i < list.length(); ++i) {
+            if (list[i].isNull()) {
+                // add free node
+                candidate.index[i].refcount = candidate.freeindex;
+                candidate.freeindex = i;
+            } else {
+                // add item
+                lUInt32 hash = calcHash(list[i]);
+                const size_t tableIndex = candidate.bucketIndex(hash);
+                std::unique_ptr<LVRefCacheRec> record(
+                        new LVRefCacheRec(list[i], hash));
+                record->index = i;
+                LVRefCacheRec *recordView = record.get();
+                record->next = std::move(candidate.table[tableIndex]);
+                candidate.table[tableIndex] = std::move(record);
+                candidate.index[i].item = recordView;
+                candidate.index[i].refcount = 1;
+                ++candidate.numitems;
             }
         }
+        swap(candidate);
     }
 
-    LVIndexedRefCache( int sz )
-    : index(NULL)
-    , indexsize(0)
+    explicit LVIndexedRefCache(int sz)
+    : size(normalizedBucketCount(sz))
+    , table(static_cast<size_t>(size))
+    , index()
     , nextindex(0)
     , freeindex(0)
     , numitems(0)
     {
-        size = sz;
-        table = new LVRefCacheRec * [ sz ];
-        for( int i=0; i<sz; i++ )
-            table[i] = NULL;
     }
+
+    LVIndexedRefCache(const LVIndexedRefCache &) = delete;
+    LVIndexedRefCache &operator=(const LVIndexedRefCache &) = delete;
+
     void clear( int sz = 0 )
     {
-        if ( sz==-1 )
+        if (sz == -1)
             sz = size;
-        LVRefCacheRec *r, *r2;
-        for ( int i=0; i < size; i++ )
-        {
-            for ( r = table[ i ]; r;  )
-            {
-                r2 = r;
-                r = r->next;
-                delete r2;
+        if (sz) {
+            const int newSize = normalizedBucketCount(sz);
+            if (newSize != size) {
+                std::vector<std::unique_ptr<LVRefCacheRec> > replacement(
+                        static_cast<size_t>(newSize));
+                clearBuckets();
+                table = std::move(replacement);
+                size = newSize;
+            } else {
+                clearBuckets();
             }
-            table[i] = NULL;
+        } else {
+            clearBuckets();
         }
-        if (index) {
-            free( index );
-            index = NULL;
-            indexsize = 0;
-            nextindex = 0;
-            freeindex = 0;
-        }
+        std::vector<LVRefCacheIndexRec>().swap(index);
+        nextindex = 0;
+        freeindex = 0;
         numitems = 0;
-        if ( sz ) {
-            size = sz;
-            if ( table )
-                delete[] table;
-            table = new LVRefCacheRec * [ sz ];
-            for( int i=0; i<sz; i++ )
-                table[i] = NULL;
-        }
     }
+
     ~LVIndexedRefCache()
     {
-        clear();
-        delete[] table;
+        clearBuckets();
     }
 };
 
@@ -456,7 +530,7 @@ private:
         dataT data;
         int lastAccess;
     };
-    Pair * buf;
+    std::vector<Pair> buf;
     int size;
     int orig_size;
     int numitems;
@@ -488,17 +562,20 @@ public:
         return numitems;
     }
     LVCacheMap( int maxSize )
-    : size(maxSize), orig_size(maxSize), numitems(0), lastAccess(1),
+    : buf(static_cast<size_t>(maxSize > 0 ? maxSize : 0)),
+      size(maxSize > 0 ? maxSize : 0),
+      orig_size(maxSize > 0 ? maxSize : 0),
+      numitems(0), lastAccess(1),
       hits(0), misses(0), evictions(0)
     {
-        buf = new Pair[ size ];
         clear();
     }
     void reduceSize(int newSize)
     {
-        if (newSize < orig_size) {
+        const int boundedSize = newSize > 0 ? newSize : 0;
+        if (boundedSize < orig_size) {
             clear();
-            size = newSize;
+            size = boundedSize;
         }
     }
     void restoreSize()
@@ -583,10 +660,7 @@ public:
         misses = 0;
         evictions = 0;
     }
-    ~LVCacheMap()
-    {
-        delete[] buf;
-    }
+    ~LVCacheMap() = default;
 };
 
 #endif // __LV_REF_CACHE_H_INCLUDED__

@@ -15582,7 +15582,7 @@ bool tinyNodeCollection::saveStylesData()
 {
     SerialBuf stylebuf(0, true);
     lUInt32 stHash = _stylesheet.getHash();
-    LVArray<css_style_ref_t> * list = _styles.getIndex();
+    std::unique_ptr<LVArray<css_style_ref_t> > list = _styles.getIndex();
     stylebuf.putMagic(styles_magic);
     stylebuf << stHash;
     stylebuf << (lUInt32)list->length(); // index
@@ -15595,7 +15595,6 @@ bool tinyNodeCollection::saveStylesData()
     }
     stylebuf << (lUInt32)0; // index=0 is end list mark
     stylebuf.putMagic(styles_magic);
-    delete list;
     if ( stylebuf.error() )
         return false;
     CRLog::trace("Writing style data: %d bytes", stylebuf.pos());
@@ -15626,7 +15625,6 @@ bool tinyNodeCollection::loadStylesData()
     // in checkRenderContext() when comparing a combo hash
     // against _hdr.stylesheet_hash fetched from the cache.
 
-    //LVArray<css_style_ref_t> * list = _styles.getIndex();
     stylebuf.checkMagic(styles_magic);
     stylebuf >> stHash;
     // Don't check for this:
@@ -15806,7 +15804,7 @@ bool tinyNodeCollection::updateLoadedStyles( bool enabled )
 {
     int count = ((_elemCount+TNC_PART_LEN-1) >> TNC_PART_SHIFT);
     bool res = true;
-    LVArray<css_style_ref_t> * list = _styles.getIndex();
+    std::unique_ptr<LVArray<css_style_ref_t> > list = _styles.getIndex();
 
     _fontMap.clear(); // style index to font index
 
@@ -15874,7 +15872,6 @@ bool tinyNodeCollection::updateLoadedStyles( bool enabled )
         }
     }
 #endif
-    delete list;
 //    getRootNode()->setFont( _def_font );
 //    getRootNode()->setStyle( _def_style );
     _nodeStyleHash = 0;

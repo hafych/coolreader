@@ -173,6 +173,15 @@ growth, sparse `set()` value-initializes gaps, and erase/reset clear inactive
 slots so reference-counted values are released while retained capacity remains
 reusable.
 
+`LVRefCache` and `LVIndexedRefCache` own bucket roots and collision links
+through vectors of `unique_ptr`. Collision teardown unlinks iteratively, while
+the indexed cache keeps only non-owning node views in vector-backed index
+metadata. Index growth completes before a new node is published, `setIndex()`
+swaps in a complete candidate, invalid or null entries stay outside the cache,
+and `getIndex()` returns explicit `unique_ptr` ownership to DOM serialization
+callers. The adjacent bounded `LVCacheMap` stores its fixed-capacity slots in a
+vector and treats non-positive capacities as an empty reusable cache.
+
 `SerialBuf` owns writable fixed-size and auto-growing storage through
 `std::vector`; its raw `_buf` member is only a compatibility view. The
 deserialization constructor remains explicitly borrowed, while the legacy

@@ -30,6 +30,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lstridmap.h" NAME_ID_MAP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lstridmap.cpp" NAME_ID_MAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvhashtable.h" HASH_TABLE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvarray.h" VALUE_ARRAY_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvrefcache.h" REF_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
@@ -1433,6 +1434,88 @@ forbid_source_text(
   "${VALUE_ARRAY_HEADER}"
   "delete [] _array"
   "value-array teardown must not use manual delete[]"
+)
+
+# --- reference-cache bucket, index and export ownership ---
+require_source_text(
+  "${REF_CACHE_HEADER}"
+  "std::vector<std::unique_ptr<LVRefCacheRec> > table"
+  "reference-cache buckets must use RAII ownership"
+)
+require_source_text(
+  "${REF_CACHE_HEADER}"
+  "std::unique_ptr<LVRefCacheRec> next"
+  "reference-cache collision links must use exclusive ownership"
+)
+require_source_text(
+  "${REF_CACHE_HEADER}"
+  "std::vector<LVRefCacheIndexRec> index"
+  "indexed reference-cache metadata must use container storage"
+)
+require_source_text(
+  "${REF_CACHE_HEADER}"
+  "LVIndexedRefCache candidate("
+  "reference-cache index restoration must build a scoped candidate"
+)
+require_source_text(
+  "${REF_CACHE_HEADER}"
+  "std::unique_ptr<LVArray<ref_t> > getIndex() const"
+  "reference-cache index export must return explicit ownership"
+)
+require_source_text(
+  "${REF_CACHE_HEADER}"
+  "void clearBuckets()"
+  "reference-cache collision teardown must remain iterative"
+)
+require_source_text(
+  "${REF_CACHE_HEADER}"
+  "std::vector<Pair> buf"
+  "bounded cache maps must use container-backed storage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<LVArray<css_style_ref_t> > list = _styles.getIndex()"
+  "DOM style-index exports must retain scoped ownership"
+)
+forbid_source_text(
+  "${REF_CACHE_HEADER}"
+  "LVRefCacheRec ** table"
+  "reference caches must not own raw bucket arrays"
+)
+forbid_source_text(
+  "${REF_CACHE_HEADER}"
+  "LVRefCacheRec * next"
+  "reference-cache nodes must not own raw collision links"
+)
+forbid_source_text(
+  "${REF_CACHE_HEADER}"
+  "cr_realloc( index"
+  "reference-cache index growth must not use realloc"
+)
+forbid_source_text(
+  "${REF_CACHE_HEADER}"
+  "delete[] table"
+  "reference-cache bucket teardown must not use manual delete[]"
+)
+forbid_source_text(
+  "${REF_CACHE_HEADER}"
+  "LVArray<ref_t> * getIndex()"
+  "reference-cache index export must not return implicit raw ownership"
+)
+forbid_source_text(
+  "${REF_CACHE_HEADER}"
+  "Pair * buf"
+  "bounded cache maps must not own a raw backing array"
+)
+forbid_source_text(
+  "${REF_CACHE_HEADER}"
+  "delete[] buf"
+  "bounded cache-map teardown must not use manual delete[]"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "delete list;"
+  "DOM style-index export cleanup must remain automatic"
 )
 
 require_source_text(

@@ -226,6 +226,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   `unique_ptr<T[]>`; reserve/copy failures preserve committed contents,
   self-appends remain valid across growth, sparse slots are initialized and
   erased reference values are released without discarding reserved capacity.
+- Native reference caches now own bucket roots and collision chains through
+  vectors of `unique_ptr`, keep indexed metadata in vector storage and export
+  serialized indexes with explicit ownership. Index restoration is
+  rollback-safe, long collision chains are released iteratively, and bounded
+  cache-map slots use vector-backed storage.
 - The RTF importer now owns its text accumulator through RAII, flushes
   recoverable truncated input before teardown and emits no document callbacks
   after `OnStop()`. Nested destinations now transfer `unique_ptr` ownership
