@@ -53,6 +53,7 @@ public:
 class CRExecutor {
 public:
     virtual ~CRExecutor() {}
+    /// Transfers task ownership to the executor, including rejected tasks.
     virtual void execute(CRRunnable * task) = 0;
 };
 

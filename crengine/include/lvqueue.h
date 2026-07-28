@@ -21,152 +21,92 @@
 #ifndef LVQUEUE_H_INCLUDED
 #define LVQUEUE_H_INCLUDED
 
+#include <climits>
+#include <list>
+#include <stdexcept>
+#include <utility>
+
 template < typename T >
 class LVQueue {
-    friend struct Iterator;
-    struct Item {
-        T value;
-        Item * next;
-        Item * prev;
-        Item(T & v) : value(v), next(NULL), prev(NULL) {}
-    };
-    Item * head;
-    Item * tail;
-    int count;
+    typedef std::list<T> Storage;
+    Storage items;
 
-
-    Item * remove(Item * p) {
-        if (!p)
-            return NULL;
-        if (!p->prev)
-            head = p->next;
-        else
-            p->prev->next = p->next;
-        if (!p->next)
-            tail = p->prev;
-        else
-            p->next->prev = p->prev;
-        p->next = NULL;
-        p->prev = NULL;
-        count--;
-        if (count == 0) {
-        	head = tail = NULL;
-        }
-
-        return p;
+    void ensureRoom() const {
+        if (items.size() >= static_cast<size_t>(INT_MAX))
+            throw std::length_error("LVQueue size overflow");
     }
-    void moveToHead(Item * item) {
-        Item * p = remove(item);
-        if (head) {
-            head->prev = p;
-            p->next = head;
-            head = p;
-        } else {
-            head = tail = p;
-        }
-        count++;
-    }
+
 public:
     struct Iterator {
     private:
         LVQueue * queue;
-        Item * currentItem;
+        typename Storage::iterator current;
+        bool valid;
     public:
-        Iterator(const Iterator & v) {
-            queue = v.queue;
-            currentItem = v.currentItem;
+        Iterator(const Iterator &) = default;
+        explicit Iterator(LVQueue * _queue)
+            : queue(_queue), current(_queue->items.end()), valid(false) {
         }
-        Iterator(LVQueue * _queue) : queue(_queue), currentItem(NULL) {
+        T get() { return valid ? *current : T(); }
+        void set(T value) {
+            if (valid)
+                *current = std::move(value);
         }
-        T get() { return currentItem ? currentItem->value : T(); }
-        void set(T value) { if (currentItem) currentItem->value = value; }
         bool next() {
-            if (!currentItem) {
-                // first time
-                currentItem = queue->head;
-            } else {
-                // continue
-                currentItem = currentItem->next;
-            }
-            return currentItem != NULL;
+            if (!valid)
+                current = queue->items.begin();
+            else
+                ++current;
+            valid = current != queue->items.end();
+            return valid;
         }
         T remove() {
-            if (!currentItem)
+            if (!valid)
                 return T();
-            Item * next = currentItem->next;
-            Item * p = queue->remove(currentItem);
-            currentItem = next;
-            T res = p->value;
-            delete p;
+            T res = std::move(*current);
+            current = queue->items.erase(current);
+            valid = current != queue->items.end();
             return res;
         }
         void moveToHead() {
-            if (currentItem)
-                queue->moveToHead(currentItem);
+            if (valid && current != queue->items.begin())
+                queue->items.splice(queue->items.begin(),
+                        queue->items, current);
         }
     };
 
-public:
     Iterator iterator() { return Iterator(this); }
-    LVQueue() : head(NULL), tail(NULL), count(0) {}
-    ~LVQueue() { clear(); }
-//    T & operator [] (int index) {
-//        Item * p = head;
-//        for (int i = 0; i < index; i++) {
-//            if (!p)
-//                return
-//        }
-//    }
+    LVQueue() = default;
+    LVQueue(const LVQueue &) = delete;
+    LVQueue & operator=(const LVQueue &) = delete;
+    LVQueue(LVQueue &&) = default;
+    LVQueue & operator=(LVQueue &&) = default;
+    ~LVQueue() = default;
 
-    int length() { return count; }
+    int length() const { return static_cast<int>(items.size()); }
     void pushBack(T item) {
-        Item * p = new Item(item);
-        if (tail) {
-            tail->next = p;
-            p->prev = tail;
-            tail = p;
-        } else {
-            head = tail = p;
-        }
-        count++;
+        ensureRoom();
+        items.push_back(std::move(item));
     }
     void pushFront(T item) {
-        Item * p = new Item(item);
-        if (head) {
-            head->prev = p;
-            p->next = head;
-            head = p;
-        } else {
-            head = tail = p;
-        }
-        count++;
+        ensureRoom();
+        items.push_front(std::move(item));
     }
     T popFront() {
-        if (!head)
+        if (items.empty())
             return T();
-        Item * p = remove(head);
-        T res = p->value;
-        delete p;
+        T res = std::move(items.front());
+        items.pop_front();
         return res;
     }
     T popBack() {
-        if (!tail)
+        if (items.empty())
             return T();
-        Item * p = remove(tail);
-        T res = p->value;
-        delete p;
+        T res = std::move(items.back());
+        items.pop_back();
         return res;
     }
-    void clear() {
-        while (head) {
-            Item * p = head;
-            head = p->next;
-            delete p;
-        }
-        head = NULL;
-        tail = NULL;
-        count = 0;
-    }
+    void clear() { items.clear(); }
 };
 
 

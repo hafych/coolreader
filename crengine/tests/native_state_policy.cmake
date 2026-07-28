@@ -61,9 +61,11 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvref.h" REF_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvptrvec.h" PTR_VECTOR_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvpagesplitter.h" PAGE_SPLITTER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvrefcache.h" REF_CACHE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvqueue.h" QUEUE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/wordfmt.cpp" WORD_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/pdbfmt.cpp" PDB_FORMAT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/pdbfmt_internal.h" PDB_FORMAT_INTERNAL_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/crconcurrent.h" CONCURRENCY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crconcurrent.cpp" CONCURRENCY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crlocks.h" LOCKS_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvxml/lvtextparser.cpp" TEXT_PARSER_SOURCE)
@@ -103,6 +105,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvcolordrawbuf.h" COLOR_DRAW_BUFFER_H
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvgraydrawbuf.cpp" GRAY_DRAW_BUFFER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvgraydrawbuf.h" GRAY_DRAW_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/core_safety_test.cpp" CORE_SAFETY_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/tests/thread_safety_test.cpp" THREAD_SAFETY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.cpp" ZIP_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.h" ZIP_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREAM_SOURCE)
@@ -857,6 +860,148 @@ forbid_source_text(
   "${CONCURRENCY_SOURCE}"
   "if (!_refMutex)"
   "engine mutex setup must not use partial raw-pointer initialization"
+)
+
+# --- generic queue nodes and thread-executor task lifecycle ---
+require_source_text(
+  "${QUEUE_HEADER}"
+  "typedef std::list<T> Storage"
+  "generic queue nodes must remain standard-container owned"
+)
+require_source_text(
+  "${QUEUE_HEADER}"
+  "LVQueue(const LVQueue &) = delete"
+  "generic queue ownership must not be duplicated"
+)
+require_source_text(
+  "${QUEUE_HEADER}"
+  "items.push_back(std::move(item))"
+  "generic queue insertion must support move-only ownership"
+)
+require_source_text(
+  "${QUEUE_HEADER}"
+  "T res = std::move(items.front())"
+  "generic queue removal must transfer move-only values"
+)
+forbid_source_text(
+  "${QUEUE_HEADER}"
+  "struct Item"
+  "generic queue nodes must not regress to a custom raw graph"
+)
+forbid_source_text(
+  "${QUEUE_HEADER}"
+  "Item * head"
+  "generic queue head ownership must not use a raw pointer"
+)
+forbid_source_text(
+  "${QUEUE_HEADER}"
+  "new Item"
+  "generic queue insertion must not manually allocate nodes"
+)
+forbid_source_text(
+  "${QUEUE_HEADER}"
+  "delete p"
+  "generic queue teardown must remain automatic"
+)
+require_source_text(
+  "${CONCURRENCY_HEADER}"
+  "std::atomic<bool> _stopped"
+  "thread-executor stop state must remain race-free"
+)
+require_source_text(
+  "${CONCURRENCY_HEADER}"
+  "std::unique_ptr<CRMonitor> _monitor"
+  "thread-executor monitor lifetime must remain explicit"
+)
+require_source_text(
+  "${CONCURRENCY_HEADER}"
+  "std::unique_ptr<CRThread> _thread"
+  "thread-executor worker lifetime must remain explicit"
+)
+require_source_text(
+  "${CONCURRENCY_HEADER}"
+  "LVQueue<std::unique_ptr<CRRunnable> > _queue"
+  "thread-executor queued tasks must remain uniquely owned"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "std::unique_ptr<CRRunnable> ownedTask(task)"
+  "thread-executor raw API boundary must adopt tasks immediately"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "_queue.pushBack(std::move(ownedTask))"
+  "thread-executor enqueue must transfer task ownership"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "std::unique_ptr<CRRunnable> task"
+  "thread-executor running tasks must remain scope-owned"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "_queue.clear()"
+  "thread-executor stop must release queued tasks automatically"
+)
+require_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "_stopped.exchange(true, std::memory_order_acq_rel)"
+  "thread-executor stop must remain idempotent"
+)
+require_source_text(
+  "${LOCKS_HEADER}"
+  "Transfers task ownership to the executor, including rejected tasks."
+  "executor raw compatibility API must document ownership transfer"
+)
+forbid_source_text(
+  "${CONCURRENCY_HEADER}"
+  "volatile bool _stopped"
+  "thread-executor stop state must not use volatile synchronization"
+)
+forbid_source_text(
+  "${CONCURRENCY_HEADER}"
+  "CRMonitorRef _monitor"
+  "thread-executor monitor must not use the legacy auto pointer"
+)
+forbid_source_text(
+  "${CONCURRENCY_HEADER}"
+  "CRThreadRef _thread"
+  "thread-executor worker must not use the legacy auto pointer"
+)
+forbid_source_text(
+  "${CONCURRENCY_HEADER}"
+  "LVQueue<CRRunnable *> _queue"
+  "thread-executor queue must not contain unowned task pointers"
+)
+forbid_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "delete task"
+  "thread-executor running task teardown must remain automatic"
+)
+forbid_source_text(
+  "${CONCURRENCY_SOURCE}"
+  "delete p"
+  "thread-executor queued task teardown must remain automatic"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "static int testQueueOwnership()"
+  "generic queue ownership must retain lifecycle regression coverage"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "static int testThreadExecutorOwnership()"
+  "thread-executor ownership must retain lifecycle regression coverage"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "thread executor stop retained its queued task"
+  "thread-executor regression must retain queued-stop cleanup coverage"
+)
+require_source_text(
+  "${THREAD_SAFETY_SOURCE}"
+  "thread executor task ownership is inconsistent"
+  "thread-executor regression must retain rejected-task cleanup coverage"
 )
 
 # --- parser format detection: operation-scoped decoded buffers ---

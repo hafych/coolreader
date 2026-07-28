@@ -498,3 +498,14 @@ successful item and the sentinel candidate that ends each list have automatic
 teardown. Regression coverage verifies parsed menu/icon/button publication,
 depth-rejected DOM cleanup, a clean repeated load after rejection, and the
 directory plus skin-list factory boundaries.
+
+`LVQueue` delegates node ownership to `std::list`, supports move-only values,
+and cannot be copied, so its linked storage can no longer be shallow-copied or
+manually torn down. `CRThreadExecutor` owns its monitor and worker with
+`unique_ptr`, uses an atomic stop flag, and queues `unique_ptr<CRRunnable>`
+values. The legacy raw `execute()` boundary transfers ownership immediately:
+accepted tasks move through queue and running scopes, while stopped/rejected
+and queued-at-stop tasks are destroyed automatically; stop/join is idempotent.
+The thread regression uses a real worker and condition-variable monitor to
+verify running-task, queued-stop, repeated-stop, post-stop and monitor/thread
+teardown independently.

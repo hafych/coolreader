@@ -21,6 +21,9 @@
 #ifndef CRCONCURRENT_H
 #define CRCONCURRENT_H
 
+#include <atomic>
+#include <memory>
+
 #include "crlocks.h"
 
 
@@ -55,10 +58,10 @@ extern CRConcurrencyProvider * concurrencyProvider;
 
 
 class CRThreadExecutor : public CRRunnable, public CRExecutor {
-    volatile bool _stopped;
-    CRMonitorRef _monitor;
-    CRThreadRef _thread;
-    LVQueue<CRRunnable *> _queue;
+    std::atomic<bool> _stopped;
+    std::unique_ptr<CRMonitor> _monitor;
+    std::unique_ptr<CRThread> _thread;
+    LVQueue<std::unique_ptr<CRRunnable> > _queue;
 public:
     CRThreadExecutor();
     virtual ~CRThreadExecutor();

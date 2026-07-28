@@ -202,61 +202,62 @@ void CRShutdownEngineConcurrency()
 }
 
 CRThreadExecutor::CRThreadExecutor() : _stopped(false) {
-    _monitor = concurrencyProvider->createMonitor();
-    _thread = concurrencyProvider->createThread(this);
+    _monitor.reset(concurrencyProvider->createMonitor());
+    _thread.reset(concurrencyProvider->createThread(this));
     _thread->start();
 }
 
 CRThreadExecutor::~CRThreadExecutor() {
-    if (!_stopped)
+    if (!_stopped.load(std::memory_order_acquire))
         stop();
 }
 
 void CRThreadExecutor::run() {
     CRLog::trace("Starting thread executor");
     for (;;) {
-        if (_stopped)
+        if (_stopped.load(std::memory_order_acquire))
             break;
-        CRRunnable * task = NULL;
+        std::unique_ptr<CRRunnable> task;
         {
-            CRGuard guard(_monitor);
+            CRGuard guard(_monitor.get());
             CR_UNUSED(guard);
             if (_queue.length() == 0)
                 _monitor->wait();
-            if (_stopped)
+            if (_stopped.load(std::memory_order_acquire))
                 break;
             task = _queue.popFront();
         }
         // process next event
         if (task) {
             task->run();
-            delete task;
         }
     }
     CRLog::trace("Exiting thread executor");
 }
 
 void CRThreadExecutor::execute(CRRunnable * task) {
-    CRGuard guard(_monitor);
+    std::unique_ptr<CRRunnable> ownedTask(task);
+    CRGuard guard(_monitor.get());
     CR_UNUSED(guard);
-    if (_stopped) {
+    if (_stopped.load(std::memory_order_acquire)) {
         CRLog::error("Ignoring new task since executor is stopped");
         return;
     }
-    _queue.pushBack(task);
+    _queue.pushBack(std::move(ownedTask));
     _monitor->notify();
 }
 
 void CRThreadExecutor::stop() {
+    bool shouldJoin = false;
     {
-        CRGuard guard(_monitor);
+        CRGuard guard(_monitor.get());
         CR_UNUSED(guard);
-        _stopped = true;
-        while (_queue.length() > 0) {
-            CRRunnable * p = _queue.popFront();
-            delete p;
+        if (!_stopped.exchange(true, std::memory_order_acq_rel)) {
+            _queue.clear();
+            _monitor->notify();
+            shouldJoin = true;
         }
-        _monitor->notify();
     }
-    _thread->join();
+    if (shouldJoin)
+        _thread->join();
 }

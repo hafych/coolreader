@@ -6,12 +6,14 @@
 #include "wordfmt.h"
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdio>
 #include <memory>
 #include <mutex>
 #include <sched.h>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 static const char INTERNED_TEXT_8[] = "thread-safe-interning-8";
@@ -92,6 +94,76 @@ static int testMutexAcrossThreads() {
     return 0;
 }
 
+class QueueTrackedValue {
+private:
+    std::atomic<int> &_destroyed;
+
+public:
+    int id;
+
+    QueueTrackedValue(int value, std::atomic<int> &destroyed)
+        : _destroyed(destroyed)
+        , id(value)
+    {
+    }
+
+    ~QueueTrackedValue()
+    {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
+static int testQueueOwnership()
+{
+    static_assert(!std::is_copy_constructible<LVQueue<int> >::value,
+            "LVQueue must not duplicate node ownership");
+
+    LVQueue<int> values;
+    values.pushBack(1);
+    values.pushBack(2);
+    values.pushFront(0);
+    if (values.length() != 3)
+        return fail("LVQueue did not retain all inserted values");
+    {
+        LVQueue<int>::Iterator iterator = values.iterator();
+        if (!iterator.next() || iterator.get() != 0
+                || !iterator.next() || iterator.get() != 1)
+            return fail("LVQueue iterator order is inconsistent");
+        iterator.moveToHead();
+    }
+    if (values.popFront() != 1)
+        return fail("LVQueue move-to-head did not preserve its value");
+    {
+        LVQueue<int>::Iterator iterator = values.iterator();
+        if (!iterator.next() || iterator.remove() != 0
+                || iterator.get() != 2)
+            return fail("LVQueue iterator removal lost its successor");
+    }
+    if (values.popBack() != 2 || values.length() != 0)
+        return fail("LVQueue pop operations retained stale nodes");
+
+    std::atomic<int> destroyed(0);
+    {
+        LVQueue<std::unique_ptr<QueueTrackedValue> > owned;
+        owned.pushBack(std::unique_ptr<QueueTrackedValue>(
+                new QueueTrackedValue(7, destroyed)));
+        owned.pushFront(std::unique_ptr<QueueTrackedValue>(
+                new QueueTrackedValue(3, destroyed)));
+        std::unique_ptr<QueueTrackedValue> first = owned.popFront();
+        if (!first || first->id != 3 || owned.length() != 1)
+            return fail("LVQueue did not move its owned front value");
+        first.reset();
+        if (destroyed.load(std::memory_order_relaxed) != 1)
+            return fail("LVQueue moved value did not keep singular ownership");
+        owned.clear();
+        if (destroyed.load(std::memory_order_relaxed) != 2)
+            return fail("LVQueue clear did not release owned values");
+    }
+    if (destroyed.load(std::memory_order_relaxed) != 2)
+        return fail("LVQueue destructor duplicated owned-value teardown");
+    return 0;
+}
+
 class CountingConcurrencyMutex : public CRMutex {
 private:
     std::recursive_mutex m_mutex;
@@ -162,6 +234,250 @@ public:
     {
     }
 };
+
+class ExecutorTestMutex : public CRMutex {
+public:
+    void acquire() override
+    {
+    }
+
+    void release() override
+    {
+    }
+};
+
+class ExecutorTestMonitor : public CRMonitor {
+private:
+    std::atomic<int> &_destroyed;
+    std::recursive_mutex _mutex;
+    std::condition_variable_any _condition;
+
+public:
+    explicit ExecutorTestMonitor(std::atomic<int> &destroyed)
+        : _destroyed(destroyed)
+    {
+    }
+
+    ~ExecutorTestMonitor() override
+    {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void acquire() override
+    {
+        _mutex.lock();
+    }
+
+    void release() override
+    {
+        _mutex.unlock();
+    }
+
+    void wait() override
+    {
+        std::unique_lock<std::recursive_mutex> lock(
+                _mutex, std::adopt_lock);
+        _condition.wait(lock);
+        lock.release();
+    }
+
+    void notify() override
+    {
+        _condition.notify_one();
+    }
+
+    void notifyAll() override
+    {
+        _condition.notify_all();
+    }
+};
+
+class ExecutorTestThread : public CRThread {
+private:
+    std::atomic<int> &_destroyed;
+    CRRunnable *_task;
+    std::thread _worker;
+
+public:
+    ExecutorTestThread(CRRunnable *task, std::atomic<int> &destroyed)
+        : _destroyed(destroyed)
+        , _task(task)
+    {
+    }
+
+    ~ExecutorTestThread() override
+    {
+        if (_worker.joinable())
+            _worker.join();
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void start() override
+    {
+        _worker = std::thread([this]() {
+            _task->run();
+        });
+    }
+
+    void join() override
+    {
+        if (_worker.joinable())
+            _worker.join();
+    }
+};
+
+class ExecutorTestProvider : public CRConcurrencyProvider {
+private:
+    std::atomic<int> &_monitorDestroyed;
+    std::atomic<int> &_threadDestroyed;
+
+public:
+    ExecutorTestProvider(std::atomic<int> &monitorDestroyed,
+                         std::atomic<int> &threadDestroyed)
+        : _monitorDestroyed(monitorDestroyed)
+        , _threadDestroyed(threadDestroyed)
+    {
+    }
+
+    CRMutex *createMutex() override
+    {
+        return new ExecutorTestMutex();
+    }
+
+    CRMonitor *createMonitor() override
+    {
+        return new ExecutorTestMonitor(_monitorDestroyed);
+    }
+
+    CRThread *createThread(CRRunnable *task) override
+    {
+        return new ExecutorTestThread(task, _threadDestroyed);
+    }
+
+    void executeGui(CRRunnable *task) override
+    {
+        delete task;
+    }
+
+    void executeGui(CRRunnable *task, int) override
+    {
+        delete task;
+    }
+
+    void sleepMs(int) override
+    {
+    }
+};
+
+class ExecutorTestTask : public CRRunnable {
+private:
+    std::atomic<int> &_ran;
+    std::atomic<int> &_destroyed;
+
+public:
+    ExecutorTestTask(std::atomic<int> &ran,
+                     std::atomic<int> &destroyed)
+        : _ran(ran)
+        , _destroyed(destroyed)
+    {
+    }
+
+    ~ExecutorTestTask() override
+    {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void run() override
+    {
+        _ran.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
+class ExecutorBlockingTask : public CRRunnable {
+private:
+    std::atomic<bool> &_started;
+    std::atomic<bool> &_release;
+    std::atomic<int> &_destroyed;
+
+public:
+    ExecutorBlockingTask(std::atomic<bool> &started,
+                         std::atomic<bool> &release,
+                         std::atomic<int> &destroyed)
+        : _started(started)
+        , _release(release)
+        , _destroyed(destroyed)
+    {
+    }
+
+    ~ExecutorBlockingTask() override
+    {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void run() override
+    {
+        _started.store(true, std::memory_order_release);
+        while (!_release.load(std::memory_order_acquire))
+            std::this_thread::yield();
+    }
+};
+
+static int testThreadExecutorOwnership()
+{
+    std::atomic<int> monitorDestroyed(0);
+    std::atomic<int> threadDestroyed(0);
+    std::atomic<bool> blockingStarted(false);
+    std::atomic<bool> releaseBlocking(false);
+    std::atomic<int> blockingDestroyed(0);
+    std::atomic<int> queuedRan(0);
+    std::atomic<int> queuedDestroyed(0);
+    ExecutorTestProvider provider(monitorDestroyed, threadDestroyed);
+    CRConcurrencyProvider *savedProvider = concurrencyProvider;
+    concurrencyProvider = &provider;
+
+    const char *error = NULL;
+    {
+        CRThreadExecutor executor;
+        executor.execute(new ExecutorBlockingTask(
+                blockingStarted, releaseBlocking, blockingDestroyed));
+        for (int spin = 0; spin < 100000
+                && !blockingStarted.load(std::memory_order_acquire); ++spin)
+            std::this_thread::yield();
+        if (!blockingStarted.load(std::memory_order_acquire)) {
+            error = "thread executor did not start its accepted task";
+            releaseBlocking.store(true, std::memory_order_release);
+            executor.stop();
+        } else {
+            executor.execute(new ExecutorTestTask(
+                    queuedRan, queuedDestroyed));
+            std::thread stopper([&executor]() {
+                executor.stop();
+            });
+            for (int spin = 0; spin < 100000
+                    && queuedDestroyed.load(std::memory_order_acquire) == 0;
+                    ++spin)
+                std::this_thread::yield();
+            if (queuedDestroyed.load(std::memory_order_acquire) != 1)
+                error = "thread executor stop retained its queued task";
+            releaseBlocking.store(true, std::memory_order_release);
+            stopper.join();
+            executor.stop();
+            executor.execute(new ExecutorTestTask(
+                    queuedRan, queuedDestroyed));
+            if (blockingDestroyed.load(std::memory_order_relaxed) != 1
+                    || queuedRan.load(std::memory_order_relaxed) != 0
+                    || queuedDestroyed.load(std::memory_order_relaxed) != 2)
+                error = "thread executor task ownership is inconsistent";
+        }
+    }
+    concurrencyProvider = savedProvider;
+    if (error)
+        return fail(error);
+    if (monitorDestroyed.load(std::memory_order_relaxed) != 1
+            || threadDestroyed.load(std::memory_order_relaxed) != 1)
+        return fail("thread executor did not release monitor/thread owners");
+    return 0;
+}
 
 static void resetConcurrencyMutexCounters()
 {
@@ -466,6 +782,10 @@ int main() {
     if (testThreadCompletion() != 0)
         return 1;
     if (testMutexAcrossThreads() != 0)
+        return 1;
+    if (testQueueOwnership() != 0)
+        return 1;
+    if (testThreadExecutorOwnership() != 0)
         return 1;
     if (testEngineConcurrencyLifecycle() != 0)
         return 1;
