@@ -37,6 +37,7 @@
 #include "../src/lvstream/lvfilestream.h"
 #include "../src/lvstream/lvfilemappedstream.h"
 #include "../src/lvstream/lvmemorystream.h"
+#include "../src/lvtextfm_internal.h"
 #include "../src/lvtinydom_internal.h"
 #include "../src/pdbfmt_internal.h"
 #include "../src/wolutil_internal.h"
@@ -1759,6 +1760,12 @@ static int testDomNodePartOwnership() {
 static int testWolBufferOwnership() {
     if (!LVRunWolBufferOwnershipRegression())
         return fail("WOL buffer ownership regression failed");
+    return 0;
+}
+
+static int testFormatterWorkspaceOwnership() {
+    if (!LVRunFormatterWorkspaceOwnershipRegression())
+        return fail("formatter workspace ownership regression failed");
     return 0;
 }
 
@@ -4657,6 +4664,8 @@ int main() {
     if (testDomNodePartOwnership() != 0)
         return 1;
     if (testWolBufferOwnership() != 0)
+        return 1;
+    if (testFormatterWorkspaceOwnership() != 0)
         return 1;
     if (testRtfTextBufferOwnership() != 0)
         return 1;

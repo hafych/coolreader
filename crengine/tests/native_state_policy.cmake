@@ -3,6 +3,7 @@ if(NOT DEFINED SOURCE_ROOT)
 endif()
 
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm_internal.h" FORMATTER_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvrend.cpp" RENDER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
@@ -134,6 +135,76 @@ require_source_text(
   "${FORMATTER_SOURCE}"
   "static thread_local lChar32 m_static_text"
   "formatter scratch text must be isolated per thread"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "BufferStorageStaticBorrowed"
+  "formatter static scratch storage must use an explicit borrowed state"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "std::vector<lChar32> m_ownedText"
+  "formatter dynamic scratch text must use scoped storage"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "~LVFormatter()"
+  "formatter teardown must release its workspace on every exit path"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "releaseWorkspace();"
+  "formatter teardown must release its workspace on every exit path"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "LVFormatter(const LVFormatter &) = delete"
+  "formatter workspace views must not be shallow-copied"
+)
+require_source_text(
+  "${FORMATTER_INTERNAL_HEADER}"
+  "bool LVRunFormatterWorkspaceOwnershipRegression()"
+  "formatter workspace ownership must retain native regression coverage"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "m_text = cr_realloc"
+  "formatter scratch text must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "m_flags = cr_realloc"
+  "formatter scratch flags must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "m_srcs = cr_realloc"
+  "formatter scratch source views must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "m_charindex = cr_realloc"
+  "formatter scratch indexes must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "m_widths = cr_realloc"
+  "formatter scratch widths must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "m_bidi_ctypes = cr_realloc"
+  "formatter bidi scratch types must not regress to manual reallocation"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "free( m_text )"
+  "formatter scratch teardown must remain automatic"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "free( m_bidi_ctypes )"
+  "formatter bidi scratch teardown must remain automatic"
 )
 require_source_text(
   "${RENDER_SOURCE}"

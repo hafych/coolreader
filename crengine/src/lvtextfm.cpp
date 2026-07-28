@@ -46,10 +46,14 @@
 #include "../include/fb2def.h"
 
 #ifdef __cplusplus
+#include <limits>
 #include <mutex>
+#include <stdexcept>
+#include <vector>
 #include "../include/lvtinydom.h"
 #include "../include/lvrend.h"
 #include "../include/textlang.h"
+#include "lvtextfm_internal.h"
 #endif
 
 #if USE_HARFBUZZ==1
@@ -394,18 +398,32 @@ void LFormattedText::AddSourceObject(
     //   width) and can better apply values in %
 }
 
+static const int FORMATTER_STATIC_BUFS_SIZE = 8192;
+static const int FORMATTER_ITEMS_RESERVED = 16;
+
 class LVFormatter {
 public:
+    enum BufferStorage {
+        BufferStorageEmpty,
+        BufferStorageStaticBorrowed,
+        BufferStorageDynamicOwned
+    };
+
     //LVArray<lUInt16>  widths_buf;
     //LVArray<lUInt8>   flags_buf;
     formatted_text_fragment_t * m_pbuffer;
     int       m_length;
     int       m_size;
-    bool      m_staticBufs;
+    BufferStorage m_bufferStorage;
     static thread_local bool m_staticBufs_inUse;
     #if (USE_LIBUNIBREAK==1)
     static std::once_flag m_libunibreak_init_once;
     #endif
+    std::vector<lChar32> m_ownedText;
+    std::vector<lUInt16> m_ownedFlags;
+    std::vector<src_text_fragment_t *> m_ownedSources;
+    std::vector<lUInt16> m_ownedCharIndexes;
+    std::vector<int> m_ownedWidths;
     lChar32 * m_text;
     lUInt16 * m_flags;
     src_text_fragment_t * * m_srcs;
@@ -428,6 +446,9 @@ public:
     int  m_specified_para_dir;
     #if (USE_FRIBIDI==1)
         // Bidi/RTL support
+        std::vector<FriBidiCharType> m_ownedBidiCTypes;
+        std::vector<FriBidiBracketType> m_ownedBidiBTypes;
+        std::vector<FriBidiLevel> m_ownedBidiLevels;
         FriBidiCharType *    m_bidi_ctypes;
         FriBidiBracketType * m_bidi_btypes;
         FriBidiLevel *       m_bidi_levels;
@@ -448,7 +469,10 @@ public:
 #define INLINEBOX_CHAR_INDEX  ((lUInt16)0xFFFD)
 
     LVFormatter(formatted_text_fragment_t * pbuffer)
-    : m_pbuffer(pbuffer), m_length(0), m_size(0), m_staticBufs(true), m_y(0)
+    : m_pbuffer(pbuffer), m_length(0), m_size(0),
+      m_bufferStorage(BufferStorageEmpty),
+      m_text(NULL), m_flags(NULL), m_srcs(NULL), m_charindex(NULL),
+      m_widths(NULL), m_y(0)
     {
         #if (USE_LIBUNIBREAK==1)
         std::call_once(m_libunibreak_init_once, []() {
@@ -456,13 +480,6 @@ public:
             init_linebreak();
         });
         #endif
-        if (m_staticBufs_inUse)
-            m_staticBufs = false;
-        m_text = NULL;
-        m_flags = NULL;
-        m_srcs = NULL;
-        m_charindex = NULL;
-        m_widths = NULL;
         m_has_images = false,
         m_max_img_height = -1;
         m_has_float_to_position = false;
@@ -482,7 +499,13 @@ public:
 
     ~LVFormatter()
     {
+        releaseWorkspace();
     }
+
+    LVFormatter(const LVFormatter &) = delete;
+    LVFormatter & operator=(const LVFormatter &) = delete;
+    LVFormatter(LVFormatter &&) = delete;
+    LVFormatter & operator=(LVFormatter &&) = delete;
 
     // Embedded floats positioning helpers.
     // Returns y of the bottom of the lowest float
@@ -893,6 +916,137 @@ public:
         usable_right_overflow = usable_right_overflow * USABLE_OVERFLOW_USABLE_RATIO;
     }
 
+    void clearWorkspaceViews()
+    {
+        m_text = NULL;
+        m_flags = NULL;
+        m_srcs = NULL;
+        m_charindex = NULL;
+        m_widths = NULL;
+        #if (USE_FRIBIDI==1)
+            m_bidi_ctypes = NULL;
+            m_bidi_btypes = NULL;
+            m_bidi_levels = NULL;
+        #endif
+    }
+
+    void releaseWorkspace()
+    {
+        if (m_bufferStorage == BufferStorageStaticBorrowed)
+            m_staticBufs_inUse = false;
+        m_bufferStorage = BufferStorageEmpty;
+        clearWorkspaceViews();
+    }
+
+    void allocateWorkspace( int length )
+    {
+        if (length < 0
+                || length > std::numeric_limits<int>::max()
+                        - FORMATTER_ITEMS_RESERVED)
+            throw std::length_error("formatter workspace is too large");
+
+        m_length = length;
+        const int requiredSize = m_length + 1;
+        const bool ownsStatic =
+                m_bufferStorage == BufferStorageStaticBorrowed;
+        const bool needsDynamic =
+                m_bufferStorage == BufferStorageDynamicOwned
+                || requiredSize > FORMATTER_STATIC_BUFS_SIZE
+                || (!ownsStatic && m_staticBufs_inUse);
+
+        if (needsDynamic) {
+            if (requiredSize > m_size) {
+                const int candidateSize =
+                        m_length + FORMATTER_ITEMS_RESERVED;
+                std::vector<lChar32> candidateText(candidateSize);
+                std::vector<lUInt16> candidateFlags(candidateSize);
+                std::vector<src_text_fragment_t *>
+                        candidateSources(candidateSize);
+                std::vector<lUInt16>
+                        candidateCharIndexes(candidateSize);
+                std::vector<int> candidateWidths(candidateSize);
+                #if (USE_FRIBIDI==1)
+                    std::vector<FriBidiCharType>
+                            candidateBidiCTypes(candidateSize);
+                    std::vector<FriBidiBracketType>
+                            candidateBidiBTypes(candidateSize);
+                    std::vector<FriBidiLevel>
+                            candidateBidiLevels(candidateSize);
+                #endif
+
+                m_ownedText.swap(candidateText);
+                m_ownedFlags.swap(candidateFlags);
+                m_ownedSources.swap(candidateSources);
+                m_ownedCharIndexes.swap(candidateCharIndexes);
+                m_ownedWidths.swap(candidateWidths);
+                #if (USE_FRIBIDI==1)
+                    m_ownedBidiCTypes.swap(candidateBidiCTypes);
+                    m_ownedBidiBTypes.swap(candidateBidiBTypes);
+                    m_ownedBidiLevels.swap(candidateBidiLevels);
+                #endif
+                m_size = candidateSize;
+            }
+            if (ownsStatic)
+                m_staticBufs_inUse = false;
+            m_text = m_ownedText.data();
+            m_flags = m_ownedFlags.data();
+            m_srcs = m_ownedSources.data();
+            m_charindex = m_ownedCharIndexes.data();
+            m_widths = m_ownedWidths.data();
+            #if (USE_FRIBIDI==1)
+                m_bidi_ctypes = m_ownedBidiCTypes.data();
+                m_bidi_btypes = m_ownedBidiBTypes.data();
+                m_bidi_levels = m_ownedBidiLevels.data();
+            #endif
+            m_bufferStorage = BufferStorageDynamicOwned;
+        }
+        else {
+            static thread_local lChar32 m_static_text[
+                    FORMATTER_STATIC_BUFS_SIZE];
+            static thread_local lUInt16
+                    m_static_flags[FORMATTER_STATIC_BUFS_SIZE];
+            static thread_local src_text_fragment_t *
+                    m_static_srcs[FORMATTER_STATIC_BUFS_SIZE];
+            static thread_local lUInt16
+                    m_static_charindex[FORMATTER_STATIC_BUFS_SIZE];
+            static thread_local int
+                    m_static_widths[FORMATTER_STATIC_BUFS_SIZE];
+            #if (USE_FRIBIDI==1)
+                static thread_local FriBidiCharType
+                        m_static_bidi_ctypes[FORMATTER_STATIC_BUFS_SIZE];
+                static thread_local FriBidiBracketType
+                        m_static_bidi_btypes[FORMATTER_STATIC_BUFS_SIZE];
+                static thread_local FriBidiLevel
+                        m_static_bidi_levels[FORMATTER_STATIC_BUFS_SIZE];
+            #endif
+            m_text = m_static_text;
+            m_flags = m_static_flags;
+            m_charindex = m_static_charindex;
+            m_srcs = m_static_srcs;
+            m_widths = m_static_widths;
+            #if (USE_FRIBIDI==1)
+                m_bidi_ctypes = m_static_bidi_ctypes;
+                m_bidi_btypes = m_static_bidi_btypes;
+                m_bidi_levels = m_static_bidi_levels;
+            #endif
+            if (!ownsStatic)
+                m_staticBufs_inUse = true;
+            m_bufferStorage = BufferStorageStaticBorrowed;
+        }
+
+        memset( m_flags, 0, sizeof(lUInt16)*m_length );
+        m_flags[m_length] = 0;
+        m_text[m_length] = 0;
+        m_charindex[m_length] = 0;
+        m_srcs[m_length] = NULL;
+        m_widths[m_length] = 0;
+        #if (USE_FRIBIDI==1)
+            m_bidi_ctypes[m_length] = 0;
+            m_bidi_btypes[m_length] = 0;
+            m_bidi_levels[m_length] = 0;
+        #endif
+    }
+
     /// allocate buffers for paragraph
     void allocate( int start, int end )
     {
@@ -937,90 +1091,17 @@ public:
             }
         }
 
-        // allocate buffers
-        m_length = pos;
-
-        TR("allocate(%d)", m_length);
+        TR("allocate(%d)", pos);
         // We start with static buffers, but when m_length reaches STATIC_BUFS_SIZE,
-        // we switch to dynamic buffers and we keep using them (realloc'ating when
-        // needed).
+        // we switch to dynamic buffers and keep using their owned storage.
         // The code in this file will fill these buffers with m_length items, so
         // from index [0] to [m_length-1], and read them back.
         // Willingly or not (bug?), this code may also access the buffer one slot
         // further at [m_length], and we need to set this slot to zero to avoid
         // a segfault. So, we need to reserve this additional slot when
         // allocating dynamic buffers, or checking if the static buffers can be
-        // used.
-        // (memset()'ing all buffers on their full allocated size to 0 would work
-        // too, but there's a small performance hit when doing so. Just setting
-        // to zero the additional slot seems enough, as all previous slots seems
-        // to be correctly filled.)
-
-#define STATIC_BUFS_SIZE 8192
-#define ITEMS_RESERVED 16
-
-        // "m_length+1" to keep room for the additional slot to be zero'ed
-        if ( !m_staticBufs || m_length+1 > STATIC_BUFS_SIZE ) {
-            // if (!m_staticBufs && m_text == NULL) printf("allocating dynamic buffers\n");
-            if ( m_length+1 > m_size ) {
-                // realloc
-                m_size = m_length+ITEMS_RESERVED;
-                m_text = cr_realloc(m_staticBufs ? NULL : m_text, m_size);
-                m_flags = cr_realloc(m_staticBufs ? NULL : m_flags, m_size);
-                m_charindex = cr_realloc(m_staticBufs ? NULL : m_charindex, m_size);
-                m_srcs = cr_realloc(m_staticBufs ? NULL : m_srcs, m_size);
-                m_widths = cr_realloc(m_staticBufs ? NULL : m_widths, m_size);
-                #if (USE_FRIBIDI==1)
-                    // Note: we could here check for RTL chars (and have a flag
-                    // to then not do it in copyText()) so we don't need to allocate
-                    // the following ones if we won't be using them.
-                    m_bidi_ctypes = cr_realloc(m_staticBufs ? NULL : m_bidi_ctypes, m_size);
-                    m_bidi_btypes = cr_realloc(m_staticBufs ? NULL : m_bidi_btypes, m_size);
-                    m_bidi_levels = cr_realloc(m_staticBufs ? NULL : m_bidi_levels, m_size);
-                #endif
-            }
-            m_staticBufs = false;
-        } else {
-            // static buffer space
-            static thread_local lChar32 m_static_text[STATIC_BUFS_SIZE];
-            static thread_local lUInt16 m_static_flags[STATIC_BUFS_SIZE];
-            static thread_local src_text_fragment_t * m_static_srcs[STATIC_BUFS_SIZE];
-            static thread_local lUInt16 m_static_charindex[STATIC_BUFS_SIZE];
-            static thread_local int m_static_widths[STATIC_BUFS_SIZE];
-            #if (USE_FRIBIDI==1)
-                static thread_local FriBidiCharType m_static_bidi_ctypes[STATIC_BUFS_SIZE];
-                static thread_local FriBidiBracketType m_static_bidi_btypes[STATIC_BUFS_SIZE];
-                static thread_local FriBidiLevel m_static_bidi_levels[STATIC_BUFS_SIZE];
-            #endif
-            m_text = m_static_text;
-            m_flags = m_static_flags;
-            m_charindex = m_static_charindex;
-            m_srcs = m_static_srcs;
-            m_widths = m_static_widths;
-            m_staticBufs = true;
-            m_staticBufs_inUse = true;
-            // printf("using static buffers\n");
-            #if (USE_FRIBIDI==1)
-                m_bidi_ctypes = m_static_bidi_ctypes;
-                m_bidi_btypes = m_static_bidi_btypes;
-                m_bidi_levels = m_static_bidi_levels;
-            #endif
-        }
-        memset( m_flags, 0, sizeof(lUInt16)*m_length ); // start with all flags set to zero
-
-        // We set to zero the additional slot that the code may peek at (with
-        // the checks against m_length we did, we know this slot is allocated).
-        // (This can be removed if we find this was a bug and can fix it)
-        m_flags[m_length] = 0;
-        m_text[m_length] = 0;
-        m_charindex[m_length] = 0;
-        m_srcs[m_length] = NULL;
-        m_widths[m_length] = 0;
-        #if (USE_FRIBIDI==1)
-            m_bidi_ctypes[m_length] = 0;
-            m_bidi_btypes[m_length] = 0;
-            m_bidi_levels[m_length] = 0;
-        #endif
+        // used. allocateWorkspace() also zeroes this sentinel slot.
+        allocateWorkspace(pos);
     }
 
     /// copy text of current paragraph to buffers
@@ -4488,32 +4569,7 @@ public:
 
     void dealloc()
     {
-        if ( !m_staticBufs ) {
-            free( m_text );
-            free( m_flags );
-            free( m_srcs );
-            free( m_charindex );
-            free( m_widths );
-            m_text = NULL;
-            m_flags = NULL;
-            m_srcs = NULL;
-            m_charindex = NULL;
-            m_widths = NULL;
-            #if (USE_FRIBIDI==1)
-                free( m_bidi_ctypes );
-                free( m_bidi_btypes );
-                free( m_bidi_levels );
-                m_bidi_ctypes = NULL;
-                m_bidi_btypes = NULL;
-                m_bidi_levels = NULL;
-            #endif
-            m_staticBufs = true;
-            // printf("freeing dynamic buffers\n");
-        }
-        else {
-            m_staticBufs_inUse = false;
-            // printf("releasing static buffers\n");
-        }
+        releaseWorkspace();
     }
 
     /// format source data
@@ -4532,6 +4588,112 @@ thread_local bool LVFormatter::m_staticBufs_inUse = false;
 #if (USE_LIBUNIBREAK==1)
 std::once_flag LVFormatter::m_libunibreak_init_once;
 #endif
+
+bool LVRunFormatterWorkspaceOwnershipRegression()
+{
+    formatted_text_fragment_t buffer = {};
+    if (LVFormatter::m_staticBufs_inUse)
+        return false;
+
+    {
+        LVFormatter outer(&buffer);
+        outer.allocateWorkspace(32);
+        if (outer.m_bufferStorage
+                    != LVFormatter::BufferStorageStaticBorrowed
+                || !LVFormatter::m_staticBufs_inUse
+                || outer.m_flags[32] != 0
+                || outer.m_text[32] != 0
+                || outer.m_srcs[32] != NULL)
+            return false;
+
+        LVFormatter nested(&buffer);
+        nested.allocateWorkspace(32);
+        if (nested.m_bufferStorage
+                    != LVFormatter::BufferStorageDynamicOwned
+                || nested.m_ownedText.size()
+                    != static_cast<size_t>(nested.m_size)
+                || nested.m_text != nested.m_ownedText.data()
+                || nested.m_flags != nested.m_ownedFlags.data()
+                || !LVFormatter::m_staticBufs_inUse)
+            return false;
+        nested.dealloc();
+        nested.dealloc();
+        if (nested.m_text != NULL
+                || nested.m_bufferStorage
+                    != LVFormatter::BufferStorageEmpty
+                || !LVFormatter::m_staticBufs_inUse)
+            return false;
+    }
+    if (LVFormatter::m_staticBufs_inUse)
+        return false;
+
+    {
+        LVFormatter growing(&buffer);
+        growing.allocateWorkspace(16);
+        if (!LVFormatter::m_staticBufs_inUse)
+            return false;
+        growing.allocateWorkspace(FORMATTER_STATIC_BUFS_SIZE);
+        if (growing.m_bufferStorage
+                    != LVFormatter::BufferStorageDynamicOwned
+                || LVFormatter::m_staticBufs_inUse
+                || growing.m_text != growing.m_ownedText.data())
+            return false;
+        lChar32 *ownedText = growing.m_text;
+        const int ownedSize = growing.m_size;
+        growing.allocateWorkspace(8);
+        if (growing.m_bufferStorage
+                    != LVFormatter::BufferStorageDynamicOwned
+                || growing.m_text != ownedText
+                || growing.m_size != ownedSize
+                || growing.m_text[8] != 0)
+            return false;
+    }
+
+    {
+        LVFormatter large(&buffer);
+        large.allocateWorkspace(FORMATTER_STATIC_BUFS_SIZE);
+        if (large.m_bufferStorage
+                    != LVFormatter::BufferStorageDynamicOwned
+                || large.m_size
+                    != FORMATTER_STATIC_BUFS_SIZE
+                        + FORMATTER_ITEMS_RESERVED
+                || large.m_widths != large.m_ownedWidths.data()
+                || large.m_widths[FORMATTER_STATIC_BUFS_SIZE] != 0)
+            return false;
+    }
+
+    {
+        LVFormatter bounded(&buffer);
+        bounded.allocateWorkspace(12);
+        lChar32 *staticText = bounded.m_text;
+        bool rejected = false;
+        try {
+            bounded.allocateWorkspace(
+                    std::numeric_limits<int>::max());
+        }
+        catch (const std::length_error &) {
+            rejected = true;
+        }
+        if (!rejected
+                || bounded.m_bufferStorage
+                    != LVFormatter::BufferStorageStaticBorrowed
+                || bounded.m_text != staticText
+                || !LVFormatter::m_staticBufs_inUse)
+            return false;
+    }
+
+    {
+        LVFormatter reusable(&buffer);
+        reusable.allocateWorkspace(16);
+        reusable.dealloc();
+        reusable.allocateWorkspace(24);
+        if (reusable.m_bufferStorage
+                    != LVFormatter::BufferStorageStaticBorrowed
+                || !LVFormatter::m_staticBufs_inUse)
+            return false;
+    }
+    return !LVFormatter::m_staticBufs_inUse;
+}
 
 static void freeFrmLines( formatted_text_fragment_t * m_pbuffer )
 {

@@ -363,3 +363,12 @@ successful and failed format probes. `LVArcContainerBase` cannot be copied, its
 `LVStreamRef` retains archive bytes for later entry creation, and each opened
 entry retains the source it needs after the container itself is released. The
 archive parent pointer remains an explicitly non-owning compatibility view.
+
+`LVFormatter` keeps dynamically sized text, flag, source, index, width and
+optional bidi workspaces in vectors; its raw members are non-owning active
+views. Small paragraphs still borrow per-thread static arrays, but an explicit
+storage state now owns that lease and releases it idempotently from normal
+cleanup or the destructor. Nested formatters fall back to dynamic storage,
+while growth constructs every candidate array before publishing any new view.
+The public `formatted_text_fragment_t` C layout and render-facing views remain
+unchanged.
