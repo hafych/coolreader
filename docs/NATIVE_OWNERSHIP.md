@@ -252,7 +252,10 @@ XPM parsed rows, palettes and decode rows, plus dummy and draw-buffer conversion
 rows, use standard containers. `LVDrawBufImgSource` keeps a non-owning
 compatibility view and, only when requested by its legacy factory, a
 `std::unique_ptr` owner. Invalid XPM construction releases partially parsed
-rows without depending on dimensions that were reset after the error.
+rows without depending on dimensions that were reset after the error. Dummy
+and draw-buffer producers stop on the first downstream cancellation and close
+the callback with an error; the draw-buffer factory rejects a null backing
+object before either its owned or borrowed view can be published.
 
 `LVImageSource` owns cached nine-patch metadata through `std::unique_ptr`; its
 public raw pointers are non-owning views into that cache. Detection decodes

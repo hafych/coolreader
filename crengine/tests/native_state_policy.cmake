@@ -3740,6 +3740,16 @@ require_source_text(
   "std::vector<lUInt32> row"
   "draw-buffer image conversion row must use RAII ownership"
 )
+require_source_text(
+  "${DRAWBUF_IMAGE_SOURCE}"
+  "callback->OnEndDecode(this, true)"
+  "draw-buffer image cancellation must close its callback lifecycle"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "if (!buf)"
+  "draw-buffer image factory must reject a missing buffer"
+)
 forbid_source_text(
   "${DRAWBUF_IMAGE_HEADER}"
   "bool _own"
@@ -3755,10 +3765,30 @@ require_source_text(
   "std::vector<lUInt32> row"
   "dummy image row must use RAII ownership"
 )
+require_source_text(
+  "${DUMMY_IMAGE_HEADER}"
+  "callback->OnEndDecode(this, true)"
+  "dummy image cancellation must close its callback lifecycle"
+)
 forbid_source_text(
   "${DUMMY_IMAGE_HEADER}"
   "new lUInt32"
   "dummy image must not use an owning row array"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "dummy image ignored callback cancellation"
+  "dummy image cancellation must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "draw-buffer image ignored callback cancellation"
+  "draw-buffer image cancellation must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "draw-buffer image factory accepted a null buffer"
+  "draw-buffer null rejection must retain native regression coverage"
 )
 require_source_text(
   "${XPM_IMAGE_HEADER}"

@@ -143,7 +143,7 @@ DRM или ограничений доступа, подбор/получени�
   bitstream/table/output parsing, palette validation и interlaced-frame row
   mapping, normalized/clamped alpha-transform arithmetic,
   alpha/stretch-transform callback borrow/lifecycle и stretch row
-  storage/downscaling,
+  storage/downscaling, dummy/draw-buffer cancellation и null-buffer factory,
   encoding autodetect/offline
   statistic input и parser format detection; parser selection, draw-buffer
   source и owned/borrowed

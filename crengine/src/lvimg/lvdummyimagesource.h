@@ -47,28 +47,31 @@ public:
     {
         if (_width <= 0 || _height <= 0)
             return false;
-        if ( callback )
+        if (!callback)
+            return true;
+        std::vector<lUInt32> row(_width);
+        callback->OnStartDecode(this);
+        for (int i=0; i<_height; i++)
         {
-            callback->OnStartDecode(this);
-            std::vector<lUInt32> row(_width);
-            for (int i=0; i<_height; i++)
+            if ( i==0 || i==_height-1 )
             {
-                if ( i==0 || i==_height-1 )
-                {
-                    for ( int x=0; x<_width; x++ )
-                        row[ x ] = 0x000000;
-                }
-                else
-                {
-                    for ( int x=1; x<_width-1; x++ )
-                        row[ x ] = 0xFFFFFF;
-                    row[ 0 ] = 0x000000;
-                    row[ _width-1 ] = 0x000000;
-                }
-                callback->OnLineDecoded(this, i, row.data());
+                for ( int x=0; x<_width; x++ )
+                    row[ x ] = 0x000000;
             }
-            callback->OnEndDecode(this, false);
+            else
+            {
+                for ( int x=1; x<_width-1; x++ )
+                    row[ x ] = 0xFFFFFF;
+                row[ 0 ] = 0x000000;
+                row[ _width-1 ] = 0x000000;
+            }
+            if (!callback->OnLineDecoded(
+                        this, i, row.data())) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
         }
+        callback->OnEndDecode(this, false);
         return true;
     }
     virtual ~LVDummyImageSource() {}

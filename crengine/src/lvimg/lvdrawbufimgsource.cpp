@@ -29,8 +29,8 @@
 LVDrawBufImgSource::LVDrawBufImgSource(LVColorDrawBuf *buf, bool own)
     : _ownedBuf(own ? buf : NULL)
     , _buf(buf)
-    , _dx( buf->GetWidth() )
-    , _dy( buf->GetHeight() )
+    , _dx(buf ? buf->GetWidth() : 0)
+    , _dy(buf ? buf->GetHeight() : 0)
 {
 }
 
@@ -38,21 +38,44 @@ LVDrawBufImgSource::~LVDrawBufImgSource() = default;
 
 bool LVDrawBufImgSource::Decode(LVImageDecoderCallback *callback)
 {
+    if (!_buf || _dx <= 0 || _dy <= 0)
+        return false;
+    const int bpp = _buf->GetBitsPerPixel();
+    if (bpp != 16 && bpp != 32)
+        return false;
+    if (!callback)
+        return true;
+    std::vector<lUInt32> row;
+    if (bpp == 16)
+        row.resize(_dx);
     callback->OnStartDecode( this );
-    //bool res = false;
-    if ( _buf->GetBitsPerPixel()==32 ) {
+    if ( bpp==32 ) {
         // 32 bpp
         for ( int y=0; y<_dy; y++ ) {
-            callback->OnLineDecoded( this, y, (lUInt32 *)_buf->GetScanLine(y) );
+            lUInt8 *scanline = _buf->GetScanLine(y);
+            if (!scanline || !callback->OnLineDecoded(
+                        this, y,
+                        reinterpret_cast<lUInt32 *>(scanline))) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
         }
     } else {
         // 16 bpp
-        std::vector<lUInt32> row(_dx);
         for ( int y=0; y<_dy; y++ ) {
-            lUInt16 * src = (lUInt16 *)_buf->GetScanLine(y);
+            lUInt16 *src = reinterpret_cast<lUInt16 *>(
+                    _buf->GetScanLine(y));
+            if (!src) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
             for ( int x=0; x<_dx; x++ )
                 row[x] = rgb565to888(src[x]);
-            callback->OnLineDecoded( this, y, row.data() );
+            if (!callback->OnLineDecoded(
+                        this, y, row.data())) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
         }
     }
     callback->OnEndDecode( this, false );

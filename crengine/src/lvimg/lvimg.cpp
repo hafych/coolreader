@@ -266,6 +266,8 @@ LVImageSourceRef LVCreateUnpackedImageSource( LVImageSourceRef srcImage, int max
 
 LVImageSourceRef LVCreateDrawBufImageSource( LVColorDrawBuf * buf, bool own )
 {
+    if (!buf)
+        return LVImageSourceRef();
     return LVImageSourceRef( new LVDrawBufImgSource( buf, own ) );
 }
 

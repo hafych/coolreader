@@ -6485,18 +6485,37 @@ static int testImageSourceOwnership() {
     if (dummyCallback.starts != 2 || dummyCallback.lines != 6
             || dummyCallback.ends != 2)
         return fail("dummy image callback lifecycle is incomplete");
-    if (LVCreateDummyImageSource(NULL, 0, 3)->Decode(NULL))
+    RejectingImageDecodeCallback rejectingDummyCallback;
+    if (dummy->Decode(&rejectingDummyCallback)
+            || rejectingDummyCallback.starts != 1
+            || rejectingDummyCallback.lines != 1
+            || rejectingDummyCallback.errorEnds != 1)
+        return fail("dummy image ignored callback cancellation");
+    if (!dummy->Decode(NULL)
+            || LVCreateDummyImageSource(
+                    NULL, 0, 3)->Decode(NULL))
         return fail("dummy image source accepted zero width");
 
     int destroyed = 0;
     LVImageSourceRef drawBufferImage = LVCreateDrawBufImageSource(
             new CountingColorDrawBuf(destroyed), true);
+    RejectingImageDecodeCallback rejectingDrawBufferCallback;
+    if (drawBufferImage.isNull()
+            || drawBufferImage->Decode(
+                    &rejectingDrawBufferCallback)
+            || rejectingDrawBufferCallback.starts != 1
+            || rejectingDrawBufferCallback.lines != 1
+            || rejectingDrawBufferCallback.errorEnds != 1)
+        return fail("draw-buffer image ignored callback cancellation");
     CountingImageDecodeCallback drawBufferCallback;
     if (!drawBufferImage->Decode(&drawBufferCallback)
+            || !drawBufferImage->Decode(NULL)
             || drawBufferCallback.starts != 1
             || drawBufferCallback.lines != 2
             || drawBufferCallback.ends != 1)
         return fail("16-bit draw-buffer image did not decode");
+    if (!LVCreateDrawBufImageSource(NULL, true).isNull())
+        return fail("draw-buffer image factory accepted a null buffer");
     drawBufferImage.Clear();
     if (destroyed != 1)
         return fail("owned draw buffer was not released exactly once");
