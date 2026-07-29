@@ -529,7 +529,7 @@ public class ActivityOwnershipPolicyTest {
 		Field loadOwner =
 				loadDocumentTask.getDeclaredField("loadOwner");
 		assertEquals(
-				CloseableTaskGate.Token.class,
+				DocumentLoadLifecycle.Request.class,
 				loadOwner.getType());
 		assertTrue(Modifier.isPrivate(loadOwner.getModifiers()));
 		assertTrue(Modifier.isFinal(loadOwner.getModifiers()));
@@ -537,6 +537,26 @@ public class ActivityOwnershipPolicyTest {
 				loadDocumentTask.getDeclaredField("bookInfo");
 		assertEquals(BookInfo.class, taskBook.getType());
 		assertTrue(Modifier.isPrivate(taskBook.getModifiers()));
+		Field activityDocumentLoads =
+				CoolReader.class.getDeclaredField(
+						"documentLoadLifecycle");
+		assertEquals(
+				DocumentLoadLifecycle.class,
+				activityDocumentLoads.getType());
+		assertTrue(Modifier.isPrivate(
+				activityDocumentLoads.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				activityDocumentLoads.getModifiers()));
+		Field readerDocumentLoads =
+				ReaderView.class.getDeclaredField(
+						"documentLoadLifecycle");
+		assertEquals(
+				DocumentLoadLifecycle.class,
+				readerDocumentLoads.getType());
+		assertTrue(Modifier.isPrivate(
+				readerDocumentLoads.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				readerDocumentLoads.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
 		for (Field field :

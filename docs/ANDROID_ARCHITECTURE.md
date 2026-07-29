@@ -96,12 +96,20 @@ identity and active service generation before publishing UI. Link/image/
 bookmark inspection also captures book identity, so its delayed GUI result
 cannot act on a replacement document.
 
-Document opening inside `ReaderView` is one closeable, identity-owned
-generation from the first history lookup through engine work and any
-memory-stream fingerprint/cache reconciliation. File, buffer and file
-descriptor handoffs all carry the same token across background and GUI queues.
-Replacement, reader close and destruction reject stale callbacks; an
-unaccepted or replaced descriptor is closed by the layer that still owns it.
+Document opening is one Activity-owned, identity-owned generation from the
+public `CoolReader` request through `ReaderView` engine work and any
+memory-stream fingerprint/cache reconciliation. `CoolReader` creates the
+`DocumentLoadLifecycle` and injects the same instance into its reader.
+DB-service readiness, SAF metadata/probing, non-seekable provider caching,
+file/buffer/descriptor handoff and history lookup all carry the same token
+across background and GUI queues. A newer selection invalidates native work
+immediately instead of waiting for SAF preprocessing to reach the reader.
+Browser/root navigation cancels a still-pending open, but preserves the token
+after the reader has atomically marked the document published so its exact
+stream reconciliation can finish off-screen. Reader close and Activity
+destruction reject every phase. An unaccepted or replaced descriptor is closed
+by the layer that still owns it, including cached descriptors produced after
+teardown.
 Each `LoadDocumentTask` retains its own `BookInfo`, settings and completion
 state rather than consulting a book pointer that another request can replace
 while native parsing is running. The old book is saved and marked closed before

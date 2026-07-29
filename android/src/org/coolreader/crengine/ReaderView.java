@@ -352,8 +352,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final DocumentFileCache mDocumentCache;
 	private final ServiceLifecycle mServiceLifecycle;
 	private final EinkScreen mEinkScreen;
-	private final CloseableTaskGate documentLoadLifecycle =
-			new CloseableTaskGate();
+	private final DocumentLoadLifecycle documentLoadLifecycle;
 
 	private BookInfo mBookInfo;
 
@@ -2867,7 +2866,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void updateCurrentPositionStatus(
 			final BookInfo expectedBook,
-			final CloseableTaskGate.Token loadOwner) {
+			final DocumentLoadLifecycle.Request loadOwner) {
 		if (expectedBook == null)
 			return;
 		// in background thread
@@ -2905,7 +2904,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void updateLoadedBookInfo(
 			BookInfo bookInfo, boolean updatePath,
-			CloseableTaskGate.Token loadOwner) {
+			DocumentLoadLifecycle.Request loadOwner) {
 		BackgroundThread.ensureBackground();
 		// get title, authors, genres, etc.
 		doc.updateBookInfo(bookInfo, updatePath);
@@ -3082,10 +3081,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	 * @return true if opened successfully
 	 */
 	public boolean showManual() {
-		File manual = generateManual();
-		if (manual == null)
+		return showManual(documentLoadLifecycle.replace());
+	}
+
+	public boolean showManual(
+			DocumentLoadLifecycle.Request loadOwner) {
+		if (!documentLoadLifecycle.isActive(loadOwner))
 			return false;
+		File manual = generateManual();
+		if (!documentLoadLifecycle.isActive(loadOwner))
+			return false;
+		if (manual == null) {
+			documentLoadLifecycle.complete(loadOwner);
+			return false;
+		}
 		return loadDocument(
+				loadOwner,
 				DocumentSource.file(manual.getAbsolutePath()),
 				null, () -> mActivity.showToast("Error while opening manual"));
 	}
@@ -3326,7 +3337,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						this.mBookInfo.getFileInfo(), null, null, true);
 				return true;
 			}
-			CloseableTaskGate.Token loadOwner =
+			DocumentLoadLifecycle.Request loadOwner =
 					documentLoadLifecycle.replace();
 			return enqueueDocumentLoad(
 					loadOwner, this.mBookInfo, source, null,
@@ -3337,18 +3348,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public boolean loadDocument(final FileInfo fileInfo, final Runnable doneHandler, final Runnable errorHandler) {
 		return loadDocument(
+				documentLoadLifecycle.replace(),
 				fileInfo, DocumentSource.fromFileInfo(fileInfo),
 				doneHandler, errorHandler);
 	}
 
 	private boolean loadDocument(
+			final DocumentLoadLifecycle.Request loadOwner,
 			final FileInfo fileInfo, final DocumentSource source,
 			final Runnable doneHandler, final Runnable errorHandler) {
 		log.v("loadDocument(" + fileInfo.getPathName() + ")");
+		if (!documentLoadLifecycle.isActive(loadOwner))
+			return false;
 		applySourceBookKeyIfMissing(fileInfo, source);
 		if (this.mBookInfo != null
 				&& this.mBookInfo.getFileInfo().sameBook(fileInfo)
 				&& mOpened) {
+			if (!documentLoadLifecycle.markPublished(loadOwner))
+				return false;
 			log.d("trying to load already opened document");
 			mActivity.showReader();
 			if (null != doneHandler)
@@ -3356,10 +3373,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			drawPage();
 			return false;
 		}
-		final CloseableTaskGate.Token loadOwner =
-				documentLoadLifecycle.replace();
-		if (loadOwner == null)
-			return false;
 		mHistory.getOrCreateBookInfo(mActivity.getDB(), fileInfo, bookInfo -> {
 			if (!documentLoadLifecycle.isActive(loadOwner))
 				return;
@@ -3391,7 +3404,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				errorHandler.run();
 			return false;
 		}
-		final CloseableTaskGate.Token loadOwner =
+		final DocumentLoadLifecycle.Request loadOwner =
 				documentLoadLifecycle.replace();
 		if (loadOwner == null) {
 			try {
@@ -3480,10 +3493,25 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 												 DocumentSource source,
 												 final Runnable doneHandler,
 												 final Runnable errorHandler) {
+		return loadDocumentFromFileDescriptor(
+				documentLoadLifecycle.replace(), pfd, source,
+				doneHandler, errorHandler);
+	}
+
+	public boolean loadDocumentFromFileDescriptor(
+			final DocumentLoadLifecycle.Request loadOwner,
+			final ParcelFileDescriptor pfd,
+			DocumentSource source,
+			final Runnable doneHandler,
+			final Runnable errorHandler) {
 		BackgroundThread.ensureGUI();
 		save();
 		String contentPath = source != null ? source.getIdentity() : null;
 		log.i("loadDocumentFromFileDescriptor(" + safeDocumentPathForLog(contentPath) + ")");
+		if (!documentLoadLifecycle.isActive(loadOwner)) {
+			closeDescriptorQuietly(pfd);
+			return false;
+		}
 		if (pfd == null || source == null
 				|| contentPath == null || contentPath.length() == 0
 				|| source.getFormat() == null) {
@@ -3493,14 +3521,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				} catch (IOException ignored) {
 				}
 			}
-			if (errorHandler != null)
+			if (documentLoadLifecycle.complete(loadOwner)
+					&& errorHandler != null)
 				errorHandler.run();
-			return false;
-		}
-		final CloseableTaskGate.Token loadOwner =
-				documentLoadLifecycle.replace();
-		if (loadOwner == null) {
-			closeDescriptorQuietly(pfd);
 			return false;
 		}
 
@@ -3535,7 +3558,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void enqueueFileDescriptorLoad(
-			CloseableTaskGate.Token loadOwner,
+			DocumentLoadLifecycle.Request loadOwner,
 			ParcelFileDescriptor pfd, DocumentSource source, BookInfo bookInfo,
 			Runnable doneHandler, Runnable errorHandler) {
 		final String streamName = streamNameFor(source);
@@ -3557,7 +3580,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private boolean enqueueDocumentLoad(
-			CloseableTaskGate.Token loadOwner,
+			DocumentLoadLifecycle.Request loadOwner,
 			BookInfo bookInfo, DocumentSource source, byte[] docBuffer,
 			ParcelFileDescriptor parcelFileDescriptor, String streamName,
 			Runnable doneHandler, Runnable errorHandler) {
@@ -3609,11 +3632,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public boolean loadDocument(
 			DocumentSource initialSource, final Runnable doneHandler,
 			final Runnable errorHandler) {
+		return loadDocument(
+				documentLoadLifecycle.replace(), initialSource,
+				doneHandler, errorHandler);
+	}
+
+	public boolean loadDocument(
+			DocumentLoadLifecycle.Request loadOwner,
+			DocumentSource initialSource,
+			final Runnable doneHandler,
+			final Runnable errorHandler) {
 		BackgroundThread.ensureGUI();
 		save();
+		if (!documentLoadLifecycle.isActive(loadOwner))
+			return false;
 		if (initialSource == null) {
 			log.v("loadDocument() : no document source specified");
-			if (errorHandler != null)
+			if (documentLoadLifecycle.complete(loadOwner)
+					&& errorHandler != null)
 				errorHandler.run();
 			return false;
 		}
@@ -3623,7 +3659,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			fileName = source.getLocalPath();
 		} catch (IllegalStateException e) {
 			log.e("ReaderView cannot directly open a non-local source", e);
-			if (errorHandler != null)
+			if (documentLoadLifecycle.complete(loadOwner)
+					&& errorHandler != null)
 				errorHandler.run();
 			return false;
 		}
@@ -3633,7 +3670,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			log.e("Trying to load book from non-standard path " + fileName);
 			mActivity.showToast("Trying to load book from non-standard path " + fileName);
 			hideProgress();
-			if (errorHandler != null)
+			if (documentLoadLifecycle.complete(loadOwner)
+					&& errorHandler != null)
 				errorHandler.run();
 			return false;
 		} else if (!normalized.equals(fileName)) {
@@ -3667,7 +3705,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			if (fi == null) {
 				log.v("loadDocument() : no file item " + fileName + " found inside " + dir);
-				if (errorHandler != null)
+				if (documentLoadLifecycle.complete(loadOwner)
+						&& errorHandler != null)
 					errorHandler.run();
 				return false;
 			}
@@ -3680,7 +3719,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			fi = book.getFileInfo();
 			log.v("loadDocument() : item from history : " + fi);
 		}
-		return loadDocument(fi, source, doneHandler, errorHandler);
+		return loadDocument(
+				loadOwner, fi, source, doneHandler, errorHandler);
 	}
 
 	private static void applySourceBookKeyIfMissing(
@@ -5693,7 +5733,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private class LoadDocumentTask extends Task {
-		private final CloseableTaskGate.Token loadOwner;
+		private final DocumentLoadLifecycle.Request loadOwner;
 		private BookInfo bookInfo;
 		private final DocumentSource documentSource;
 		private String filename;
@@ -5712,7 +5752,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private boolean loadSucceeded;
 
 		LoadDocumentTask(
-				CloseableTaskGate.Token loadOwner,
+				DocumentLoadLifecycle.Request loadOwner,
 				BookInfo bookInfo, DocumentSource documentSource,
 				byte[] docBuffer, Runnable doneHandler,
 				Runnable errorHandler) {
@@ -5721,7 +5761,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		LoadDocumentTask(
-				CloseableTaskGate.Token loadOwner,
+				DocumentLoadLifecycle.Request loadOwner,
 				BookInfo bookInfo, DocumentSource documentSource,
 				byte[] docBuffer,
 				ParcelFileDescriptor parcelFileDescriptor,
@@ -5920,6 +5960,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (!loadSucceeded
 					|| !mServiceLifecycle.isActive()
 					|| !documentLoadLifecycle.isActive(loadOwner))
+				return;
+			if (!documentLoadLifecycle.markPublished(loadOwner))
 				return;
 
 			mBookInfo = bookInfo;
@@ -6340,7 +6382,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void restorePositionBackground(
 			String pos, BookInfo expectedBook,
-			CloseableTaskGate.Token loadOwner) {
+			DocumentLoadLifecycle.Request loadOwner) {
 		BackgroundThread.ensureBackground();
 		if (pos != null) {
 			if (loadOwner != null
@@ -7519,6 +7561,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			CoverpageManager coverpageManager,
 			GenresCollection genresCollection,
 			DocumentFileCache documentCache,
+			DocumentLoadLifecycle documentLoadLifecycle,
 			ServiceLifecycle serviceLifecycle,
 			Properties props) {
 		//super(activity);
@@ -7542,6 +7585,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		this.mCoverpageManager = coverpageManager;
 		this.mGenresCollection = genresCollection;
 		this.mDocumentCache = documentCache;
+		this.documentLoadLifecycle = documentLoadLifecycle;
 		this.mServiceLifecycle = serviceLifecycle;
 		this.mEinkScreen = activity.getEinkScreen();
 		surface.setFocusable(true);

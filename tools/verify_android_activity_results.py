@@ -215,6 +215,9 @@ REPLACEABLE_TASK_SLOT = (
 CLOSEABLE_TASK_GATE = (
     SOURCE / "crengine" / "CloseableTaskGate.java"
 )
+DOCUMENT_LOAD_LIFECYCLE = (
+    SOURCE / "crengine" / "DocumentLoadLifecycle.java"
+)
 BLOCKING_RESULT = SOURCE / "crengine" / "BlockingResult.java"
 FREEZABLE_REGISTRY = SOURCE / "crengine" / "FreezableRegistry.java"
 PAGE_FLIP_GEOMETRY_TEST = (
@@ -372,6 +375,18 @@ CLOSEABLE_TASK_GATE_TEST = (
     / "coolreader"
     / "crengine"
     / "CloseableTaskGateTest.java"
+)
+DOCUMENT_LOAD_LIFECYCLE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "DocumentLoadLifecycleTest.java"
 )
 BLOCKING_RESULT_TEST = (
     ROOT
@@ -754,6 +769,14 @@ REQUIRED_COOL_READER_MARKERS = (
     "registerForActivityResult",
     "STATE_OPEN_DOCUMENT_TREE_COMMAND",
     "STATE_OPEN_DOCUMENT_TREE_ARG",
+    "private final DocumentLoadLifecycle documentLoadLifecycle",
+    "documentLoadLifecycle.replace()",
+    "runInReader(loadOwner,",
+    "cacheAndOpenSafDocument(\n\t\t\t\t\t\tloadOwner,",
+    "loadOwner, resultPfd, resultSource,",
+    "closeDescriptorQuietly(resultPfd)",
+    "documentLoadLifecycle.cancelPending()",
+    "documentLoadLifecycle.close()",
 )
 
 
@@ -1653,6 +1676,44 @@ def main() -> None:
                 f"{relative(CLOSEABLE_TASK_GATE)} omits closeable task "
                 f"marker: {marker}")
 
+    document_load_lifecycle_text = DOCUMENT_LOAD_LIFECYCLE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "public final class DocumentLoadLifecycle",
+        "public synchronized Request replace()",
+        "public synchronized boolean isActive(Request request)",
+        "public synchronized boolean complete(Request request)",
+        "public synchronized void cancel()",
+        "public synchronized boolean markPublished(Request request)",
+        "public synchronized boolean cancelPending()",
+        "public synchronized boolean close()",
+        "public synchronized boolean isClosed()",
+        "public static final class Request",
+    ):
+        if marker not in document_load_lifecycle_text:
+            violations.append(
+                f"{relative(DOCUMENT_LOAD_LIFECYCLE)} omits document-load "
+                f"lifecycle marker: {marker}")
+
+    document_load_lifecycle_test_text = (
+        DOCUMENT_LOAD_LIFECYCLE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "replacementInvalidatesTheWholePriorOpenChain",
+        "staleCompletionCannotClearReplacement",
+        "cancelAllowsAnotherRequest",
+        "navigationCancelsPendingButPreservesPublishedDocument",
+        "staleRequestCannotPublishReplacement",
+        "closePermanentlyRejectsRequests",
+        "assertFalse(lifecycle.complete(stale))",
+        "assertFalse(lifecycle.markPublished(stale))",
+        "assertNull(lifecycle.replace())",
+    ):
+        if marker not in document_load_lifecycle_test_text:
+            violations.append(
+                f"{relative(DOCUMENT_LOAD_LIFECYCLE_TEST)} omits "
+                f"document-load lifecycle regression: {marker}")
+
     closeable_gate_test_text = CLOSEABLE_TASK_GATE_TEST.read_text(
         encoding="utf-8")
     for marker in (
@@ -2029,7 +2090,7 @@ def main() -> None:
         "private final CloseableTaskGate selectionUpdateLifecycle",
         "private final CloseableTaskGate drawTaskLifecycle",
         "private final CloseableTaskGate ttsInitializationLifecycle",
-        "private final CloseableTaskGate documentLoadLifecycle",
+        "private final DocumentLoadLifecycle documentLoadLifecycle",
         "private final ReaderSurfaceState readerSurfaceState",
         "private final DelayedExecutor einkRefreshScheduler",
         "private final KeyDoubleClickState<ReaderAction>",
@@ -2108,7 +2169,8 @@ def main() -> None:
         "documentLoadLifecycle.complete(loadOwner)",
         "documentLoadLifecycle.cancel()",
         "documentLoadLifecycle.close()",
-        "private final CloseableTaskGate.Token loadOwner",
+        "documentLoadLifecycle.markPublished(loadOwner)",
+        "private final DocumentLoadLifecycle.Request loadOwner",
         "private BookInfo bookInfo",
         "private boolean enqueueDocumentLoad(",
         "closeDescriptorQuietly(parcelFileDescriptor)",

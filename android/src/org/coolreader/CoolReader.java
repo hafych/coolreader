@@ -71,6 +71,7 @@ import org.coolreader.crengine.CRToolBar;
 import org.coolreader.crengine.CoverpageManager;
 import org.coolreader.crengine.DeviceInfo;
 import org.coolreader.crengine.DocumentFileCache;
+import org.coolreader.crengine.DocumentLoadLifecycle;
 import org.coolreader.crengine.DocumentsContractWrapper;
 import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.DocumentFormatDetector;
@@ -139,6 +140,8 @@ public class CoolReader extends BaseActivity {
 	private FileSystemFolders mFileSystemFolders;
 	private GenresCollection mGenresCollection;
 	private ServiceLifecycle mServiceLifecycle;
+	private final DocumentLoadLifecycle documentLoadLifecycle =
+			new DocumentLoadLifecycle();
 	private final ExternalDocumentValidator mExternalDocumentValidator =
 			new ExternalDocumentValidator();
 	//View startupView;
@@ -329,6 +332,7 @@ public class CoolReader extends BaseActivity {
 	protected void onDestroy() {
 
 		log.i("CoolReader.onDestroy() entered");
+		documentLoadLifecycle.close();
 		if (!CLOSE_BOOK_ON_STOP && mReaderView != null)
 			mReaderView.close();
 
@@ -1314,6 +1318,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showRootWindow() {
+		documentLoadLifecycle.cancelPending();
 		if (null != mBrowser)
 			mBrowser.stopCurrentScan();
 		setCurrentFrame(mHomeFrame);
@@ -1336,11 +1341,23 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void runInReader(final Runnable task) {
+		runInReader(null, task);
+	}
+
+	private void runInReader(
+			final DocumentLoadLifecycle.Request loadOwner,
+			final Runnable task) {
 		if (null != mBrowser)
 			mBrowser.stopCurrentScan();
 		waitForCRDBService(() -> {
+			if (loadOwner != null
+					&& !documentLoadLifecycle.isActive(loadOwner))
+				return;
 			if (mReaderFrame != null) {
 				task.run();
+				if (loadOwner != null
+						&& !documentLoadLifecycle.isActive(loadOwner))
+					return;
 				setCurrentFrame(mReaderFrame);
 				if (mReaderView != null && mReaderView.getSurface() != null) {
 					mReaderView.getSurface().setFocusable(true);
@@ -1358,6 +1375,7 @@ public class CoolReader extends BaseActivity {
 						mCoverpageManager,
 						mGenresCollection,
 						mDocumentCache,
+						documentLoadLifecycle,
 						mServiceLifecycle,
 						settings());
 				mReaderFrame = new ReaderViewLayout(CoolReader.this, mReaderView);
@@ -1367,14 +1385,19 @@ public class CoolReader extends BaseActivity {
 					return true;
 				});
 				task.run();
+				mReaderView.setBatteryStatus(initialBatteryStatus);
+				mReaderView.doEngineCommand(
+						ReaderCommand.DCMD_SET_ROTATION_INFO_FOR_AA,
+						screenRotation);
+				if (loadOwner != null
+						&& !documentLoadLifecycle.isActive(loadOwner))
+					return;
 				setCurrentFrame(mReaderFrame);
 				if (mReaderView.getSurface() != null) {
 					mReaderView.getSurface().setFocusable(true);
 					mReaderView.getSurface().setFocusableInTouchMode(true);
 					mReaderView.getSurface().requestFocus();
 				}
-				mReaderView.setBatteryStatus(initialBatteryStatus);
-				mReaderView.doEngineCommand(ReaderCommand.DCMD_SET_ROTATION_INFO_FOR_AA, screenRotation);
 			}
 		});
 	}
@@ -1384,6 +1407,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void runInBrowser(final Runnable task) {
+		documentLoadLifecycle.cancelPending();
 		waitForCRDBService(() -> {
 			if (mBrowserFrame == null) {
 				mBrowser = new FileBrowser(
@@ -1484,7 +1508,13 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showManual() {
-		runInReader(() -> mReaderView.showManual());
+		DocumentLoadLifecycle.Request loadOwner =
+				documentLoadLifecycle.replace();
+		if (loadOwner == null)
+			return;
+		runInReader(
+				loadOwner,
+				() -> mReaderView.showManual(loadOwner));
 	}
 
 	public static final String OPEN_FILE_PARAM = "FILE_TO_OPEN";
@@ -1497,13 +1527,20 @@ public class CoolReader extends BaseActivity {
 			runOpenError(errorCallback);
 			return;
 		}
+		final DocumentLoadLifecycle.Request loadOwner =
+				documentLoadLifecycle.replace();
+		if (loadOwner == null)
+			return;
 		if (source.getKind() == DocumentSource.Kind.CONTENT_URI) {
-			if (!source.isDurable())
+			if (!source.isDurable()
+					&& documentLoadLifecycle.isActive(loadOwner))
 				showToast(R.string.temporary_uri_access_warning);
-			loadDocumentFromUri(source, doneCallback, errorCallback);
+			loadDocumentFromUri(
+					loadOwner, source, doneCallback, errorCallback);
 			return;
 		}
-		runInReader(() -> mReaderView.loadDocument(source, forceSync ? () -> {
+		runInReader(loadOwner, () -> mReaderView.loadDocument(
+				loadOwner, source, forceSync ? () -> {
 			if (null != doneCallback)
 				doneCallback.run();
 			/*
@@ -1541,15 +1578,21 @@ public class CoolReader extends BaseActivity {
 				doneCallback, errorCallback, false);
 	}
 
-	private void loadDocumentFromUri(DocumentSource source,
+	private void loadDocumentFromUri(
+									 DocumentLoadLifecycle.Request loadOwner,
+									 DocumentSource source,
 									 Runnable doneCallback,
 									 Runnable errorCallback) {
-		runInReader(() -> {
+		runInReader(loadOwner, () -> {
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
 			ContentResolver contentResolver = getContentResolver();
 			ParcelFileDescriptor pfd = null;
 			try {
 				Uri uri = Uri.parse(source.getLocator());
 				SafDocumentMetadata metadata = readSafDocumentMetadata(contentResolver, uri);
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
 				pfd = contentResolver.openFileDescriptor(uri, "r");
 				if (pfd == null)
 					throw new IOException("Content provider returned no file descriptor");
@@ -1559,15 +1602,18 @@ public class CoolReader extends BaseActivity {
 				if (isSeekable(pfd) && statSize >= 0) {
 					DocumentFormat detectedFormat =
 							resolveSafDocumentFormat(pfd, metadata);
+					if (!documentLoadLifecycle.isActive(loadOwner))
+						return;
 					if (detectedFormat == null) {
-						showToast(R.string.unsupported_document_format);
+						if (documentLoadLifecycle.isActive(loadOwner))
+							showToast(R.string.unsupported_document_format);
 						throw new IOException("Unsupported document format");
 					}
 					DocumentSource resolvedSource = source.withMetadata(
 							metadata.displayName, metadata.mimeType, statSize,
 							detectedFormat);
 					mReaderView.loadDocumentFromFileDescriptor(
-							pfd, resolvedSource,
+							loadOwner, pfd, resolvedSource,
 							doneCallback, errorCallback);
 					pfd = null; // ownership transferred to ReaderView
 					return;
@@ -1579,12 +1625,12 @@ public class CoolReader extends BaseActivity {
 				final ParcelFileDescriptor fallbackPfd = pfd;
 				pfd = null; // AutoCloseInputStream owns it from here
 				BackgroundThread.instance().postBackground(() -> cacheAndOpenSafDocument(
-						source, metadata, fallbackPfd,
+						loadOwner, source, metadata, fallbackPfd,
 						doneCallback, errorCallback));
 			} catch (Exception e) {
 				Uri uri = Uri.parse(source.getLocator());
 				log.e("Cannot open SAF document " + safeUriForLog(uri), e);
-				runOpenError(errorCallback);
+				runOpenError(loadOwner, errorCallback);
 			} finally {
 				if (pfd != null) {
 					try {
@@ -1628,6 +1674,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void cacheAndOpenSafDocument(
+										DocumentLoadLifecycle.Request loadOwner,
 										DocumentSource source,
 										SafDocumentMetadata metadata,
 										ParcelFileDescriptor pfd,
@@ -1644,9 +1691,12 @@ public class CoolReader extends BaseActivity {
 		ParcelFileDescriptor cachedPfd = null;
 		DocumentSource resolvedSource = null;
 		try (InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
 			cachedBook = mDocumentCache.saveStream(
 					sourceInfo, inputStream, ParseBudget.MAX_DOCUMENT_INPUT_BYTES);
-			if (cachedBook != null) {
+			if (cachedBook != null
+					&& documentLoadLifecycle.isActive(loadOwner)) {
 				File cachedFile = new File(cachedBook.getFileInfo().pathname);
 				DocumentFormat detectedFormat;
 				try (InputStream probe = new FileInputStream(cachedFile)) {
@@ -1657,9 +1707,14 @@ public class CoolReader extends BaseActivity {
 					if (!cachedFile.delete())
 						log.w("Cannot delete unsupported cached document");
 					BackgroundThread.instance().postGUI(
-							() -> showToast(R.string.unsupported_document_format));
+							() -> {
+								if (documentLoadLifecycle.isActive(loadOwner))
+									showToast(R.string.unsupported_document_format);
+							});
 					throw new IOException("Unsupported document format");
 				}
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
 				cachedBook.getFileInfo().format = detectedFormat;
 				resolvedSource = source.withMetadata(
 						metadata.displayName, metadata.mimeType,
@@ -1671,17 +1726,37 @@ public class CoolReader extends BaseActivity {
 			log.e("Cannot cache non-seekable SAF document " + safeUriForLog(uri), e);
 			cachedBook = null;
 		}
+		if (!documentLoadLifecycle.isActive(loadOwner)) {
+			closeDescriptorQuietly(cachedPfd);
+			return;
+		}
 
 		final ParcelFileDescriptor resultPfd = cachedPfd;
 		final DocumentSource resultSource = resolvedSource;
 		BackgroundThread.instance().postGUI(() -> {
-			if (resultPfd == null || resultSource == null) {
-				runOpenError(errorCallback);
+			if (!documentLoadLifecycle.isActive(loadOwner)) {
+				closeDescriptorQuietly(resultPfd);
 				return;
 			}
-			runInReader(() -> mReaderView.loadDocumentFromFileDescriptor(
-					resultPfd, resultSource,
-					doneCallback, errorCallback));
+			if (resultPfd == null || resultSource == null) {
+				runOpenError(loadOwner, errorCallback);
+				return;
+			}
+			if (mReaderView == null) {
+				closeDescriptorQuietly(resultPfd);
+				runOpenError(loadOwner, errorCallback);
+				return;
+			}
+			try {
+				mReaderView.loadDocumentFromFileDescriptor(
+						loadOwner, resultPfd, resultSource,
+						doneCallback, errorCallback);
+			} catch (RuntimeException e) {
+				closeDescriptorQuietly(resultPfd);
+				log.e("Cannot transfer cached SAF document "
+						+ safeUriForLog(uri), e);
+				runOpenError(loadOwner, errorCallback);
+			}
 		});
 	}
 
@@ -1767,6 +1842,27 @@ public class CoolReader extends BaseActivity {
 	private void runOpenError(Runnable errorCallback) {
 		if (errorCallback != null)
 			BackgroundThread.instance().postGUI(errorCallback);
+	}
+
+	private void runOpenError(
+			DocumentLoadLifecycle.Request loadOwner,
+			Runnable errorCallback) {
+		BackgroundThread.instance().postGUI(() -> {
+			if (!documentLoadLifecycle.complete(loadOwner))
+				return;
+			if (errorCallback != null)
+				errorCallback.run();
+		});
+	}
+
+	private static void closeDescriptorQuietly(
+			ParcelFileDescriptor descriptor) {
+		if (descriptor == null)
+			return;
+		try {
+			descriptor.close();
+		} catch (IOException ignored) {
+		}
 	}
 
 	public void loadDocument(FileInfo item, boolean forceSync) {

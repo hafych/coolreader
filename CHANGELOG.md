@@ -463,11 +463,14 @@ The historical Debian changelog remains in [`changelog`](changelog).
   double-tap timeouts are reader-owned and canceled on gesture changes,
   `ACTION_CANCEL`, focus loss, book close or destruction; delayed tap inspection
   cannot publish against a replacement book.
-- Reader document loads now carry one exact generation through history lookup,
-  background/GUI handoff, native parsing and memory-stream reconciliation.
-  Replaced loads cannot publish UI or overwrite current book metadata, stale
-  file descriptors are closed, and each engine task uses its own `BookInfo`
-  instead of a mutable book pointer shared with a newer request.
+- Document loads now carry one Activity-owned exact generation through
+  DB-service readiness, SAF probing/non-seekable caching, descriptor transfer,
+  history lookup, native parsing and memory-stream reconciliation. A newer
+  selection invalidates the prior chain immediately, while navigation away
+  cancels pending opens without aborting reconciliation of an already
+  published book. Replaced loads cannot reopen Reader, publish UI or overwrite
+  current metadata, stale descriptors are closed, and each engine task uses
+  its own `BookInfo` instead of a mutable pointer shared with a newer request.
 - Reader animation and GC schedulers are now generation-owned and canceled
   during every teardown. Animation updates no longer coordinate unrelated
   Activities through a class monitor or retain active state after destruction.

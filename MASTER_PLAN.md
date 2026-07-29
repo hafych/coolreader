@@ -278,15 +278,19 @@ DRM или ограничений доступа, подбор/получени�
   loss/book close/destroy отменяют exact owner, stale selection completion
   проверяет handler identity и active service generation, а delayed
   link/image/bookmark completion дополнительно проверяет captured book identity.
-  Загрузка документа внутри `ReaderView` теперь также принадлежит exact
-  closeable generation: history lookup, background/GUI handoff, FD и memory
-  stream используют один token, replacement/close/destroy отбрасывают stale
-  callbacks и закрывают переданный descriptor. `LoadDocumentTask` хранит свой
-  `BookInfo` вместо чтения mutable global book во время engine work; только
-  current generation публикует UI, failure recovery и позднее stream-to-cache/
-  fingerprint reconciliation. Закрытие старой книги сохраняет её позицию до
-  публикации metadata новой, а native engine boundary закрывает документ,
-  оставшийся от уже заменённой parse-задачи.
+  Открытие документа теперь принадлежит одному Activity-owned
+  `DocumentLoadLifecycle` от первого public request до `ReaderView`: ожидание
+  DB service, SAF metadata/probe, non-seekable cache, descriptor transfer,
+  history lookup, background/GUI handoff, native load и memory-stream
+  reconciliation используют один exact token. Новый выбор, close и destroy
+  сразу инвалидируют всю старую цепочку; переход в browser/root отменяет
+  pending open, но не обрывает reconciliation уже опубликованной книги. Stale
+  SAF result не открывает Reader и закрывает ещё не переданный descriptor.
+  `LoadDocumentTask` хранит свой `BookInfo` вместо чтения mutable global book
+  во время engine work; только current generation публикует UI, failure
+  recovery и позднее stream-to-cache/fingerprint reconciliation. Закрытие
+  старой книги сохраняет её позицию до публикации metadata новой, а native
+  engine boundary закрывает документ, оставшийся от уже заменённой parse-задачи.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
