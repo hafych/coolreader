@@ -116,12 +116,12 @@ protected:
     CRPropRef _props;
     CRPropRef _newProps;
     lString16 _dataDir;
-    lString16 _settingsFileName;
+    lString32 _settingsFileName;
     lString32 _historyFileName;
     lString8  _css;
     lString32 _dictConfig;
     lString32 _bookmarkDir;
-	lString16 _helpFile;
+	lString32 _helpFile;
     lString32 _cssDir;
     time_t _loadFileStart;
 public:
@@ -147,8 +147,16 @@ public:
     {
         return loadCSS(Utf16ToUnicode(filename));
     }
-    bool loadSettings( lString16 filename );
-    bool saveSettings( lString16 filename );
+    bool loadSettings( lString32 filename );
+    bool loadSettings( lString16 filename )
+    {
+        return loadSettings(Utf16ToUnicode(filename));
+    }
+    bool saveSettings( lString32 filename );
+    bool saveSettings( lString16 filename )
+    {
+        return saveSettings(Utf16ToUnicode(filename));
+    }
     bool loadHistory( lString32 filename );
     bool loadHistory( lString16 filename )
     {
@@ -166,7 +174,11 @@ public:
     {
         return loadDictConfig(Utf16ToUnicode(filename));
     }
-	bool setHelpFile( lString16 filename );
+	bool setHelpFile( lString32 filename );
+    bool setHelpFile( lString16 filename )
+    {
+        return setHelpFile(Utf16ToUnicode(filename));
+    }
 	lString16 getHelpFile( );
 	/// on starting file loading
 	void OnLoadFileStart( lString32 filename ) override;

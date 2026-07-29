@@ -7019,6 +7019,21 @@ require_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_HEADER}"
+  "bool loadSettings( lString32 filename );"
+  "settings load paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool saveSettings( lString32 filename );"
+  "settings save paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool setHelpFile( lString32 filename );"
+  "help document paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
   "setBookmarkDir(Utf16ToUnicode(dir));"
   "legacy bookmark paths must cross an explicit compatibility boundary"
 )
@@ -7061,6 +7076,26 @@ forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "V3DocViewWin::loadDictConfig( lString16"
   "dictionary configuration implementations must not retain legacy widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::loadSettings( lString16"
+  "settings load implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::saveSettings( lString16"
+  "settings save implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::setHelpFile( lString16"
+  "help document implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "getAccTables().get(lString16"
+  "main-window accelerator table lookups must use the current string width"
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"

@@ -636,7 +636,7 @@ void V3DocViewWin::flush()
     CRDocViewWindow::flush();
 }
 
-bool V3DocViewWin::loadSettings( lString16 filename )
+bool V3DocViewWin::loadSettings( lString32 filename )
 {
 	CRLog::debug("loading settings from %s", LCSTR(filename));
     _settingsFileName = filename;
@@ -647,7 +647,6 @@ bool V3DocViewWin::loadSettings( lString16 filename )
         _docview->propsApply( _props );
         _wm->getScreen()->setFullUpdateInterval(_props->getIntDef(PROP_DISPLAY_FULL_UPDATE_INTERVAL, 1));
         _wm->getScreen()->setTurboUpdateEnabled(_props->getIntDef(PROP_DISPLAY_TURBO_UPDATE_MODE, 0));
-        //setAccelerators( _wm->getAccTables().get(lString16("main"), _props) );
         return false;
     }
     if ( _props->loadFromStream( stream.get() ) ) {
@@ -656,18 +655,17 @@ bool V3DocViewWin::loadSettings( lString16 filename )
         _docview->propsApply( _props );
         _wm->getScreen()->setFullUpdateInterval(_props->getIntDef(PROP_DISPLAY_FULL_UPDATE_INTERVAL, 1));
         _wm->getScreen()->setTurboUpdateEnabled(_props->getIntDef(PROP_DISPLAY_TURBO_UPDATE_MODE, 0));
-        setAccelerators( _wm->getAccTables().get(lString16("main"), _props) );
+        setAccelerators(_wm->getAccTables().get(cs32("main"), _props));
         return true;
     }
     _docview->propsUpdateDefaults( _props );
     _docview->propsApply( _props );
     _wm->getScreen()->setFullUpdateInterval(_props->getIntDef(PROP_DISPLAY_FULL_UPDATE_INTERVAL, 1));
     _wm->getScreen()->setTurboUpdateEnabled(_props->getIntDef(PROP_DISPLAY_TURBO_UPDATE_MODE, 0));
-    //setAccelerators( _wm->getAccTables().get(lString16("main"), _props) );
     return false;
 }
 
-bool V3DocViewWin::saveSettings( lString16 filename )
+bool V3DocViewWin::saveSettings( lString32 filename )
 {
     crtrace log;
     if ( filename.empty() )
@@ -678,9 +676,10 @@ bool V3DocViewWin::saveSettings( lString16 filename )
     log << "V3DocViewWin::saveSettings(" << filename << ")";
     LVStreamRef stream = LVOpenFileStream( filename.c_str(), LVOM_WRITE );
     if ( !stream ) {
-        lString16 path16 = LVExtractPath( filename );
-        lString8 path = UnicodeToLocal( path16 );
+        lString32 pathName = LVExtractPath(filename);
+        lString8 path = UnicodeToLocal(pathName);
 #ifdef _WIN32
+        lString16 path16 = UnicodeToUtf16(pathName);
         if ( !CreateDirectoryW( path16.c_str(), NULL ) ) {
             CRLog::error("Cannot create directory %s", path.c_str() );
         } else {
@@ -718,7 +717,7 @@ void V3DocViewWin::applySettings()
     _docview->propsApply( delta );
     _props = _newProps; // | _props;
     _wm->getScreen()->setFullUpdateInterval(_props->getIntDef(PROP_DISPLAY_FULL_UPDATE_INTERVAL, 1));
-    setAccelerators( _wm->getAccTables().get(lString16("main"), _props) );
+    setAccelerators(_wm->getAccTables().get(cs32("main"), _props));
 }
 
 void V3DocViewWin::showSettingsMenu()
@@ -767,7 +766,7 @@ void V3DocViewWin::showRecentBooksMenu()
 }
 
 
-bool V3DocViewWin::setHelpFile( lString16 filename )
+bool V3DocViewWin::setHelpFile( lString32 filename )
 {
 	if ( LVFileExists( filename ) ) {
 		_helpFile = filename;
@@ -778,7 +777,7 @@ bool V3DocViewWin::setHelpFile( lString16 filename )
 
 lString16 V3DocViewWin::getHelpFile( )
 {
-	return _helpFile;
+	return UnicodeToUtf16(_helpFile);
 }
 
 void V3DocViewWin::openRecentBook( int index )
@@ -787,7 +786,7 @@ void V3DocViewWin::openRecentBook( int index )
     LVPtrVector<CRFileHistRecord> & files = _docview->getHistory()->getRecords();
     if ( index >= 1 && index < files.length() ) {
         CRFileHistRecord * file = files.get( index );
-        lString16 fn = file->getFilePathName();
+        lString32 fn = file->getFilePathName();
         // TODO: check error
         if ( LVFileExists(fn) ) {
             //showWaitIcon();
@@ -852,7 +851,8 @@ VIEWER_MENU_5ABOUT=About...
 VIEWER_MENU_4ABOUT=About...
 */
     menu_win->setSkinName(lString16("#main"));
-	CRGUIAcceleratorTableRef menuItems = _wm->getAccTables().get(lString16("mainMenuItems"));
+	CRGUIAcceleratorTableRef menuItems =
+            _wm->getAccTables().get(cs32("mainMenuItems"));
 	if ( !menuItems.isNull() && menuItems->length()>1 ) {
 		// get menu from file
         for (int i=0; i < menuItems->length(); i++) {
@@ -1173,12 +1173,12 @@ bool V3DocViewWin::onCommand( int command, int params )
 #endif
     case mm_FontSize:
         applySettings();
-        saveSettings(lString16::empty_str);
+        saveSettings(lString32::empty_str);
         _wm->getSkin()->gc();
         return true;
     case DCMD_SAVE_HISTORY:
-        saveHistory(lString16::empty_str);
-        saveSettings(lString16::empty_str);
+        saveHistory(lString32::empty_str);
+        saveSettings(lString32::empty_str);
         return true;
     case DCMD_SAVE_TO_CACHE:
         _docview->swapToCache();
@@ -1199,7 +1199,7 @@ bool V3DocViewWin::onCommand( int command, int params )
         showWaitIcon();
 		CRViewDialog::onCommand( command, params );
         _props->setInt( PROP_FONT_SIZE, _docview->getFontSize() );
-        saveSettings(lString16::empty_str);
+        saveSettings(lString32::empty_str);
         return true;
     case MCMD_HELP:
         showHelpDialog();
@@ -1207,7 +1207,7 @@ bool V3DocViewWin::onCommand( int command, int params )
     case DCMD_BOOKMARK_SAVE_N:
         _docview->doCommand( DCMD_BOOKMARK_SAVE_N, params );
         if ( _props->getBoolDef( PROP_AUTOSAVE_BOOKMARKS, true ) )
-            saveHistory(lString16::empty_str);
+            saveHistory(lString32::empty_str);
         return true;
     default:
         // do nothing
