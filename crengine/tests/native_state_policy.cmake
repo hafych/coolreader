@@ -669,6 +669,41 @@ forbid_source_text(
   "delete item->layout"
   "modern Qt fallback-font layouts must remain row-owned"
 )
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "WolExportDlg dialog(this);"
+  "modern Qt export options must retain scoped ownership"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "ExportProgressDlg progress_dialog(this);"
+  "modern Qt export progress must retain scoped ownership"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "class DocViewCallbackScope final"
+  "modern Qt export callbacks must retain scoped restoration"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "_docview.setCallback(_previous);"
+  "modern Qt export callbacks must restore the previous observer"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "new WolExportDlg"
+  "modern Qt export options must not return to raw ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "new ExportProgressDlg"
+  "modern Qt export progress must not return to raw ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "setCallback( oldCallback"
+  "modern Qt export callbacks must not return to manual restoration"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(

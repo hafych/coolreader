@@ -203,7 +203,7 @@ DRM или ограничений доступа, подбор/получени�
   output ownership, а также GUI window-manager screen owner/borrow lifecycle,
   transactional canvas-generation resize, modern Qt view
   PIMPL/document/word-selector, generated-UI helper owners и fallback-font
-  row/control graphs,
+  row/control graphs, scoped export dialogs и callback restoration,
   GUI window/event queue ownership и
   scoped accelerator/command-event/main-menu/recent/bookmark item
   publication candidates и lifecycle `CRDocViewWindow`, scoped page-image

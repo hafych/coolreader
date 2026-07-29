@@ -175,70 +175,86 @@ void MainWindow::on_view_destroyed()
     //
 }
 
-class ExportProgressCallback : public LVDocViewCallback
+namespace {
+
+class ExportProgressCallback final : public LVDocViewCallback
 {
-    ExportProgressDlg * _dlg;
+    ExportProgressDlg & _dialog;
 public:
-    ExportProgressCallback( ExportProgressDlg * dlg )
-            : _dlg(dlg)
+    explicit ExportProgressCallback( ExportProgressDlg & dialog )
+            : _dialog(dialog)
     {
     }
     /// document formatting started
-    virtual void OnFormatStart()
+    void OnFormatStart() override
     {
-        _dlg->setPercent(0);
+        _dialog.setPercent(0);
     }
     /// document formatting finished
-    virtual void OnFormatEnd()
+    void OnFormatEnd() override
     {
-        _dlg->setPercent(100);
+        _dialog.setPercent(100);
     }
     /// format progress, called with values 0..100
-    virtual void OnFormatProgress( int )
+    void OnFormatProgress( int ) override
     {
     }
     /// export progress, called with values 0..100
-    virtual void OnExportProgress( int percent )
+    void OnExportProgress( int percent ) override
     {
-        _dlg->setPercent(percent);
+        _dialog.setPercent(percent);
     }
 };
+
+class DocViewCallbackScope final
+{
+    LVDocView & _docview;
+    LVDocViewCallback * _previous;
+public:
+    DocViewCallbackScope( LVDocView & docview, LVDocViewCallback & callback )
+            : _docview(docview), _previous(docview.getCallback())
+    {
+        _docview.setCallback(&callback);
+    }
+
+    ~DocViewCallbackScope()
+    {
+        _docview.setCallback(_previous);
+    }
+
+    DocViewCallbackScope( const DocViewCallbackScope & ) = delete;
+    DocViewCallbackScope & operator=( const DocViewCallbackScope & ) = delete;
+};
+
+} // namespace
 
 void MainWindow::on_actionExport_triggered()
 {
     QString fileName = QFileDialog::getSaveFileName(this, tr("Export document to"),
          QString(),
          tr("WOL book (*.wol)"));
-    if ( fileName.length()==0 )
+    if ( fileName.isEmpty() )
         return;
-    WolExportDlg * dlg = new WolExportDlg( this );
-    //dlg->setModal( true );
-    dlg->setWindowTitle(tr("Export to WOL format"));
-//    dlg->setModal( true );
-//    dlg->show();
-    //dlg->raise();
-    //dlg->activateWindow();
-    int result = dlg->exec();
-    if ( result==QDialog::Accepted ) {
-        int bpp = dlg->getBitsPerPixel();
-        int levels = dlg->getTocLevels();
-        delete dlg;
-        repaint();
-        ExportProgressDlg * msg = new ExportProgressDlg(this);
-        msg->show();
-        msg->raise();
-        msg->activateWindow();
-        msg->repaint();
-        repaint();
-        ExportProgressCallback progress(msg);
-        LVDocViewCallback * oldCallback = ui->view->getDocView()->getCallback( );
-        ui->view->getDocView()->setCallback( &progress );
-        ui->view->getDocView()->exportWolFile(qt2cr(fileName).c_str(), bpp>1, levels );
-        ui->view->getDocView()->setCallback( oldCallback );
-        delete msg;
-    } else {
-        delete dlg;
-    }
+    WolExportDlg dialog(this);
+    dialog.setWindowTitle(tr("Export to WOL format"));
+    if ( dialog.exec() != QDialog::Accepted )
+        return;
+
+    int bpp = dialog.getBitsPerPixel();
+    int levels = dialog.getTocLevels();
+    repaint();
+
+    ExportProgressDlg progress_dialog(this);
+    progress_dialog.show();
+    progress_dialog.raise();
+    progress_dialog.activateWindow();
+    progress_dialog.repaint();
+    repaint();
+
+    ExportProgressCallback progress(progress_dialog);
+    LVDocView & docview = *ui->view->getDocView();
+    DocViewCallbackScope callback_scope(docview, progress);
+    docview.exportWolFile(qt2cr(fileName).c_str(), bpp > 1, levels);
 }
 
 void MainWindow::on_actionOpen_triggered()
