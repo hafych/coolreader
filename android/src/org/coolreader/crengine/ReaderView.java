@@ -45,7 +45,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.text.ClipboardManager;
-import android.util.SparseArray;
 import android.view.GestureDetector;
 import android.view.GestureDetector.SimpleOnGestureListener;
 import android.view.KeyEvent;
@@ -435,10 +434,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public final int LONG_KEYPRESS_TIME = 900;
 	public final int AUTOREPEAT_KEYPRESS_TIME = 700;
 	public final int DOUBLE_CLICK_INTERVAL = 400;
+	private static final long KEY_DOWN_TIME_TOLERANCE = 300L;
 	private final KeyDoubleClickState<ReaderAction>
 			keyDoubleClickState = new KeyDoubleClickState<>();
 	private final DelayedExecutor keyDoubleClickScheduler =
 			DelayedExecutor.createGUI("key-double-click");
+	private final KeyRepeatState<ReaderAction> keyRepeatState =
+			new KeyRepeatState<>();
 //	boolean VOLUME_KEYS_ZOOM = false;
 
 	//private boolean backKeyDownHere = false;
@@ -498,19 +500,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		bookView.onResume();
 	}
 
-	private boolean startTrackingKey(KeyEvent event) {
-		if (event.getRepeatCount() == 0) {
-			stopTracking();
-			trackedKeyEvent = event;
-			return true;
-		}
-		return false;
+	private KeyRepeatState.Press<ReaderAction> startTrackingKey(
+			KeyEvent event, ReaderAction repeatAction) {
+		if (event.getRepeatCount() != 0)
+			return null;
+		stopTracking();
+		return keyRepeatState.begin(
+				event.getKeyCode(),
+				event.getDownTime(),
+				repeatAction);
 	}
 
 	private void stopTracking() {
-		trackedKeyEvent = null;
-		actionToRepeat = null;
-		repeatActionActive = false;
+		keyRepeatState.cancel();
 		cancelKeyDoubleClick();
 		if (currentTapHandler != null)
 			currentTapHandler.cancel();
@@ -533,34 +535,35 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		onAction(action);
 	}
 
-	private boolean isTracked(KeyEvent event) {
-		if (trackedKeyEvent != null) {
-			int tkeKc = trackedKeyEvent.getKeyCode();
-			int eKc = event.getKeyCode();
-			// check if tracked key and current key are the same
-			if (tkeKc == eKc) {
-				long tkeDt = trackedKeyEvent.getDownTime();
-				long eDt = event.getDownTime();
-				// empirical value (could be changed or moved to constant)
-				long delta = 300l;
-				// time difference between tracked and current event
-				long diff = eDt - tkeDt;
-				// needed for correct function on HTC Desire for CENTER_KEY
-				if (delta > diff)
-					return true;
-			} else {
-				log.v("isTracked( trackedKeyEvent=" + trackedKeyEvent + ", event=" + event + " )");
-			}
+	private KeyRepeatState.Release releaseTrackedKey(
+			KeyEvent event) {
+		KeyRepeatState.Release release =
+				keyRepeatState.release(
+						event.getKeyCode(),
+						event.getDownTime(),
+						event.getEventTime(),
+						KEY_DOWN_TIME_TOLERANCE,
+						LONG_KEYPRESS_TIME);
+		if (!release.isTracked()) {
+			log.v("releaseTrackedKey: unmatched event "
+					+ event);
+			stopTracking();
 		}
-		stopTracking();
-		return false;
+		return release;
 	}
 
-
-	private KeyEvent trackedKeyEvent = null;
-	private ReaderAction actionToRepeat = null;
-	private boolean repeatActionActive = false;
-	private SparseArray<Long> keyDownTimestampMap = new SparseArray<Long>();
+	private void runKeyRepeatAction(
+			KeyRepeatState.Repeat<ReaderAction> repeat) {
+		if (repeat == null)
+			return;
+		ReaderAction action = repeat.action();
+		log.v("running repeat action : " + action);
+		onAction(action, () -> {
+			if (keyRepeatState.completeRepeat(repeat))
+				log.v("repeat action is completed : "
+						+ action);
+		});
+	}
 
 	private int translateKeyCode(int keyCode) {
 		if (DeviceInfo.REVERT_LANDSCAPE_VOLUME_KEYS && (mActivity.getScreenOrientation() & 1) != 0) {
@@ -1246,6 +1249,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void closeGestureTimeouts() {
+		keyRepeatState.close();
 		keyDoubleClickState.close();
 		keyDoubleClickScheduler.cancel();
 		tapGestureLifecycle.close();
@@ -9022,7 +9026,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //		backKeyDownHere = false;
 		if (event.getRepeatCount() == 0) {
 			log.v("onKeyDown(" + keyCode + ", " + event + ")");
-			keyDownTimestampMap.put(keyCode, System.currentTimeMillis());
 
 			if (keyCode == KeyEvent.KEYCODE_BACK) {
 				// force saving position on BACK key press
@@ -9076,22 +9079,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		if (event.getRepeatCount() > 0) {
-			if (!isTracked(event))
+			KeyRepeatState.RepeatEvent<ReaderAction>
+					repeatEvent =
+					keyRepeatState.repeat(
+							event.getKeyCode(),
+							event.getDownTime(),
+							event.getEventTime(),
+							KEY_DOWN_TIME_TOLERANCE,
+							AUTOREPEAT_KEYPRESS_TIME);
+			if (!repeatEvent.isTracked()) {
+				stopTracking();
 				return true; // ignore
-			// repeating key down
-			boolean isLongPress = (event.getEventTime() - event.getDownTime()) >= AUTOREPEAT_KEYPRESS_TIME;
-			if (isLongPress) {
-				if (actionToRepeat != null) {
-					if (!repeatActionActive) {
-						log.v("autorepeating action : " + actionToRepeat);
-						repeatActionActive = true;
-						onAction(actionToRepeat, () -> {
-							if (trackedKeyEvent != null && trackedKeyEvent.getDownTime() == event.getDownTime()) {
-								log.v("action is completed : " + actionToRepeat);
-								repeatActionActive = false;
-							}
-						});
-					}
+			}
+			if (repeatEvent.isLongPress()) {
+				if (repeatEvent.hasRepeatAction()) {
+					runKeyRepeatAction(
+							repeatEvent.repeat());
 				} else {
 					stopTracking();
 					log.v("executing action on long press : " + longAction);
@@ -9103,30 +9106,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		if (!action.isNone() && action.canRepeat() && longAction.isRepeat()) {
 			// start tracking repeat
-			startTrackingKey(event);
-			actionToRepeat = action;
-			log.v("running action with scheduled autorepeat : " + actionToRepeat);
-			repeatActionActive = true;
-			onAction(actionToRepeat, () -> {
-				if (trackedKeyEvent == event) {
-					log.v("action is completed : " + actionToRepeat);
-					repeatActionActive = false;
-				}
-			});
+			KeyRepeatState.Press<ReaderAction> press =
+					startTrackingKey(event, action);
+			KeyRepeatState.Repeat<ReaderAction> repeat =
+					keyRepeatState.startRepeat(press);
+			if (repeat == null)
+				return false;
+			runKeyRepeatAction(repeat);
 			return true;
-		} else {
-			actionToRepeat = null;
 		}
 
 /*		if ( keyCode>=KeyEvent.KEYCODE_0 && keyCode<=KeyEvent.KEYCODE_9 ) {
 			// will process in keyup handler
-			startTrackingKey(event);
+			startTrackingKey(event, null);
 			return true;
 		}*/
 		if (action.isNone() && longAction.isNone())
 			return false;
-		startTrackingKey(event);
-		return true;
+		return startTrackingKey(event, null) != null;
 	}
 
 	public boolean onKeyUp(int keyCode, final KeyEvent event) {
@@ -9152,7 +9149,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			mActivity.releaseBacklightControl();
 			return false;
 		}
-		boolean tracked = isTracked(event);
+		KeyRepeatState.Release keyRelease =
+				releaseTrackedKey(event);
+		boolean tracked = keyRelease.isTracked();
 //		if ( keyCode!=KeyEvent.KEYCODE_BACK )
 //			backKeyDownHere = false;
 
@@ -9162,10 +9161,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		// apply orientation
 		keyCode = overrideKey(keyCode);
-		boolean isLongPress = false;
-		Long keyDownTs = keyDownTimestampMap.get(keyCode);
-		if (keyDownTs != null && System.currentTimeMillis() - keyDownTs >= LONG_KEYPRESS_TIME)
-			isLongPress = true;
+		boolean isLongPress =
+				keyRelease.isLongPress();
 		ReaderAction action = ReaderAction.findForKey(keyCode, mSettings);
 		ReaderAction longAction = ReaderAction.findForLongKey(keyCode, mSettings);
 		ReaderAction dblAction = ReaderAction.findForDoubleKey(keyCode, mSettings);

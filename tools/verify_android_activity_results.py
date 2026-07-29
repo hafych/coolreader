@@ -241,6 +241,7 @@ READER_NATIVE_LIFECYCLE = (
 KEY_DOUBLE_CLICK_STATE = (
     SOURCE / "crengine" / "KeyDoubleClickState.java"
 )
+KEY_REPEAT_STATE = SOURCE / "crengine" / "KeyRepeatState.java"
 POSITION_PROPERTIES = SOURCE / "crengine" / "PositionProperties.java"
 DOCUMENT_POSITION_POLICY = (
     SOURCE / "crengine" / "DocumentPositionPolicy.java"
@@ -353,6 +354,18 @@ KEY_DOUBLE_CLICK_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "KeyDoubleClickStateTest.java"
+)
+KEY_REPEAT_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "KeyRepeatStateTest.java"
 )
 POSITION_PROPERTIES_TEST = (
     ROOT
@@ -2381,6 +2394,11 @@ def main() -> None:
         "surface.getHolder().removeCallback(this)",
         "private final KeyDoubleClickState<ReaderAction>",
         "private final DelayedExecutor keyDoubleClickScheduler",
+        "private final KeyRepeatState<ReaderAction> keyRepeatState",
+        "keyRepeatState.repeat(",
+        "keyRepeatState.release(",
+        "keyRepeatState.completeRepeat(",
+        "keyRepeatState.close()",
         "private final CloseableTaskGate tapGestureLifecycle",
         "private final DelayedExecutor tapGestureScheduler",
         "private volatile int autoScrollSpeed",
@@ -3025,6 +3043,10 @@ def main() -> None:
         "currentSingleClickAction",
         "currentDoubleClickActionStart",
         "currentDoubleClickActionKeyCode",
+        "trackedKeyEvent",
+        "actionToRepeat",
+        "repeatActionActive",
+        "keyDownTimestampMap",
         "updateSerialNumber",
         "postGUI(() -> mEinkScreen.refreshScreen(surface)",
         "BackgroundThread.instance().postGUI("
@@ -3206,6 +3228,9 @@ def main() -> None:
         "ReaderPageCacheClose.class",
         '"initialCurrent"',
         '"publishSerialized"',
+        "KeyRepeatState.class",
+        '"keyRepeatState"',
+        '"completeRepeat"',
         '"cancelPendingDocumentLoad"',
         '"isDocumentInteractionCurrent"',
         '"isOwnedDocumentLoadCurrent"',
@@ -3537,6 +3562,48 @@ def main() -> None:
             violations.append(
                 f"{relative(KEY_DOUBLE_CLICK_STATE_TEST)} omits key "
                 f"double-click regression: {marker}")
+
+    key_repeat_state_text = KEY_REPEAT_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class KeyRepeatState<T>",
+        "private Press<T> current",
+        "private boolean repeatInFlight",
+        "private boolean closed",
+        "synchronized Press<T> begin(",
+        "synchronized Repeat<T> startRepeat(Press<T> press)",
+        "synchronized RepeatEvent<T> repeat(",
+        "synchronized boolean completeRepeat(Repeat<T> repeat)",
+        "synchronized Release release(",
+        "synchronized void cancel()",
+        "synchronized boolean close()",
+        "downTime < press.downTime",
+        "startedAt > Long.MAX_VALUE - interval",
+        "static final class Press<T>",
+        "static final class Repeat<T>",
+        "static final class RepeatEvent<T>",
+        "static final class Release",
+    ):
+        if marker not in key_repeat_state_text:
+            violations.append(
+                f"{relative(KEY_REPEAT_STATE)} omits exact key-repeat "
+                f"marker: {marker}")
+
+    key_repeat_state_test_text = KEY_REPEAT_STATE_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "initialAndRepeatedActionsCompleteByExactIdentity",
+        "staleCompletionCannotReleaseReplacementPress",
+        "downTimeToleranceIsBoundedAndRejectsRegression",
+        "releaseUsesMonotonicEventTimeAndClearsPress",
+        "clockRegressionAndOverflowCannotForgeLongPress",
+        "cancelAllowsReuseAndCloseRejectsNewPresses",
+        "Long.MAX_VALUE",
+    ):
+        if marker not in key_repeat_state_test_text:
+            violations.append(
+                f"{relative(KEY_REPEAT_STATE_TEST)} omits key-repeat "
+                f"regression: {marker}")
 
     auto_scroll_state_text = AUTO_SCROLL_SESSION_STATE.read_text(
         encoding="utf-8")

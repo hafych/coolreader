@@ -340,11 +340,16 @@ DRM или ограничений доступа, подбор/получени�
   synchronized `KeyDoubleClickState`: immutable pending identity не позволяет
   stale timer очистить replacement, matching second press потребляет double,
   остальные/expired/regressed события flush только prior single с
-  overflow-safe elapsed. Touch long/double timeouts используют отдельный
-  closeable gate и reader scheduler; replacement/drag/`ACTION_CANCEL`/focus
-  loss/book close/destroy отменяют exact owner, stale selection completion
-  проверяет handler identity и active service generation, а delayed
-  link/image/bookmark completion дополнительно проверяет captured book identity.
+  overflow-safe elapsed. Hardware key repeat/long-press также принадлежит
+  synchronized `KeyRepeatState`: одна press identity заменяет `KeyEvent`,
+  action, in-flight flag и неограниченную timestamp map; каждый command
+  completion может освободить только свой repeat token, а duration считается
+  по monotonic event time с bounded device tolerance и без wall-clock jumps.
+  Touch long/double timeouts используют отдельный closeable gate и reader
+  scheduler; replacement/drag/`ACTION_CANCEL`/focus loss/book close/destroy
+  отменяют exact owner, stale selection completion проверяет handler identity и
+  active service generation, а delayed link/image/bookmark completion
+  дополнительно проверяет captured book identity.
   Открытие документа теперь принадлежит одному Activity-owned
   `DocumentLoadLifecycle` от первого public request до `ReaderView`: ожидание
   DB service, SAF metadata/probe, non-seekable cache, descriptor transfer,

@@ -436,6 +436,7 @@ public class ActivityOwnershipPolicyTest {
 				"einkRefreshScheduler",
 				"keyDoubleClickState",
 				"keyDoubleClickScheduler",
+				"keyRepeatState",
 				"tapGestureLifecycle",
 				"tapGestureScheduler"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
@@ -1216,6 +1217,60 @@ public class ActivityOwnershipPolicyTest {
 				"cancel");
 		assertSynchronizedMethod(
 				KeyDoubleClickState.class,
+				"close");
+		assertTrue(Modifier.isFinal(
+				KeyRepeatState.class.getModifiers()));
+		for (Field field :
+				KeyRepeatState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Class<?> nested :
+				KeyRepeatState.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				assertTrue(Modifier.isPrivate(
+						field.getModifiers()));
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+			}
+		}
+		assertSynchronizedMethod(
+				KeyRepeatState.class,
+				"begin",
+				int.class,
+				long.class,
+				Object.class);
+		assertSynchronizedMethod(
+				KeyRepeatState.class,
+				"startRepeat",
+				KeyRepeatState.Press.class);
+		assertSynchronizedMethod(
+				KeyRepeatState.class,
+				"repeat",
+				int.class,
+				long.class,
+				long.class,
+				long.class,
+				long.class);
+		assertSynchronizedMethod(
+				KeyRepeatState.class,
+				"completeRepeat",
+				KeyRepeatState.Repeat.class);
+		assertSynchronizedMethod(
+				KeyRepeatState.class,
+				"release",
+				int.class,
+				long.class,
+				long.class,
+				long.class,
+				long.class);
+		assertSynchronizedMethod(
+				KeyRepeatState.class,
+				"cancel");
+		assertSynchronizedMethod(
+				KeyRepeatState.class,
 				"close");
 		for (String name : new String[]{
 				"cancelTapGestureTimeout",

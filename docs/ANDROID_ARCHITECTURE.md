@@ -112,7 +112,14 @@ parallel fields. A scheduled single-click claims its exact immutable pending
 decision, so an old timer cannot clear or execute a replacement; a matching
 second press consumes the double action, while another, expired or
 clock-regressed press flushes only the prior single action with overflow-safe
-elapsed arithmetic. Touch long-press and double-tap timeouts use a separate
+elapsed arithmetic. Hardware-key repeat and long-press state likewise belongs
+to one synchronized `KeyRepeatState`, replacing the retained `KeyEvent`,
+repeat action, in-flight flag and unbounded wall-clock timestamp map. Each
+command completion releases only its exact press/repeat token; release,
+cancellation, focus loss, book close and destruction invalidate it. Long-press
+duration uses monotonic `KeyEvent` time with a bounded device down-time
+tolerance, so clock jumps or a stale completion cannot trigger or unblock a
+replacement press. Touch long-press and double-tap timeouts use a separate
 closeable gate plus reader-owned scheduler. Gesture replacement, drag-mode
 entry, `ACTION_CANCEL`, focus loss, book close and reader destruction cancel
 the exact timeout, and late selection inspection verifies both its handler
