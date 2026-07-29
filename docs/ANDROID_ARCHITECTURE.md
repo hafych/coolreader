@@ -98,6 +98,13 @@ Nook 1.2 creates its controller only from the current View host. Vendor
 methods, constructors, enum arrays and failure diagnostics are not retained in
 mutable process-wide fields.
 
+Each `ReaderView` also owns its bitmap pool and `VMRuntimeHack`. The optional
+legacy VM reflection bindings are final, accounting is synchronized and uses a
+`long`, and failed vendor calls do not corrupt the local total. Bitmap memory
+uses the actual row stride; the legacy surface estimate widens before
+multiplication. Replacement reader generations therefore cannot share pool or
+diagnostic accounting state.
+
 ## Migration rule
 
 New Android components should:

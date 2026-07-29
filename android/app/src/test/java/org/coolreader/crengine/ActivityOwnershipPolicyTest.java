@@ -19,6 +19,7 @@ import org.coolreader.plugins.litres.LitresPlugin;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.text.DateFormat;
 
@@ -153,6 +154,43 @@ public class ActivityOwnershipPolicyTest {
 					"Page-curve storage must not escape its owner: "
 							+ field.getName(),
 					Modifier.isPrivate(field.getModifiers()));
+		}
+	}
+
+	@Test
+	public void readerBitmapMemoryStateBelongsToOneGeneration()
+			throws Exception {
+		for (String name : new String[]{"runtime", "factory"}) {
+			Field field = ReaderView.class.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		Field surfaceMemory =
+				ReaderView.class.getDeclaredField("hackMemorySize");
+		assertFalse(Modifier.isStatic(surfaceMemory.getModifiers()));
+		assertEquals(long.class, surfaceMemory.getType());
+
+		for (Field field : VMRuntimeHack.class.getDeclaredFields()) {
+			assertFalse(
+					"VMRuntime state must be reader-owned: " + field.getName(),
+					Modifier.isStatic(field.getModifiers()));
+			assertTrue(
+					"VMRuntime state must remain encapsulated: "
+							+ field.getName(),
+					Modifier.isPrivate(field.getModifiers()));
+			if (!field.getName().equals("totalSize"))
+				assertTrue(
+						"VMRuntime bindings must be immutable: "
+								+ field.getName(),
+						Modifier.isFinal(field.getModifiers()));
+		}
+		Field totalSize = VMRuntimeHack.class.getDeclaredField("totalSize");
+		assertEquals(long.class, totalSize.getType());
+		for (String methodName : new String[]{"trackAlloc", "trackFree"}) {
+			Method method =
+					VMRuntimeHack.class.getDeclaredMethod(
+							methodName, long.class);
+			assertTrue(Modifier.isSynchronized(method.getModifiers()));
 		}
 	}
 

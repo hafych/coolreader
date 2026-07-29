@@ -3467,12 +3467,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	private static final VMRuntimeHack runtime = new VMRuntimeHack();
+	private final VMRuntimeHack runtime = new VMRuntimeHack();
 
-	private static class BitmapFactory {
+	private static final class BitmapFactory {
 		public static final int MAX_FREE_LIST_SIZE = 2;
-		ArrayList<Bitmap> freeList = new ArrayList<Bitmap>();
-		ArrayList<Bitmap> usedList = new ArrayList<Bitmap>();
+		private final VMRuntimeHack runtime;
+		private final ArrayList<Bitmap> freeList = new ArrayList<Bitmap>();
+		private final ArrayList<Bitmap> usedList = new ArrayList<Bitmap>();
+
+		BitmapFactory(VMRuntimeHack runtime) {
+			this.runtime = runtime;
+		}
 
 		public synchronized Bitmap get(int dx, int dy) {
 			for (int i = 0; i < freeList.size(); i++) {
@@ -3487,12 +3492,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			for (int i = freeList.size() - 1; i >= 0; i--) {
 				Bitmap bmp = freeList.remove(i);
-				runtime.trackAlloc(bmp.getWidth() * bmp.getHeight() * 2);
+				runtime.trackAlloc(BitmapMemoryAccounting.bitmapBytes(
+						bmp.getRowBytes(), bmp.getHeight()));
 				//log.d("Recycling free bitmap "+bmp.getWidth()+"x"+bmp.getHeight());
 				//bmp.recycle(); //20110109
 			}
 			Bitmap bmp = Bitmap.createBitmap(dx, dy, DeviceInfo.BUFFER_COLOR_FORMAT);
-			runtime.trackFree(dx * dy * 2);
+			runtime.trackFree(BitmapMemoryAccounting.bitmapBytes(
+					bmp.getRowBytes(), bmp.getHeight()));
 			//bmp.setDensity(0);
 			usedList.add(bmp);
 			//log.d("Created new bitmap "+dx+"x"+dy+". New bitmap list size = " + usedList.size());
@@ -3503,7 +3510,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			while (freeList.size() > 0) {
 				//freeList.get(0).recycle();//20110109
 				Bitmap bmp = freeList.remove(0);
-				runtime.trackAlloc(bmp.getWidth() * bmp.getHeight() * 2);
+				runtime.trackAlloc(BitmapMemoryAccounting.bitmapBytes(
+						bmp.getRowBytes(), bmp.getHeight()));
 			}
 		}
 
@@ -3515,7 +3523,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					while (freeList.size() > MAX_FREE_LIST_SIZE) {
 						//freeList.get(0).recycle(); //20110109
 						Bitmap b = freeList.remove(0);
-						runtime.trackAlloc(b.getWidth() * b.getHeight() * 2);
+						runtime.trackAlloc(BitmapMemoryAccounting.bitmapBytes(
+								b.getRowBytes(), b.getHeight()));
 						//b.recycle();
 					}
 					log.d("BitmapFactory: bitmap released, used size = " + usedList.size() + ", free size=" + freeList.size());
@@ -3528,7 +3537,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	;
-	BitmapFactory factory = new BitmapFactory();
+	private final BitmapFactory factory = new BitmapFactory(runtime);
 
 	class BitmapInfo {
 		Bitmap bitmap;
@@ -3888,7 +3897,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	int hackMemorySize = 0;
+	private long hackMemorySize;
 
 	// SurfaceView callbacks
 	@Override
@@ -3897,7 +3906,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		log.i("surfaceChanged(" + width + ", " + height + ")");
 
 		if (hackMemorySize <= 0) {
-			hackMemorySize = width * height * 2;
+			hackMemorySize =
+					BitmapMemoryAccounting.surfaceBytes(width, height);
 			runtime.trackFree(hackMemorySize);
 		}
 

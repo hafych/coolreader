@@ -136,7 +136,9 @@ DRM или ограничений доступа, подбор/получени�
   Activity-owned backlight timestamp/timer и pure timeout policy, а также
   thread-safe strict OPDS timestamp parser без shared formatter state и
   generation-owned immutable Nook EPD reflection bindings без mutable
-  process-wide vendor cache.
+  process-wide vendor cache, плюс ReaderView-owned bitmap pool/VMRuntime
+  tracker с immutable reflection bindings, synchronized long accounting и
+  widened row-stride/surface byte sizes.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

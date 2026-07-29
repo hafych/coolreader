@@ -47,6 +47,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Nook E-Ink vendor reflection bindings are now immutable and owned by one
   screen-controller generation; disabled devices skip proprietary class
   loading, while legacy and Nook 1.2 invocation paths have local JVM coverage.
+- Reader bitmap pools and the optional legacy VM memory tracker are now scoped
+  to one reader generation. Tracking is synchronized and uses real row strides
+  plus widened byte counts, without shared or overflow-prone static totals.
 - The native Engine retains only application context plus a detachable weak UI
   host, and stale Activity shutdown can no longer tear down a newer generation.
 - ReaderView receives scanner, history, document cache and a per-generation

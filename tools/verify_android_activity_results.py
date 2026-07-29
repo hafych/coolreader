@@ -22,6 +22,10 @@ SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
+VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
+BITMAP_MEMORY_ACCOUNTING = (
+    SOURCE / "crengine" / "BitmapMemoryAccounting.java"
+)
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 PAGE_CURVE_TABLES = SOURCE / "crengine" / "PageCurveTables.java"
 BACKLIGHT_OPTIONS = SOURCE / "crengine" / "BacklightOptions.java"
@@ -154,6 +158,30 @@ NOOK_CONTROLLER_BINDINGS_TEST = (
     / "coolreader"
     / "crengine"
     / "NookEpdControllerBindingsTest.java"
+)
+VM_RUNTIME_HACK_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "VMRuntimeHackTest.java"
+)
+BITMAP_MEMORY_ACCOUNTING_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "BitmapMemoryAccountingTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -658,6 +686,83 @@ def main() -> None:
         r"\[[^\]\n]*\*\s*SIN_TABLE_SIZE\s*/",
         "indexes a page-flip table with unchecked int arithmetic",
         violations)
+    for marker in (
+        "private final VMRuntimeHack runtime = new VMRuntimeHack()",
+        "private final BitmapFactory factory = new BitmapFactory(runtime)",
+        "private long hackMemorySize",
+        "bmp.getRowBytes(), bmp.getHeight()",
+        "BitmapMemoryAccounting.surfaceBytes(width, height)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits reader-owned bitmap marker: "
+                f"{marker}")
+    if re.search(
+            r"\bstatic\s+(?:final\s+)?VMRuntimeHack\s+\w+",
+            reader_view_text):
+        violations.append(
+            f"{relative(READER_VIEW)} shares VMRuntime accounting between "
+            "reader generations")
+
+    vm_runtime_text = VM_RUNTIME_HACK.read_text(encoding="utf-8")
+    for marker in (
+        "public final class VMRuntimeHack",
+        "private final Object runtime",
+        "private final Method trackAllocation",
+        "private final Method trackFree",
+        "private long totalSize",
+        "public synchronized boolean trackAlloc(long size)",
+        "public synchronized boolean trackFree(long size)",
+        "if (runtime == null || size < 0)",
+        "if (!invoke(trackAllocation, size))",
+        "if (!invoke(trackFree, size))",
+    ):
+        if marker not in vm_runtime_text:
+            violations.append(
+                f"{relative(VM_RUNTIME_HACK)} omits scoped accounting "
+                f"marker: {marker}")
+    if re.search(
+            r"\bstatic\s+(?:final\s+)?(?:Object|Method|long|int)\s+\w+",
+            vm_runtime_text):
+        violations.append(
+            f"{relative(VM_RUNTIME_HACK)} retains process-wide mutable state")
+
+    bitmap_accounting_text = BITMAP_MEMORY_ACCOUNTING.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class BitmapMemoryAccounting",
+        "return (long) first * second",
+        "dimensions must be non-negative",
+    ):
+        if marker not in bitmap_accounting_text:
+            violations.append(
+                f"{relative(BITMAP_MEMORY_ACCOUNTING)} omits widened bitmap "
+                f"marker: {marker}")
+
+    vm_runtime_test_text = VM_RUNTIME_HACK_TEST.read_text(encoding="utf-8")
+    for marker in (
+        "unavailableTrackerIsANoop",
+        "successfulCallsUseLongAccountingAndStayInstanceOwned",
+        "rejectedOrThrowingCallsDoNotChangeAccounting",
+        "concurrentCallsCannotLoseAccountingUpdates",
+    ):
+        if marker not in vm_runtime_test_text:
+            violations.append(
+                f"{relative(VM_RUNTIME_HACK_TEST)} omits VMRuntime "
+                f"regression: {marker}")
+
+    bitmap_accounting_test_text = BITMAP_MEMORY_ACCOUNTING_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "bitmapAccountingUsesActualRowStride",
+        "surfaceAccountingWidensBeforeMultiplication",
+        "negativeDimensionsAreRejected",
+        "Integer.MAX_VALUE",
+    ):
+        if marker not in bitmap_accounting_test_text:
+            violations.append(
+                f"{relative(BITMAP_MEMORY_ACCOUNTING_TEST)} omits bitmap "
+                f"regression: {marker}")
 
     page_flip_geometry_text = PAGE_FLIP_GEOMETRY.read_text(encoding="utf-8")
     for marker in (

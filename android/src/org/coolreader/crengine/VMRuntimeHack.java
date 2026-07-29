@@ -23,35 +23,37 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 
-public class VMRuntimeHack {
-	private Object runtime = null;
-	private Method trackAllocation = null;
-	private Method trackFree = null;
-	private static int totalSize = 0;
+public final class VMRuntimeHack {
+	private final Object runtime;
+	private final Method trackAllocation;
+	private final Method trackFree;
+	private long totalSize;
 	
-	public boolean trackAlloc(long size) {
-		if (runtime == null)
+	public synchronized boolean trackAlloc(long size) {
+		if (runtime == null || size < 0)
+			return false;
+		if (!invoke(trackAllocation, size))
 			return false;
 		totalSize += size;
-		L.v("trackAlloc(" + size + ")  total=" + totalSize);
-		try {
-			Object res = trackAllocation.invoke(runtime, Long.valueOf(size));
-			return (res instanceof Boolean) ? (Boolean)res : true;
-		} catch (IllegalArgumentException e) {
-			return false;
-		} catch (IllegalAccessException e) {
-			return false;
-		} catch (InvocationTargetException e) {
-			return false;
-		}
+		return true;
 	}
-	public boolean trackFree(long size) {
-		if (runtime == null)
+
+	public synchronized boolean trackFree(long size) {
+		if (runtime == null || size < 0)
+			return false;
+		if (!invoke(trackFree, size))
 			return false;
 		totalSize -= size;
-		L.v("trackFree(" + size + ")  total=" + totalSize);
+		return true;
+	}
+
+	synchronized long trackedSize() {
+		return totalSize;
+	}
+
+	private boolean invoke(Method method, long size) {
 		try {
-			Object res = trackFree.invoke(runtime, Long.valueOf(size));
+			Object res = method.invoke(runtime, Long.valueOf(size));
 			return (res instanceof Boolean) ? (Boolean)res : true;
 		} catch (IllegalArgumentException e) {
 			return false;
@@ -61,29 +63,48 @@ public class VMRuntimeHack {
 			return false;
 		}
 	}
+
 	public VMRuntimeHack() {
-		if (!DeviceInfo.USE_BITMAP_MEMORY_HACK)
-			return;
-		boolean success = false;
-		try {
-			Class<?> cl = Class.forName("dalvik.system.VMRuntime");
-			Method getRt = cl.getMethod("getRuntime", new Class[0]);
-			runtime = getRt.invoke(null, new Object[0]);
-			trackAllocation = cl.getMethod("trackExternalAllocation", new Class[] {long.class});
-			trackFree = cl.getMethod("trackExternalFree", new Class[] {long.class});
-			success = true;
-		} catch (ClassNotFoundException e) {
-		} catch (SecurityException e) {
-		} catch (NoSuchMethodException e) {
-		} catch (IllegalArgumentException e) {
-		} catch (IllegalAccessException e) {
-		} catch (InvocationTargetException e) {
+		Object resolvedRuntime = null;
+		Method resolvedTrackAllocation = null;
+		Method resolvedTrackFree = null;
+		if (DeviceInfo.USE_BITMAP_MEMORY_HACK) {
+			try {
+				Class<?> cl = Class.forName("dalvik.system.VMRuntime");
+				Method getRt = cl.getMethod("getRuntime");
+				resolvedRuntime = getRt.invoke(null);
+				resolvedTrackAllocation =
+						cl.getMethod("trackExternalAllocation", long.class);
+				resolvedTrackFree =
+						cl.getMethod("trackExternalFree", long.class);
+			} catch (ReflectiveOperationException
+					| IllegalArgumentException
+					| SecurityException e) {
+				Log.i("cr3", "VMRuntime hack does not work: "
+						+ e.getClass().getSimpleName());
+				resolvedRuntime = null;
+				resolvedTrackAllocation = null;
+				resolvedTrackFree = null;
+			}
 		}
-		if (!success) {
-			Log.i("cr3", "VMRuntime hack does not work!");
-			runtime = null;
-			trackAllocation = null;
-			trackFree = null;
-		}
+		runtime = resolvedRuntime;
+		trackAllocation = resolvedTrackAllocation;
+		trackFree = resolvedTrackFree;
+	}
+
+	VMRuntimeHack(
+			Object runtime,
+			Method trackAllocation,
+			Method trackFree) {
+		boolean allMissing =
+				runtime == null && trackAllocation == null && trackFree == null;
+		boolean allPresent =
+				runtime != null && trackAllocation != null && trackFree != null;
+		if (!allMissing && !allPresent)
+			throw new IllegalArgumentException(
+					"VMRuntime bindings must be either complete or absent");
+		this.runtime = runtime;
+		this.trackAllocation = trackAllocation;
+		this.trackFree = trackFree;
 	}
 }
