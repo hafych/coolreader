@@ -24,6 +24,9 @@
 
 #include <unistd.h>
 #include <sys/wait.h>
+#include <climits>
+#include <cstdlib>
+#include <limits>
 #include <memory>
 #include "cr3jinke.h"
 #include <crengine.h>
@@ -31,6 +34,18 @@
 #include "cr3main.h"
 #include "mainwnd.h"
 #include <cr3version.h>
+
+struct JinkeFreeDeleter {
+    template <typename T>
+    void operator()(T *ptr) const noexcept
+    {
+        std::free(ptr);
+    }
+};
+
+template <typename T>
+using JinkeBufferPtr =
+        std::unique_ptr<T, JinkeFreeDeleter>;
 
 // uncomment following line to allow running executables named .exe.txt
 #define ALLOW_RUN_EXE 1
@@ -372,37 +387,53 @@ void GoToBookmark( const char * bookmark )
 */
 unsigned short * szGetVoiceDataBlock( int iPage, int * numBytes, int * encodingType )
 {
+    if (!numBytes || !encodingType)
+        return NULL;
     LVDocView * _docview = main_win->getDocView();
     CRLog::trace("szGetVoiceDataBlock(%d)", iPage);
-    lString16 text;
+    lString32 text;
     ldomXPointer bm = _docview->getPageBookmark( iPage );
     if ( !bm.isNull() ) {
-        lString16 titleText;
-        lString16 posText;
+        lString32 titleText;
+        lString32 posText;
         _docview->getBookmarkPosText( bm, titleText, posText );
         text = titleText;
         if ( !posText.empty() && !titleText.empty() )
-            text += " \n";
+            text += U" \n";
         text += posText;
     }
     if ( text.empty() ) {
-        text = "";
+        text = U"";
         LVRendPageList * pages = _docview->getPageList();
         int percent = 0;
         if ( iPage>=0 && iPage<pages->length() ) {
             percent = ( iPage * 100 ) / pages->length()-1;
         }
-        text = lString16::itoa(percent);
-        text += "%";
+        text = lString32::itoa(percent);
+        text += U"%";
     }
+    lString16 abiText = UnicodeToUtf16(text);
     *encodingType = 2;
-    *numBytes = text.length(); // * 2;
-    unsigned short * buf = ( unsigned short *) malloc( ( text.length() + 1 ) * sizeof(unsigned short ) );
+    *numBytes = abiText.length(); // * 2;
+    size_t bufferLength =
+            static_cast<size_t>(abiText.length()) + 1;
+    if (bufferLength
+            > std::numeric_limits<size_t>::max()
+                    / sizeof(unsigned short))
+        return NULL;
+    JinkeBufferPtr<unsigned short> buffer(
+            static_cast<unsigned short *>(
+                    std::malloc(
+                            bufferLength
+                            * sizeof(unsigned short))));
+    if (!buffer)
+        return NULL;
     int i=0;
-    for ( const lChar16 * str = text.c_str(); (buf[i++] = *str++) != 0; ) {
+    for ( const lChar16 * str = abiText.c_str();
+            (buffer.get()[i++] = *str++) != 0; ) {
     }
     CRLog::trace(" return : \"%s\"\n", UnicodeToUtf8(text).c_str() );
-    return buf; // caller should free this buffer
+    return buffer.release(); // caller frees this ABI-owned buffer
 }
 
 
@@ -553,6 +584,10 @@ int GetPageNum()
 void bGetUserData(void **vUserData, int *iUserDataLength)
 {
     printf("PLUGIN: bGetUserData()\n");
+    if (!vUserData || !iUserDataLength)
+        return;
+    *vUserData = NULL;
+    *iUserDataLength = 0;
 #if USE_JINKE_USER_DATA==1
     if ( !main_win ) {
     	CRLog::error("bGetUserData() - No main window yet created");
@@ -563,14 +598,32 @@ void bGetUserData(void **vUserData, int *iUserDataLength)
     	CRLog::error( "Cannot write history file to buffer" );
     	return;
     }
-    int sz = stream->GetSize();
-    char * buf = (char*)malloc( sz );
-    lvsize_t bytesRead = 0;
-    if ( stream->Read( buf, sz, &bytesRead )!=LVERR_OK || bytesRead!=sz ) {
-    	// NOTE: ignore this memory leak
-    	*vUserData = buf;
-    	*iUserDataLength = sz;
+    lvsize_t size = stream->GetSize();
+    if (size == 0 || size > static_cast<lvsize_t>(INT_MAX)) {
+        CRLog::error(
+                "History data size is outside the plugin ABI");
+        return;
     }
+    if (stream->SetPos(0) != 0) {
+        CRLog::error("Cannot rewind history data");
+        return;
+    }
+    JinkeBufferPtr<char> buffer(
+            static_cast<char *>(
+                    std::malloc(static_cast<size_t>(size))));
+    if (!buffer) {
+        CRLog::error("Cannot allocate history data buffer");
+        return;
+    }
+    lvsize_t bytesRead = 0;
+    if (stream->Read(
+                buffer.get(), size, &bytesRead) != LVERR_OK
+            || bytesRead != size) {
+        CRLog::error("Cannot read serialized history data");
+        return;
+    }
+    *vUserData = buffer.release();
+    *iUserDataLength = static_cast<int>(size);
 #endif
 }
 

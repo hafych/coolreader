@@ -6837,6 +6837,46 @@ require_source_text(
   "Jinke window managers must adopt their created screen"
 )
 require_source_text(
+  "${JINKE_SOURCE}"
+  "using JinkeBufferPtr ="
+  "Jinke plugin output buffers must share a scoped malloc owner"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "return buffer.release(); // caller frees this ABI-owned buffer"
+  "Jinke voice data must transfer only at its caller-owned ABI boundary"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "lString16 abiText = UnicodeToUtf16(text);"
+  "Jinke voice text must narrow only at its UTF-16 plugin ABI boundary"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "if (stream->SetPos(0) != 0)"
+  "Jinke history export must rewind serialized data before reading"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "*vUserData = buffer.release();"
+  "Jinke history data must transfer only after a complete read"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "unsigned short * buf = ( unsigned short *) malloc"
+  "Jinke voice-data candidates must not use raw malloc ownership"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "char * buf = (char*)malloc"
+  "Jinke history-data candidates must not use raw malloc ownership"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "NOTE: ignore this memory leak"
+  "Jinke history export must retain failure cleanup"
+)
+require_source_text(
   "${XCB_GUI_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "XCB window managers must adopt their created screen"
