@@ -158,6 +158,13 @@ snapshot before view creation, while `ReaderView` publishes a single volatile
 snapshot to render work and captures it once before updating the native
 document, avoiding mixed state/charger/level generations.
 
+Load/format progress is similarly owned by one `ReaderProgressState`. Its
+initial state is explicitly hidden, `show` publishes an atomic position,
+resource and resolved-title snapshot, and `hide` is idempotent. A zero position
+remains a valid visible start state; duplicate callbacks do not redraw or
+reacquire E-Ink refresh suppression, and the renderer cannot combine fields
+from different progress generations.
+
 Each `ReaderView` also owns its bitmap pool and `VMRuntimeHack`. The optional
 legacy VM reflection bindings are final, accounting is synchronized and uses a
 `long`, and failed vendor calls do not corrupt the local total. Bitmap memory

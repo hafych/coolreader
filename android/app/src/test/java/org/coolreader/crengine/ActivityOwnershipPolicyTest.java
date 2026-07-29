@@ -321,6 +321,50 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void mainProgressIsAnAtomicReaderSnapshot()
+			throws Exception {
+		Field owner =
+				ReaderView.class.getDeclaredField("progressState");
+		assertFalse(Modifier.isStatic(owner.getModifiers()));
+		assertTrue(Modifier.isPrivate(owner.getModifiers()));
+		assertTrue(Modifier.isFinal(owner.getModifiers()));
+		assertEquals(ReaderProgressState.class, owner.getType());
+
+		Field snapshot =
+				ReaderProgressState.class.getDeclaredField("snapshot");
+		assertFalse(Modifier.isStatic(snapshot.getModifiers()));
+		assertTrue(Modifier.isPrivate(snapshot.getModifiers()));
+		assertTrue(Modifier.isVolatile(snapshot.getModifiers()));
+		for (Field field :
+				ReaderProgressState.Snapshot.class.getDeclaredFields()) {
+			if (Modifier.isStatic(field.getModifiers())) {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			} else {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		Method show = ReaderProgressState.class.getDeclaredMethod(
+				"show", int.class, int.class, String.class);
+		Method hide =
+				ReaderProgressState.class.getDeclaredMethod("hide");
+		assertTrue(Modifier.isSynchronized(show.getModifiers()));
+		assertTrue(Modifier.isSynchronized(hide.getModifiers()));
+		for (String legacy : new String[]{
+				"currentProgressPosition",
+				"currentProgressTitleId",
+				"currentProgressTitle"}) {
+			for (Field field : ReaderView.class.getDeclaredFields()) {
+				assertFalse(
+						"ReaderView retains parallel progress field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
 	public void gestureAccelerationIsReaderOwnedAndImmutable()
 			throws Exception {
 		Field acceleration =

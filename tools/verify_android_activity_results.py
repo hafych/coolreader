@@ -80,6 +80,9 @@ ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
 READING_TIME_TRACKER = SOURCE / "crengine" / "ReadingTimeTracker.java"
 READING_TIME_FORMATTER = SOURCE / "crengine" / "ReadingTimeFormatter.java"
 BATTERY_STATUS = SOURCE / "crengine" / "BatteryStatus.java"
+READER_PROGRESS_STATE = (
+    SOURCE / "crengine" / "ReaderProgressState.java"
+)
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
@@ -280,6 +283,18 @@ BATTERY_STATUS_TEST = (
     / "coolreader"
     / "crengine"
     / "BatteryStatusTest.java"
+)
+READER_PROGRESS_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderProgressStateTest.java"
 )
 ACTION_ICON_SET_TEST = (
     ROOT
@@ -1358,6 +1373,25 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} retains parallel battery field: "
                 f"{legacy}")
+    for marker in (
+        "private final ReaderProgressState progressState",
+        "ReaderProgressState.Snapshot progress =",
+        "progressState.show(",
+        "progressState.hide()",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits atomic progress owner: "
+                f"{marker}")
+    for legacy in (
+        "currentProgressPosition",
+        "currentProgressTitleId",
+        "currentProgressTitle",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains parallel progress field: "
+                f"{legacy}")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(
@@ -1750,6 +1784,38 @@ def main() -> None:
             violations.append(
                 f"{relative(COOL_READER)} retains parallel initial battery "
                 f"field: {legacy}")
+
+    reader_progress_text = READER_PROGRESS_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ReaderProgressState",
+        "private volatile Snapshot snapshot = Snapshot.HIDDEN",
+        "synchronized Change show(",
+        "synchronized boolean hide()",
+        "return previous.active ? Change.UPDATE : Change.FIRST",
+        "private final boolean active",
+        "private final int position",
+        "private final String title",
+    ):
+        if marker not in reader_progress_text:
+            violations.append(
+                f"{relative(READER_PROGRESS_STATE)} omits atomic progress "
+                f"marker: {marker}")
+
+    reader_progress_test_text = READER_PROGRESS_STATE_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "initialStateIsHiddenAndComplete",
+        "firstShowIsActiveEvenAtZeroPosition",
+        "duplicateShowIsNoOpAndUpdatesPublishNewSnapshot",
+        "hideIsIdempotentAndNextShowIsFirstAgain",
+        "nullTitleIsRejected",
+        "state.show(0, 10, \"Loading\")",
+    ):
+        if marker not in reader_progress_test_text:
+            violations.append(
+                f"{relative(READER_PROGRESS_STATE_TEST)} omits progress "
+                f"regression: {marker}")
 
     page_curve_tables_text = PAGE_CURVE_TABLES.read_text(encoding="utf-8")
     for marker in (

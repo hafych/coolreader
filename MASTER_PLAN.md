@@ -172,6 +172,10 @@ DRM или ограничений доступа, подбор/получени�
   полей на immutable `BatteryStatus`: provider level нормализуется по scale
   widened arithmetic, Activity хранит один initial snapshot, а `ReaderView`
   публикует один volatile snapshot без mixed-generation native update.
+  Основной load/format progress `ReaderView` также вынесен в synchronized
+  snapshot owner: initial state явно hidden, zero-position остаётся active,
+  duplicate show и hide идемпотентны, а renderer получает согласованные
+  position/resource/title одного поколения.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

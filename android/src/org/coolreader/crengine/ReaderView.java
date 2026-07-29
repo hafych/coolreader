@@ -176,10 +176,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		protected void doDraw(Canvas canvas) {
 			try {
 				log.d("doDraw() called");
-				if (isProgressActive()) {
-					log.d("onDraw() -- drawing progress " + (currentProgressPosition / 100));
+				ReaderProgressState.Snapshot progress =
+						progressState.snapshot();
+				if (progress.isActive()) {
+					log.d("onDraw() -- drawing progress "
+							+ (progress.getPosition() / 100));
 					drawPageBackground(canvas);
-					doDrawProgress(canvas, currentProgressPosition, currentProgressTitle);
+					doDrawProgress(
+							canvas,
+							progress.getPosition(),
+							progress.getTitle());
 				} else if (mInitialized && mCurrentPageInfo != null && mCurrentPageInfo.bitmap != null) {
 					log.d("onDraw() -- drawing page image");
 
@@ -5112,9 +5118,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	private int currentProgressPosition = 1;
-	private int currentProgressTitleId = R.string.progress_loading;
-	private String currentProgressTitle = null;
+	private final ReaderProgressState progressState =
+			new ReaderProgressState();
 	private int currentCloudSyncProgressPosition = -1;
 
 	private final EinkRefreshLeaseTracker einkRefreshLeases =
@@ -5145,38 +5150,25 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void showProgress(int position, int titleResource) {
 		log.v("showProgress(" + position + ")");
-		boolean first = currentProgressTitleId == 0;
-		boolean update = false;
-		if (null == currentProgressTitle || currentProgressTitleId != titleResource) {
-			currentProgressTitleId = titleResource;
-			currentProgressTitle = mActivity.getString(currentProgressTitleId);
-			update = true;
-		}
-		if (currentProgressPosition != position || currentProgressTitleId != titleResource) {
-			currentProgressPosition = position;
-			update = true;
-		}
-		if (update) {
+		ReaderProgressState.Change change = progressState.show(
+				position,
+				titleResource,
+				mActivity.getString(titleResource));
+		if (change != ReaderProgressState.Change.NONE) {
 			if (DeviceInfo.EINK_SCREEN)
 				requestDisableFullRefresh(1);
-			bookView.draw(!first);
+			bookView.draw(
+					change == ReaderProgressState.Change.UPDATE);
 		}
 	}
 
 	private void hideProgress() {
 		log.v("hideProgress()");
-		if (currentProgressTitleId != 0) {
-			currentProgressPosition = -1;
-			currentProgressTitleId = 0;
-			currentProgressTitle = null;
+		if (progressState.hide()) {
 			if (DeviceInfo.EINK_SCREEN)
 				releaseDisableFullRefresh(1);
 			bookView.draw(false);
 		}
-	}
-
-	private boolean isProgressActive() {
-		return currentProgressPosition > 0;
 	}
 
 	public void showCloudSyncProgress(int progress) {

@@ -389,6 +389,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android battery percentages now honor the provider's advertised scale and
   clamp malformed values. Activity, reader UI and native rendering share one
   immutable status snapshot instead of independently observed parallel fields.
+- Reader load/format progress now starts explicitly hidden and publishes
+  position/title atomically. Zero-position progress is visible, while duplicate
+  show and hide callbacks no longer trigger redundant redraw transitions.
 - Scroll-view animation frames now use fractional progress instead of truncated
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates
