@@ -93,12 +93,15 @@ DRM или ограничений доступа, подбор/получени�
   Shared GUI startup/font discovery и log properties переведены на
   `lString32Collection`/UTF-32; все platform call sites синхронизированы,
   а неиспользуемый unchecked file-read helper удалён.
+  Jinke, NanoX, PocketBook, XCB и legacy Qt translation units проверены
+  реальными SDK/header contracts; legacy Qt route переведён на Qt5 и добавлен
+  в Linux Clang job вместе с `tinydict`.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,
-  `reorder-ctor`, `sign-compare`, `unused-but-set-variable`.
-  Осталось: подтвердить зелёный CI-прогон и при возможности расширить
-  `-Werror` дополнительными классами.
+  `reorder-ctor`, `sign-compare`, `unused-but-set-variable`,
+  `unused-parameter`, `unused-private-field`.
+  Осталось: подтвердить первый зелёный CI-прогон.
 - [-] Проверить первый полный CI-прогон после закрепления Linux/Android jobs на
   Ubuntu 24.04 и macOS job на macOS 15; после зелёного прогона убрать этот пункт.
 
