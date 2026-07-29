@@ -27,12 +27,24 @@
 #include "fsmenu.h"
 
 
-CRFullScreenMenu::CRFullScreenMenu(CRGUIWindowManager * wm, int id, const lString16 & caption, int numItems, lvRect & rc)
-    : CRMenu( wm, NULL, id, caption, LVImageSourceRef(), LVFontRef(), LVFontRef() )
+CRFullScreenMenu::CRFullScreenMenu(
+        CRGUIWindowManager *wm, int id, const lString32 &caption,
+        int numItems, lvRect &rc)
+    : CRMenu(
+            wm, NULL, id, caption,
+            LVImageSourceRef(), LVFontRef(), LVFontRef())
 {
     _rect = rc;
     _pageItems = numItems;
     _fullscreen = true;
+}
+
+CRFullScreenMenu::CRFullScreenMenu(
+        CRGUIWindowManager *wm, int id, const lString16 &caption,
+        int numItems, lvRect &rc)
+    : CRFullScreenMenu(
+            wm, id, Utf16ToUnicode(caption), numItems, rc)
+{
 }
 
 lString16 CRFullScreenMenu::getCommandKeyName( int cmd, int param )

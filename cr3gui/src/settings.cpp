@@ -45,77 +45,88 @@ private:
     int _command;
     int _params;
     CRControlsMenu * _controlsMenu;
-    lString16 _settingKey;
+    lString32 _settingKey;
     int _defCommand;
     int _defParams;
 public:
     bool getCommand( int & cmd, int & params )
     {
-        lString16 v = _menu->getProps()->getStringDef(LCSTR(_settingKey), "");
+        lString32 v = _menu->getProps()->getStringDef(
+                LCSTR(_settingKey), "");
         cmd = _defCommand;
         params = _defParams;
-        return splitIntegerList( v, lString16(","), cmd, params );
+        return splitIntegerList(v, cs32(","), cmd, params);
    }
     /// submenu for options dialog support
-    virtual lString16 getSubmenuValue()
+    lString32 getSubmenuValue() override
     {
         int cmd;
         int params;
-        bool isSet = getCommand( cmd, params );
-        lString16 res = Utf8ToUnicode(lString8(getCommandName( cmd, params )));
+        getCommand(cmd, params);
+        lString32 res =
+                Utf8ToUnicode(lString8(getCommandName(cmd, params)));
         // TODO: use default flag
         return res;
     }
     /// called on item selection
-    virtual int onSelect();
+    int onSelect() override;
     CRControlsMenuItem( CRControlsMenu * menu, int id, int key, int flags, const CRGUIAccelerator * defAcc );
-    virtual void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected );
+    void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin,
+               CRRectSkinRef valueSkin, bool selected ) override;
 };
 
 class CRControlsMenu : public CRFullScreenMenu
 {
-    lString16 _accelTableId;
+    lString32 _accelTableId;
     CRGUIAcceleratorTableRef _baseAccs;
     CRGUIAcceleratorTableRef _overrideCommands;
-    lString16 _settingKey;
+    lString32 _settingKey;
 public:
     CRPropRef getProps() { return _props; }
-    lString16 getSettingKey( int key, int flags )
+    lString32 getSettingKey( int key, int flags )
     {
-        lString16 res = _settingKey;
+        lString32 res = _settingKey;
         if ( key!=0 )
             res << "." << fmt::decimal(key) << "." << fmt::decimal(flags);
         return res;
     }
-    lString16 getSettingLabel( int key, int flags )
+    lString32 getSettingLabel( int key, int flags )
     {
-        return lString16(getKeyName(key, flags));
+        return lString32(getKeyName(key, flags));
     }
     CRMenu * createCommandsMenu(int key, int flags)
     {
-        lString16 label = getSettingLabel( key, flags ) + " - " + lString16(_("choose command"));
-        lString16 keyid = getSettingKey( key, flags );
+        lString32 label = getSettingLabel(key, flags)
+                + " - "
+                + Utf8ToUnicode(lString8(_("choose command")));
+        lString32 keyid = getSettingKey(key, flags);
         std::unique_ptr<CRMenu> menu(new CRMenu(
                 _wm, this, _id, label, LVImageSourceRef(),
                 LVFontRef(), LVFontRef(), _props, LCSTR(keyid), 8));
         for ( int i=0; i<_overrideCommands->length(); i++ ) {
             const CRGUIAccelerator * acc = _overrideCommands->get(i);
-            lString16 cmdLabel = lString16( getCommandName(acc->commandId, acc->commandParam) );
-            lString16 cmdValue = lString16::itoa(acc->commandId) << "," << lString16::itoa(acc->commandParam);
+            lString32 cmdLabel = Utf8ToUnicode(
+                    lString8(getCommandName(
+                            acc->commandId, acc->commandParam)));
+            lString32 cmdValue = lString32::itoa(acc->commandId)
+                    << "," << lString32::itoa(acc->commandParam);
             std::unique_ptr<CRMenuItem> item(new CRMenuItem(
                     menu.get(), i, cmdLabel, LVImageSourceRef(),
                     LVFontRef(), cmdValue.c_str()));
             menu->addItem(std::move(item));
         }
         menu->setAccelerators( getAccelerators() );
-        menu->setSkinName(lString16("#settings"));
+        menu->setSkinName(cs32("#settings"));
         menu->setValueFont(_valueFont);
         menu->setFullscreen(true);
         menu->reconfigure( 0 );
         return menu.release();
     }
-    CRControlsMenu(CRMenu * baseMenu, int id, CRPropRef props, lString16 accelTableId, int numItems, lvRect & rc)
-    : CRFullScreenMenu( baseMenu->getWindowManager(), id, lString16(_("Controls")), numItems, rc )
+    CRControlsMenu(CRMenu * baseMenu, int id, CRPropRef props,
+                   lString32 accelTableId, int numItems, lvRect & rc)
+    : CRFullScreenMenu(
+            baseMenu->getWindowManager(), id,
+            Utf8ToUnicode(lString8(_("Controls"))), numItems, rc)
     {
         _menu = baseMenu;
         _props = props;
@@ -134,7 +145,7 @@ public:
             CRLog::error("CRControlsMenu: No table of allowed commands to override accelerators %s", LCSTR(_accelTableId) );
             return;
         }
-        _settingKey = lString16("keymap.") + _accelTableId;
+        _settingKey = cs32("keymap.") + _accelTableId;
         for ( int i=0; i<_overrideKeys->length(); i++ ) {
             const CRGUIAccelerator * acc = _overrideKeys->get(i);
             CRControlsMenuItem * item = new CRControlsMenuItem(this, i, acc->keyCode, acc->keyFlags,
@@ -184,9 +195,10 @@ void CRControlsMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin,
     lvRect borders = skin->getBorderWidths();
     //textRect.shrinkBy(borders);
     skin->drawText(buf, textRect, _label);
-    lString16 s = getSubmenuValue();
+    lString32 s = getSubmenuValue();
     if ( s.empty() )
-        s = lString16(_("[Command is not assigned]"));
+        s = Utf8ToUnicode(
+                lString8(_("[Command is not assigned]")));
     //_menu->getValueFont()->DrawTextString( &buf, rc.right - w - 8, rc.top + hh/2 - _menu->getValueFont()->getHeight()/2, s.c_str(), s.length(), L'?', NULL, false, 0 );
     valueSkin->drawText(buf, textRect, s);
 }
@@ -827,7 +839,8 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
 #ifndef CR_POCKETBOOK
         CRControlsMenu * controlsMenu =
-                new CRControlsMenu(this, mm_Controls, props, lString16("main"), 8, _rect);
+                new CRControlsMenu(
+                        this, mm_Controls, props, cs32("main"), 8, _rect);
         controlsMenu->setAccelerators( _menuAccelerators );
         controlsMenu->setSkinName(lString16("#settings"));
         controlsMenu->setValueFont(valueFont);

@@ -17,6 +17,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crgui.cpp" GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.h" SETTINGS_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.cpp" SETTINGS_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.cpp" DICTIONARY_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
@@ -6925,6 +6927,38 @@ require_source_text(
   "${SETTINGS_SOURCE}"
   "Utf16ToUnicode(getCommandKeyName(MCMD_OK))"
   "settings key labels must convert explicitly to the current string width"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "lString32 getSubmenuValue() override"
+  "settings control values must match the current menu string contract"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "lString32 _accelTableId;"
+  "settings accelerator identifiers must use the current string width"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "lString32 cmdValue = lString32::itoa"
+  "settings command property values must use the current property width"
+)
+require_source_text(
+  "${FULLSCREEN_MENU_HEADER}"
+  "const lString32 &caption"
+  "fullscreen menus must accept the current caption width"
+)
+require_source_text(
+  "${FULLSCREEN_MENU_SOURCE}"
+  "wm, id, Utf16ToUnicode(caption), numItems, rc"
+  "legacy fullscreen captions must cross an explicit compatibility boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "virtual lString16 getSubmenuValue()
+    {
+        int cmd;"
+  "settings controls must not retain the obsolete submenu return type"
 )
 forbid_source_text(
   "${SETTINGS_HEADER}"
