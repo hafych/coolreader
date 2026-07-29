@@ -23,6 +23,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/scrkbd.h" SCREEN_KEYBOARD_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/scrkbd.cpp" SCREEN_KEYBOARD_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/viewdlg.h" VIEW_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/viewdlg.cpp" VIEW_DIALOG_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/numedit.h" NUMBER_EDIT_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/numedit.cpp" NUMBER_EDIT_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7288,6 +7290,26 @@ forbid_source_text(
   "${VIEW_DIALOG_SOURCE}"
   "void CRViewDialog::showGoToPercentDialog()\n{\n    LVTocItem * toc"
   "go-to-percent dialogs must not retain unused TOC state"
+)
+require_source_text(
+  "${NUMBER_EDIT_HEADER}"
+  "lString32 _title;"
+  "number-editor titles must use the current string width"
+)
+require_source_text(
+  "${NUMBER_EDIT_HEADER}"
+  "lString32 _value;"
+  "number-editor values must use the current string width"
+)
+require_source_text(
+  "${NUMBER_EDIT_SOURCE}"
+  "CRGUIWindowManager * wm, lString32 title,"
+  "number-editor implementations must accept current-width text"
+)
+forbid_source_text(
+  "${NUMBER_EDIT_SOURCE}"
+  "getMenuSkin(L\"#toc\")"
+  "number-editor skin identifiers must use the current character width"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

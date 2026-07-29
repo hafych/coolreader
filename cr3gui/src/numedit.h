@@ -31,21 +31,34 @@
 class CRNumberEditDialog : public CRGUIWindowBase
 {
     protected:
-        lString16 _title;
-        lString16 _value;
+        lString32 _title;
+        lString32 _value;
         int _minvalue;
         int _maxvalue;
         int _resultCmd;
         CRMenuSkinRef _skin;
-        virtual void draw();
+        void draw() override;
     public:
-        CRNumberEditDialog( CRGUIWindowManager * wm, lString16 title, lString16 initialValue, int resultCmd, int minvalue, int maxvalue );
-        virtual ~CRNumberEditDialog()
+        CRNumberEditDialog(
+                CRGUIWindowManager * wm, lString32 title,
+                lString32 initialValue, int resultCmd,
+                int minvalue, int maxvalue);
+        CRNumberEditDialog(
+                CRGUIWindowManager * wm, lString16 title,
+                lString16 initialValue, int resultCmd,
+                int minvalue, int maxvalue)
+            : CRNumberEditDialog(
+                    wm, Utf16ToUnicode(title),
+                    Utf16ToUnicode(initialValue), resultCmd,
+                    minvalue, maxvalue)
         {
         }
-        bool digitEntered( lChar16 c );
+        ~CRNumberEditDialog() override
+        {
+        }
+        bool digitEntered( lChar32 c );
         /// returns true if command is processed
-        virtual bool onCommand( int command, int params );
+        bool onCommand( int command, int params ) override;
 };
 
 
