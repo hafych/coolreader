@@ -378,6 +378,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private BookInfo mBookInfo;
 
 	private Properties mSettings = new Properties();
+	private final CloseableTaskGate settingsSyncLifecycle =
+			new CloseableTaskGate();
 
 	public Engine getEngine() {
 		return mEngine;
@@ -4071,26 +4073,70 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	 * Read JNI view settings, update and save if changed
 	 */
 	private void syncViewSettings(final Properties currSettings, final boolean save, final boolean saveDelayed) {
+		BackgroundThread.ensureGUI();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
+		final ReaderSettingsSyncSnapshot snapshot =
+				ReaderSettingsSyncSnapshot.capture(
+						currSettings);
+		if (snapshot == null)
+			return;
+		final CloseableTaskGate.Token owner =
+				settingsSyncLifecycle.replace();
+		if (owner == null)
+			return;
 		post(new Task() {
-			Properties props;
+			Properties nativeSettings;
 
 			public void work() {
 				BackgroundThread.ensureBackground();
+				if (!settingsSyncLifecycle.isActive(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
 				java.util.Properties internalProps = doc.getSettings();
-				props = new Properties(internalProps);
+				if (!settingsSyncLifecycle.isActive(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
+				nativeSettings = new Properties(internalProps);
 			}
 
 			public void done() {
-				Properties changedSettings = props.diff(currSettings);
-				for (Map.Entry<Object, Object> entry : changedSettings.entrySet()) {
-					currSettings.setProperty((String) entry.getKey(), (String) entry.getValue());
-				}
-				mSettings = currSettings;
+				BackgroundThread.ensureGUI();
+				if (!settingsSyncLifecycle.complete(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
+				Properties merged =
+						snapshot.merge(
+								mSettings, nativeSettings);
+				if (merged == null)
+					return;
+				mSettings = merged;
+				Properties published =
+						new Properties(merged);
 				if (save) {
-					mActivity.setSettings(mSettings, saveDelayed ? 5000 : 0, false);
+					mActivity.setSettings(
+							published,
+							saveDelayed ? 5000 : 0,
+							false);
 				} else {
-					mActivity.setSettings(mSettings, -1, false);
+					mActivity.setSettings(
+							published, -1, false);
 				}
+			}
+
+			public void fail(Exception e) {
+				BackgroundThread.ensureGUI();
+				if (settingsSyncLifecycle.complete(owner)
+						&& isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					log.e("Cannot synchronize reader settings", e);
 			}
 		});
 	}
@@ -4153,6 +4199,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BackgroundThread.ensureGUI();
 		stopTts();
 		bookInfoDialogLifecycle.cancel();
+		settingsSyncLifecycle.cancel();
 		return documentLoadLifecycle.replace();
 	}
 
@@ -4286,6 +4333,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		log.v("updateSettings() " + newSettings.toString());
 		log.v("oldNightMode=" + mSettings.getProperty(PROP_NIGHT_MODE) + " newNightMode=" + newSettings.getProperty(PROP_NIGHT_MODE));
 		BackgroundThread.ensureGUI();
+		settingsSyncLifecycle.cancel();
 		final Properties currSettings = new Properties(mSettings);
 		if (null != ttsToolbar) {
 			// ignore all non TTS options if TTS is active...
@@ -7965,6 +8013,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (cancelDocumentLoad)
 			documentLoadLifecycle.cancel();
 		bookInfoDialogLifecycle.cancel();
+		settingsSyncLifecycle.cancel();
 		stopTracking();
 		cancelDocumentAnimation();
 		invalidateTapHighlight();
@@ -8046,6 +8095,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		drawTaskLifecycle.close();
 		ttsInitializationLifecycle.close();
 		bookInfoDialogLifecycle.close();
+		settingsSyncLifecycle.close();
 		documentLoadLifecycle.close();
 		closeGestureTimeouts();
 		synchronized (viewportResizeState) {

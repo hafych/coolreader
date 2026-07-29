@@ -395,6 +395,14 @@ DRM или ограничений доступа, подбор/получени�
   `ReaderBookInfoSnapshot`; bookmark и position читаются только у той же
   document generation. Поэтому быстрый повтор, смена книги или teardown не
   открывают stale dialog и не смешивают metadata одной книги с позицией другой.
+  Обратная синхронизация native viewer settings после zoom/font-команд также
+  принадлежит captured book+interaction и latest-only `CloseableTaskGate`.
+  Immutable `ReaderSettingsSyncSnapshot` выполняет optimistic per-key merge:
+  native значение применяется, только пока GUI-значение и наличие ключа
+  совпадают с request baseline, поэтому более новые same-key и unrelated
+  настройки не теряются. `updateSettings`, replacement и close отменяют
+  request, destroy закрывает owner, а поздний callback не публикует настройки
+  в уже уничтоженную Activity.
   Selection/search chain также сохраняет captured book+interaction от native
   gesture update до toolbar, search-history callback, двухпроходного
   forward/backward find, find-next popup, clear и bookmark highlight. Native

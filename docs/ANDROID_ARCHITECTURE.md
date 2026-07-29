@@ -213,6 +213,14 @@ same document generation. Repeated requests, book replacement and teardown
 therefore cannot open a stale dialog or combine one book's metadata with
 another book's position.
 
+Native viewer-settings readback after zoom and font commands follows the same
+captured book/interaction boundary and a latest-only `CloseableTaskGate`. An
+immutable `ReaderSettingsSyncSnapshot` performs an optimistic per-key merge: a
+native value is applied only while the current GUI value and key presence still
+match the request baseline, preserving newer same-key and unrelated settings.
+`updateSettings`, replacement and close cancel the request, destruction closes
+the owner, and a late callback cannot publish settings to a destroyed Activity.
+
 Selection and search preserve the same captured book/interaction pair from a
 native gesture update through selection-toolbar actions, asynchronous search
 history, both forward/backward native search passes, the find-next popup,

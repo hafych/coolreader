@@ -777,6 +777,9 @@ READER_DOCUMENT_OPTIONS = (
 READER_BOOK_INFO_SNAPSHOT = (
     SOURCE / "crengine" / "ReaderBookInfoSnapshot.java"
 )
+READER_SETTINGS_SYNC_SNAPSHOT = (
+    SOURCE / "crengine" / "ReaderSettingsSyncSnapshot.java"
+)
 READER_DOCUMENT_OPTIONS_TEST = (
     ROOT
     / "android"
@@ -800,6 +803,18 @@ READER_BOOK_INFO_SNAPSHOT_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderBookInfoSnapshotTest.java"
+)
+READER_SETTINGS_SYNC_SNAPSHOT_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderSettingsSyncSnapshotTest.java"
 )
 INTERFACE_THEME = SOURCE / "crengine" / "InterfaceTheme.java"
 INTERFACE_THEME_CATALOG = (
@@ -2469,6 +2484,32 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits reader-owned delayed work "
                 f"marker: {marker}")
+    for marker in (
+        "private final CloseableTaskGate settingsSyncLifecycle",
+        "ReaderSettingsSyncSnapshot.capture(",
+        "settingsSyncLifecycle.replace()",
+        "settingsSyncLifecycle.isActive(owner)",
+        "settingsSyncLifecycle.complete(owner)",
+        "settingsSyncLifecycle.cancel()",
+        "settingsSyncLifecycle.close()",
+        "snapshot.merge(",
+        "new Properties(merged)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits exact settings-sync "
+                f"ownership marker: {marker}")
+    settings_sync_start = reader_view_text.find(
+        "\n\tprivate void syncViewSettings(")
+    settings_sync_end = reader_view_text.find(
+        "\n\tpublic Properties getSettings()", settings_sync_start)
+    settings_sync_text = reader_view_text[
+        settings_sync_start:settings_sync_end
+    ]
+    if "mSettings = currSettings;" in settings_sync_text:
+        violations.append(
+            f"{relative(READER_VIEW)} publishes a mutable settings-sync "
+            "request snapshot")
     if "mInitialized" in reader_view_text:
         violations.append(
             f"{relative(READER_VIEW)} retains parallel native lifecycle "
@@ -2732,7 +2773,9 @@ def main() -> None:
         "TtsDocumentHandler.class.isInterface()",
         "TtsDocumentSnapshot.class.getModifiers()",
         "ReaderBookInfoSnapshot.class.getModifiers()",
+        "ReaderSettingsSyncSnapshot.class.getModifiers()",
         '"bookInfoDialogLifecycle"',
+        '"settingsSyncLifecycle"',
         '"ttsDocumentHandler"',
         '"stopTtsForDocumentChange"',
         "TOCDlg.PageSelectionHandler.class",
@@ -2853,6 +2896,39 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_BOOK_INFO_SNAPSHOT_TEST)} omits reader "
                 f"book-info regression: {marker}")
+
+    reader_settings_sync_snapshot_text = (
+        READER_SETTINGS_SYNC_SNAPSHOT.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderSettingsSyncSnapshot",
+        "private final Properties baseline",
+        "static ReaderSettingsSyncSnapshot capture(",
+        "Properties merge(",
+        "baseline.containsKey(key)",
+        "merged.containsKey(key)",
+        "Properties.eq(",
+        "new Properties(nativeSettings)",
+    ):
+        if marker not in reader_settings_sync_snapshot_text:
+            violations.append(
+                f"{relative(READER_SETTINGS_SYNC_SNAPSHOT)} omits "
+                f"immutable settings-sync marker: {marker}")
+
+    reader_settings_sync_snapshot_test_text = (
+        READER_SETTINGS_SYNC_SNAPSHOT_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "nativeChangesMergeIntoUnchangedBaseline",
+        "newerSameKeyGuiValuesWinOverNativeReadback",
+        "newNativeKeyRequiresNoNewerGuiOwner",
+        "captureAndMergeOwnTheirSnapshots",
+        "missingBoundariesAreRejected",
+    ):
+        if marker not in reader_settings_sync_snapshot_test_text:
+            violations.append(
+                f"{relative(READER_SETTINGS_SYNC_SNAPSHOT_TEST)} omits "
+                f"settings-sync regression: {marker}")
 
     key_double_click_state_text = KEY_DOUBLE_CLICK_STATE.read_text(
         encoding="utf-8")

@@ -2613,6 +2613,43 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void readerSettingsReadbackOwnsImmutableGenerationSnapshot()
+			throws Exception {
+		assertTrue(Modifier.isFinal(
+				ReaderSettingsSyncSnapshot.class.getModifiers()));
+		for (Field field :
+				ReaderSettingsSyncSnapshot.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		Method capture =
+				ReaderSettingsSyncSnapshot.class.getDeclaredMethod(
+						"capture",
+						java.util.Properties.class);
+		assertTrue(Modifier.isStatic(
+				capture.getModifiers()));
+		assertFalse(Modifier.isPublic(
+				capture.getModifiers()));
+		Method merge =
+				ReaderSettingsSyncSnapshot.class.getDeclaredMethod(
+						"merge",
+						java.util.Properties.class,
+						java.util.Properties.class);
+		assertFalse(Modifier.isStatic(
+				merge.getModifiers()));
+		assertFalse(Modifier.isPublic(
+				merge.getModifiers()));
+		assertPrivateFinalField(
+				ReaderView.class,
+				"settingsSyncLifecycle",
+				CloseableTaskGate.class);
+	}
+
+	@Test
 	public void backlightTimeoutStateBelongsToOneActivityGeneration()
 			throws Exception {
 		Field control =
