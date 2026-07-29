@@ -405,6 +405,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Replaceable Android delayed tasks now claim an exact one-shot generation.
   Replaced or canceled wrappers cannot run because a newer task exists, and
   completed callbacks no longer leave a stale pending slot behind.
+- Reader autoscroll now uses an identity-owned start/ready/stop lifecycle and
+  a dedicated cancelable timer. Stopped background initialization cannot
+  resurrect a session, partial page reinitialization is not rendered, and
+  destroy permanently rejects queued timer or initialization callbacks.
 - TTS audiobook timing work and its periodic position poll now belong to the
   dialog lifecycle. Reinitialization rejects stale results, while close removes
   pending callbacks, retires the timing thread and prevents late service or

@@ -156,6 +156,9 @@ REPEAT_ON_TOUCH_LISTENER = (
 )
 GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
 ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
+AUTO_SCROLL_SESSION_STATE = (
+    SOURCE / "crengine" / "AutoScrollSessionState.java"
+)
 READING_TIME_TRACKER = SOURCE / "crengine" / "ReadingTimeTracker.java"
 READING_TIME_FORMATTER = SOURCE / "crengine" / "ReadingTimeFormatter.java"
 BATTERY_STATUS = SOURCE / "crengine" / "BatteryStatus.java"
@@ -525,6 +528,18 @@ ANIMATION_TIMING_TEST = (
     / "coolreader"
     / "crengine"
     / "AnimationTimingTest.java"
+)
+AUTO_SCROLL_SESSION_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "AutoScrollSessionStateTest.java"
 )
 READING_TIME_TRACKER_TEST = (
     ROOT
@@ -1935,11 +1950,21 @@ def main() -> None:
         "private volatile ViewAnimationControl currentAnimation",
         "private final Object animationUpdateLock",
         "private final DelayedExecutor animationScheduler",
+        "private final AutoScrollSessionState<AutoScrollAnimation>",
+        "private final DelayedExecutor autoScrollScheduler",
+        "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
         "animationScheduler.cancel()",
+        "autoScrollScheduler.cancel()",
+        "autoScrollSessions.close()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
+        "autoScrollSessions.beginInitialization(this)",
+        "autoScrollSessions.markReady(this)",
+        "autoScrollSessions.readySession()",
+        "autoScrollScheduler.postDelayed(",
+        "new AutoscrollTimerTask(interval).schedule()",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -1949,6 +1974,56 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} coordinates reader generations on "
             "the process-wide AnimationUpdate class monitor")
+    for legacy in (
+        "currentAutoScrollAnimation",
+        "BackgroundThread.instance().postGUI("
+        "AutoscrollTimerTask.this",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains unowned autoscroll "
+                f"lifecycle marker: {legacy}")
+
+    auto_scroll_state_text = AUTO_SCROLL_SESSION_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class AutoScrollSessionState<T>",
+        "private T current",
+        "private boolean ready",
+        "private boolean initialized",
+        "private boolean closed",
+        "synchronized boolean requestStart(T session)",
+        "synchronized boolean beginInitialization(T session)",
+        "synchronized boolean markReady(T session)",
+        "synchronized boolean isCurrent(T session)",
+        "synchronized boolean isReady(T session)",
+        "synchronized boolean isInitialized(T session)",
+        "synchronized T readySession()",
+        "synchronized boolean stop(T session)",
+        "synchronized T stopCurrent()",
+        "synchronized T close()",
+    ):
+        if marker not in auto_scroll_state_text:
+            violations.append(
+                f"{relative(AUTO_SCROLL_SESSION_STATE)} omits exact "
+                f"autoscroll ownership marker: {marker}")
+
+    auto_scroll_state_test_text = (
+        AUTO_SCROLL_SESSION_STATE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "sessionIsNotRenderableUntilInitializationCompletes",
+        "stoppedInitializationCannotResurrectItsSession",
+        "staleOwnerCannotStopReplacementSession",
+        "initializationTemporarilySuppressesRendering",
+        "stopCurrentReturnsItsExactOwnerOnce",
+        "nullIsNeverTreatedAsAnOwner",
+        "closePermanentlyRejectsStaleAndNewSessions",
+    ):
+        if marker not in auto_scroll_state_test_text:
+            violations.append(
+                f"{relative(AUTO_SCROLL_SESSION_STATE_TEST)} omits "
+                f"autoscroll lifecycle regression: {marker}")
     for marker in (
         "FontFaceSwitcher.select(",
         "if (selected == null)",

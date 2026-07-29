@@ -413,6 +413,8 @@ public class ActivityOwnershipPolicyTest {
 			throws Exception {
 		for (String name : new String[]{
 				"animationScheduler",
+				"autoScrollScheduler",
+				"autoScrollSessions",
 				"gcTask",
 				"animationUpdateLock"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
@@ -425,6 +427,32 @@ public class ActivityOwnershipPolicyTest {
 		assertFalse(Modifier.isStatic(animation.getModifiers()));
 		assertTrue(Modifier.isPrivate(animation.getModifiers()));
 		assertTrue(Modifier.isVolatile(animation.getModifiers()));
+		Field autoScrollSpeed =
+				ReaderView.class.getDeclaredField(
+						"autoScrollSpeed");
+		assertTrue(Modifier.isVolatile(
+				autoScrollSpeed.getModifiers()));
+		for (Field field : ReaderView.class.getDeclaredFields()) {
+			assertFalse(
+					"ReaderView retains a racy autoscroll pointer",
+					field.getName().equals(
+							"currentAutoScrollAnimation"));
+		}
+		assertTrue(Modifier.isFinal(
+				AutoScrollSessionState.class.getModifiers()));
+		for (Field field :
+				AutoScrollSessionState.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		Method close =
+				AutoScrollSessionState.class.getDeclaredMethod(
+						"close");
+		assertTrue(Modifier.isSynchronized(
+				close.getModifiers()));
 		Method teardown =
 				ReaderView.class.getDeclaredMethod(
 						"cancelDelayedReaderWork");

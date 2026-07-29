@@ -196,6 +196,11 @@ DRM или ограничений доступа, подбор/получени�
   animation handoff использует instance lock и volatile active reference вместо
   process-wide class monitor, а `destroy()` безусловно отменяет оба executor и
   очищает pending animation state до native teardown.
+  Autoscroll теперь принадлежит synchronized identity-owned
+  `AutoScrollSessionState` и отдельному cancelable GUI scheduler: background
+  init публикует render-ready только точному owner, stop/destroy не допускают
+  resurrection, re-init временно скрывает partial state, speed публикуется
+  volatile, а close не запускает page cleanup для ещё не initialized session.
   Font-face navigation вынесена в stateless `FontFaceSwitcher`: empty native
   catalog даёт no-op, missing current начинает с directional edge, известные
   значения корректно wrap, magnitude направления нормализуется без overflow.

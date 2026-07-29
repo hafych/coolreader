@@ -224,6 +224,13 @@ active-animation reference rather than the nested class monitor shared by all
 Activities. `destroy()` always cancels both executors and clears pending
 animation state before native document teardown, including repeated or
 partially initialized teardown.
+Autoscroll has a separate synchronized `AutoScrollSessionState` and cancelable
+GUI scheduler. A session is renderable only after its exact owner completes
+background initialization; initialization temporarily suppresses drawing and
+cannot republish after stop or destroy. Timer rescheduling and cancellation
+share the same owner lock, speed publication is volatile, book close finishes
+only an initialized session, and `ReaderView.destroy()` permanently rejects
+late initialization and timer callbacks before native teardown.
 Font-face next/previous commands delegate catalog navigation to the stateless
 `FontFaceSwitcher`. Empty native catalogs are a no-op, an unavailable current
 face starts at the directional edge, and known faces wrap safely after
