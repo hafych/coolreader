@@ -90,6 +90,7 @@ BITMAP_MEMORY_ACCOUNTING = (
 )
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 TAP_ZONE_GEOMETRY = SOURCE / "crengine" / "TapZoneGeometry.java"
+POSITION_PROPERTIES = SOURCE / "crengine" / "PositionProperties.java"
 EINK_REFRESH_LEASE_TRACKER = (
     SOURCE / "crengine" / "EinkRefreshLeaseTracker.java"
 )
@@ -132,6 +133,18 @@ TAP_ZONE_GEOMETRY_TEST = (
     / "coolreader"
     / "crengine"
     / "TapZoneGeometryTest.java"
+)
+POSITION_PROPERTIES_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "PositionPropertiesTest.java"
 )
 EINK_REFRESH_LEASE_TRACKER_TEST = (
     ROOT
@@ -1507,6 +1520,14 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} indexes the native font catalog "
             "without an empty-list boundary")
+    if "props.getPercent() / 100" not in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} does not reuse bounded document "
+            "percentage for go-to input")
+    if "props.y * 100 / props.fullHeight" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} retains divide-by-zero-prone "
+            "go-to percentage arithmetic")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(
@@ -1816,6 +1837,36 @@ def main() -> None:
         if marker not in tap_zone_geometry_test_text:
             violations.append(
                 f"{relative(TAP_ZONE_GEOMETRY_TEST)} omits tap-zone "
+                f"regression: {marker}")
+
+    position_properties_text = POSITION_PROPERTIES.read_text(
+        encoding="utf-8")
+    for marker in (
+        "long scrollableHeight = (long) fullHeight - pageHeight",
+        "long percent = (long) y * 10000 / scrollableHeight",
+        "Math.max(0, Math.min(percent, 10000))",
+        "(long) y < scrollableHeight",
+        "(long) pageNumber < (long) pageCount - pageMode",
+    ):
+        if marker not in position_properties_text:
+            violations.append(
+                f"{relative(POSITION_PROPERTIES)} omits widened position "
+                f"marker: {marker}")
+
+    position_properties_test_text = POSITION_PROPERTIES_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "percentUsesScrollableHeight",
+        "emptyAndNegativeRangesStartAtZero",
+        "percentClampsBeforeAndAfterDocument",
+        "percentWidensMultiplicationAndRangeSubtraction",
+        "scrollMovementUsesTheSameWidenedRange",
+        "Integer.MIN_VALUE",
+        "Integer.MAX_VALUE",
+    ):
+        if marker not in position_properties_test_text:
+            violations.append(
+                f"{relative(POSITION_PROPERTIES_TEST)} omits position "
                 f"regression: {marker}")
 
     eink_lease_text = EINK_REFRESH_LEASE_TRACKER.read_text(

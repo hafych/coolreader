@@ -187,6 +187,9 @@ DRM или ограничений доступа, подбор/получени�
   Font-face navigation вынесена в stateless `FontFaceSwitcher`: empty native
   catalog даёт no-op, missing current начинает с directional edge, известные
   значения корректно wrap, magnitude направления нормализуется без overflow.
+  `PositionProperties` теперь widened/clamped для scrollable range и 0–10000
+  percent; scroll movement использует тот же range, а go-to-percent переиспользует
+  единый контракт без int overflow и division by zero.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

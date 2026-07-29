@@ -101,6 +101,10 @@ Tap actions and their highlight rectangles likewise share the pure
 non-divisible surface sizes, clamps coordinates, widens boundary arithmetic and
 returns an empty immutable rectangle for an invalid surface, so action routing
 and visual feedback cannot drift or divide by zero.
+`PositionProperties` widens scrollable-height subtraction and percentage
+multiplication before clamping to its 0–10000 contract. Scroll movement uses the
+same widened range, and go-to-percent derives its initial 0–100 value from that
+single contract instead of dividing directly by an unchecked document height.
 Gesture animation uses the same boundary: each `ReaderView` owns an immutable
 `GestureAcceleration` curve, input is clamped, and interpolation widens before
 arithmetic so the full signed-integer range cannot overflow.

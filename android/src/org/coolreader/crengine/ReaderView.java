@@ -6472,7 +6472,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			String pos = mActivity.getString(R.string.dlg_goto_current_position) + " " + positionText;
 			String prompt = mActivity.getString(R.string.dlg_goto_input_percent);
 			showInputDialog(mActivity.getString(R.string.mi_goto_percent), pos + "\n" + prompt, true,
-					0, 100, props.y * 100 / props.fullHeight,
+					0, 100, props.getPercent() / 100,
 					new InputHandler() {
 						int percent = 0;
 

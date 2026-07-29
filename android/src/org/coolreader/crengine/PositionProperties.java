@@ -51,14 +51,11 @@ public class PositionProperties {
 	}
 	
 	public int getPercent() {
-		if (fullHeight - pageHeight <= 0)
+		long scrollableHeight = (long) fullHeight - pageHeight;
+		if (scrollableHeight <= 0)
 			return 0;
-		int p = 10000 * y / (fullHeight - pageHeight);
-		if (p < 0)
-			p = 0;
-		if (p > 10000)
-			p = 10000;
-		return p;
+		long percent = (long) y * 10000 / scrollableHeight;
+		return (int) Math.max(0, Math.min(percent, 10000));
 	}
 	
 	@Override
@@ -68,9 +65,10 @@ public class PositionProperties {
 
 	public boolean canMoveToNextPage() {
 		if (pageMode == 0) {
-			return fullHeight > pageHeight && y < fullHeight - pageHeight;
+			long scrollableHeight = (long) fullHeight - pageHeight;
+			return scrollableHeight > 0 && (long) y < scrollableHeight;
 		}
-		return pageNumber < pageCount - pageMode;
+		return (long) pageNumber < (long) pageCount - pageMode;
 	}
 	
 	@Override
