@@ -47,6 +47,7 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.h" DICTIONARY_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.cpp" DICTIONARY_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/CMakeLists.txt" LEGACY_GUI_CMAKE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom_internal.h" DOM_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
@@ -6833,6 +6834,52 @@ require_source_text(
   "${QT_GUI_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "Qt window managers must adopt their created screen"
+)
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "#include <QtWidgets/QApplication>"
+  "Qt application headers must use the Qt5 widgets module"
+)
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "#include <QtWidgets/QMainWindow>"
+  "Qt window headers must use the Qt5 widgets module"
+)
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "#include <QtCore/QEvent>"
+  "Qt event headers must use an explicit module boundary"
+)
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "#if CR_EMULATE_GETTEXT!=1
+    #undef LOCALEDIR"
+  "Qt gettext initialization must respect the emulation configuration"
+)
+forbid_source_text(
+  "${QT_GUI_SOURCE}"
+  "#include <QtGui/QApplication>"
+  "Qt application headers must not regress to the Qt4 layout"
+)
+forbid_source_text(
+  "${QT_GUI_SOURCE}"
+  "waitForEvent = false"
+  "Qt event forwarding must not retain dead parameter assignments"
+)
+require_source_text(
+  "${LEGACY_GUI_CMAKE_SOURCE}"
+  "FIND_PACKAGE(Qt5 REQUIRED COMPONENTS Core Gui Widgets)"
+  "the legacy Qt backend must use the supported Qt5 package contract"
+)
+require_source_text(
+  "${LEGACY_GUI_CMAKE_SOURCE}"
+  "SET(EXTRA_LIBS Qt5::Core Qt5::Gui Qt5::Widgets"
+  "the legacy Qt backend must link explicit Qt5 module targets"
+)
+forbid_source_text(
+  "${LEGACY_GUI_CMAKE_SOURCE}"
+  "FIND_PACKAGE( Qt4 REQUIRED )"
+  "the legacy Qt backend must not regress to the retired Qt4 package"
 )
 require_source_text(
   "${WIN_GUI_SOURCE}"

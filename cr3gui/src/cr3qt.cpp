@@ -32,14 +32,16 @@
 #include "mainwnd.h"
 
 #include <locale.h>
+#if CR_EMULATE_GETTEXT!=1
 #include <libintl.h>
+#endif
 #include <cri18n.h>
 
-#include <QtGui/QApplication>
-#include <QtGui/QMainWindow>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QMainWindow>
 #include <QtGui/QPainter>
 #include <QtGui/QResizeEvent>
-#include <QEvent>
+#include <QtCore/QEvent>
 #include <QtGui/QKeyEvent>
 
 // Qt code ===================================================================
@@ -299,8 +301,7 @@ bool CRQtWindowManager::getBatteryStatus( int & percent, bool & charging )
 /// forward events from system queue to application queue
 void CRQtWindowManager::forwardSystemEvents( bool waitForEvent )
 {
-    if ( _stopFlag )
-        waitForEvent = false;
+    (void)waitForEvent;
 }
 
 /// called when message queue is empty and application is going to wait for event
@@ -332,6 +333,7 @@ int main(int argc, char **argv)
        
     // gettext initialization
     setlocale (LC_ALL, "");
+#if CR_EMULATE_GETTEXT!=1
     #undef LOCALEDIR
     #define LOCALEDIR "/usr/share/locale"
     #ifndef PACKAGE
@@ -342,6 +344,7 @@ int main(int argc, char **argv)
     CRLog::info("Initializing gettext: dir=%s, LANGUAGE=%s, DOMAIN=%s, bindtxtdomain result = %s", LOCALEDIR, getenv("LANGUAGE"), PACKAGE, bindres);
     CRLog::info("Trying to translate: 'On'='%s'", gettext("On"));
     CRLog::info("Trying to translate: 'About...'='%s'", gettext("About..."));
+#endif
 
     lString32Collection fontDirs;
     if ( !InitCREngine( argv[0], fontDirs ) ) {
