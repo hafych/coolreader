@@ -4643,45 +4643,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final static int SIN_TABLE_SIZE = 1024;
 	private final static int SIN_TABLE_SCALE = 0x10000;
 	private final static int PI_DIV_2 = (int) (Math.PI / 2 * SIN_TABLE_SCALE);
-	/// sin table, for 0..PI/2
-	private static int[] SIN_TABLE = new int[SIN_TABLE_SIZE + 1];
-	private static int[] ASIN_TABLE = new int[SIN_TABLE_SIZE + 1];
-	// mapping of 0..1 shift to angle
-	private static int[] SRC_TABLE = new int[SIN_TABLE_SIZE + 1];
-	// mapping of 0..1 shift to sin(angle)
-	private static int[] DST_TABLE = new int[SIN_TABLE_SIZE + 1];
-
-	// for dx=0..1 find such alpha (0..pi/2) that alpha - sin(alpha) = dx
-	private static double shiftfn(double dx) {
-		double a = 0;
-		double b = Math.PI / 2;
-		double c = 0;
-		for (int i = 0; i < 15; i++) {
-			c = (a + b) / 2;
-			double cq = c - Math.sin(c);
-			if (cq < dx)
-				a = c;
-			else
-				b = c;
-		}
-		return c;
-	}
-
-	static {
-		for (int i = 0; i <= SIN_TABLE_SIZE; i++) {
-			double angle = Math.PI / 2 * i / SIN_TABLE_SIZE;
-			int s = (int) Math.round(Math.sin(angle) * SIN_TABLE_SCALE);
-			SIN_TABLE[i] = s;
-			double x = (double) i / SIN_TABLE_SIZE;
-			s = (int) Math.round(Math.asin(x) * SIN_TABLE_SCALE);
-			ASIN_TABLE[i] = s;
-
-			double dx = i * (Math.PI / 2 - 1.0) / SIN_TABLE_SIZE;
-			angle = shiftfn(dx);
-			SRC_TABLE[i] = (int) Math.round(angle * SIN_TABLE_SCALE);
-			DST_TABLE[i] = (int) Math.round(Math.sin(angle) * SIN_TABLE_SCALE);
-		}
-	}
+	private static final PageCurveTables PAGE_CURVE_TABLES =
+			new PageCurveTables(SIN_TABLE_SIZE, SIN_TABLE_SCALE);
 
 	class PageViewAnimation extends ViewAnimationBase {
 		int startX;
@@ -4810,7 +4773,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				// start
 				int index = PageFlipGeometry.tableIndex(
 						dx, maxdx, SIN_TABLE_SIZE);
-				int dstv = DST_TABLE[index] * maxdistortdx / SIN_TABLE_SCALE;
+				int dstv = PAGE_CURVE_TABLES.destinationShift(index)
+						* maxdistortdx / SIN_TABLE_SCALE;
 				distortdststart = distortsrcstart = dstdx - dstv;
 				distortsrcend = srcdx;
 				distortdstend = dstdx;
@@ -4818,7 +4782,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				normalsrcend = distortsrcstart;
 				normaldstend = distortdststart;
 				distortanglestart = 0;
-				distortangleend = SRC_TABLE[index];
+				distortangleend =
+						PAGE_CURVE_TABLES.sourceAngle(index);
 				distortdx = maxdistortdx;
 			} else if (dstdx > maxdistortdx) {
 				// middle
@@ -4836,17 +4801,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				distortdx = dstdx;
 				distortsrcstart = 0;
 				int n = maxdistortdx >= dstdx ? maxdistortdx - dstdx : 0;
-				distortsrcend = ASIN_TABLE[
+				distortsrcend = PAGE_CURVE_TABLES.arcsine(
 						PageFlipGeometry.tableIndex(
-								n, maxdistortdx, SIN_TABLE_SIZE)
-						] * maxdistortsrc / SIN_TABLE_SCALE;
+								n, maxdistortdx, SIN_TABLE_SIZE))
+						* maxdistortsrc / SIN_TABLE_SCALE;
 				distortdststart = 0;
 				distortdstend = dstdx;
 				distortangleend = PI_DIV_2;
 				n = maxdistortdx >= distortdx ? maxdistortdx - distortdx : 0;
-				distortanglestart = ASIN_TABLE[
+				distortanglestart = PAGE_CURVE_TABLES.arcsine(
 						PageFlipGeometry.tableIndex(
-								n, maxdistortdx, SIN_TABLE_SIZE)];
+								n, maxdistortdx, SIN_TABLE_SIZE));
 			}
 
 			Rect srcrc = new Rect(src);
@@ -4867,12 +4832,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			if (distortdststart < distortdstend) {
 				int n = distortdx / 5 + 1;
-				int dst0 = SIN_TABLE[
+				int dst0 = PAGE_CURVE_TABLES.sine(
 						PageFlipGeometry.tableIndex(
 								distortanglestart,
 								PI_DIV_2,
-								SIN_TABLE_SIZE)
-						] * maxdistortdx / SIN_TABLE_SCALE;
+								SIN_TABLE_SIZE))
+						* maxdistortdx / SIN_TABLE_SCALE;
 				int src0 = distortanglestart * maxdistortdx / SIN_TABLE_SCALE;
 				for (int i = 0; i < n; i++) {
 					int angledelta = distortangleend - distortanglestart;
@@ -4880,18 +4845,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					int endangle = distortanglestart + (i + 1) * angledelta / n;
 					int src1 = startangle * maxdistortdx / SIN_TABLE_SCALE - src0;
 					int src2 = endangle * maxdistortdx / SIN_TABLE_SCALE - src0;
-					int dst1 = SIN_TABLE[
+					int dst1 = PAGE_CURVE_TABLES.sine(
 							PageFlipGeometry.tableIndex(
 									startangle,
 									PI_DIV_2,
-									SIN_TABLE_SIZE)
-							] * maxdistortdx / SIN_TABLE_SCALE - dst0;
-					int dst2 = SIN_TABLE[
+									SIN_TABLE_SIZE))
+							* maxdistortdx / SIN_TABLE_SCALE - dst0;
+					int dst2 = PAGE_CURVE_TABLES.sine(
 							PageFlipGeometry.tableIndex(
 									endangle,
 									PI_DIV_2,
-									SIN_TABLE_SIZE)
-							] * maxdistortdx / SIN_TABLE_SCALE - dst0;
+									SIN_TABLE_SIZE))
+							* maxdistortdx / SIN_TABLE_SCALE - dst0;
 					int hiliteIndex = startangle * hilitePaints.length / PI_DIV_2;
 					Paint[] paints;
 					if (dir > 0) {

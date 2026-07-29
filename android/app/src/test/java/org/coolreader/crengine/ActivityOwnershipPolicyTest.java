@@ -120,6 +120,26 @@ public class ActivityOwnershipPolicyTest {
 		}
 	}
 
+	@Test
+	public void pageCurveTablesHaveOneFinalOwnerAndPrivateStorage()
+			throws Exception {
+		assertFinalStaticField(ReaderView.class, "PAGE_CURVE_TABLES");
+		for (Field field : PageCurveTables.class.getDeclaredFields()) {
+			assertFalse(
+					"Page-curve storage must be instance-owned: "
+							+ field.getName(),
+					Modifier.isStatic(field.getModifiers()));
+			assertTrue(
+					"Page-curve storage must not be replaceable: "
+							+ field.getName(),
+					Modifier.isFinal(field.getModifiers()));
+			assertTrue(
+					"Page-curve storage must not escape its owner: "
+							+ field.getName(),
+					Modifier.isPrivate(field.getModifiers()));
+		}
+	}
+
 	private static void assertVolatileField(Class<?> type, String name)
 			throws Exception {
 		Field field = type.getDeclaredField(name);

@@ -363,6 +363,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android hyphenation definitions now publish one frozen JNI snapshot; Java
   enumeration returns copies and late definitions cannot diverge from native
   registry state.
+- Natural page-curl lookup curves now live behind one immutable, test-covered
+  owner instead of mutable static arrays in `ReaderView`.
 - All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
   `sign-compare` and `unused-but-set-variable` promoted to the full
   `-Werror` gate alongside the existing high-confidence classes.

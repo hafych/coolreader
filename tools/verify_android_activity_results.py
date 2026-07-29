@@ -20,6 +20,7 @@ TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
+PAGE_CURVE_TABLES = SOURCE / "crengine" / "PageCurveTables.java"
 BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
 DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
 FREEZABLE_REGISTRY = SOURCE / "crengine" / "FreezableRegistry.java"
@@ -34,6 +35,18 @@ PAGE_FLIP_GEOMETRY_TEST = (
     / "coolreader"
     / "crengine"
     / "PageFlipGeometryTest.java"
+)
+PAGE_CURVE_TABLES_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "PageCurveTablesTest.java"
 )
 DEFERRED_TASK_QUEUE_TEST = (
     ROOT
@@ -413,6 +426,21 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} does not use bounded page-flip "
             "table indexing")
+    if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
+            reader_view_text):
+        violations.append(
+            f"{relative(READER_VIEW)} does not use one final page-curve "
+            "table owner")
+    for marker in (
+        "private static int[] SIN_TABLE",
+        "private static int[] ASIN_TABLE",
+        "private static int[] SRC_TABLE",
+        "private static int[] DST_TABLE",
+    ):
+        if marker in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains mutable page-curve "
+                f"storage: {marker}")
     find_pattern(
         READER_VIEW,
         reader_view_text,
@@ -448,6 +476,32 @@ def main() -> None:
         if marker not in page_flip_geometry_test_text:
             violations.append(
                 f"{relative(PAGE_FLIP_GEOMETRY_TEST)} omits regression "
+                f"marker: {marker}")
+
+    page_curve_tables_text = PAGE_CURVE_TABLES.read_text(encoding="utf-8")
+    for marker in (
+        "final class PageCurveTables",
+        "private final int[] sine",
+        "private final int[] arcsine",
+        "private final int[] sourceAngle",
+        "private final int[] destinationShift",
+        "private static double shiftAngle(double dx)",
+    ):
+        if marker not in page_curve_tables_text:
+            violations.append(
+                f"{relative(PAGE_CURVE_TABLES)} omits immutable curve "
+                f"marker: {marker}")
+
+    page_curve_tables_test_text = PAGE_CURVE_TABLES_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "valuesMatchLegacyPageCurlLookup",
+        "everyCurveIsMonotonic",
+        "invalidTableShapeIsRejected",
+    ):
+        if marker not in page_curve_tables_test_text:
+            violations.append(
+                f"{relative(PAGE_CURVE_TABLES_TEST)} omits curve regression "
                 f"marker: {marker}")
 
     for path in (FILE_BROWSER, ROOT_VIEW):

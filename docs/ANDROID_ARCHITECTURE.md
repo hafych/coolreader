@@ -66,7 +66,9 @@ in the Activity's ContentResolver flow. Storage helpers such as
 `PageFlipGeometry` component. It widens multiplication before division and
 clamps every lookup to the table's last valid index. Boundary and integer-limit
 behavior is covered by a local JVM test, without constructing an Activity,
-Surface or native document.
+Surface or native document. The matching sine/arcsine page-curl curves are
+built once by `PageCurveTables`; its arrays are private, final, instance-owned
+storage and the legacy numeric samples are locked by a pure JVM regression.
 
 ## Migration rule
 
