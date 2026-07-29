@@ -50,20 +50,25 @@ import android.widget.TextView;
 
 import org.coolreader.CoolReader;
 import org.coolreader.R;
+import org.coolreader.db.CRDBService;
 import org.coolreader.genrescollection.GenresCollection;
 
 import java.util.ArrayList;
 
 public class BookInfoEditDialog extends BaseDialog {
-	private CoolReader mActivity;
+	private final CoolReader mActivity;
 	private final CoverpageManager mCoverpageManager;
 	private final GenresCollection mGenresCollection;
 	private final History mHistory;
-	private BookInfo mBookInfo;
-	private FileInfo mParentDir;
+	private final ServiceLifecycle serviceLifecycle;
+	private final BookInfoDialogSession dialogSession =
+			new BookInfoDialogSession();
+	private final BookInfo mBookInfo;
+	private final FileInfo mParentDir;
 	private LayoutInflater mInflater;
-	private int mWindowSize;
-	private boolean mIsRecentBooksItem;
+	private final int mWindowSize;
+	private final boolean mIsRecentBooksItem;
+	private DetachableRunnable coverBindCallback;
 	public BookInfoEditDialog(
 			CoolReader activity,
 			CoverpageManager coverpageManager,
@@ -77,6 +82,8 @@ public class BookInfoEditDialog extends BaseDialog {
 		this.mCoverpageManager = coverpageManager;
 		this.mGenresCollection = genresCollection;
 		this.mHistory = history;
+		this.serviceLifecycle =
+				activity.getServiceDependencies().getLifecycle();
 		this.mParentDir = baseDir;
 		DisplayMetrics outMetrics = new DisplayMetrics();
 		activity.getWindowManager().getDefaultDisplay().getMetrics(outMetrics);
@@ -287,6 +294,8 @@ public class BookInfoEditDialog extends BaseDialog {
         btnOpenBook.setOnClickListener(v -> onPositiveButtonClick());
         ImageButton btnDeleteBook = mainView.findViewById(R.id.book_delete);
         btnDeleteBook.setOnClickListener(v -> {
+			if (!finishDialog())
+				return;
 			mActivity.askDeleteBook(mBookInfo.getFileInfo());
 			dismiss();
 		});
@@ -317,11 +326,7 @@ public class BookInfoEditDialog extends BaseDialog {
         image.setMaxHeight(h);
         image.setMinimumWidth(w);
         image.setMaxWidth(w);
-        Bitmap bmp = Bitmap.createBitmap(w, h, Config.RGB_565);
-        mCoverpageManager.drawCoverpageFor(mActivity.getDB(), file, bmp, false, (file1, bitmap) -> {
-			BitmapDrawable drawable = new BitmapDrawable(bitmap);
-			image.setImageDrawable(drawable);
-		});
+		requestCover(file, image, w, h);
 
         final ImageView progress = mainView.findViewById(R.id.book_progress);
         int percent = -1;
@@ -379,10 +384,14 @@ public class BookInfoEditDialog extends BaseDialog {
     	ImageButton btnOpenFolder = mainView.findViewById(R.id.book_folder_open);
         if (mIsRecentBooksItem) {
         	btnRemoveRecent.setOnClickListener(v -> {
+				if (!finishDialog())
+					return;
 				mActivity.askDeleteRecent(mBookInfo.getFileInfo());
 				dismiss();
 			});
         	btnOpenFolder.setOnClickListener(v -> {
+				if (!finishDialog())
+					return;
 				mActivity.showDirectory(mBookInfo.getFileInfo());
 				dismiss();
 			});
@@ -393,6 +402,59 @@ public class BookInfoEditDialog extends BaseDialog {
         }
 
         setView(mainView);
+	}
+
+	private void requestCover(
+			FileInfo file,
+			ImageView image,
+			int width,
+			int height) {
+		BookInfoDialogSession.Request owner =
+				dialogSession.replace();
+		if (owner == null)
+			return;
+		Bitmap buffer =
+				Bitmap.createBitmap(
+						width,
+						height,
+						Config.RGB_565);
+		FileInfo coverFile = new FileInfo(file);
+		coverBindCallback =
+				new DetachableRunnable(() -> {
+					if (!serviceLifecycle.isActive()
+							|| !dialogSession.isActive(owner))
+						return;
+					CRDBService.LocalBinder db =
+							mActivity.getDB();
+					if (db == null) {
+						dialogSession.complete(owner);
+						return;
+					}
+					mCoverpageManager.drawCoverpageFor(
+							db,
+							coverFile,
+							buffer,
+							false,
+							(file1, bitmap) -> {
+								if (!serviceLifecycle.isActive()
+										|| bitmap == null
+										|| !dialogSession.complete(
+												owner))
+									return;
+								BitmapDrawable drawable =
+										new BitmapDrawable(
+												mActivity.getResources(),
+												bitmap);
+								image.setImageDrawable(drawable);
+							});
+				});
+		mActivity.waitForCRDBService(coverBindCallback);
+	}
+
+	private boolean finishDialog() {
+		if (coverBindCallback != null)
+			coverBindCallback.detach();
+		return dialogSession.close();
 	}
 
 	private void save() {
@@ -428,18 +490,55 @@ public class BookInfoEditDialog extends BaseDialog {
 			state = FileInfo.STATE_FINISHED;
         modified = file.setReadingState(state) || modified;
         if (modified) {
-        	mActivity.getDB().saveBookInfo(mBookInfo);
-        	mActivity.getDB().flush();
+			persistBookInfo(
+					mActivity,
+					serviceLifecycle,
+					new BookInfo(mBookInfo));
             BookInfo bi = mHistory.getBookInfo(file);
         	if (bi != null)
         		bi.getFileInfo().setFileProperties(file);
-        	mParentDir.setFile(file);
-        	mActivity.directoryUpdated(mParentDir, file);
+			if (mParentDir != null) {
+				mParentDir.setFile(file);
+				if (serviceLifecycle.isActive())
+					mActivity.directoryUpdated(
+							mParentDir,
+							file);
+			}
         }
+	}
+
+	private static void persistBookInfo(
+			CoolReader activity,
+			ServiceLifecycle lifecycle,
+			BookInfo bookInfo) {
+		if (!lifecycle.isActive())
+			return;
+		CRDBService.LocalBinder db = activity.getDB();
+		if (db != null) {
+			saveBookInfo(db, bookInfo);
+			return;
+		}
+		activity.waitForCRDBService(() -> {
+			if (!lifecycle.isActive())
+				return;
+			CRDBService.LocalBinder connectedDb =
+					activity.getDB();
+			if (connectedDb != null)
+				saveBookInfo(connectedDb, bookInfo);
+		});
+	}
+
+	private static void saveBookInfo(
+			CRDBService.LocalBinder db,
+			BookInfo bookInfo) {
+		db.saveBookInfo(bookInfo);
+		db.flush();
 	}
 
 	@Override
 	protected void onPositiveButtonClick() {
+		if (!finishDialog())
+			return;
 		save();
 		mActivity.loadDocument(mBookInfo.getFileInfo(), null, () -> {
 			// error occured
@@ -450,8 +549,16 @@ public class BookInfoEditDialog extends BaseDialog {
 
 	@Override
 	protected void onNegativeButtonClick() {
+		if (!finishDialog())
+			return;
 		save();
 		super.onNegativeButtonClick();
+	}
+
+	@Override
+	protected void onClose() {
+		finishDialog();
+		super.onClose();
 	}
 
 	@Override
@@ -471,10 +578,10 @@ public class BookInfoEditDialog extends BaseDialog {
 	@Override
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
 		if (KeyEvent.KEYCODE_BACK == keyCode) {
-			dismiss();
+			onNegativeButtonClick();
 			return true;
 		}
-		return super.onKeyDown(keyCode, event);
+		return super.onKeyUp(keyCode, event);
 	}
 
 }

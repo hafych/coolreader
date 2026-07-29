@@ -63,6 +63,7 @@ import org.coolreader.crengine.BaseActivity;
 import org.coolreader.crengine.BatteryStatus;
 import org.coolreader.crengine.BookInfo;
 import org.coolreader.crengine.BookInfoEditDialog;
+import org.coolreader.crengine.BookInfoDialogSession;
 import org.coolreader.crengine.Bookmark;
 import org.coolreader.crengine.BrowserViewLayout;
 import org.coolreader.crengine.CRRootView;
@@ -102,6 +103,7 @@ import org.coolreader.crengine.ServiceDependencies;
 import org.coolreader.crengine.ServiceLifecycle;
 import org.coolreader.crengine.TTSToolbarDlg;
 import org.coolreader.crengine.Utils;
+import org.coolreader.db.CRDBService;
 import org.coolreader.genrescollection.GenresCollection;
 import org.coolreader.tts.OnTTSCreatedListener;
 import org.coolreader.tts.TTSControlServiceAccessor;
@@ -141,6 +143,8 @@ public class CoolReader extends BaseActivity {
 	private ServiceLifecycle mServiceLifecycle;
 	private final DocumentLoadLifecycle documentLoadLifecycle =
 			new DocumentLoadLifecycle();
+	private final BookInfoDialogSession bookInfoDialogRequests =
+			new BookInfoDialogSession();
 	private final ExternalDocumentValidator mExternalDocumentValidator =
 			new ExternalDocumentValidator();
 	//View startupView;
@@ -337,6 +341,7 @@ public class CoolReader extends BaseActivity {
 				mReaderView.close();
 		}
 		documentLoadLifecycle.close();
+		bookInfoDialogRequests.close();
 
 		// Shutdown TTS service if running
 		if (null != ttsControlServiceAccessor) {
@@ -2558,20 +2563,41 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void editBookInfo(final FileInfo currDirectory, final FileInfo item) {
-		waitForCRDBService(() -> mHistory.getOrCreateBookInfo(
-				getDB(), item, bookInfo -> {
-			if (bookInfo == null)
-				bookInfo = new BookInfo(item);
-			BookInfoEditDialog dlg = new BookInfoEditDialog(
-					CoolReader.this,
-					mCoverpageManager,
-					mGenresCollection,
-					mHistory,
-					currDirectory,
-					bookInfo,
-					currDirectory.isRecentDir());
-			dlg.show();
-		}));
+		BookInfoDialogSession.Request owner =
+				bookInfoDialogRequests.replace();
+		if (owner == null)
+			return;
+		waitForCRDBService(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| mDestroyed
+					|| !bookInfoDialogRequests.isActive(owner))
+				return;
+			CRDBService.LocalBinder db = getDB();
+			if (db == null) {
+				bookInfoDialogRequests.complete(owner);
+				return;
+			}
+			mHistory.getOrCreateBookInfo(db, item, bookInfo -> {
+				if (!mServiceLifecycle.isActive()
+						|| mDestroyed
+						|| !bookInfoDialogRequests.complete(owner))
+					return;
+				BookInfo dialogBook =
+						bookInfo != null
+								? bookInfo
+								: new BookInfo(item);
+				BookInfoEditDialog dlg =
+						new BookInfoEditDialog(
+								CoolReader.this,
+								mCoverpageManager,
+								mGenresCollection,
+								mHistory,
+								currDirectory,
+								dialogBook,
+								currDirectory.isRecentDir());
+				dlg.show();
+			});
+		});
 	}
 
 	public void editOPDSCatalog(FileInfo opds) {

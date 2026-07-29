@@ -192,6 +192,16 @@ persists a copied `BookInfo` through a temporary database disconnect without
 retaining the dialog itself. The find-next popup folds outside touch, close,
 Back and platform dismiss into one terminal selection cleanup instead of
 posting duplicate native work.
+Book-info editing has two exact ownership levels. `CoolReader` gives each
+pending database lookup a latest-only `BookInfoDialogSession` request, so a
+second selection or Activity teardown rejects the earlier result before a
+dialog is constructed. Each visible `BookInfoEditDialog` owns another session
+for its cover bind/render callback and detaches the pending bind wrapper on
+every terminal action or dismiss. Back uses the same save-and-close path as the
+visible back button. Edited metadata updates the captured book and browser
+snapshot once, while persistence uses a copied `BookInfo`; a temporary database
+disconnect queues only that persistence callback and cannot retain the dialog
+or dereference a null binder.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

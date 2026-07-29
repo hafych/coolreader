@@ -1058,6 +1058,59 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void bookInfoDialogOwnsOpenCoverAndCloseLifecycle()
+			throws Exception {
+		Field openRequests =
+				CoolReader.class.getDeclaredField(
+						"bookInfoDialogRequests");
+		assertTrue(Modifier.isPrivate(
+				openRequests.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				openRequests.getModifiers()));
+		assertFalse(Modifier.isStatic(
+				openRequests.getModifiers()));
+
+		for (String name : new String[]{
+				"mActivity",
+				"serviceLifecycle",
+				"dialogSession"}) {
+			Field field =
+					BookInfoEditDialog.class
+							.getDeclaredField(name);
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+		}
+		Field coverBindCallback =
+				BookInfoEditDialog.class.getDeclaredField(
+						"coverBindCallback");
+		assertTrue(Modifier.isPrivate(
+				coverBindCallback.getModifiers()));
+		assertFalse(Modifier.isStatic(
+				coverBindCallback.getModifiers()));
+		Method onClose =
+				BookInfoEditDialog.class.getDeclaredMethod(
+						"onClose");
+		assertTrue(Modifier.isProtected(
+				onClose.getModifiers()));
+
+		assertSynchronizedMethod(
+				BookInfoDialogSession.class,
+				"replace");
+		assertSynchronizedMethod(
+				BookInfoDialogSession.class,
+				"isActive",
+				BookInfoDialogSession.Request.class);
+		assertSynchronizedMethod(
+				BookInfoDialogSession.class,
+				"complete",
+				BookInfoDialogSession.Request.class);
+		assertSynchronizedMethod(
+				BookInfoDialogSession.class,
+				"close");
+	}
+
+	@Test
 	public void readerSearchUiOwnsItsCloseableLifecycle()
 			throws Exception {
 		for (String name : new String[]{

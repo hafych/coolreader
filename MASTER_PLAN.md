@@ -373,6 +373,13 @@ DRM или ограничений доступа, подбор/получени�
   без падения или удержания самого dialog. Find-next popup сводит outside,
   close, Back и dismiss к одной terminal очистке selection вместо двойных
   native задач.
+  Открытие `BookInfoEditDialog` теперь latest-request-owned: повторный запрос и
+  Activity destroy инвалидируют поздние DB results до создания dialog.
+  Внутри dialog cover bind/render принадлежит отдельной exact session и
+  detachable wrapper, а любой terminal action/Back/dismiss закрывает её ровно
+  один раз. Metadata сначала обновляет captured book/browser snapshot, затем
+  сохраняется через immutable `BookInfo` copy; временный DB disconnect ставит
+  только persistence callback без удержания dialog и больше не приводит к NPE.
   Фоновая language-фильтрация font picker теперь принадлежит отдельной
   `FontFilterSession`: scan читает deep-copied candidate snapshot, replacement,
   uncheck и dismiss физически вызывают `ScanControl.stop()`, а late completion
