@@ -792,35 +792,25 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
 
         //====== Margins ==============
-        CRMenu * marginsMenu = new CRMenu(_wm, mainMenu, mm_PageMargins,
-                _("Page margins"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props );
-        CRMenu * marginsMenuTop = new CRMenu(_wm, marginsMenu, mm_PageMarginTop,
-                _("Top margin"),
-                 LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_PAGE_MARGIN_TOP );
-        addMenuItems( marginsMenuTop, page_margins );
-        marginsMenu->addItem( marginsMenuTop );
-        CRMenu * marginsMenuBottom = new CRMenu(_wm, marginsMenu, mm_PageMarginBottom,
-                _("Bottom margin"),
-                 LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_PAGE_MARGIN_BOTTOM );
-        addMenuItems( marginsMenuBottom, page_margins );
-        marginsMenu->addItem( marginsMenuBottom );
-        CRMenu * marginsMenuLeft = new CRMenu(_wm, marginsMenu, mm_PageMarginLeft,
-                _("Left margin"),
-                 LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_PAGE_MARGIN_LEFT );
-        addMenuItems( marginsMenuLeft, page_margins );
-        marginsMenu->addItem( marginsMenuLeft );
-        CRMenu * marginsMenuRight = new CRMenu(_wm, marginsMenu, mm_PageMarginRight,
-                _("Right margin"),
-                 LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_PAGE_MARGIN_RIGHT );
-        addMenuItems( marginsMenuRight, page_margins );
-
-
-        marginsMenu->addItem( marginsMenuRight );
-		marginsMenu->setAccelerators( _menuAccelerators );
+        std::unique_ptr<CRMenu> marginsMenu = std::make_unique<CRMenu>(
+                _wm, mainMenu, mm_PageMargins, _("Page margins"),
+                LVImageSourceRef(), LVFontRef(), valueFont, props);
+        marginsMenu->addItem(createOptionMenu(
+                marginsMenu.get(), mm_PageMarginTop, _("Top margin"),
+                valueFont, props, PROP_PAGE_MARGIN_TOP, page_margins));
+        marginsMenu->addItem(createOptionMenu(
+                marginsMenu.get(), mm_PageMarginBottom, _("Bottom margin"),
+                valueFont, props, PROP_PAGE_MARGIN_BOTTOM, page_margins));
+        marginsMenu->addItem(createOptionMenu(
+                marginsMenu.get(), mm_PageMarginLeft, _("Left margin"),
+                valueFont, props, PROP_PAGE_MARGIN_LEFT, page_margins));
+        marginsMenu->addItem(createOptionMenu(
+                marginsMenu.get(), mm_PageMarginRight, _("Right margin"),
+                valueFont, props, PROP_PAGE_MARGIN_RIGHT, page_margins));
+        marginsMenu->setAccelerators( _menuAccelerators );
         marginsMenu->setSkinName(cs32("#settings"));
         marginsMenu->reconfigure( 0 );
-        mainMenu->addItem( marginsMenu );
+        mainMenu->addItem(std::move(marginsMenu));
 
 #ifndef CR_POCKETBOOK
         CRControlsMenu * controlsMenu =

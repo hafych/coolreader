@@ -7993,6 +7993,31 @@ forbid_source_text(
   "hyphenation submenu candidates must not begin as raw owners"
 )
 require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> marginsMenu = std::make_unique<CRMenu>("
+  "page-margins menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "marginsMenu->addItem(createOptionMenu("
+  "page-margins child menus must transfer through owner-aware boundaries"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(marginsMenu));"
+  "page-margins menus must transfer through the owner-aware boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * marginsMenu = new"
+  "page-margins menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * marginsMenuTop = new"
+  "page-margin child candidates must not begin as raw owners"
+)
+require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"
