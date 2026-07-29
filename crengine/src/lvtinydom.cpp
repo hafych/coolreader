@@ -5159,9 +5159,9 @@ lUInt16 lxmlDocBase::getElementNameIndex( const lChar8 * name )
 }
 
 /// create formatted text object with options set
-LFormattedText * lxmlDocBase::createFormattedText()
+LFormattedTextRef lxmlDocBase::createFormattedText()
 {
-    LFormattedText * p = new LFormattedText();
+    LFormattedTextRef p(new LFormattedText());
     p->setImageScalingOptions(&_imgScalingOptions);
     p->setSpaceWidthScalePercent(_spaceWidthScalePercent);
     p->setMinSpaceCondensingPercent(_minSpaceCondensingPercent);

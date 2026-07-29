@@ -1374,7 +1374,7 @@ public:
 
 
     /// create formatted text object with options set
-    LFormattedText * createFormattedText();
+    LFormattedTextRef createFormattedText();
 
 #if BUILD_LITE!=1
     void setHightlightOptions(text_highlight_options_t & options) {

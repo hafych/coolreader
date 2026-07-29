@@ -248,6 +248,36 @@ require_source_text(
   "formatted lines must have scoped owners"
 )
 require_source_text(
+  "${DOM_HEADER}"
+  "LFormattedTextRef createFormattedText();"
+  "formatted-text factories must return scoped reference ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LFormattedTextRef lxmlDocBase::createFormattedText()"
+  "formatted-text factory implementation must preserve its owner contract"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "LFormattedTextRef p(new LFormattedText());"
+  "formatted-text configuration must occur under scoped ownership"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "formatted text factory lost scoped ownership or options"
+  "formatted-text factory ownership must retain native lifecycle coverage"
+)
+forbid_source_text(
+  "${DOM_HEADER}"
+  "LFormattedText * createFormattedText();"
+  "formatted-text factories must not expose a raw owner"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "LFormattedText * p = new LFormattedText();"
+  "formatted-text configuration must not begin with a raw allocation"
+)
+require_source_text(
   "${FORMATTER_SOURCE}"
   "std::vector<std::unique_ptr<EmbeddedFloatOwner> > m_floats"
   "embedded floats must have scoped owners"

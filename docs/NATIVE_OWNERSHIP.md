@@ -526,6 +526,12 @@ remain the explicit raw ownership boundary. `LFormattedText` now holds that
 boundary in a `unique_ptr`, disables shallow copies and swaps a complete
 replacement during `Clear()`.
 
+Document-side formatted-text creation returns `LFormattedTextRef` directly.
+The factory configures image scaling, spacing and highlight options only after
+reference ownership has been established, so no raw allocation exists between
+construction and caller publication. Native coverage checks option propagation,
+distinct factory results and alias lifetime after the original reference clears.
+
 History XML parsing keeps the current file and bookmark in `unique_ptr`
 candidates until the owning pointer vectors adopt them. A complete history is
 parsed into a temporary `CRFileHist` and swapped into the live object only after

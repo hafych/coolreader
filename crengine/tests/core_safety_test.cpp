@@ -3218,6 +3218,32 @@ static int testFormatterWorkspaceOwnership() {
     lvtextFreeFormatter(cApiBuffer);
     if (!cApiValid)
         return fail("formatted text C ownership boundary failed");
+
+    std::unique_ptr<ldomDocument> document =
+            std::make_unique<ldomDocument>();
+    document->setSpaceWidthScalePercent(135);
+    document->setMinSpaceCondensingPercent(75);
+    document->setUnusedSpaceThresholdPercent(12);
+    document->setMaxAddedLetterSpacingPercent(9);
+    LFormattedTextRef first =
+            document->createFormattedText();
+    LFormattedTextRef alias = first;
+    LFormattedTextRef second =
+            document->createFormattedText();
+    if (first.isNull() || alias.isNull() || second.isNull()
+            || first.get() != alias.get()
+            || first.get() == second.get()
+            || first->GetBuffer()->space_width_scale_percent != 135
+            || first->GetBuffer()->min_space_condensing_percent != 75
+            || first->GetBuffer()->unused_space_threshold_percent != 12
+            || first->GetBuffer()
+                    ->max_added_letter_spacing_percent != 9)
+        return fail("formatted text factory lost scoped ownership or options");
+    first.Clear();
+    if (alias.isNull()
+            || alias->GetBuffer()
+                    ->space_width_scale_percent != 135)
+        return fail("formatted text factory alias lost owner lifetime");
     return 0;
 }
 
