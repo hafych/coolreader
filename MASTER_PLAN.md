@@ -133,7 +133,8 @@ DRM или ограничений доступа, подбор/получени�
   immutable/testable owner lookup-таблиц page-curl, плюс one-shot
   interrupt-preserving blocking result без зависимости dispatcher от UI и
   generation-scoped OptionsDialog resource/format state без shared title arrays,
-  а также Activity-owned backlight timestamp/timer и pure timeout policy.
+  Activity-owned backlight timestamp/timer и pure timeout policy, а также
+  thread-safe strict OPDS timestamp parser без shared formatter state.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

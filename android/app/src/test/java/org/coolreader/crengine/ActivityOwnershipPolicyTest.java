@@ -20,6 +20,7 @@ import org.junit.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.text.DateFormat;
 
 public class ActivityOwnershipPolicyTest {
 	@Test
@@ -214,6 +215,18 @@ public class ActivityOwnershipPolicyTest {
 			Field field = controlClass.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+	}
+
+	@Test
+	public void opdsTimestampParsingRetainsNoSharedFormatter() {
+		for (Field field : OPDSUtil.OPDSHandler.class.getDeclaredFields()) {
+			assertFalse(
+					"OPDS parser retains process-wide mutable formatter "
+							+ field.getName(),
+					Modifier.isStatic(field.getModifiers())
+							&& DateFormat.class.isAssignableFrom(
+									field.getType()));
 		}
 	}
 

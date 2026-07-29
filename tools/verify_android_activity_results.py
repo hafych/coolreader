@@ -25,6 +25,9 @@ BACKLIGHT_OPTIONS = SOURCE / "crengine" / "BacklightOptions.java"
 BACKLIGHT_TIMEOUT_POLICY = (
     SOURCE / "crengine" / "BacklightTimeoutPolicy.java"
 )
+FEED_TIMESTAMP_PARSER = (
+    SOURCE / "crengine" / "FeedTimestampParser.java"
+)
 BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
 DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
 BLOCKING_RESULT = SOURCE / "crengine" / "BlockingResult.java"
@@ -124,6 +127,18 @@ BACKLIGHT_TIMEOUT_POLICY_TEST = (
     / "coolreader"
     / "crengine"
     / "BacklightTimeoutPolicyTest.java"
+)
+FEED_TIMESTAMP_PARSER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "FeedTimestampParserTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -770,9 +785,45 @@ def main() -> None:
         "final private Engine engine",
         "final private ServiceLifecycle serviceLifecycle",
         "cancelled || !serviceLifecycle.isActive()",
+        "FeedTimestampParser.parse(ts)",
     ):
         if marker not in opds_text:
             violations.append(f"{relative(OPDS_UTIL)} omits marker: {marker}")
+    if re.search(
+            r"\bstatic\s+(?:final\s+)?SimpleDateFormat\b",
+            opds_text):
+        violations.append(
+            f"{relative(OPDS_UTIL)} retains a shared date formatter")
+
+    feed_timestamp_parser_text = FEED_TIMESTAMP_PARSER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class FeedTimestampParser",
+        "new SimpleDateFormat(",
+        "Locale.US",
+        "TimeZone.getTimeZone(\"UTC\")",
+        "parser.setLenient(false)",
+        "value.substring(23)",
+        "position.getIndex() != value.length()",
+    ):
+        if marker not in feed_timestamp_parser_text:
+            violations.append(
+                f"{relative(FEED_TIMESTAMP_PARSER)} omits feed timestamp "
+                f"marker: {marker}")
+
+    feed_timestamp_parser_test_text = FEED_TIMESTAMP_PARSER_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "utcTimestampIgnoresDefaultTimezone",
+        "colonAndCompactOffsetsAreEquivalent",
+        "malformedTimestampIsRejected",
+        "concurrentParsingHasNoSharedFormatterState",
+        "GMT+09:00",
+    ):
+        if marker not in feed_timestamp_parser_test_text:
+            violations.append(
+                f"{relative(FEED_TIMESTAMP_PARSER_TEST)} omits timestamp "
+                f"regression: {marker}")
 
     main_db_text = MAIN_DB.read_text(encoding="utf-8")
     if re.search(r"\bServices\.", main_db_text):

@@ -374,6 +374,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android backlight inactivity timestamps and timer tasks are now owned by one
   Activity generation, with overflow-safe dim/expiry thresholds covered by
   pure JVM tests.
+- OPDS timestamps now parse with strict method-scoped formatters, explicit UTC
+  handling, and working compact or colon timezone offsets under concurrent use.
 - All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
   `sign-compare` and `unused-but-set-variable` promoted to the full
   `-Werror` gate alongside the existing high-confidence classes.

@@ -21,8 +21,6 @@
 
 package org.coolreader.crengine;
 
-import android.annotation.SuppressLint;
-
 import org.coolreader.CoolReader;
 import org.coolreader.crengine.Engine.DelayedProgress;
 import org.xml.sax.Attributes;
@@ -40,8 +38,6 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URL;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,7 +48,6 @@ import java.util.zip.GZIPInputStream;
 
 import javax.xml.parsers.SAXParser;
 
-@SuppressLint("SimpleDateFormat")
 public class OPDSUtil {
 
 	public static final boolean EXTENDED_LOG = false; // set to false for production
@@ -246,9 +241,6 @@ xml:base="http://lib.ololo.cc/opds/">
 		private boolean insideEntryTitle;
 		//private boolean singleEntry;
 		private int level = 0;
-		//2011-05-31T10:28:22+04:00
-		private static SimpleDateFormat tsFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ"); 
-		private static SimpleDateFormat tsFormat2 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 		public OPDSHandler( URL url ) {
 			this.url = url;
 		}
@@ -256,23 +248,10 @@ xml:base="http://lib.ololo.cc/opds/">
 			this.url = url;
 		}
 		private long parseTimestamp( String ts ) {
-			if ( ts==null )
-				return 0;
-			ts = ts.trim();
-			try {
-				if ( ts.length()=="2010-01-10T10:01:10Z".length() )
-					return tsFormat2.parse(ts).getTime();
-				if ( ts.length()=="2011-11-11T11:11:11+67:87".length()&& ts.lastIndexOf(":")==ts.length()-3 ) {
-					ts = ts.substring(0, ts.length()-3) + ts.substring(0, ts.length()-2);
-					return tsFormat.parse(ts).getTime();
-				}
-				if ( ts.length()=="2011-11-11T11:11:11+6787".length()) {
-					return tsFormat.parse(ts).getTime();
-				}
-			} catch (ParseException e) {
-			}
-			L.e("cannot parse timestamp " + ts);
-			return 0;
+			long parsed = FeedTimestampParser.parse(ts);
+			if (parsed == 0)
+				L.e("cannot parse timestamp " + ts);
+			return parsed;
 		}
 		
 		@Override

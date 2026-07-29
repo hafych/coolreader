@@ -86,6 +86,11 @@ reschedule decisions are delegated to the pure, overflow-safe
 `BacklightTimeoutPolicy`; activity from a replacement screen cannot extend an
 older screen's WakeLock.
 
+OPDS feed timestamps are parsed by the pure `FeedTimestampParser`. Formatter
+instances are method-scoped, UTC and locale handling are explicit, parsing is
+strict, and both compact and colon timezone offsets are normalized without
+shared `SimpleDateFormat` state.
+
 ## Migration rule
 
 New Android components should:
