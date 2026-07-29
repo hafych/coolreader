@@ -328,6 +328,12 @@ DRM или ограничений доступа, подбор/получени�
   Reload явно переносит embedded-font flag вместе со styles/reflow/DOM/block
   flags, а stale диалог не может изменить native document или metadata книги,
   которая заменила исходную.
+  Переключение reader profile также получает узкий `ProfileSwitchHandler`
+  вместо `ReaderView`: dialog open и каждый apply принадлежат captured
+  book+interaction, профиль валидируется до mutation, а `FileInfo`, DB и
+  Activity settings меняются только для всё ещё current документа. Поэтому
+  оставшийся открытым profile dialog старой книги не может назначить её выбор
+  replacement-книге.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

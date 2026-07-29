@@ -275,6 +275,13 @@ render. A reload consumes all five captured per-book settings, including the
 embedded-font command. If the interaction has been replaced, the handler
 rejects every document/native/DB effect; unrelated Activity settings selected
 in the same dialog may still be applied normally.
+Profile selection follows the stricter document boundary. A
+`SwitchProfileDialog` retains only a `ProfileSwitchHandler` created for the
+captured `BookInfo` and interaction. The handler validates both the profile
+range and exact document generation before changing the book's profile ID,
+persisting it, or loading the corresponding Activity settings. A click from a
+dialog left open across document replacement is therefore a complete no-op for
+the replacement book and its settings.
 Interface themes follow the same boundary: each `BaseActivity` owns an
 immutable `InterfaceThemeCatalog` built from its E-Ink snapshot. Theme visual
 metadata is final, the ordered catalog is unmodifiable, and `OptionsDialog`

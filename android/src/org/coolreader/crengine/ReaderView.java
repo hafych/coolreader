@@ -8198,29 +8198,61 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void showSwitchProfileDialog() {
-		SwitchProfileDialog dlg = new SwitchProfileDialog(mActivity, this);
+		BackgroundThread.ensureGUI();
+		BookInfo expectedBook = mBookInfo;
+		DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
+		SwitchProfileDialog dlg = new SwitchProfileDialog(
+				mActivity,
+				profileSwitchHandler(
+						expectedBook, interaction));
 		dlg.show();
 	}
 
-//	private int currentProfile = 0;
-//	public int getCurrentProfile() {
-//		if (currentProfile == 0) {
-//			currentProfile = mSettings.getInt(PROP_PROFILE_NUMBER, 1);
-//			if (currentProfile < 1 || currentProfile > MAX_PROFILES)
-//				currentProfile = 1;
-//		}
-//		return currentProfile;
-//	}
+	private ProfileSwitchHandler profileSwitchHandler(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		return new ProfileSwitchHandler() {
+			@Override
+			public boolean isActive() {
+				return isDocumentInteractionCurrent(
+						expectedBook, interaction);
+			}
 
-	public void setCurrentProfile(int profile) {
+			@Override
+			public int getCurrentProfile() {
+				return mActivity.getCurrentProfile();
+			}
+
+			@Override
+			public boolean selectProfile(int profile) {
+				return applyProfileSelection(
+						profile, expectedBook, interaction);
+			}
+		};
+	}
+
+	private boolean applyProfileSelection(
+			int profile,
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (profile < 1 || profile > Settings.MAX_PROFILES
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction)
+				|| expectedBook.getFileInfo() == null)
+			return false;
 		if (mActivity.getCurrentProfile() == profile)
-			return;
-		if (mBookInfo != null && mBookInfo.getFileInfo() != null) {
-			mBookInfo.getFileInfo().setProfileId(profile);
-			mActivity.getDB().saveBookInfo(mBookInfo);
-		}
+			return true;
+		expectedBook.getFileInfo().setProfileId(profile);
+		if (mActivity.getDB() != null)
+			mActivity.getDB().saveBookInfo(expectedBook);
 		log.i("Apply new profile settings");
 		mActivity.setCurrentProfile(profile);
+		return true;
 	}
 
 	private final static String NOOK_TOUCH_COVERPAGE_DIR = "/media/screensavers/currentbook";

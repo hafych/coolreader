@@ -729,6 +729,12 @@ OPTIONS_DIALOG = SOURCE / "crengine" / "OptionsDialog.java"
 READER_OPTIONS_HANDLER = (
     SOURCE / "crengine" / "ReaderOptionsHandler.java"
 )
+SWITCH_PROFILE_DIALOG = (
+    SOURCE / "crengine" / "SwitchProfileDialog.java"
+)
+PROFILE_SWITCH_HANDLER = (
+    SOURCE / "crengine" / "ProfileSwitchHandler.java"
+)
 READER_DOCUMENT_OPTIONS = (
     SOURCE / "crengine" / "ReaderDocumentOptions.java"
 )
@@ -2466,6 +2472,9 @@ def main() -> None:
         "ReaderOptionsHandler.class.isInterface()",
         "OptionsDialog.class, \"readerOptionsHandler\"",
         '"applyReaderDocumentOptions"',
+        "ProfileSwitchHandler.class.isInterface()",
+        "SwitchProfileDialog.class,",
+        '"applyProfileSelection"',
         "SelectionToolbarDlg.class, \"expectedBook\"",
         "TOCDlg.PageSelectionHandler.class",
         '"TOC dialog must not retain a mutable reader"',
@@ -3657,6 +3666,54 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits exact reader-options "
                 f"marker: {marker}")
+
+    profile_switch_handler_text = PROFILE_SWITCH_HANDLER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "interface ProfileSwitchHandler",
+        "boolean isActive()",
+        "int getCurrentProfile()",
+        "boolean selectProfile(int profile)",
+    ):
+        if marker not in profile_switch_handler_text:
+            violations.append(
+                f"{relative(PROFILE_SWITCH_HANDLER)} omits narrow "
+                f"profile-switch marker: {marker}")
+
+    switch_profile_dialog_text = SWITCH_PROFILE_DIALOG.read_text(
+        encoding="utf-8")
+    for marker in (
+        "private final ProfileSwitchHandler profileSwitchHandler",
+        "profileSwitchHandler.getCurrentProfile()",
+        "profileSwitchHandler.selectProfile(position + 1)",
+    ):
+        if marker not in switch_profile_dialog_text:
+            violations.append(
+                f"{relative(SWITCH_PROFILE_DIALOG)} omits exact "
+                f"profile-switch marker: {marker}")
+    if re.search(r"\bReaderView\s+\w+", switch_profile_dialog_text):
+        violations.append(
+            f"{relative(SWITCH_PROFILE_DIALOG)} retains a mutable ReaderView")
+
+    for marker in (
+        "private void showSwitchProfileDialog()",
+        "private ProfileSwitchHandler profileSwitchHandler(",
+        "private boolean applyProfileSelection(",
+        "profile < 1 || profile > Settings.MAX_PROFILES",
+        "expectedBook.getFileInfo().setProfileId(profile)",
+        "mActivity.getDB().saveBookInfo(expectedBook)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits exact profile-switch "
+                f"marker: {marker}")
+    if re.search(
+            r"\b(?:public|protected|private)\s+void\s+"
+            r"setCurrentProfile\s*\(",
+            reader_view_text
+    ):
+        violations.append(
+            f"{relative(READER_VIEW)} retains mutable-current profile apply")
 
     reader_document_options_test_text = (
         READER_DOCUMENT_OPTIONS_TEST.read_text(encoding="utf-8")

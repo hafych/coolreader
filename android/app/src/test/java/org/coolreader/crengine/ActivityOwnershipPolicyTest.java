@@ -1760,6 +1760,49 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void switchProfileDialogKeepsDocumentSelectionGenerationScoped()
+			throws Exception {
+		assertTrue(ProfileSwitchHandler.class.isInterface());
+		assertPrivateFinalField(
+				SwitchProfileDialog.class,
+				"profileSwitchHandler",
+				ProfileSwitchHandler.class);
+		for (Field field :
+				SwitchProfileDialog.class.getDeclaredFields()) {
+			assertFalse(
+					"SwitchProfileDialog must retain only a narrow "
+							+ "profile-switch handler",
+					field.getType() == ReaderView.class);
+		}
+		Method showDialog =
+				ReaderView.class.getDeclaredMethod(
+						"showSwitchProfileDialog");
+		assertTrue(Modifier.isPrivate(
+				showDialog.getModifiers()));
+		Method createHandler =
+				ReaderView.class.getDeclaredMethod(
+						"profileSwitchHandler",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				createHandler.getModifiers()));
+		Method applySelection =
+				ReaderView.class.getDeclaredMethod(
+						"applyProfileSelection",
+						int.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				applySelection.getModifiers()));
+		for (Method method : ReaderView.class.getDeclaredMethods()) {
+			assertFalse(
+					"Reader profile selection must not reread "
+							+ "mutable current-book state",
+					method.getName().equals("setCurrentProfile"));
+		}
+	}
+
+	@Test
 	public void backlightTimeoutStateBelongsToOneActivityGeneration()
 			throws Exception {
 		Field control =
