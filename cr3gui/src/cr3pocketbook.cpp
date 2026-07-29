@@ -2463,7 +2463,8 @@ int InitDoc(const char *exename, char *fileName)
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
         if (manual_file[0])
-            main_win->setHelpFile( lString16( manual_file ) );
+            main_win->setHelpFile(
+                    Utf8ToUnicode(lString8(manual_file)));
         if (!main_win->loadDefaultCover(lString16(CONFIGPATH"/cr3/cr3_def_cover.png")))
             if (!main_win->loadDefaultCover(lString16(USERDATA2"/share/cr3/cr3_def_cover.png")))
                 main_win->loadDefaultCover(lString16(USERDATA"/share/cr3/cr3_def_cover.png"));

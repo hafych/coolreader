@@ -169,10 +169,6 @@ public:
         return loadDictConfig(Utf16ToUnicode(filename));
     }
 	bool setHelpFile( lString32 filename );
-    bool setHelpFile( lString16 filename )
-    {
-        return setHelpFile(Utf16ToUnicode(filename));
-    }
 	/// on starting file loading
 	void OnLoadFileStart( lString32 filename ) override;
 	/// format detection finished
