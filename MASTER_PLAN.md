@@ -358,6 +358,12 @@ DRM или ограничений доступа, подбор/получени�
   viewport widened arithmetic, нормализует направление и clamps document
   boundaries; общий command executor повторно проверяет exact request до/после
   native mutation и перед render/save completion.
+  Минутный Android time tick также больше не вызывает `DocView` из broadcast
+  GUI callback: latest-only `CloseableTaskGate` и captured render request
+  сериализуют `isTimeChanged()` через Engine queue. Pause, autoscroll,
+  replacement и close отменяют exact owner, destroy permanently закрывает его,
+  а completion перерисовывает только исходную document/surface generation без
+  recapture текущей книги через общий `redraw()`.
   Touch long/double timeouts используют отдельный closeable gate и reader
   scheduler; replacement/drag/`ACTION_CANCEL`/focus loss/book close/destroy
   отменяют exact owner, stale selection completion проверяет handler identity и

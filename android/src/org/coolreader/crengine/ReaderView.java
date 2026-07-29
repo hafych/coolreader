@@ -476,6 +476,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		stopTracking();
 		if (isAutoScrollActive())
 			stopAutoScroll();
+		timeTickLifecycle.cancel();
 		cancelPositionSave();
 		Bookmark bmk = getCurrentPositionBookmark();
 		if (bmk != null)
@@ -4359,6 +4360,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BackgroundThread.ensureGUI();
 		stopTts();
 		resetTemporaryViewMode();
+		timeTickLifecycle.cancel();
 		bookInfoDialogLifecycle.cancel();
 		readerOptionsDialogLifecycle.cancel();
 		settingsSyncLifecycle.cancel();
@@ -5054,6 +5056,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					BatteryStatus.CHARGER_NO,
 					0,
 					100);
+	private final CloseableTaskGate timeTickLifecycle =
+			new CloseableTaskGate();
 
 	public void setBatteryStatus(BatteryStatus status) {
 		if (status == null)
@@ -5097,12 +5101,62 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void onTimeTickReceived() {
-		if (!DeviceInfo.EINK_SCREEN && !isAutoScrollActive()) {
-			if (doc.isTimeChanged()) {
-				log.i("The current time has been changed (minutes), redrawing is scheduled.");
-				redraw();
-			}
+		BackgroundThread.ensureGUI();
+		if (DeviceInfo.EINK_SCREEN || isAutoScrollActive()) {
+			timeTickLifecycle.cancel();
+			return;
 		}
+		final CloseableTaskGate.Token owner =
+				timeTickLifecycle.replace();
+		final ReaderRenderRequest renderRequest =
+				ReaderRenderRequest.capture(
+						mBookInfo,
+						documentLoadLifecycle);
+		if (owner == null
+				|| !isRenderRequestCurrent(renderRequest)) {
+			timeTickLifecycle.complete(owner);
+			return;
+		}
+		post(new Task() {
+			boolean changed;
+
+			@Override
+			public void work() {
+				BackgroundThread.ensureBackground();
+				if (!timeTickLifecycle.isActive(owner)
+						|| !readerNativeLifecycle.isInitialized()
+						|| !isRenderRequestCurrent(
+								renderRequest))
+					return;
+				changed = doc.isTimeChanged();
+			}
+
+			@Override
+			public void done() {
+				BackgroundThread.ensureGUI();
+				if (!timeTickLifecycle.complete(owner)
+						|| !isRenderRequestCurrent(
+								renderRequest)
+						|| !changed
+						|| isAutoScrollActive()
+						|| readerSurfaceState.isClosed())
+					return;
+				log.i("The current time has been changed "
+						+ "(minutes), redrawing is scheduled.");
+				surface.invalidate();
+				invalidImages = true;
+				drawPage(null, false, renderRequest);
+			}
+
+			@Override
+			public void fail(Exception e) {
+				BackgroundThread.ensureGUI();
+				if (timeTickLifecycle.complete(owner)
+						&& isRenderRequestCurrent(
+								renderRequest))
+					super.fail(e);
+			}
+		});
 	}
 
 	private final VMRuntimeHack runtime = new VMRuntimeHack();
@@ -8248,6 +8302,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		log.i("ReaderView.close() is called");
 		stopTts();
 		resetTemporaryViewMode();
+		timeTickLifecycle.cancel();
 		if (cancelDocumentLoad)
 			documentLoadLifecycle.cancel();
 		bookInfoDialogLifecycle.cancel();
@@ -8391,6 +8446,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		bookInfoDialogLifecycle.close();
 		readerOptionsDialogLifecycle.close();
 		settingsSyncLifecycle.close();
+		timeTickLifecycle.close();
 		documentLoadLifecycle.close();
 		closeGestureTimeouts();
 		synchronized (viewportResizeState) {

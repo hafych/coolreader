@@ -2376,6 +2376,68 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} retains parallel battery field: "
                 f"{legacy}")
+    time_tick_start = reader_view_text.find(
+        "\n\tpublic void onTimeTickReceived() {")
+    time_tick_end = reader_view_text.find(
+        "\n\tprivate final VMRuntimeHack runtime",
+        time_tick_start)
+    if time_tick_start < 0 or time_tick_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned time-tick work")
+    else:
+        time_tick_text = reader_view_text[
+            time_tick_start:time_tick_end
+        ]
+        work_index = time_tick_text.find(
+            "public void work()")
+        owner_guard_index = time_tick_text.find(
+            "timeTickLifecycle.isActive(owner)",
+            work_index)
+        render_guard_index = time_tick_text.find(
+            "isRenderRequestCurrent(",
+            work_index)
+        native_index = time_tick_text.find(
+            "changed = doc.isTimeChanged()",
+            work_index)
+        done_index = time_tick_text.find(
+            "public void done()")
+        complete_index = time_tick_text.find(
+            "timeTickLifecycle.complete(owner)",
+            done_index)
+        done_render_guard_index = time_tick_text.find(
+            "isRenderRequestCurrent(",
+            complete_index)
+        draw_index = time_tick_text.find(
+            "drawPage(null, false, renderRequest)",
+            done_render_guard_index)
+        for marker in (
+            "BackgroundThread.ensureGUI()",
+            "timeTickLifecycle.replace()",
+            "ReaderRenderRequest.capture(",
+            "readerNativeLifecycle.isInitialized()",
+            "isAutoScrollActive()",
+            "readerSurfaceState.isClosed()",
+        ):
+            if marker not in time_tick_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} time tick omits exact "
+                    f"ownership marker: {marker}")
+        if not (
+                work_index >= 0
+                and owner_guard_index > work_index
+                and render_guard_index > owner_guard_index
+                and native_index > render_guard_index
+                and done_index > native_index
+                and complete_index > done_index
+                and done_render_guard_index > complete_index
+                and draw_index > done_render_guard_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not gate native time "
+                "query and redraw with the same exact request")
+        if "redraw();" in time_tick_text:
+            violations.append(
+                f"{relative(READER_VIEW)} time tick recaptures a "
+                "replacement document through generic redraw")
     for marker in (
         "private final ReaderProgressState progressState",
         "ReaderProgressState.Snapshot progress =",
@@ -2508,6 +2570,12 @@ def main() -> None:
         "private void finishTtsInitialization(",
         "private TtsDocumentHandler ttsDocumentHandler(",
         "private final ReaderViewModeState readerViewModeState",
+        "private final CloseableTaskGate timeTickLifecycle",
+        "timeTickLifecycle.replace()",
+        "timeTickLifecycle.isActive(owner)",
+        "timeTickLifecycle.complete(owner)",
+        "timeTickLifecycle.cancel()",
+        "timeTickLifecycle.close()",
         "private ReaderViewModeState.Lease acquireTemporaryScrollMode()",
         "private void releaseTemporaryScrollMode(",
         "private void resetTemporaryViewMode()",
@@ -2520,6 +2588,7 @@ def main() -> None:
         "public void stopTtsForDocumentChange()",
         "private DocumentLoadLifecycle.Request replaceDocumentLoad()",
         "stopTts();\n\t\tresetTemporaryViewMode();\n"
+        "\t\ttimeTickLifecycle.cancel();\n"
         "\t\tif (cancelDocumentLoad)",
         "stopTts();\n\t\tresetTemporaryViewMode();\n"
         "\t\treaderViewModeState.close();\n"
@@ -3348,6 +3417,7 @@ def main() -> None:
         '"isEngineCommandRequestCurrent"',
         "ReaderViewModeState.class",
         '"readerViewModeState"',
+        '"timeTickLifecycle"',
         "ReaderPageCacheClose.class",
         '"initialCurrent"',
         '"publishSerialized"',

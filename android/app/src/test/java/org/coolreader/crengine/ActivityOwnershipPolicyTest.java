@@ -434,6 +434,7 @@ public class ActivityOwnershipPolicyTest {
 				"documentLoadLifecycle",
 				"readerSurfaceState",
 				"readerViewModeState",
+				"timeTickLifecycle",
 				"einkRefreshScheduler",
 				"keyDoubleClickState",
 				"keyDoubleClickScheduler",

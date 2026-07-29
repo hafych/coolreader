@@ -136,6 +136,14 @@ longer calls `DocView.getPositionProps()` on the GUI thread. The pure
 arithmetic and clamps both document boundaries. The shared Engine executor
 revalidates the exact request before and after the operation and again before
 render/save completion.
+Android minute ticks use an independent latest-only `CloseableTaskGate` and
+the captured `ReaderRenderRequest`. The broadcast callback only queues work;
+`DocView.isTimeChanged()` runs on the Engine thread after native-lifecycle,
+service, document and token checks. Pause, autoscroll, replacement and close
+invalidate
+the exact owner, while reader destruction closes it permanently. Completion
+revalidates the same request and draws through its captured identity instead
+of a generic redraw that could recapture a replacement book.
 Touch long-press and double-tap timeouts use a separate
 closeable gate plus reader-owned scheduler. Gesture replacement, drag-mode
 entry, `ACTION_CANCEL`, focus loss, book close and reader destruction cancel
