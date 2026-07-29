@@ -6713,6 +6713,30 @@ static int testImageSourceOwnership() {
         return fail(
                 "oversized smooth snapshot did not use mapped fallback");
 
+    static const int oversizedSmoothOutput = 16385;
+    LVColorDrawBuf boundedSmoothOutput(2, 2, 32);
+    boundedSmoothOutput.Clear(scaledSentinel);
+    boundedSmoothOutput.setSmoothScalingImages(true);
+    boundedSmoothOutput.Draw(
+            xpm, 0, 0,
+            oversizedSmoothOutput,
+            oversizedSmoothOutput, false);
+    if (boundedSmoothOutput.getDrawnImagesCount() != 1
+            || boundedSmoothOutput.getDrawnImagesSurface()
+                    != static_cast<lUInt64>(
+                            oversizedSmoothOutput)
+                            * oversizedSmoothOutput)
+        return fail(
+                "oversized smooth output did not use mapped fallback");
+    for (int y = 0; y < 2; ++y) {
+        for (int x = 0; x < 2; ++x) {
+            if (boundedSmoothOutput.GetPixel(x, y)
+                    == scaledSentinel)
+                return fail(
+                        "oversized smooth output did not use mapped fallback");
+        }
+    }
+
     static const int unpackedBpps[] = {8, 16, 32};
     for (int bpp : unpackedBpps) {
         LVImageSourceRef unpacked =

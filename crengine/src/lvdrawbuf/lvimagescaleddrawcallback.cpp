@@ -49,7 +49,7 @@ struct SmoothScaledBufferDeleter {
     }
 };
 
-bool getSmoothSnapshotByteCount(
+bool getSmoothImageByteCount(
         int width, int height, std::size_t &byteCount)
 {
     if (width <= 0 || height <= 0)
@@ -213,8 +213,11 @@ LVImageScaledDrawCallback::LVImageScaledDrawCallback(LVBaseDrawBuf *dstbuf, LVIm
     // allocation bounded and fall back to mapped scaling if it is unavailable.
     if (smoothscale) {
         std::size_t snapshotBytes = 0;
-        if (!getSmoothSnapshotByteCount(
-                    src_dx, src_dy, snapshotBytes)) {
+        std::size_t outputBytes = 0;
+        if (!getSmoothImageByteCount(
+                    src_dx, src_dy, snapshotBytes)
+                || !getSmoothImageByteCount(
+                        dst_dx, dst_dy, outputBytes)) {
             smoothscale = false;
         } else {
             try {

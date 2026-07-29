@@ -4023,8 +4023,8 @@ require_source_text(
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
-  "getSmoothSnapshotByteCount"
-  "smooth-scale snapshots must use checked byte counts"
+  "getSmoothImageByteCount"
+  "smooth-scale input and output must use checked byte counts"
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
@@ -4100,6 +4100,16 @@ require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "oversized smooth snapshot did not use mapped fallback"
   "bounded smooth-scale fallback must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "oversized smooth output did not use mapped fallback"
+  "bounded smooth-scale output must retain native regression coverage"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "dst_dx, dst_dy, outputBytes"
+  "smooth-scale output must honor the shared image budget"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"
