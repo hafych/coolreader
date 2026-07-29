@@ -320,9 +320,7 @@ CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * m
                         cr_font_sizes[i], 400, false, css_ff_sans_serif, fontFace, UnicodeToUtf8(skin->getItemSkin()->getFontFace())) );
     }
     fontSizeMenu->setAccelerators( _wm->getAccTables().get("menu") );
-    //fontSizeMenu->setAccelerators( _menuAccelerators );
     fontSizeMenu->setSkinName(cs32("#settings"));
-    //fontSizeMenu->setSkinName(lString16("#main"));
     fontSizeMenu->reconfigure( 0 );
     return fontSizeMenu;
 }
@@ -460,8 +458,8 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 	};
 
     item_def_t embolden_mode[] = {
-        {_("Normal"), "0"},
-        {_("Bold"), "1"},
+        {_("Normal"), "400"},
+        {_("Bold"), "700"},
         {NULL, NULL},
     };
 
@@ -599,8 +597,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
 	CRLog::trace("showSettingsMenu() - %d property values found", props->getCount() );
 
-        setSkinName(lString16("#settings"));
-        //setSkinName(lString16(L"#main"));
+        setSkinName(cs32("#settings"));
 
         LVFontRef valueFont( fontMan->GetFont( VALUE_FONT_SIZE, 400, true, css_ff_sans_serif, lString8("Arial")) );
         CRMenu * mainMenu = this;
@@ -609,9 +606,9 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         CRMenu * fontFaceMenu = new CRMenu(_wm, mainMenu, mm_FontFace,
                                             _("Default font face"),
                                                     LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_FACE );
-        fontFaceMenu->setSkinName(lString16("#settings"));
+        fontFaceMenu->setSkinName(cs32("#settings"));
         CRLog::trace("getting font face list");
-        lString16Collection list;
+        lString32Collection list;
         fontMan->getFaceList( list );
         CRLog::trace("faces found: %d", list.length());
         int i;
@@ -631,8 +628,8 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
         CRMenu * fontFallbackFaceMenu = new CRMenu(_wm, mainMenu, mm_FontFallbackFace,
                                             _("Fallback font face"),
-                                                    LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FALLBACK_FONT_FACE );
-        fontFallbackFaceMenu->setSkinName(lString16("#settings"));
+                                                    LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FALLBACK_FONT_FACES );
+        fontFallbackFaceMenu->setSkinName(cs32("#settings"));
 
         for ( i=0; i<(int)list.length(); i++ ) {
             fontFallbackFaceMenu->addItem( new OnDemandFontMenuItem( fontFallbackFaceMenu, i,
@@ -651,7 +648,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
         CRMenu * emboldenModeMenu = new CRMenu(_wm, mainMenu, mm_Embolden,
                 _("Font weight"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_WEIGHT_EMBOLDEN );
+                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_BASE_WEIGHT );
         addMenuItems( emboldenModeMenu, embolden_mode );
         mainMenu->addItem( emboldenModeMenu );
 
@@ -801,7 +798,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 					LVFontRef(), item->getId().c_str() ) );
 			}
 			hyphMenu->setAccelerators( _menuAccelerators );
-            hyphMenu->setSkinName(lString16("#settings"));
+            hyphMenu->setSkinName(cs32("#settings"));
             hyphMenu->reconfigure( 0 );
             mainMenu->addItem( hyphMenu );
 		}
@@ -840,7 +837,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
         marginsMenu->addItem( marginsMenuRight );
 		marginsMenu->setAccelerators( _menuAccelerators );
-        marginsMenu->setSkinName(lString16("#settings"));
+        marginsMenu->setSkinName(cs32("#settings"));
         marginsMenu->reconfigure( 0 );
         mainMenu->addItem( marginsMenu );
 
@@ -849,7 +846,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
                 new CRControlsMenu(
                         this, mm_Controls, props, cs32("main"), 8, _rect);
         controlsMenu->setAccelerators( _menuAccelerators );
-        controlsMenu->setSkinName(lString16("#settings"));
+        controlsMenu->setSkinName(cs32("#settings"));
         controlsMenu->setValueFont(valueFont);
         controlsMenu->reconfigure( 0 );
         mainMenu->addItem( controlsMenu );
@@ -880,7 +877,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         addMenuItems( inlineImagesZoominScaleMenu, image_scaling_factors );
         scalingMenu->addItem( inlineImagesZoominScaleMenu );
         scalingMenu->setAccelerators( _menuAccelerators );
-        scalingMenu->setSkinName(lString16("#settings"));
+        scalingMenu->setSkinName(cs32("#settings"));
         scalingMenu->reconfigure( 0 );
         mainMenu->addItem( scalingMenu );
         reconfigure(0);

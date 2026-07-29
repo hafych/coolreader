@@ -6973,6 +6973,41 @@ require_source_text(
   "snprintf("
   "settings sample labels must use a bounded formatter"
 )
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "props, PROP_FALLBACK_FONT_FACES"
+  "settings fallback font menu must use the current multi-face property"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "props, PROP_FONT_BASE_WEIGHT"
+  "settings font weight menu must use the current base-weight property"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "{_(\"Normal\"), \"400\"}"
+  "settings normal font weight must use the current numeric scale"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "{_(\"Bold\"), \"700\"}"
+  "settings bold font weight must use the current numeric scale"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "PROP_FALLBACK_FONT_FACE "
+  "settings must not use the removed single fallback property"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "PROP_FONT_WEIGHT_EMBOLDEN"
+  "settings must not use the removed boolean embolden property"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "setSkinName(lString16"
+  "settings skin identifiers must use the current string width"
+)
 forbid_source_text(
   "${SETTINGS_SOURCE}"
   "sprintf( defvalue"
