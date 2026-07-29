@@ -583,6 +583,15 @@ completion for the same document. Replacement and close cancel the draw gate;
 stale completion or failure cannot call the handler, schedule GC, or hide the
 next load's progress. `destroy()` closes the gate before native teardown and
 permanently rejects late render, callback and GC work.
+Asynchronous native commands use one `ReaderEngineCommandPolicy`. Every
+document command, including zoom and render configuration, validates its
+captured book and interaction before and after native mutation and again before
+GUI completion, so an old command cannot affect or invalidate a replacement
+document. Rotation metadata for font antialiasing is the sole reader-scoped
+command: it still requires the active native/service lifecycle, survives a book
+replacement, and captures the then-current render owner on completion.
+Movement and position-save behavior comes from the same exhaustive JVM-tested
+policy instead of a second switch in `ReaderView`.
 Autoscroll has a separate synchronized `AutoScrollSessionState` and cancelable
 GUI scheduler. A session is renderable only after its exact owner completes
 background initialization; initialization temporarily suppresses drawing and

@@ -3913,43 +3913,60 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void doEngineCommand(final ReaderCommand cmd, final int param, final Runnable doneHandler) {
 		BackgroundThread.ensureGUI();
+		if (cmd == null || !mServiceLifecycle.isActive())
+			return;
 		log.d("doCommand(" + cmd + ", " + param + ")");
+		final ReaderEngineCommandPolicy.Scope commandScope =
+				ReaderEngineCommandPolicy.scopeOf(cmd);
 		final boolean movesDocument =
-				isDocumentPositionCommand(cmd);
+				ReaderEngineCommandPolicy.movesDocument(cmd);
 		final BookInfo expectedBook = mBookInfo;
 		final DocumentLoadLifecycle.Interaction interaction =
 				documentLoadLifecycle.interaction();
 		final ReaderRenderRequest renderRequest =
-				ReaderRenderRequest.fromInteraction(
-						expectedBook, interaction);
+				commandScope
+						== ReaderEngineCommandPolicy
+								.Scope.DOCUMENT
+						? ReaderRenderRequest.fromInteraction(
+								expectedBook, interaction)
+						: null;
+		if (commandScope
+				== ReaderEngineCommandPolicy.Scope.DOCUMENT
+				&& !isRenderRequestCurrent(renderRequest))
+			return;
 		post(new Task() {
 			boolean res;
 
 			public void work() {
 				BackgroundThread.ensureBackground();
-				if (movesDocument
-						&& !isDocumentInteractionCurrent(
-								expectedBook, interaction))
+				if (!isEngineCommandRequestCurrent(
+						commandScope, renderRequest))
 					return;
 				res = doc.doCommand(cmd.nativeId, param);
-				if (movesDocument
-						&& isDocumentInteractionCurrent(
-								expectedBook, interaction))
+				if (!isEngineCommandRequestCurrent(
+						commandScope, renderRequest))
+					return;
+				if (movesDocument)
 					updateCurrentPositionStatus(
 							expectedBook, interaction);
 			}
 
 			public void done() {
-				if (movesDocument
-						&& !isDocumentInteractionCurrent(
-								expectedBook, interaction))
+				if (!isEngineCommandRequestCurrent(
+						commandScope, renderRequest))
 					return;
 				if (res) {
 					invalidImages = true;
-					drawPage(
-							doneHandler,
-							false,
-							renderRequest);
+					if (commandScope
+							== ReaderEngineCommandPolicy
+									.Scope.DOCUMENT) {
+						drawPage(
+								doneHandler,
+								false,
+								renderRequest);
+					} else {
+						drawPage(doneHandler, false);
+					}
 				}
 				if (movesDocument)
 					scheduleSaveCurrentPositionBookmark(
@@ -3959,31 +3976,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	private static boolean isDocumentPositionCommand(
-			ReaderCommand command) {
-		switch (command) {
-			case DCMD_BEGIN:
-			case DCMD_LINEUP:
-			case DCMD_PAGEUP:
-			case DCMD_PAGEDOWN:
-			case DCMD_LINEDOWN:
-			case DCMD_LINK_FORWARD:
-			case DCMD_LINK_BACK:
-			case DCMD_LINK_NEXT:
-			case DCMD_LINK_PREV:
-			case DCMD_LINK_GO:
-			case DCMD_END:
-			case DCMD_GO_POS:
-			case DCMD_GO_PAGE:
-			case DCMD_GO_PAGE_DONT_SAVE_HISTORY:
-			case DCMD_MOVE_BY_CHAPTER:
-			case DCMD_GO_SCROLL_POS:
-			case DCMD_LINK_FIRST:
-			case DCMD_SCROLL_BY:
-				return true;
-			default:
-				return false;
-		}
+	private boolean isEngineCommandRequestCurrent(
+			ReaderEngineCommandPolicy.Scope commandScope,
+			ReaderRenderRequest renderRequest) {
+		return mServiceLifecycle.isActive()
+				&& readerNativeLifecycle.isInitialized()
+				&& (commandScope
+						== ReaderEngineCommandPolicy.Scope.READER
+						|| isRenderRequestCurrent(renderRequest));
 	}
 
 	// update book and position info in status bar

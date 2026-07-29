@@ -783,6 +783,9 @@ READER_SETTINGS_SYNC_SNAPSHOT = (
 READER_RENDER_REQUEST = (
     SOURCE / "crengine" / "ReaderRenderRequest.java"
 )
+READER_ENGINE_COMMAND_POLICY = (
+    SOURCE / "crengine" / "ReaderEngineCommandPolicy.java"
+)
 READER_DOCUMENT_OPTIONS_TEST = (
     ROOT
     / "android"
@@ -830,6 +833,18 @@ READER_RENDER_REQUEST_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderRenderRequestTest.java"
+)
+READER_ENGINE_COMMAND_POLICY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderEngineCommandPolicyTest.java"
 )
 INTERFACE_THEME = SOURCE / "crengine" / "InterfaceTheme.java"
 INTERFACE_THEME_CATALOG = (
@@ -2448,7 +2463,9 @@ def main() -> None:
         "private final DocumentLoadLifecycle.Interaction",
         "private boolean isDocumentInteractionCurrent(",
         "private boolean isOwnedDocumentLoadCurrent(",
-        "private static boolean isDocumentPositionCommand(",
+        "ReaderEngineCommandPolicy.scopeOf(cmd)",
+        "ReaderEngineCommandPolicy.movesDocument(cmd)",
+        "private boolean isEngineCommandRequestCurrent(",
         "private void cancelDocumentAnimation()",
         "private void getCurrentPositionProperties(",
         "void showSearchDialog(",
@@ -2640,6 +2657,91 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} does not rotate the document "
                 "interaction before cancelling its render")
+
+    engine_command_start = reader_view_text.find(
+        "\n\tpublic void doEngineCommand("
+        "final ReaderCommand cmd, final int param, "
+        "final Runnable doneHandler) {")
+    engine_command_end = reader_view_text.find(
+        "\n\tprivate boolean isEngineCommandRequestCurrent(",
+        engine_command_start)
+    if engine_command_start < 0 or engine_command_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned engine commands")
+    else:
+        engine_command_text = reader_view_text[
+            engine_command_start:engine_command_end
+        ]
+        work_index = engine_command_text.find(
+            "public void work()")
+        native_command_index = engine_command_text.find(
+            "res = doc.doCommand(cmd.nativeId, param)",
+            work_index)
+        work_guard_index = engine_command_text.find(
+            "isEngineCommandRequestCurrent(",
+            work_index)
+        post_native_guard_index = engine_command_text.find(
+            "isEngineCommandRequestCurrent(",
+            native_command_index)
+        done_index = engine_command_text.find(
+            "public void done()")
+        done_guard_index = engine_command_text.find(
+            "isEngineCommandRequestCurrent(",
+            done_index)
+        invalidation_index = engine_command_text.find(
+            "invalidImages = true", done_index)
+        for marker in (
+            "ReaderEngineCommandPolicy.scopeOf(cmd)",
+            "ReaderEngineCommandPolicy.movesDocument(cmd)",
+            "ReaderEngineCommandPolicy.Scope.DOCUMENT",
+            "ReaderRenderRequest.fromInteraction(",
+            "drawPage(doneHandler, false)",
+            "doneHandler,\n"
+            "\t\t\t\t\t\t\t\tfalse,\n"
+            "\t\t\t\t\t\t\t\trenderRequest",
+        ):
+            if marker not in engine_command_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} engine command omits "
+                    f"scope marker: {marker}")
+        if not (
+                work_index >= 0
+                and work_guard_index > work_index
+                and native_command_index > work_guard_index
+                and post_native_guard_index > native_command_index
+                and done_index > post_native_guard_index
+                and done_guard_index > done_index
+                and invalidation_index > done_guard_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not gate native engine "
+                "work and completion with the exact request")
+
+    engine_command_guard_start = reader_view_text.find(
+        "\n\tprivate boolean isEngineCommandRequestCurrent(")
+    engine_command_guard_end = reader_view_text.find(
+        "\n\t// update book and position info",
+        engine_command_guard_start)
+    if engine_command_guard_start < 0 or engine_command_guard_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits engine-command owner guard")
+    else:
+        engine_command_guard_text = reader_view_text[
+            engine_command_guard_start:engine_command_guard_end
+        ]
+        for marker in (
+            "mServiceLifecycle.isActive()",
+            "readerNativeLifecycle.isInitialized()",
+            "ReaderEngineCommandPolicy.Scope.READER",
+            "isRenderRequestCurrent(renderRequest)",
+        ):
+            if marker not in engine_command_guard_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} engine-command guard "
+                    f"omits lifecycle marker: {marker}")
+    if "isDocumentPositionCommand" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} retains parallel engine-command "
+            "classification")
 
     for marker in (
         "private final CloseableTaskGate settingsSyncLifecycle",
@@ -2907,7 +3009,10 @@ def main() -> None:
         'nested.getSimpleName().equals("ViewAnimationBase")',
         'nested.getSimpleName().equals("AnimationUpdate")',
         'nested.getSimpleName().equals("AutoScrollAnimation")',
-        '"isDocumentPositionCommand"',
+        "ReaderEngineCommandPolicy.class",
+        '"scopeOf"',
+        '"movesDocument"',
+        '"isEngineCommandRequestCurrent"',
         '"isDocumentInteractionCurrent"',
         '"isOwnedDocumentLoadCurrent"',
         "SearchDlg.SearchHandler.class",
@@ -3122,6 +3227,44 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_RENDER_REQUEST_TEST)} omits render "
                 f"ownership regression: {marker}")
+
+    reader_engine_command_policy_text = (
+        READER_ENGINE_COMMAND_POLICY.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderEngineCommandPolicy",
+        "enum Scope",
+        "DOCUMENT",
+        "READER",
+        "static Scope scopeOf(ReaderCommand command)",
+        "ReaderCommand.DCMD_SET_ROTATION_INFO_FOR_AA",
+        "static boolean movesDocument(ReaderCommand command)",
+        "case DCMD_BOOKMARK_GO_N:",
+        "case DCMD_TOGGLE_PAGE_SCROLL_VIEW:",
+        "case DCMD_SELECT_NEXT_SENTENCE:",
+        "case DCMD_GO_PAGE_DONT_SAVE_HISTORY:",
+        "case DCMD_SCROLL_BY:",
+    ):
+        if marker not in reader_engine_command_policy_text:
+            violations.append(
+                f"{relative(READER_ENGINE_COMMAND_POLICY)} omits "
+                f"engine-command scope marker: {marker}")
+
+    reader_engine_command_policy_test_text = (
+        READER_ENGINE_COMMAND_POLICY_TEST.read_text(
+            encoding="utf-8")
+    )
+    for marker in (
+        "onlyRotationMetadataIsReaderScoped",
+        "unknownCommandDefaultsToDocumentScope",
+        "movementClassificationIsExhaustive",
+        "everyMovementCommandIsDocumentScoped",
+        "for (ReaderCommand command : ReaderCommand.values())",
+    ):
+        if marker not in reader_engine_command_policy_test_text:
+            violations.append(
+                f"{relative(READER_ENGINE_COMMAND_POLICY_TEST)} omits "
+                f"engine-command regression: {marker}")
 
     key_double_click_state_text = KEY_DOUBLE_CLICK_STATE.read_text(
         encoding="utf-8")

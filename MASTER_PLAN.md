@@ -245,6 +245,15 @@ DRM или ограничений доступа, подбор/получени�
   completion той же книги, но replacement/close отменяют gate, а stale
   completion/failure не вызывает handler и не скрывает progress новой загрузки.
   Destroy закрывает render/callback owner до native teardown.
+  Асинхронные native commands теперь классифицируются единым
+  `ReaderEngineCommandPolicy`: все document commands, включая zoom/render,
+  проверяют captured book+interaction до и после native mutation и ещё раз
+  перед GUI completion, поэтому команда старой книги не действует на
+  replacement и не инвалидирует его cache. Единственное reader-scoped
+  исключение — rotation metadata для font AA: оно требует active native/service
+  lifecycle, переживает смену книги и по завершении захватывает уже текущий
+  render owner. Movement/save semantics выводятся из того же exhaustive
+  JVM-tested policy без параллельного switch в `ReaderView`.
   Autoscroll теперь принадлежит synchronized identity-owned
   `AutoScrollSessionState` и отдельному cancelable GUI scheduler: background
   init публикует render-ready только точному owner, stop/destroy не допускают

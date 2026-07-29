@@ -657,22 +657,36 @@ public class ActivityOwnershipPolicyTest {
 				DocumentLoadLifecycle.class,
 				"isInteractionActive",
 				DocumentLoadLifecycle.Interaction.class);
-		Method documentPositionCommand =
-				ReaderView.class.getDeclaredMethod(
-						"isDocumentPositionCommand",
-						ReaderCommand.class);
+		assertTrue(Modifier.isFinal(
+				ReaderEngineCommandPolicy.class
+						.getModifiers()));
 		assertTrue(Modifier.isPrivate(
-				documentPositionCommand.getModifiers()));
+				ReaderEngineCommandPolicy.class
+						.getDeclaredConstructors()[0]
+						.getModifiers()));
+		Method commandScope =
+				ReaderEngineCommandPolicy.class
+						.getDeclaredMethod(
+								"scopeOf",
+								ReaderCommand.class);
 		assertTrue(Modifier.isStatic(
-				documentPositionCommand.getModifiers()));
-		documentPositionCommand.setAccessible(true);
-		assertTrue((Boolean) documentPositionCommand.invoke(
-				null, ReaderCommand.DCMD_GO_POS));
-		assertTrue((Boolean) documentPositionCommand.invoke(
-				null,
-				ReaderCommand.DCMD_GO_PAGE_DONT_SAVE_HISTORY));
-		assertFalse((Boolean) documentPositionCommand.invoke(
-				null, ReaderCommand.DCMD_ZOOM_IN));
+				commandScope.getModifiers()));
+		Method commandMovement =
+				ReaderEngineCommandPolicy.class
+						.getDeclaredMethod(
+								"movesDocument",
+								ReaderCommand.class);
+		assertTrue(Modifier.isStatic(
+				commandMovement.getModifiers()));
+		Method engineCommandGuard =
+				ReaderView.class.getDeclaredMethod(
+						"isEngineCommandRequestCurrent",
+						ReaderEngineCommandPolicy.Scope.class,
+						ReaderRenderRequest.class);
+		assertTrue(Modifier.isPrivate(
+				engineCommandGuard.getModifiers()));
+		assertFalse(Modifier.isStatic(
+				engineCommandGuard.getModifiers()));
 		Method documentInteractionGuard =
 				ReaderView.class.getDeclaredMethod(
 						"isDocumentInteractionCurrent",
