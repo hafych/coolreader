@@ -161,6 +161,9 @@ DRM или ограничений доступа, подбор/получени�
   immutable metadata и `none → external → built-in` List snapshot JVM-tested.
   `DocumentFormat` extension/MIME metadata теперь clone-on-boundary, private
   final и используется через primary-extension API без backing-array escape.
+  Tap action routing и highlight bounds `ReaderView` теперь используют одну
+  pure JVM-tested 3×3 geometry с совпадающими границами для некратных размеров,
+  clamped coordinates, widened arithmetic и safe empty invalid-surface bounds.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

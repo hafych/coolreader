@@ -91,6 +91,11 @@ behavior is covered by a local JVM test, without constructing an Activity,
 Surface or native document. The matching sine/arcsine page-curl curves are
 built once by `PageCurveTables`; its arrays are private, final, instance-owned
 storage and the legacy numeric samples are locked by a pure JVM regression.
+Tap actions and their highlight rectangles likewise share the pure
+`TapZoneGeometry` boundary. One row-major 3×3 partition now handles
+non-divisible surface sizes, clamps coordinates, widens boundary arithmetic and
+returns an empty immutable rectangle for an invalid surface, so action routing
+and visual feedback cannot drift or divide by zero.
 Gesture animation uses the same boundary: each `ReaderView` owns an immutable
 `GestureAcceleration` curve, input is clamped, and interpolation widens before
 arithmetic so the full signed-integer range cannot overflow.

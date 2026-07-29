@@ -84,6 +84,7 @@ BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
 )
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
+TAP_ZONE_GEOMETRY = SOURCE / "crengine" / "TapZoneGeometry.java"
 PAGE_CURVE_TABLES = SOURCE / "crengine" / "PageCurveTables.java"
 BACKLIGHT_OPTIONS = SOURCE / "crengine" / "BacklightOptions.java"
 BACKLIGHT_TIMEOUT_POLICY = (
@@ -107,6 +108,18 @@ PAGE_FLIP_GEOMETRY_TEST = (
     / "coolreader"
     / "crengine"
     / "PageFlipGeometryTest.java"
+)
+TAP_ZONE_GEOMETRY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "TapZoneGeometryTest.java"
 )
 PAGE_CURVE_TABLES_TEST = (
     ROOT
@@ -1263,6 +1276,24 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} does not use bounded page-flip "
             "table indexing")
+    for marker in (
+        "TapZoneGeometry.zoneAt(",
+        "TapZoneGeometry.boundsAt(",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits shared tap-zone geometry: "
+                f"{marker}")
+    for legacy in (
+        "int x1 = dx / 3",
+        "int x2 = dx * 2 / 3",
+        "(maxX + 2) / 3",
+        "(maxY + 2) / 3",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains divergent tap-zone "
+                f"arithmetic: {legacy}")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(
@@ -1544,6 +1575,35 @@ def main() -> None:
             violations.append(
                 f"{relative(PAGE_FLIP_GEOMETRY_TEST)} omits regression "
                 f"marker: {marker}")
+
+    tap_zone_geometry_text = TAP_ZONE_GEOMETRY.read_text(encoding="utf-8")
+    for marker in (
+        "final class TapZoneGeometry",
+        "static int zoneAt(int x, int y, int width, int height)",
+        "static Bounds boundsAt(int x, int y, int width, int height)",
+        "private static int segmentAt(int coordinate, int size)",
+        "(long) size * segment / SEGMENT_COUNT",
+        "private final int left",
+        "private final int bottom",
+    ):
+        if marker not in tap_zone_geometry_text:
+            violations.append(
+                f"{relative(TAP_ZONE_GEOMETRY)} omits shared geometry "
+                f"marker: {marker}")
+
+    tap_zone_geometry_test_text = TAP_ZONE_GEOMETRY_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "zonesFollowRowMajorThreeByThreeLayout",
+        "highlightBoundsMatchEveryPixelForNonDivisibleSize",
+        "coordinatesClampAndInvalidSurfacesUseSafeFallbacks",
+        "boundaryArithmeticWidensBeforeMultiplication",
+        "Integer.MAX_VALUE",
+    ):
+        if marker not in tap_zone_geometry_test_text:
+            violations.append(
+                f"{relative(TAP_ZONE_GEOMETRY_TEST)} omits tap-zone "
+                f"regression: {marker}")
 
     page_curve_tables_text = PAGE_CURVE_TABLES.read_text(encoding="utf-8")
     for marker in (

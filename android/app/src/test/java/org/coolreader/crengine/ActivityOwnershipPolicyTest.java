@@ -202,6 +202,32 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void tapZoneGeometryUsesImmutableValueBounds() {
+		assertTrue(Modifier.isFinal(
+				TapZoneGeometry.class.getModifiers()));
+		for (Field field : TapZoneGeometry.class.getDeclaredFields()) {
+			assertTrue(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+			assertTrue(field.getType().isPrimitive());
+		}
+		for (Field field :
+				TapZoneGeometry.Bounds.class.getDeclaredFields()) {
+			if (Modifier.isStatic(field.getModifiers())) {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+				assertEquals(
+						TapZoneGeometry.Bounds.class,
+						field.getType());
+			} else {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+				assertTrue(field.getType().isPrimitive());
+			}
+		}
+	}
+
+	@Test
 	public void gestureAccelerationIsReaderOwnedAndImmutable()
 			throws Exception {
 		Field acceleration =

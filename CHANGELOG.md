@@ -380,6 +380,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 
 ### Fixed
 
+- Tap-zone actions and highlight rectangles now use the same overflow-safe 3×3
+  geometry. Non-divisible surface sizes can no longer highlight a neighboring
+  action, and an invalid zero-sized surface cannot trigger division by zero.
 - Scroll-view animation frames now use fractional progress instead of truncated
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates

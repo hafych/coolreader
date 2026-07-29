@@ -376,34 +376,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public int getTapZone(int x, int y, int dx, int dy) {
-		int x1 = dx / 3;
-		int x2 = dx * 2 / 3;
-		int y1 = dy / 3;
-		int y2 = dy * 2 / 3;
-		int zone = 0;
-		if (y < y1) {
-			if (x < x1)
-				zone = 1;
-			else if (x < x2)
-				zone = 2;
-			else
-				zone = 3;
-		} else if (y < y2) {
-			if (x < x1)
-				zone = 4;
-			else if (x < x2)
-				zone = 5;
-			else
-				zone = 6;
-		} else {
-			if (x < x1)
-				zone = 7;
-			else if (x < x2)
-				zone = 8;
-			else
-				zone = 9;
-		}
-		return zone;
+		return TapZoneGeometry.zoneAt(x, y, dx, dy);
 	}
 
 	public ReaderAction findTapZoneAction(int zone, int tapActionType) {
@@ -4005,19 +3978,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	static private Rect tapZoneBounds(int startX, int startY, int maxX, int maxY) {
-		if (startX < 0)
-			startX = 0;
-		if (startY < 0)
-			startY = 0;
-		if (startX > maxX)
-			startX = maxX;
-		if (startY > maxY)
-			startY = maxY;
-		int dx = (maxX + 2) / 3;
-		int dy = (maxY + 2) / 3;
-		int x0 = startX / dx * dx;
-		int y0 = startY / dy * dy;
-		return new Rect(x0, y0, x0 + dx, y0 + dy);
+		TapZoneGeometry.Bounds bounds =
+				TapZoneGeometry.boundsAt(
+						startX, startY, maxX, maxY);
+		return new Rect(
+				bounds.left(),
+				bounds.top(),
+				bounds.right(),
+				bounds.bottom());
 	}
 
 	volatile private int nextHiliteId = 0;
