@@ -147,10 +147,12 @@ class CRJinkeWindowManager : public CRGUIWindowManager
 protected:
 public:
     /// translate string by key, return default value if not found
-    virtual lString16 translateString( const char * key, const char * defValue )
+    lString32 translateString(
+            const char * key,
+            const char * defValue ) override
     {
         CRLog::trace("Translate(%s)", key);
-        lString16 res;
+        lString32 res;
         //static char buf[2048];
         const char * res8 = v3_callbacks->GetString( (char *)key );
         if ( res8 && res8[0] ) {
@@ -462,25 +464,26 @@ const char * GetAboutInfoText()
 {
     LVDocView * _docview = main_win->getDocView();
     CRLog::trace("GetAboutInfoText()");
-    lString16 authors = _docview->getAuthors();
-    lString16 title = _docview->getTitle();
-    lString16 series = _docview->getSeries();
-    lString16 text;
-    static char about_text[10000];
+    lString32 authors = _docview->getAuthors();
+    lString32 title = _docview->getTitle();
+    lString32 series = _docview->getSeries();
+    lString32 text;
+    static lString8 aboutText;
     if ( !authors.empty() ) {
-        text << "Author(s):     " << authors << "\n";
+        text << U"Author(s):     " << authors << U"\n";
     }
     if ( !title.empty() ) {
-        text << "Title:     " << title << "\n";
+        text << U"Title:     " << title << U"\n";
     }
     if ( !series.empty() ) {
-        text << "Series:     " << series << "\n";
+        text << U"Series:     " << series << U"\n";
     }
-    lString16 crengineVersion = Utf8ToUnicode(lString8(CR_ENGINE_VERSION));
-    text << "CoolReader:    " << crengineVersion << "\n";
+    lString32 crengineVersion =
+            Utf8ToUnicode(lString8(CR_ENGINE_VERSION));
+    text << U"CoolReader:    " << crengineVersion << U"\n";
 
-    lStr_cpy( about_text, UnicodeToUtf8( text ).c_str() );
-    return about_text;
+    aboutText = UnicodeToUtf8(text);
+    return aboutText.c_str();
 }
 
 
@@ -709,7 +712,8 @@ static char history_file_name[1024] = "/root/abook/.cr3hist";
 static const char * getLang( )
 {
 #if 1
-    const char * lang = v3_callbacks->GetString( "CR3_LANG" );
+    char langProperty[] = "CR3_LANG";
+    const char * lang = v3_callbacks->GetString(langProperty);
     return lang;
 #else
 
@@ -792,14 +796,20 @@ int InitDoc(char *fileName)
         CRLog::info( "History file name: %s", history_file_name );
     }
 
-    char manual_file[512] = "";
+    lString32 manualFile;
     {
         const char * lang = getLang();
         if ( lang && lang[0] ) {
             // set translator
             CRLog::info("Current language is %s, looking for translation file", lang);
-            lString16 mofilename = "/root/crengine/i18n/" + lString16(lang) + ".mo";
-            lString16 mofilename2 = "/root/abook/crengine/i18n/" + lString16(lang) + ".mo";
+            lString32 langText =
+                    Utf8ToUnicode(lString8(lang));
+            lString32 mofilename =
+                    lString32(U"/root/crengine/i18n/")
+                    + langText + U".mo";
+            lString32 mofilename2 =
+                    lString32(U"/root/abook/crengine/i18n/")
+                    + langText + U".mo";
             std::unique_ptr<CRMoFileTranslator> t(
                     new CRMoFileTranslator());
             if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
@@ -808,9 +818,17 @@ int InitDoc(char *fileName)
             } else {
                 CRLog::info("translation file %s.mo not found", lang);
             }
-            sprintf( manual_file, "/root/abook/crengine/manual/cr3-manual-%s.fb2", lang );
-            if ( !LVFileExists( lString16(manual_file).c_str() ) )
-                sprintf( manual_file, "/root/crengine/manual/cr3-manual-%s.fb2", lang );
+            manualFile =
+                    lString32(
+                            U"/root/abook/crengine/manual/"
+                            U"cr3-manual-")
+                    + langText + U".fb2";
+            if ( !LVFileExists(manualFile) )
+                manualFile =
+                        lString32(
+                                U"/root/crengine/manual/"
+                                U"cr3-manual-")
+                        + langText + U".fb2";
         }
     }
 
@@ -855,16 +873,23 @@ int InitDoc(char *fileName)
             NULL,
         };
         loadKeymaps( *wm, keymap_locations );
-        if ( LVDirectoryExists( L"/root/abook/crengine/hyph" ) )
-            HyphMan::initDictionaries( lString16("/root/abook/crengine/hyph/") );
+        if ( LVDirectoryExists( U"/root/abook/crengine/hyph" ) )
+            HyphMan::initDictionaries(
+                    U"/root/abook/crengine/hyph/");
         else
-            HyphMan::initDictionaries( lString16("/root/crengine/hyph/") );
+            HyphMan::initDictionaries(
+                    U"/root/crengine/hyph/");
 
-        if ( !wm->loadSkin(  lString16( L"/root/abook/crengine/skin" ) ) )
-            if ( !wm->loadSkin(  lString16( L"/home/crengine/skin" ) ) )
-                wm->loadSkin( lString16( L"/root/crengine/skin" ) );
+        if ( !wm->loadSkin(
+                    U"/root/abook/crengine/skin" ) )
+            if ( !wm->loadSkin(
+                        U"/home/crengine/skin" ) )
+                wm->loadSkin(
+                        U"/root/crengine/skin" );
 
-        ldomDocCache::init( lString16("/root/abook/crengine/.cache"), 0x100000 * 64 ); /*96Mb*/
+        ldomDocCache::init(
+                U"/root/abook/crengine/.cache",
+                0x100000 * 64 ); /*96Mb*/
 
         CRLog::trace("creating main window...");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
@@ -884,9 +909,8 @@ int InitDoc(char *fileName)
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
-        if ( manual_file[0] )
-            main_win->setHelpFile(
-                    Utf8ToUnicode(lString8(manual_file)));
+        if ( !manualFile.empty() )
+            main_win->setHelpFile(manualFile);
         if ( !main_win->loadDefaultCover(
                     U"/root/abook/crengine/cr3_def_cover.png") )
             if ( !main_win->loadDefaultCover(

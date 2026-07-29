@@ -6838,6 +6838,56 @@ require_source_text(
 )
 require_source_text(
   "${JINKE_SOURCE}"
+  "lString32 translateString("
+  "Jinke translations must implement the current Unicode-width contract"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "static lString8 aboutText;"
+  "Jinke about text must retain bounded dynamic storage"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "aboutText = UnicodeToUtf8(text);"
+  "Jinke about text must narrow only at its plugin ABI boundary"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "lString32 manualFile;"
+  "Jinke manual paths must retain current-width storage"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "static char about_text["
+  "Jinke about text must not return through a fixed output buffer"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "sprintf( manual_file"
+  "Jinke manual paths must not use unbounded C formatting"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "lString16 mofilename"
+  "Jinke translation paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "HyphMan::initDictionaries( lString16"
+  "Jinke hyphenation paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "wm->loadSkin(  lString16"
+  "Jinke skin paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "ldomDocCache::init( lString16"
+  "Jinke cache paths must not regress to legacy Unicode width"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
   "using JinkeBufferPtr ="
   "Jinke plugin output buffers must share a scoped malloc owner"
 )
