@@ -813,14 +813,14 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         mainMenu->addItem(std::move(marginsMenu));
 
 #ifndef CR_POCKETBOOK
-        CRControlsMenu * controlsMenu =
-                new CRControlsMenu(
+        std::unique_ptr<CRControlsMenu> controlsMenu =
+                std::make_unique<CRControlsMenu>(
                         this, mm_Controls, props, cs32("main"), 8, _rect);
         controlsMenu->setAccelerators( _menuAccelerators );
         controlsMenu->setSkinName(cs32("#settings"));
         controlsMenu->setValueFont(valueFont);
         controlsMenu->reconfigure( 0 );
-        mainMenu->addItem( controlsMenu );
+        mainMenu->addItem(std::move(controlsMenu));
 #endif
 
         //====== Image scaling ==============

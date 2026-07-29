@@ -8018,6 +8018,26 @@ forbid_source_text(
   "page-margin child candidates must not begin as raw owners"
 )
 require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRControlsMenu> controlsMenu ="
+  "controls menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::make_unique<CRControlsMenu>("
+  "controls menus must be constructed under scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(controlsMenu));"
+  "controls menus must transfer through the owner-aware boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRControlsMenu * controlsMenu ="
+  "controls menu candidates must not begin as raw owners"
+)
+require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"
