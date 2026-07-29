@@ -75,6 +75,7 @@ SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
+TTS_TOOLBAR = SOURCE / "crengine" / "TTSToolbarDlg.java"
 GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
 ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
 READING_TIME_TRACKER = SOURCE / "crengine" / "ReadingTimeTracker.java"
@@ -110,6 +111,9 @@ DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
 DELAYED_EXECUTOR = SOURCE / "crengine" / "DelayedExecutor.java"
 REPLACEABLE_TASK_SLOT = (
     SOURCE / "crengine" / "ReplaceableTaskSlot.java"
+)
+CLOSEABLE_TASK_GATE = (
+    SOURCE / "crengine" / "CloseableTaskGate.java"
 )
 BLOCKING_RESULT = SOURCE / "crengine" / "BlockingResult.java"
 FREEZABLE_REGISTRY = SOURCE / "crengine" / "FreezableRegistry.java"
@@ -208,6 +212,18 @@ REPLACEABLE_TASK_SLOT_TEST = (
     / "coolreader"
     / "crengine"
     / "ReplaceableTaskSlotTest.java"
+)
+CLOSEABLE_TASK_GATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "CloseableTaskGateTest.java"
 )
 BLOCKING_RESULT_TEST = (
     ROOT
@@ -1303,6 +1319,62 @@ def main() -> None:
             violations.append(
                 f"{relative(REPLACEABLE_TASK_SLOT_TEST)} omits replaceable "
                 f"task regression: {marker}")
+
+    closeable_gate_text = CLOSEABLE_TASK_GATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class CloseableTaskGate",
+        "synchronized Token replace()",
+        "synchronized void cancel()",
+        "synchronized boolean close()",
+        "synchronized boolean isActive(Token token)",
+        "return !closed && current == token",
+        "synchronized boolean isClosed()",
+    ):
+        if marker not in closeable_gate_text:
+            violations.append(
+                f"{relative(CLOSEABLE_TASK_GATE)} omits closeable task "
+                f"marker: {marker}")
+
+    closeable_gate_test_text = CLOSEABLE_TASK_GATE_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "replacementInvalidatesOnlyThePreviousGeneration",
+        "cancelIsIdempotentAndAllowsAnotherGeneration",
+        "closePermanentlyRejectsWork",
+        "assertNull(gate.replace())",
+    ):
+        if marker not in closeable_gate_test_text:
+            violations.append(
+                f"{relative(CLOSEABLE_TASK_GATE_TEST)} omits closeable "
+                f"task regression: {marker}")
+
+    tts_toolbar_text = TTS_TOOLBAR.read_text(encoding="utf-8")
+    for marker in (
+        "private final CloseableTaskGate workLifecycle",
+        "private final Handler audioBookPosHandler",
+        "if (!workLifecycle.close())",
+        "private void stopAudiobookWork()",
+        "audioBookPosHandler.removeCallbacksAndMessages(null)",
+        "wordTimingCalcHandlerThread.quit()",
+        "CloseableTaskGate.Token token = workLifecycle.replace()",
+        "finishAudiobookInitialization(",
+        "scheduleAudiobookPositionPoll(token)",
+        "workLifecycle.isActive(token)",
+    ):
+        if marker not in tts_toolbar_text:
+            violations.append(
+                f"{relative(TTS_TOOLBAR)} omits owned TTS work "
+                f"marker: {marker}")
+    for legacy in (
+        "audioBookPosRunnable",
+        "postDelayed(this, 500)",
+        "private boolean mClosed",
+    ):
+        if legacy in tts_toolbar_text:
+            violations.append(
+                f"{relative(TTS_TOOLBAR)} retains unowned TTS lifecycle "
+                f"marker: {legacy}")
 
     blocking_result_text = BLOCKING_RESULT.read_text(encoding="utf-8")
     for marker in (

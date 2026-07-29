@@ -428,6 +428,33 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void ttsDialogOwnsItsCloseableWorkLifecycle()
+			throws Exception {
+		Field lifecycle =
+				TTSToolbarDlg.class.getDeclaredField(
+						"workLifecycle");
+		assertFalse(Modifier.isStatic(lifecycle.getModifiers()));
+		assertTrue(Modifier.isPrivate(lifecycle.getModifiers()));
+		assertTrue(Modifier.isFinal(lifecycle.getModifiers()));
+
+		Field pollingHandler =
+				TTSToolbarDlg.class.getDeclaredField(
+						"audioBookPosHandler");
+		assertFalse(
+				Modifier.isStatic(pollingHandler.getModifiers()));
+		assertTrue(
+				Modifier.isPrivate(pollingHandler.getModifiers()));
+		assertTrue(
+				Modifier.isFinal(pollingHandler.getModifiers()));
+
+		for (Field field :
+				CloseableTaskGate.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+	}
+
+	@Test
 	public void fontFaceNavigationIsAStatelessPureBoundary() {
 		assertTrue(Modifier.isFinal(
 				FontFaceSwitcher.class.getModifiers()));

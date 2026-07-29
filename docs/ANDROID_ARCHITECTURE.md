@@ -47,6 +47,13 @@ cancellation invalidates the exact old wrapper, only the current generation can
 claim execution, and a successful claim clears the slot before invoking user
 code. Reentrant scheduling therefore cannot be cleared by its predecessor, and
 an already-removed callback cannot run merely because a newer callback exists.
+Long-lived dialog work uses a closeable generation gate when cancellation must
+also be permanent after teardown. `TTSToolbarDlg` assigns audiobook timing
+initialization and its periodic position poll to the current gate token.
+Reinitialization invalidates older results; close removes owned handler
+callbacks and quits the dialog's timing thread. Completion is published on the
+GUI thread only while its exact token remains active, so stale work cannot
+restore controls or move selection after dismissal.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

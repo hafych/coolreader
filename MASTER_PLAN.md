@@ -192,6 +192,11 @@ DRM или ограничений доступа, подбор/получени�
   единый контракт без int overflow и division by zero. Stateless
   `DocumentPositionPolicy` централизует one-based display page, percent text и
   0–100 → valid page mapping с точной 100% last-page boundary.
+  Долгая инициализация audiobook word timings и периодический position poll
+  `TTSToolbarDlg` теперь принадлежат closeable generation gate: повторная
+  инициализация инвалидирует старую публикацию, закрытие очищает main-handler
+  и завершает owned `HandlerThread`, а stale service/background callbacks не
+  меняют selection или UI закрытого диалога.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
