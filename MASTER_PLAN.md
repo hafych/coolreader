@@ -97,6 +97,8 @@ DRM или ограничений доступа, подбор/получени�
   реальными SDK/header contracts; legacy Qt route переведён на Qt5 и добавлен
   в Linux Clang job вместе с `tinydict`. Modern Qt5/Qt6 link matrix использует
   imported targets на всех hosts без конфликтующего macOS fontconfig override.
+  Границы массивов настроек modern Qt используют совместимые с Qt знаковые
+  индексы и проходят строгую проверку `-Wsign-compare`.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,

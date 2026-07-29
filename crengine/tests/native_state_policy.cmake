@@ -574,6 +574,56 @@ forbid_source_text(
   "delete ui"
   "modern Qt generated-UI helper teardown must remain automatic"
 )
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "static constexpr int MAX_MARGIN_INDEX"
+  "modern Qt margin-option bounds must match signed Qt indices"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "static constexpr int MAX_REND_FLAGS_INDEX"
+  "modern Qt rendering-option bounds must match signed Qt indices"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "static constexpr int MAX_DOM_VERSIONS_INDEX"
+  "modern Qt DOM-option bounds must match signed Qt indices"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "static constexpr int MAX_AA_INDEX"
+  "modern Qt antialiasing-option bounds must match signed Qt indices"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "static constexpr int SYNTH_WEIGHTS_SZ"
+  "modern Qt synthetic-weight bounds must match signed Qt indices"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "#define MAX_MARGIN_INDEX"
+  "modern Qt margin-option bounds must not return to unsigned macros"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "#define MAX_REND_FLAGS_INDEX"
+  "modern Qt rendering-option bounds must not return to unsigned macros"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "#define MAX_DOM_VERSIONS_INDEX"
+  "modern Qt DOM-option bounds must not return to unsigned macros"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "#define MAX_AA_INDEX"
+  "modern Qt antialiasing-option bounds must not return to unsigned macros"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "#define SYNTH_WEIGHTS_SZ"
+  "modern Qt synthetic-weight bounds must not return to unsigned macros"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(

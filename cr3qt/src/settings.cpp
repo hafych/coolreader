@@ -40,7 +40,8 @@
 #include "lvrend.h"         // for BLOCK_RENDERING_FLAGS_XXX presets
 
 static int def_margins[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 25, 30, 40, 50, 60 };
-#define MAX_MARGIN_INDEX (sizeof(def_margins)/sizeof(int))
+static constexpr int MAX_MARGIN_INDEX =
+        static_cast<int>(sizeof(def_margins) / sizeof(def_margins[0]));
 
 DECL_DEF_CR_FONT_SIZES;
 
@@ -49,14 +50,18 @@ static int synth_weights[] = { 300, 400, 500, 600, 700, 800, 900 };
 #else
 static int synth_weights[] = { 600 };
 #endif
-#define SYNTH_WEIGHTS_SZ    (sizeof(synth_weights)/sizeof(int))
+static constexpr int SYNTH_WEIGHTS_SZ =
+        static_cast<int>(sizeof(synth_weights) / sizeof(synth_weights[0]));
 
 static int rend_flags[] = { BLOCK_RENDERING_FLAGS_LEGACY, BLOCK_RENDERING_FLAGS_FLAT, BLOCK_RENDERING_FLAGS_BOOK, BLOCK_RENDERING_FLAGS_WEB };
-#define MAX_REND_FLAGS_INDEX (sizeof(rend_flags)/sizeof(int))
+static constexpr int MAX_REND_FLAGS_INDEX =
+        static_cast<int>(sizeof(rend_flags) / sizeof(rend_flags[0]));
 static int DOM_versions[] = { 0, gDOMVersionCurrent };
-#define MAX_DOM_VERSIONS_INDEX (sizeof(DOM_versions)/sizeof(int))
+static constexpr int MAX_DOM_VERSIONS_INDEX =
+        static_cast<int>(sizeof(DOM_versions) / sizeof(DOM_versions[0]));
 static int aa_variants[] = { font_aa_none, font_aa_gray, font_aa_lcd_rgb, font_aa_lcd_bgr, font_aa_lcd_v_rgb, font_aa_lcd_v_bgr };
-#define MAX_AA_INDEX (sizeof(aa_variants)/sizeof(int))
+static constexpr int MAX_AA_INDEX =
+        static_cast<int>(sizeof(aa_variants) / sizeof(aa_variants[0]));
 
 static bool initDone = false;
 static bool suppressOnChange = false;
@@ -284,7 +289,7 @@ SettingsDlg::SettingsDlg(QWidget *parent, CR3View * docView ) :
 
     int n = m_props->getIntDef( PROP_PAGE_MARGIN_LEFT, 8 );
     int mi = 0;
-    for (int i=0; i <  (int)MAX_MARGIN_INDEX; i++) {
+    for (int i=0; i < MAX_MARGIN_INDEX; i++) {
         if (n <= def_margins[i]) {
             mi = i;
             break;
