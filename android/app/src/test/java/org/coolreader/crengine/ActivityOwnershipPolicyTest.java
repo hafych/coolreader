@@ -1007,6 +1007,50 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void engineProgressUsesIdentityOwnedUiGenerations()
+			throws Exception {
+		Field progressState =
+				Engine.class.getDeclaredField("progressUiState");
+		assertFalse(Modifier.isStatic(
+				progressState.getModifiers()));
+		assertTrue(Modifier.isPrivate(
+				progressState.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				progressState.getModifiers()));
+		for (Field field : Engine.class.getDeclaredFields()) {
+			assertFalse(
+					"Engine retains numeric progress generations",
+					field.getName().equals("nextProgressId"));
+			assertFalse(
+					"Engine retains parallel progress visibility",
+					field.getName().equals("progressShown"));
+		}
+
+		for (Field field :
+				ProgressUiState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+		for (Class<?> nested :
+				ProgressUiState.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				assertFalse(Modifier.isStatic(
+						field.getModifiers()));
+				assertTrue(Modifier.isPrivate(
+						field.getModifiers()));
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+			}
+		}
+
+		Method cancel =
+				Engine.DelayedProgress.class.getDeclaredMethod(
+						"cancel");
+		assertTrue(Modifier.isSynchronized(
+				cancel.getModifiers()));
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

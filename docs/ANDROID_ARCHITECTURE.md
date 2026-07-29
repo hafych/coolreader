@@ -211,6 +211,13 @@ existing GUI-serialized progress path. Its former Handler consumed empty
 messages and owned no work, so it has been removed. Number and percentage
 views now use the stateless, locale-aware `ProgressDisplayState`, which clamps
 out-of-range values and defines a stable zero-maximum display.
+Engine progress request ownership is tracked separately by the synchronized
+`ProgressUiState`. Identity tokens replace the former non-atomic numeric
+generation and parallel visibility flag. Latest show/hide wins; a
+`DelayedProgress` can cancel a pending show or dismiss exactly its own visible
+token, never a replacement request. Activity detach permanently closes the
+state before the dialog is dismissed through the GUI dispatcher, so queued
+work cannot recreate UI for a stale generation.
 Animation and GC delayed executors are private final members of one
 `ReaderView`. Animation handoff uses that reader's instance lock and a volatile
 active-animation reference rather than the nested class monitor shared by all

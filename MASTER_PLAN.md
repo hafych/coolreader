@@ -183,6 +183,11 @@ DRM или ограничений доступа, подбор/получени�
   Horizontal `ProgressDialog` больше не создаёт пустой implicit-Looper Handler:
   number/percent views связаны явно и синхронно получают JVM-tested,
   locale-aware `ProgressDisplayState` с clamped progress и safe zero max.
+  Engine show/hide/delayed progress переведён с non-atomic volatile int и
+  parallel booleans на synchronized identity-owned `ProgressUiState`: latest
+  request wins, delayed hide действует только на свой visible/pending token,
+  cancel/show race закрыт, а detach permanently invalidates work и dismisses
+  диалог через GUI owner.
   Общий `DelayedExecutor` переведён с nullable callback check на pure one-shot
   `ReplaceableTaskSlot`: replacement/cancel инвалидируют точный wrapper,
   successful claim очищает slot до delegate, stale generations и повторный

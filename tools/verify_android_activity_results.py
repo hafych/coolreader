@@ -166,6 +166,9 @@ PROGRESS_DIALOG = SOURCE / "crengine" / "ProgressDialog.java"
 PROGRESS_DISPLAY_STATE = (
     SOURCE / "crengine" / "ProgressDisplayState.java"
 )
+PROGRESS_UI_STATE = (
+    SOURCE / "crengine" / "ProgressUiState.java"
+)
 FONT_FACE_SWITCHER = SOURCE / "crengine" / "FontFaceSwitcher.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
@@ -450,6 +453,18 @@ PROGRESS_DISPLAY_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "ProgressDisplayStateTest.java"
+)
+PROGRESS_UI_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ProgressUiStateTest.java"
 )
 FONT_FACE_SWITCHER_TEST = (
     ROOT
@@ -2523,6 +2538,78 @@ def main() -> None:
             violations.append(
                 f"{relative(PROGRESS_DISPLAY_STATE_TEST)} omits "
                 f"progress display regression: {marker}")
+
+    progress_ui_text = PROGRESS_UI_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ProgressUiState",
+        "synchronized Token requestShow()",
+        "synchronized Token requestHideAll()",
+        "synchronized OwnedHide requestOwnedHide(Token owner)",
+        "current != owner",
+        "synchronized boolean markVisible(Token request)",
+        "synchronized void markShowFailed(Token request)",
+        "synchronized boolean markDismissed(Token owner)",
+        "synchronized boolean applyHideAll(Token request)",
+        "synchronized boolean applyOwnedHide(OwnedHide hide)",
+        "visible != hide.owner",
+        "synchronized boolean close()",
+        "static final class Token",
+        "static final class OwnedHide",
+    ):
+        if marker not in progress_ui_text:
+            violations.append(
+                f"{relative(PROGRESS_UI_STATE)} omits identity-owned "
+                f"progress marker: {marker}")
+
+    progress_ui_test_text = PROGRESS_UI_STATE_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "latestShowRequestWinsByIdentity",
+        "globalHideInvalidatesPendingShowAndClearsVisible",
+        "failedLatestShowClearsDismissedPreviousState",
+        "ownerCanCancelItsPendingShowWithoutDismissingAnother",
+        "ownerCannotHideAReplacementGeneration",
+        "visibleOwnerCanHideExactlyItself",
+        "dismissCallbackClearsOnlyItsVisibleOwner",
+        "closePermanentlyRejectsNewUiWork",
+    ):
+        if marker not in progress_ui_test_text:
+            violations.append(
+                f"{relative(PROGRESS_UI_STATE_TEST)} omits progress "
+                f"ownership regression: {marker}")
+
+    for marker in (
+        "private final ProgressUiState progressUiState",
+        "private ProgressUiState.Token requestProgressShow(",
+        "progressUiState.requestShow()",
+        "applyProgressShow(",
+        "progressUiState.markVisible(request)",
+        "progressUiState.requestHideAll()",
+        "progressUiState.requestOwnedHide(owner)",
+        "private ProgressUiState.Token owner",
+        "public synchronized void cancel()",
+        "hideImmediately = cancelled",
+        "progressUiState.close()",
+        "this::dismissProgressDialog",
+    ):
+        if marker not in engine_text:
+            violations.append(
+                f"{relative(ENGINE)} omits identity-owned progress "
+                f"integration marker: {marker}")
+    for legacy in (
+        "nextProgressId",
+        "progressShown",
+        "enable_progress",
+        "mProgressMessage",
+        "mProgressPos",
+        "private volatile boolean cancelled",
+        "private volatile boolean shown",
+    ):
+        if legacy in engine_text:
+            violations.append(
+                f"{relative(ENGINE)} retains numeric/parallel progress "
+                f"state: {legacy}")
 
     font_switcher_text = FONT_FACE_SWITCHER.read_text(encoding="utf-8")
     for marker in (

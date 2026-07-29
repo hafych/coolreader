@@ -398,6 +398,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Horizontal progress dialogs now show their numeric and percentage values
   through a bounded, locale-aware formatter. The empty implicit-Looper Handler
   has been removed; Engine's existing GUI path updates both labels directly.
+- Engine progress show/hide requests now use exact identity ownership instead
+  of a racy numeric generation and parallel visibility flag. Delayed progress
+  can hide only itself, cancel/show races are closed, and Activity detach
+  permanently rejects stale UI callbacks.
 - Replaceable Android delayed tasks now claim an exact one-shot generation.
   Replaced or canceled wrappers cannot run because a newer task exists, and
   completed callbacks no longer leave a stale pending slot behind.

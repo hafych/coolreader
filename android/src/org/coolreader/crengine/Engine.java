@@ -28,7 +28,6 @@ package org.coolreader.crengine;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.drawable.Drawable;
 import android.os.Environment;
 
 import org.coolreader.R;
@@ -291,30 +290,11 @@ public class Engine {
 		activity.finish();
 	}
 
+	private final ProgressUiState progressUiState =
+			new ProgressUiState();
 	private ProgressDialog mProgress;
-	private boolean enable_progress = true;
-	private boolean progressShown = false;
 	private static final int PROGRESS_STYLE =
 			ProgressDialog.STYLE_HORIZONTAL;
-	private Drawable progressIcon = null;
-
-	// public void setProgressDrawable( final BitmapDrawable drawable )
-	// {
-	// if ( enable_progress ) {
-	// mBackgroundThread.executeGUI( new Runnable() {
-	// public void run() {
-	// // show progress
-	// log.v("showProgress() - in GUI thread");
-	// if ( mProgress!=null && progressShown ) {
-	// hideProgress();
-	// progressIcon = drawable;
-	// showProgress(mProgressPos, mProgressMessage);
-	// //mProgress.setIcon(drawable);
-	// }
-	// }
-	// });
-	// }
-	// }
 
 	public void showProgress(final int mainProgress, final int resourceId) {
 		showProgress(mainProgress,
@@ -326,19 +306,14 @@ public class Engine {
 				mAppContext.getResources().getString(resourceId), scanControl);
 	}
 
-	private String mProgressMessage = null;
-	private int mProgressPos = 0;
-
-	private volatile int nextProgressId = 0;
-
 	public class DelayedProgress {
-		private volatile boolean cancelled;
-		private volatile boolean shown;
+		private boolean cancelled;
+		private ProgressUiState.Token owner;
 
 		/**
 		 * Cancel scheduled progress.
 		 */
-		public void cancel() {
+		public synchronized void cancel() {
 			cancelled = true;
 		}
 
@@ -346,21 +321,32 @@ public class Engine {
 		 * Cancel and hide scheduled progress.
 		 */
 		public void hide() {
-			this.cancelled = true;
-			BackgroundThread.instance().executeGUI(() -> {
-				if (shown)
-					hideProgress();
-				shown = false;
-			});
+			ProgressUiState.Token shownOwner;
+			synchronized (this) {
+				cancelled = true;
+				shownOwner = owner;
+				owner = null;
+			}
+			if (shownOwner != null)
+				hideProgress(shownOwner);
 		}
 
 		DelayedProgress(final int percent, final String msg, final int delayMillis) {
-			this.cancelled = false;
 			BackgroundThread.instance().postGUI(() -> {
-				if (!cancelled) {
-					showProgress(percent, msg);
-					shown = true;
+				synchronized (this) {
+					if (cancelled)
+						return;
 				}
+				ProgressUiState.Token shownOwner =
+						requestProgressShow(percent, msg, null);
+				boolean hideImmediately;
+				synchronized (this) {
+					hideImmediately = cancelled;
+					if (!hideImmediately)
+						owner = shownOwner;
+				}
+				if (hideImmediately && shownOwner != null)
+					hideProgress(shownOwner);
 			}, delayMillis);
 		}
 	}
@@ -398,75 +384,79 @@ public class Engine {
 	 * @param scanControl  control to interrupt process, can be null.
 	 */
 	public void showProgress(final int mainProgress, final String msg, Scanner.ScanControl scanControl) {
-		final int progressId = ++nextProgressId;
-		mProgressMessage = msg;
-		mProgressPos = mainProgress;
+		requestProgressShow(mainProgress, msg, scanControl);
+	}
+
+	private ProgressUiState.Token requestProgressShow(
+			final int mainProgress,
+			final String msg,
+			final Scanner.ScanControl scanControl) {
 		if (mainProgress == 10000) {
-			//log.v("mainProgress==10000 : calling hideProgress");
 			hideProgress();
-			return;
+			return null;
 		}
+		ProgressUiState.Token request =
+				progressUiState.requestShow();
+		if (request == null)
+			return null;
 		log.v("showProgress(" + mainProgress + ", \"" + msg
 				+ "\") is called : " + Thread.currentThread().getName());
-		if (enable_progress) {
-			BackgroundThread.instance().executeGUI(() -> {
-				// show progress
-				//log.v("showProgress() - in GUI thread");
-				if (progressId != nextProgressId) {
-					//log.v("showProgress() - skipping duplicate progress event");
+		BackgroundThread.instance().executeGUI(() ->
+				applyProgressShow(
+						request, mainProgress, msg, scanControl));
+		return request;
+	}
+
+	private void applyProgressShow(
+			ProgressUiState.Token request,
+			int mainProgress,
+			String msg,
+			Scanner.ScanControl scanControl) {
+		if (!progressUiState.isCurrent(request))
+			return;
+		try {
+			if (mProgress == null) {
+				BaseActivity activity = getActivity();
+				if (activity == null || !activity.isStarted()) {
+					progressUiState.markShowFailed(request);
 					return;
 				}
-				if (mProgress == null) {
-					//log.v("showProgress() - creating progress window");
-					try {
-						BaseActivity activity = getActivity();
-						if (activity != null && activity.isStarted()) {
-							mProgress = new ProgressDialog(activity);
-							mProgress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-							if (progressIcon != null)
-								mProgress.setIcon(progressIcon);
-							else
-								mProgress.setIcon(R.mipmap.cr3_logo);
-							mProgress.setMax(10000);
-							mProgress.setCancelable(null != scanControl);
-							mProgress.setProgress(mainProgress);
-							mProgress.setTitle(activity
-											.getResources()
-											.getString(
-													R.string.progress_please_wait));
-							mProgress.setMessage(msg);
-							mProgress.setOnCancelListener(dialog -> {
-								if (null != scanControl) {
-									log.e("scanControl.stop()");
-									scanControl.stop();
-								}
-							});
-							mProgress.show();
-							progressShown = true;
-						}
-					} catch (Exception e) {
-						Log.e("cr3",
-								"Exception while trying to show progress dialog",
-								e);
-						progressShown = false;
-						mProgress = null;
-					}
-				} else {
-					mProgress.setProgress(mainProgress);
-					mProgress.setMessage(msg);
-					mProgress.setCancelable(null != scanControl);
-					mProgress.setOnCancelListener(dialog -> {
-						if (null != scanControl) {
-							log.e("scanControl.stop()");
-							scanControl.stop();
-						}
-					});
-					if (!mProgress.isShowing()) {
-						mProgress.show();
-						progressShown = true;
-					}
+				mProgress = new ProgressDialog(activity);
+				mProgress.setProgressStyle(PROGRESS_STYLE);
+				mProgress.setIcon(R.mipmap.cr3_logo);
+				mProgress.setMax(10000);
+				mProgress.setTitle(
+						activity.getResources().getString(
+								R.string.progress_please_wait));
+			}
+			mProgress.setProgress(mainProgress);
+			mProgress.setMessage(msg);
+			mProgress.setCancelable(scanControl != null);
+			mProgress.setOnCancelListener(dialog -> {
+				if (progressUiState.markDismissed(request))
+					mProgress = null;
+				if (scanControl != null) {
+					log.e("scanControl.stop()");
+					scanControl.stop();
 				}
 			});
+			if (!progressUiState.isCurrent(request))
+				return;
+			if (!mProgress.isShowing())
+				mProgress.show();
+			if (!progressUiState.markVisible(request)
+					&& mProgress != null
+					&& mProgress.isShowing()
+					&& !progressUiState.isVisible()) {
+				dismissProgressDialog();
+			}
+		} catch (Exception e) {
+			Log.e(
+					"cr3",
+					"Exception while trying to show progress dialog",
+					e);
+			dismissProgressDialog();
+			progressUiState.markShowFailed(request);
 		}
 	}
 
@@ -475,33 +465,40 @@ public class Engine {
 	 * (thread-safe)
 	 */
 	public void hideProgress() {
-		final int progressId = ++nextProgressId;
+		ProgressUiState.Token request =
+				progressUiState.requestHideAll();
+		if (request == null)
+			return;
 		log.v("hideProgress() - is called : "
 				+ Thread.currentThread().getName());
-		// log.v("hideProgress() is called");
 		BackgroundThread.instance().executeGUI(() -> {
-			// hide progress
-//				log.v("hideProgress() - in GUI thread");
-			if (progressId != nextProgressId) {
-//					Log.v("cr3",
-//							"hideProgress() - skipping duplicate progress event");
+			if (!progressUiState.applyHideAll(request))
 				return;
-			}
-			if (mProgress != null) {
-				// if ( mProgress.isShowing() )
-				// mProgress.hide();
-				progressShown = false;
-				progressIcon = null;
-				if (mProgress.isShowing())
-					mProgress.dismiss();
-				mProgress = null;
-//					log.v("hideProgress() - in GUI thread, finished");
-			}
+			dismissProgressDialog();
 		});
 	}
 
+	private void hideProgress(ProgressUiState.Token owner) {
+		ProgressUiState.OwnedHide request =
+				progressUiState.requestOwnedHide(owner);
+		if (request == null)
+			return;
+		BackgroundThread.instance().executeGUI(() -> {
+			if (progressUiState.applyOwnedHide(request))
+				dismissProgressDialog();
+		});
+	}
+
+	private void dismissProgressDialog() {
+		if (mProgress == null)
+			return;
+		if (mProgress.isShowing())
+			mProgress.dismiss();
+		mProgress = null;
+	}
+
 	public boolean isProgressShown() {
-		return progressShown;
+		return progressUiState.isVisible();
 	}
 
 	public static String loadFileUtf8(File file) {
@@ -590,14 +587,9 @@ public class Engine {
 		BaseActivity attached = getActivity();
 		if (attached != activity)
 			return;
-		++nextProgressId;
-		if (mProgress != null) {
-			if (mProgress.isShowing())
-				mProgress.dismiss();
-			mProgress = null;
-		}
-		progressShown = false;
-		progressIcon = null;
+		progressUiState.close();
+		BackgroundThread.instance().executeGUI(
+				this::dismissProgressDialog);
 		mActivityRef.clear();
 	}
 
