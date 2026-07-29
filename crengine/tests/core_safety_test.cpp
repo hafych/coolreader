@@ -1795,11 +1795,13 @@ static int testGuiRuntimeOwnership() {
     std::atomic<int> windowClosed(0);
     {
         GuiScreenOwnershipWindowManager manager(screen.get());
-        CountingGuiWindow *first = new CountingGuiWindow(
-                &manager, windowDestroyed, windowClosed);
+        std::unique_ptr<CountingGuiWindow> firstOwner =
+                std::make_unique<CountingGuiWindow>(
+                        &manager, windowDestroyed, windowClosed);
+        CountingGuiWindow *first = firstOwner.get();
         CountingGuiWindow *second = new CountingGuiWindow(
                 &manager, windowDestroyed, windowClosed);
-        manager.activateWindow(first);
+        manager.activateWindow(std::move(firstOwner));
         manager.activateWindow(second);
         manager.activateWindow(first);
         if (manager.getWindowCount() != 2

@@ -731,7 +731,7 @@ void V3DocViewWin::showSettingsMenu()
             std::make_unique<CRSettingsMenu>(
                     _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont,
                     getMenuAccelerators(), rc);
-    _wm->activateWindow(mainMenu.release());
+    _wm->activateWindow(std::move(mainMenu));
 }
 
 void V3DocViewWin::showFontSizeMenu()
@@ -747,7 +747,7 @@ void V3DocViewWin::showFontSizeMenu()
                     getMenuAccelerators(), rc);
     std::unique_ptr<CRMenu> menu =
             menuFactory->createFontSizeMenu(_wm, NULL, _newProps);
-    _wm->activateWindow(menu.release());
+    _wm->activateWindow(std::move(menu));
 }
 
 #if CR_INTERNAL_PAGE_ORIENTATION==1
@@ -764,7 +764,7 @@ void V3DocViewWin::showOrientationMenu()
                     getMenuAccelerators(), rc);
     std::unique_ptr<CRMenu> menu =
             menuFactory->createOrientationMenu(NULL, _newProps);
-    _wm->activateWindow(menu.release());
+    _wm->activateWindow(std::move(menu));
 }
 #endif
 

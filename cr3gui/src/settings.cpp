@@ -170,7 +170,7 @@ int CRControlsMenuItem::onSelect()
 {
     std::unique_ptr<CRMenu> menu =
             _controlsMenu->createCommandsMenu(_key, _flags);
-    _menu->getWindowManager()->activateWindow(menu.release());
+    _menu->getWindowManager()->activateWindow(std::move(menu));
     return 1;
 }
 

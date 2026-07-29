@@ -7879,8 +7879,8 @@ require_source_text(
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
-  "_menu->getWindowManager()->activateWindow(menu.release());"
-  "control-command menus must transfer explicitly to the legacy activation boundary"
+  "_menu->getWindowManager()->activateWindow(std::move(menu));"
+  "control-command menus must transfer through the owner-aware activation boundary"
 )
 forbid_source_text(
   "${SETTINGS_SOURCE}"
@@ -8099,8 +8099,8 @@ require_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
-  "_wm->activateWindow(mainMenu.release());"
-  "settings windows must transfer explicitly to the legacy activation boundary"
+  "_wm->activateWindow(std::move(mainMenu));"
+  "settings windows must transfer through the owner-aware activation boundary"
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
@@ -8114,8 +8114,8 @@ require_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
-  "_wm->activateWindow(menu.release());"
-  "quick-settings menus must transfer explicitly to the legacy activation boundary"
+  "_wm->activateWindow(std::move(menu));"
+  "quick-settings menus must transfer through the owner-aware activation boundary"
 )
 forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
@@ -8183,9 +8183,19 @@ require_source_text(
   "the legacy GUI event API must remain an explicit transfer boundary"
 )
 require_source_text(
+  "${GUI_HEADER}"
+  "void activateWindow( std::unique_ptr<CRGUIWindow> window );"
+  "GUI window activation must expose an owner-aware boundary"
+)
+require_source_text(
   "${GUI_SOURCE}"
-  "std::unique_ptr<CRGUIWindow> owner( window );"
-  "GUI window activation must adopt new windows before publication"
+  "_windows.push_back( std::move( owner ) );"
+  "GUI window activation must publish scoped owners"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "manager.activateWindow(std::move(firstOwner));"
+  "owner-aware GUI window activation must retain regression coverage"
 )
 require_source_text(
   "${GUI_SOURCE}"

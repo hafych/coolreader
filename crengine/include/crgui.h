@@ -651,6 +651,8 @@ class CRGUIWindowManager : public CRGUIStringTranslator
             }
         }
         /// activates window, brings it on top; add to stack if not added
+        void activateWindow( std::unique_ptr<CRGUIWindow> window );
+        /// compatibility overload for new raw candidates and managed windows
         void activateWindow( CRGUIWindow * window );
         /// closes window, removes from stack, destroys object
         void closeWindow( CRGUIWindow * window );

@@ -348,15 +348,40 @@ void CRGUIWindowManager::closeWindow( CRGUIWindow * window )
 }
 
 /// activates window, brings it on top; add to stack if not added
+void CRGUIWindowManager::activateWindow(
+        std::unique_ptr<CRGUIWindow> owner )
+{
+    if ( !owner )
+        return;
+    CRGUIWindow * window = owner.get();
+    int index = findWindowIndex( window );
+    if ( index >= 0 ) {
+        owner.release();
+        activateWindow( window );
+        return;
+    }
+    CRGUIWindow * lostFocus = getTopVisibleWindow();
+    window->setVisible( true );
+    _windows.push_back( std::move( owner ) );
+    if ( window != lostFocus )
+    {
+        if ( lostFocus )
+            lostFocus->covered();
+        window->activated();
+    }
+}
+
+/// compatibility activation for new raw candidates and managed windows
 void CRGUIWindowManager::activateWindow( CRGUIWindow * window )
 {
     int index = findWindowIndex( window );
+    if ( index < 0 ) {
+        activateWindow( std::unique_ptr<CRGUIWindow>( window ) );
+        return;
+    }
     CRGUIWindow * lostFocus = getTopVisibleWindow();
     window->setVisible( true );
-    if ( index < 0 ) {
-        std::unique_ptr<CRGUIWindow> owner( window );
-        _windows.push_back( std::move( owner ) );
-    } else if ( index < static_cast<int>( _windows.size() ) - 1 ) {
+    if ( index < static_cast<int>( _windows.size() ) - 1 ) {
         std::unique_ptr<CRGUIWindow> owner =
                 std::move( _windows[static_cast<size_t>( index )] );
         _windows.erase( _windows.begin() + index );
