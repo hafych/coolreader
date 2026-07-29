@@ -162,6 +162,10 @@ BATTERY_STATUS = SOURCE / "crengine" / "BatteryStatus.java"
 READER_PROGRESS_STATE = (
     SOURCE / "crengine" / "ReaderProgressState.java"
 )
+PROGRESS_DIALOG = SOURCE / "crengine" / "ProgressDialog.java"
+PROGRESS_DISPLAY_STATE = (
+    SOURCE / "crengine" / "ProgressDisplayState.java"
+)
 FONT_FACE_SWITCHER = SOURCE / "crengine" / "FontFaceSwitcher.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
@@ -434,6 +438,18 @@ READER_PROGRESS_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderProgressStateTest.java"
+)
+PROGRESS_DISPLAY_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ProgressDisplayStateTest.java"
 )
 FONT_FACE_SWITCHER_TEST = (
     ROOT
@@ -2444,6 +2460,69 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_PROGRESS_STATE_TEST)} omits progress "
                 f"regression: {marker}")
+
+    progress_dialog_text = PROGRESS_DIALOG.read_text(
+        encoding="utf-8")
+    for marker in (
+        "private TextView mProgressNumber",
+        "private TextView mProgressPercent",
+        "private final Context mContext",
+        "R.id.progress_number",
+        "R.id.progress_percent",
+        "ProgressDisplayState.format(",
+        "mProgressNumber.setText(display.number())",
+        "mProgressPercent.setText(display.percent())",
+    ):
+        if marker not in progress_dialog_text:
+            violations.append(
+                f"{relative(PROGRESS_DIALOG)} omits synchronous progress "
+                f"display marker: {marker}")
+    for legacy in (
+        "mViewUpdateHandler",
+        "new Handler()",
+        "sendEmptyMessage(",
+        "import android.os.Message",
+    ):
+        if legacy in progress_dialog_text:
+            violations.append(
+                f"{relative(PROGRESS_DIALOG)} retains empty async "
+                f"progress marker: {legacy}")
+
+    progress_display_text = PROGRESS_DISPLAY_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ProgressDisplayState",
+        "static Snapshot format(",
+        "int boundedMax = Math.max(0, max)",
+        "Math.max(0, Math.min(progress, boundedMax))",
+        "NumberFormat.getPercentInstance(locale)",
+        "percentFormat.setMaximumFractionDigits(0)",
+        "static final class Snapshot",
+        "private final String number",
+        "private final String percent",
+    ):
+        if marker not in progress_display_text:
+            violations.append(
+                f"{relative(PROGRESS_DISPLAY_STATE)} omits bounded "
+                f"progress formatting marker: {marker}")
+
+    progress_display_test_text = (
+        PROGRESS_DISPLAY_STATE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "normalProgressFormatsNumberAndPercent",
+        "progressIsClampedToValidBounds",
+        "invalidMaximumHasStableEmptyDisplay",
+        "nullLocaleIsRejected",
+        "Integer.MIN_VALUE",
+        "Integer.MAX_VALUE",
+        '"4325/10000"',
+        '"43%"',
+    ):
+        if marker not in progress_display_test_text:
+            violations.append(
+                f"{relative(PROGRESS_DISPLAY_STATE_TEST)} omits "
+                f"progress display regression: {marker}")
 
     font_switcher_text = FONT_FACE_SWITCHER.read_text(encoding="utf-8")
     for marker in (

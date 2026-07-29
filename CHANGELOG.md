@@ -395,6 +395,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Reader load/format progress now starts explicitly hidden and publishes
   position/title atomically. Zero-position progress is visible, while duplicate
   show and hide callbacks no longer trigger redundant redraw transitions.
+- Horizontal progress dialogs now show their numeric and percentage values
+  through a bounded, locale-aware formatter. The empty implicit-Looper Handler
+  has been removed; Engine's existing GUI path updates both labels directly.
 - Replaceable Android delayed tasks now claim an exact one-shot generation.
   Replaced or canceled wrappers cannot run because a newer task exists, and
   completed callbacks no longer leave a stale pending slot behind.

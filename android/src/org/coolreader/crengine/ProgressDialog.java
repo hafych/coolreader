@@ -25,12 +25,12 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+
+import java.util.Locale;
 
 /**
  * Progress dialog, based on source code of android.app.ProgressDialog
@@ -48,6 +48,8 @@ public class ProgressDialog extends AlertDialog {
     
     private ProgressBar mProgress;
     private TextView mMessageView;
+    private TextView mProgressNumber;
+    private TextView mProgressPercent;
     
     private int mProgressStyle = STYLE_SPINNER;
     
@@ -62,8 +64,7 @@ public class ProgressDialog extends AlertDialog {
     private boolean mIndeterminate;
     
     private boolean mHasStarted;
-    private Handler mViewUpdateHandler;
-    private Context mContext;
+    private final Context mContext;
     
     public ProgressDialog(Context context) {
         super(context);
@@ -103,18 +104,14 @@ public class ProgressDialog extends AlertDialog {
     protected void onCreate(Bundle savedInstanceState) {
         LayoutInflater inflater = LayoutInflater.from(mContext);
         if (mProgressStyle == STYLE_HORIZONTAL) {
-            
-            /* Use a separate handler to update the text views as they
-             * must be updated on the same thread that created them.
-             */
-            mViewUpdateHandler = new Handler() {
-                @Override
-                public void handleMessage(Message msg) {
-                    super.handleMessage(msg);
-                }
-            };
             View view = inflater.inflate(R.layout.alert_dialog_progress, null);
             mProgress = (ProgressBar) view.findViewById(R.id.progress);
+            mProgressNumber =
+                    (TextView) view.findViewById(
+                            R.id.progress_number);
+            mProgressPercent =
+                    (TextView) view.findViewById(
+                            R.id.progress_percent);
             //view.setBackgroundColor(Color.WHITE);
             setView(view);
 //    		if ( DeviceInfo.FORCE_LIGHT_THEME ) {
@@ -283,8 +280,17 @@ public class ProgressDialog extends AlertDialog {
     }
 
     private void onProgressChanged() {
-        if (mProgressStyle == STYLE_HORIZONTAL) {
-            mViewUpdateHandler.sendEmptyMessage(0);
-        }
+        if (mProgressStyle != STYLE_HORIZONTAL
+                || mProgress == null
+                || mProgressNumber == null
+                || mProgressPercent == null)
+            return;
+        ProgressDisplayState.Snapshot display =
+                ProgressDisplayState.format(
+                        mProgress.getProgress(),
+                        mProgress.getMax(),
+                        Locale.getDefault());
+        mProgressNumber.setText(display.number());
+        mProgressPercent.setText(display.percent());
     }
 }

@@ -206,6 +206,11 @@ resource and resolved-title snapshot, and `hide` is idempotent. A zero position
 remains a valid visible start state; duplicate callbacks do not redraw or
 reacquire E-Ink refresh suppression, and the renderer cannot combine fields
 from different progress generations.
+The horizontal modal `ProgressDialog` is updated directly by the Engine's
+existing GUI-serialized progress path. Its former Handler consumed empty
+messages and owned no work, so it has been removed. Number and percentage
+views now use the stateless, locale-aware `ProgressDisplayState`, which clamps
+out-of-range values and defines a stable zero-maximum display.
 Animation and GC delayed executors are private final members of one
 `ReaderView`. Animation handoff uses that reader's instance lock and a volatile
 active-animation reference rather than the nested class monitor shared by all

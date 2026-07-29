@@ -968,6 +968,45 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void progressDisplayIsSynchronousAndStateless()
+			throws Exception {
+		for (String name : new String[]{
+				"mProgressNumber",
+				"mProgressPercent",
+				"mContext"}) {
+			Field field =
+					ProgressDialog.class.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			if (name.equals("mContext"))
+				assertTrue(
+						Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field :
+				ProgressDialog.class.getDeclaredFields()) {
+			assertFalse(
+					"ProgressDialog retains an async update handler",
+					field.getName().equals(
+							"mViewUpdateHandler"));
+		}
+		assertTrue(
+				Modifier.isFinal(
+						ProgressDisplayState.class
+								.getModifiers()));
+		assertEquals(
+				0,
+				ProgressDisplayState.class
+						.getDeclaredFields().length);
+		for (Field field :
+				ProgressDisplayState.Snapshot.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

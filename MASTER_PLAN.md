@@ -180,6 +180,9 @@ DRM или ограничений доступа, подбор/получени�
   snapshot owner: initial state явно hidden, zero-position остаётся active,
   duplicate show и hide идемпотентны, а renderer получает согласованные
   position/resource/title одного поколения.
+  Horizontal `ProgressDialog` больше не создаёт пустой implicit-Looper Handler:
+  number/percent views связаны явно и синхронно получают JVM-tested,
+  locale-aware `ProgressDisplayState` с clamped progress и safe zero max.
   Общий `DelayedExecutor` переведён с nullable callback check на pure one-shot
   `ReplaceableTaskSlot`: replacement/cancel инвалидируют точный wrapper,
   successful claim очищает slot до delegate, stale generations и повторный
