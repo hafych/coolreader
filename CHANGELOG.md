@@ -54,6 +54,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   device input defaults now belong to one Activity/settings generation.
   Nook key conflicts override generated defaults while preserving explicit
   user mappings, and action catalogs no longer expose mutable arrays.
+- Gesture acceleration now uses an immutable curve owned by each reader and
+  widened interpolation across the full integer range. Document style codes
+  and labels now share one typed immutable catalog instead of parallel arrays.
 - The native Engine retains only application context plus a detachable weak UI
   host, and stale Activity shutdown can no longer tear down a newer generation.
 - ReaderView receives scanner, history, document cache and a per-generation

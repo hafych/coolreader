@@ -74,6 +74,9 @@ import java.util.Locale;
 
 public class OptionsDialog extends BaseDialog implements TabContentFactory, OptionOwner, Settings {
 
+	private static final StyleOptionCatalog STYLE_OPTION_CATALOG =
+			StyleOptionCatalog.legacy();
+
 	ReaderView mReaderView;
 	BaseActivity mActivity;
 	private final Engine mEngine;
@@ -771,8 +774,9 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			mProperties.setColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_COMMENT_DAY, mProperties.getColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_COMMENT, 0xFFFF40));
 			mProperties.setColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_CORRECTION_DAY, mProperties.getColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_CORRECTION, 0xFF8000));
 		}
-		for (String code : styleCodes) {
-			String styleName = "styles." + code + ".color";
+		for (StyleOptionCatalog.Entry style :
+				STYLE_OPTION_CATALOG.entries()) {
+			String styleName = "styles." + style.code() + ".color";
 			String v = mProperties.getProperty(styleName); 
 			if (v != null) {
 				if ( night )
@@ -810,8 +814,9 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			mProperties.setColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_COMMENT, mProperties.getColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_COMMENT_DAY, 0xFFFF40));
 			mProperties.setColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_CORRECTION, mProperties.getColor(PROP_HIGHLIGHT_BOOKMARK_COLOR_CORRECTION_DAY, 0xFF8000));
 		}
-		for (String code : styleCodes) {
-			String styleName = "styles." + code + ".color";
+		for (StyleOptionCatalog.Entry style :
+				STYLE_OPTION_CATALOG.entries()) {
+			String styleName = "styles." + style.code() + ".color";
 			String pname = night ? styleName + ".night" : styleName + ".day";
 			String v = mProperties.getProperty(pname);
 			if (v != null)
@@ -2390,38 +2395,6 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		return res;
 	}
 
-	final static private String[] styleCodes = {
-		"def",
-		"title",
-		"subtitle",
-		"pre",
-		"link",
-		"cite",
-		"epigraph",
-		"poem",
-		"text-author",
-		"footnote",
-		"footnote-link",
-		"footnote-title",
-		"annotation",
-	};
-	
-	final static private int[] styleTitles = {
-		R.string.options_css_def,
-		R.string.options_css_title,
-		R.string.options_css_subtitle,
-		R.string.options_css_pre,
-		R.string.options_css_link,
-		R.string.options_css_cite,
-		R.string.options_css_epigraph,
-		R.string.options_css_poem,
-		R.string.options_css_textauthor,
-		R.string.options_css_footnote,
-		R.string.options_css_footnotelink,
-		R.string.options_css_footnotetitle,
-		R.string.options_css_annotation,
-	};
-	
 	private void fillStyleEditorOptions() {
 		mOptionsCSS = new OptionsListView(getContext());
 		//mProperties.setBool(PROP_TXT_OPTION_PREFORMATTED, mReaderView.isTextAutoformatEnabled());
@@ -2468,8 +2441,11 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 					.setOnChangeHandler(renderindChangeListsner)
 			);
 		}
-		for (int i=0; i<styleCodes.length; i++)
-			mOptionsCSS.add(createStyleEditor(styleCodes[i], styleTitles[i]));
+		for (StyleOptionCatalog.Entry style :
+				STYLE_OPTION_CATALOG.entries()) {
+			mOptionsCSS.add(
+					createStyleEditor(style.code(), style.titleId()));
+		}
 	}
 	
 	private void setupBrowserOptions()

@@ -26,6 +26,7 @@ SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
+GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
@@ -211,6 +212,18 @@ DEFAULT_INPUT_ACTIONS_TEST = (
     / "crengine"
     / "DefaultInputActionsTest.java"
 )
+GESTURE_ACCELERATION_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "GestureAccelerationTest.java"
+)
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
 COVERPAGE_MANAGER = SOURCE / "crengine" / "CoverpageManager.java"
@@ -218,6 +231,19 @@ FILE_SYSTEM_FOLDERS = SOURCE / "crengine" / "FileSystemFolders.java"
 UTILS = SOURCE / "crengine" / "Utils.java"
 ABOUT_DIALOG = SOURCE / "crengine" / "AboutDialog.java"
 OPTIONS_DIALOG = SOURCE / "crengine" / "OptionsDialog.java"
+STYLE_OPTION_CATALOG = SOURCE / "crengine" / "StyleOptionCatalog.java"
+STYLE_OPTION_CATALOG_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "StyleOptionCatalogTest.java"
+)
 BOOK_INFO_DIALOGS = (
     SOURCE / "crengine" / "BookInfoDialog.java",
     SOURCE / "crengine" / "BookInfoEditDialog.java",
@@ -840,6 +866,47 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} shares VMRuntime accounting between "
             "reader generations")
+    for marker in (
+        "private final GestureAcceleration gestureAcceleration",
+        "gestureAcceleration.apply(start, end, value)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits gesture acceleration "
+                f"owner marker: {marker}")
+    if "accelerationShape" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} retains a mutable acceleration array")
+
+    gesture_acceleration_text = GESTURE_ACCELERATION.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class GestureAcceleration",
+        "private final int[] shape",
+        "this.shape = shape.clone()",
+        "if (end <= start)",
+        "long range = (long) end - start",
+        "long position = INTERPOLATION_STEPS",
+        "long result = start",
+    ):
+        if marker not in gesture_acceleration_text:
+            violations.append(
+                f"{relative(GESTURE_ACCELERATION)} omits immutable widened "
+                f"acceleration marker: {marker}")
+
+    gesture_acceleration_test_text = GESTURE_ACCELERATION_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "legacyCurveMatchesKnownSamples",
+        "inputIsClampedAndDegenerateRangeIsStable",
+        "fullIntegerRangeUsesWidenedArithmetic",
+        "constructorCopiesAndValidatesShape",
+        "Integer.MIN_VALUE",
+    ):
+        if marker not in gesture_acceleration_test_text:
+            violations.append(
+                f"{relative(GESTURE_ACCELERATION_TEST)} omits gesture "
+                f"regression: {marker}")
 
     vm_runtime_text = VM_RUNTIME_HACK.read_text(encoding="utf-8")
     for marker in (
@@ -1008,6 +1075,9 @@ def main() -> None:
         "private boolean isEpubFormat",
         "private boolean isFormatWithEmbeddedStyle",
         "PROP_APP_SETTINGS_SHOW_ICONS, true",
+        "private static final StyleOptionCatalog STYLE_OPTION_CATALOG",
+        "STYLE_OPTION_CATALOG.entries()",
+        "createStyleEditor(style.code(), style.titleId())",
     ):
         if marker not in options_text:
             violations.append(
@@ -1024,11 +1094,43 @@ def main() -> None:
         "public static String[] mPagesPerFullSwipeTitles",
         "public static final int[] mBacklightLevels",
         "public static final String[] mBacklightLevelsTitles",
+        "styleCodes",
+        "styleTitles",
     ):
         if marker in options_text:
             violations.append(
                 f"{relative(OPTIONS_DIALOG)} retains process UI state: "
                 f"{marker}")
+
+    style_catalog_text = STYLE_OPTION_CATALOG.read_text(encoding="utf-8")
+    for marker in (
+        "final class StyleOptionCatalog",
+        "private final List<Entry> entries",
+        "Collections.unmodifiableList(",
+        "new ArrayList<>(entries)",
+        'new Entry("def", R.string.options_css_def)',
+        '"annotation", R.string.options_css_annotation',
+        "static final class Entry",
+        "private final String code",
+        "private final int titleId",
+    ):
+        if marker not in style_catalog_text:
+            violations.append(
+                f"{relative(STYLE_OPTION_CATALOG)} omits immutable typed "
+                f"style marker: {marker}")
+
+    style_catalog_test_text = STYLE_OPTION_CATALOG_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "legacyCatalogPreservesAllTypedPairsInOrder",
+        "entryListCannotBeMutated",
+        "assertEquals(13, catalog.entries().size())",
+        '"footnote-link"',
+    ):
+        if marker not in style_catalog_test_text:
+            violations.append(
+                f"{relative(STYLE_OPTION_CATALOG_TEST)} omits style "
+                f"regression: {marker}")
 
     backlight_options_text = BACKLIGHT_OPTIONS.read_text(encoding="utf-8")
     for marker in (

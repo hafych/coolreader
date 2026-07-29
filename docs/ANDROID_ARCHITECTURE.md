@@ -73,12 +73,17 @@ behavior is covered by a local JVM test, without constructing an Activity,
 Surface or native document. The matching sine/arcsine page-curl curves are
 built once by `PageCurveTables`; its arrays are private, final, instance-owned
 storage and the legacy numeric samples are locked by a pure JVM regression.
+Gesture animation uses the same boundary: each `ReaderView` owns an immutable
+`GestureAcceleration` curve, input is clamped, and interpolation widens before
+arithmetic so the full signed-integer range cannot overflow.
 
 Options UI state is scoped to each `OptionsDialog` generation. Resource-backed
 motion and gesture choices, format capability flags, and icon visibility no
 longer live in process-wide fields. Shared backlight values are exposed only
 through the pure `BacklightOptions` owner; callers receive copies and localized
-titles are built per Activity instead of mutating a global array.
+titles are built per Activity instead of mutating a global array. Document
+style codes and label resources are paired in one immutable
+`StyleOptionCatalog`, preventing the former parallel arrays from drifting.
 
 Screen-backlight user-activity timestamps and scheduled timer tasks belong to
 the `ScreenBacklightControl` of one `BaseActivity` generation. Threshold and

@@ -141,7 +141,9 @@ DRM или ограничений доступа, подбор/получени�
   widened row-stride/surface byte sizes, а также immutable ReaderAction
   metadata/catalog copies, Activity-owned themed icon snapshots и
   SettingsManager-owned device input defaults с корректным Nook override без
-  перезаписи user mappings.
+  перезаписи user mappings, ReaderView-owned immutable/overflow-safe gesture
+  acceleration curve и единый immutable typed OptionsDialog style catalog
+  вместо параллельных process-wide массивов.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

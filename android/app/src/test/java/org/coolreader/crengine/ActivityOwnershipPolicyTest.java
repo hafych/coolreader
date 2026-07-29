@@ -158,6 +158,53 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void gestureAccelerationIsReaderOwnedAndImmutable()
+			throws Exception {
+		Field acceleration =
+				ReaderView.class.getDeclaredField("gestureAcceleration");
+		assertFalse(Modifier.isStatic(acceleration.getModifiers()));
+		assertTrue(Modifier.isPrivate(acceleration.getModifiers()));
+		assertTrue(Modifier.isFinal(acceleration.getModifiers()));
+
+		for (Field field : GestureAcceleration.class.getDeclaredFields()) {
+			if (field.getType().isArray()) {
+				assertFalse(Modifier.isStatic(field.getModifiers()));
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (Field field : ReaderView.class.getDeclaredFields()) {
+			assertFalse(
+					"ReaderView retains the legacy acceleration array",
+					field.getName().equals("accelerationShape"));
+		}
+	}
+
+	@Test
+	public void styleOptionsHaveOneImmutableTypedCatalog()
+			throws Exception {
+		assertFinalStaticField(
+				OptionsDialog.class, "STYLE_OPTION_CATALOG");
+		for (Field field : StyleOptionCatalog.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field :
+				StyleOptionCatalog.Entry.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field : OptionsDialog.class.getDeclaredFields()) {
+			assertFalse(
+					"OptionsDialog retains parallel style arrays",
+					field.getName().equals("styleCodes")
+							|| field.getName().equals("styleTitles"));
+		}
+	}
+
+	@Test
 	public void readerBitmapMemoryStateBelongsToOneGeneration()
 			throws Exception {
 		for (String name : new String[]{"runtime", "factory"}) {
