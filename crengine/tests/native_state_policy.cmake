@@ -7026,6 +7026,26 @@ require_source_text(
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "XCB window managers must adopt their created screen"
 )
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "#define class klass"
+  "XCB headers must not require a C++ keyword compatibility macro"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "static xcb_window_t window = 0;"
+  "XCB numeric resource identifiers must use a numeric null value"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "lvsize_t size = coverStream->GetSize();"
+  "XCB cover reads must preserve the stream size type"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "static bool alt_pressed"
+  "XCB event loops must not retain unused modifier state"
+)
 foreach(
     GUI_STARTUP_SOURCE
     "${QT_GUI_SOURCE}"

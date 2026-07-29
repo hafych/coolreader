@@ -56,14 +56,12 @@
 
 #include <xcb/xcb.h>
 int8_t i8sample = 0;
-#define class klass
 extern "C" {
 #include <xcb/xcb_aux.h>
 #include <xcb/shm.h>
 #include <xcb/randr.h>
 #include <xcb/xcb_atom.h>
 }
-#undef class
 #include <xcb/xcb_image.h>
 #include <xcb/xcb_keysyms.h>
 #include <sys/ipc.h>
@@ -226,7 +224,7 @@ eoi_get_battery_info(battery_info_t * info)
 
 
 static xcb_connection_t *connection = NULL;
-static xcb_window_t window = NULL;
+static xcb_window_t window = 0;
 static xcb_screen_t *screen = NULL;
 static V3DocViewWin * main_win = NULL;
 
@@ -977,9 +975,9 @@ public:
             LVStreamRef coverStream = doc_view->getCoverPageImageStream();
             if ( !coverStream.isNull() ) {
                 //LVStreamRef out = LVOpenFileStream(COVER_FILE_NAME, LVOM_WRITE);
-                int size = coverStream->GetSize();
+                lvsize_t size = coverStream->GetSize();
                 if ( size>0 && size<1000000 ) {
-                    cover_image_file.addSpace(size);
+                    cover_image_file.addSpace(static_cast<int>(size));
                     lvsize_t bytesRead = 0;
                     coverStream->Read( cover_image_file.get(), size, &bytesRead );
                     if ( bytesRead!=size ) {
@@ -1368,8 +1366,6 @@ int CRXCBWindowManager::runEventLoop()
     reply.reset(xcb_intern_atom_reply(
             connection, cookie, NULL));
     wm_protocols_atom = reply->atom;
-
-    static bool alt_pressed = false;
 
     CRLog::trace("CRXCBWindowManager::runEventLoop()");
     keysyms.reset(xcb_key_symbols_alloc(connection));
