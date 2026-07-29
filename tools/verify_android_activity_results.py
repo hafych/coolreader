@@ -150,6 +150,24 @@ ACTIVITY_OWNERSHIP_POLICY_TEST = (
     / "ActivityOwnershipPolicyTest.java"
 )
 TTS_TOOLBAR = SOURCE / "crengine" / "TTSToolbarDlg.java"
+TTS_DOCUMENT_HANDLER = (
+    SOURCE / "crengine" / "TtsDocumentHandler.java"
+)
+TTS_DOCUMENT_SNAPSHOT = (
+    SOURCE / "crengine" / "TtsDocumentSnapshot.java"
+)
+TTS_DOCUMENT_SNAPSHOT_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "TtsDocumentSnapshotTest.java"
+)
 MOTION_WATCHDOG = (
     ROOT
     / "android"
@@ -1817,6 +1835,81 @@ def main() -> None:
                 f"{relative(TTS_TOOLBAR)} retains unowned TTS lifecycle "
                 f"marker: {legacy}")
     for marker in (
+        "private final Engine mEngine",
+        "private final TtsDocumentSnapshot documentSnapshot",
+        "private final TtsDocumentHandler documentHandler",
+        "private boolean isDocumentOpen()",
+        "private boolean isDocumentWorkActive(",
+        "documentHandler.enterReaderMode()",
+        "documentHandler.restoreReaderMode(changedPageMode)",
+        "documentHandler.moveSelection(",
+        "documentHandler.drawCover(",
+        "documentHandler.getAllSentences()",
+        "void stopAndCloseForDocumentChange()",
+        "private void cleanupDocument()",
+        "documentHandler.clearSelection()",
+        "documentHandler.savePosition()",
+        "if (!stopRequested)",
+        "finishClose();",
+    ):
+        if marker not in tts_toolbar_text:
+            violations.append(
+                f"{relative(TTS_TOOLBAR)} omits exact-document TTS "
+                f"marker: {marker}")
+    if re.search(r"\bReaderView\s+\w+", tts_toolbar_text):
+        violations.append(
+            f"{relative(TTS_TOOLBAR)} retains a mutable ReaderView")
+
+    tts_document_handler_text = TTS_DOCUMENT_HANDLER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "interface TtsDocumentHandler",
+        "interface SelectionHandler",
+        "interface CoverHandler",
+        "boolean isActive()",
+        "void clearSelection()",
+        "void savePosition()",
+        "boolean enterReaderMode()",
+        "void restoreReaderMode(boolean changed)",
+        "void moveSelection(",
+        "void drawCover(Bitmap bitmap, CoverHandler coverHandler)",
+        "List<SentenceInfo> getAllSentences()",
+    ):
+        if marker not in tts_document_handler_text:
+            violations.append(
+                f"{relative(TTS_DOCUMENT_HANDLER)} omits narrow "
+                f"TTS document marker: {marker}")
+
+    tts_document_snapshot_text = TTS_DOCUMENT_SNAPSHOT.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class TtsDocumentSnapshot",
+        "private final String authors",
+        "private final String title",
+        "private final String language",
+        "private final String path",
+        "static TtsDocumentSnapshot capture(BookInfo bookInfo)",
+        "static TtsDocumentSnapshot fromValues(",
+    ):
+        if marker not in tts_document_snapshot_text:
+            violations.append(
+                f"{relative(TTS_DOCUMENT_SNAPSHOT)} omits immutable "
+                f"TTS snapshot marker: {marker}")
+
+    tts_document_snapshot_test_text = (
+        TTS_DOCUMENT_SNAPSHOT_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "missingBookCannotProduceTtsSnapshot",
+        "snapshotOwnsDocumentMetadataAndPath",
+        "nullableMetadataIsPreservedWithoutGlobalFallback",
+        '"/books/example.fb2"',
+    ):
+        if marker not in tts_document_snapshot_test_text:
+            violations.append(
+                f"{relative(TTS_DOCUMENT_SNAPSHOT_TEST)} omits TTS "
+                f"snapshot regression: {marker}")
+    for marker in (
         "private MotionWatchdogHandler mMotionWatchdog",
         "private synchronized void startMotionWatchdog()",
         "private synchronized void stopMotionWatchdog()",
@@ -2226,6 +2319,14 @@ def main() -> None:
         "ttsInitializationLifecycle.complete(owner)",
         "ttsInitializationLifecycle.cancel()",
         "private void finishTtsInitialization(",
+        "private TtsDocumentHandler ttsDocumentHandler(",
+        "TtsDocumentSnapshot.capture(expectedBook)",
+        "TtsDocumentSnapshot documentSnapshot)",
+        "toolbar.stopAndCloseForDocumentChange()",
+        "public void stopTtsForDocumentChange()",
+        "private DocumentLoadLifecycle.Request replaceDocumentLoad()",
+        "stopTts();\n\t\tif (cancelDocumentLoad)",
+        "stopTts();\n\t\tcancelDelayedReaderWork();",
         "documentLoadLifecycle.replace()",
         "documentLoadLifecycle.isActive(loadOwner)",
         "documentLoadLifecycle.complete(loadOwner)",
@@ -2277,6 +2378,11 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits reader-owned delayed work "
                 f"marker: {marker}")
+    if reader_view_text.count(
+            "documentLoadLifecycle.replace()") != 1:
+        violations.append(
+            f"{relative(READER_VIEW)} bypasses TTS-aware document "
+            "replacement")
     auto_scroll_start = reader_view_text.find(
         "\n\tclass AutoScrollAnimation {")
     auto_scroll_end = reader_view_text.find(
@@ -2520,6 +2626,10 @@ def main() -> None:
         "SelectionToolbarHandler.class.isInterface()",
         "SelectionToolbarDlg.class,",
         '"selectionToolbarHandler"',
+        "TtsDocumentHandler.class.isInterface()",
+        "TtsDocumentSnapshot.class.getModifiers()",
+        '"ttsDocumentHandler"',
+        '"stopTtsForDocumentChange"',
         "TOCDlg.PageSelectionHandler.class",
         '"TOC dialog must not retain a mutable reader"',
     ):
@@ -4097,6 +4207,29 @@ def main() -> None:
         violations.append(
             f"{relative(COOL_READER)} publishes TTS through a mutable "
             "accessor generation")
+    for marker in (
+        "private void stopTtsForDocumentChange()",
+        "mReaderView.stopTtsForDocumentChange()",
+        "private DocumentLoadLifecycle.Request replaceDocumentLoad()",
+        "private void cancelPendingDocumentLoad()",
+        "stopTtsForDocumentChange();",
+        "mReaderView.stopTtsForDocumentChange();\n"
+        "\t\t\tif (!CLOSE_BOOK_ON_STOP)",
+    ):
+        if marker not in cool_reader_text:
+            violations.append(
+                f"{relative(COOL_READER)} omits TTS-aware document "
+                f"transition marker: {marker}")
+    if cool_reader_text.count(
+            "documentLoadLifecycle.replace()") != 1:
+        violations.append(
+            f"{relative(COOL_READER)} bypasses TTS-aware document "
+            "replacement")
+    if cool_reader_text.count(
+            "documentLoadLifecycle.cancelPending()") != 1:
+        violations.append(
+            f"{relative(COOL_READER)} bypasses TTS-aware pending-open "
+            "cancellation")
     find_pattern(
         COOL_READER,
         cool_reader_text,

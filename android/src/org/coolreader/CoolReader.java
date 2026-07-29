@@ -331,9 +331,12 @@ public class CoolReader extends BaseActivity {
 	protected void onDestroy() {
 
 		log.i("CoolReader.onDestroy() entered");
+		if (mReaderView != null) {
+			mReaderView.stopTtsForDocumentChange();
+			if (!CLOSE_BOOK_ON_STOP)
+				mReaderView.close();
+		}
 		documentLoadLifecycle.close();
-		if (!CLOSE_BOOK_ON_STOP && mReaderView != null)
-			mReaderView.close();
 
 		// Shutdown TTS service if running
 		if (null != ttsControlServiceAccessor) {
@@ -1316,8 +1319,23 @@ public class CoolReader extends BaseActivity {
 		});
 	}
 
-	public void showRootWindow() {
+	private void stopTtsForDocumentChange() {
+		if (mReaderView != null)
+			mReaderView.stopTtsForDocumentChange();
+	}
+
+	private DocumentLoadLifecycle.Request replaceDocumentLoad() {
+		stopTtsForDocumentChange();
+		return documentLoadLifecycle.replace();
+	}
+
+	private void cancelPendingDocumentLoad() {
+		stopTtsForDocumentChange();
 		documentLoadLifecycle.cancelPending();
+	}
+
+	public void showRootWindow() {
+		cancelPendingDocumentLoad();
 		if (null != mBrowser)
 			mBrowser.stopCurrentScan();
 		setCurrentFrame(mHomeFrame);
@@ -1406,7 +1424,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void runInBrowser(final Runnable task) {
-		documentLoadLifecycle.cancelPending();
+		cancelPendingDocumentLoad();
 		waitForCRDBService(() -> {
 			if (mBrowserFrame == null) {
 				mBrowser = new FileBrowser(
@@ -1508,7 +1526,7 @@ public class CoolReader extends BaseActivity {
 
 	public void showManual() {
 		DocumentLoadLifecycle.Request loadOwner =
-				documentLoadLifecycle.replace();
+				replaceDocumentLoad();
 		if (loadOwner == null)
 			return;
 		runInReader(
@@ -1527,7 +1545,7 @@ public class CoolReader extends BaseActivity {
 			return;
 		}
 		final DocumentLoadLifecycle.Request loadOwner =
-				documentLoadLifecycle.replace();
+				replaceDocumentLoad();
 		if (loadOwner == null)
 			return;
 		if (source.getKind() == DocumentSource.Kind.CONTENT_URI) {

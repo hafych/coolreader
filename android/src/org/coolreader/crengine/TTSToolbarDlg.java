@@ -68,7 +68,9 @@ public class TTSToolbarDlg implements Settings {
 
 	private final PopupWindow mWindow;
 	private final CoolReader mCoolReader;
-	private final ReaderView mReaderView;
+	private final Engine mEngine;
+	private final TtsDocumentSnapshot documentSnapshot;
+	private final TtsDocumentHandler documentHandler;
 	private final LinearLayout glassPanel;
 	private final LinearLayout toolbarBody;
 	private final TTSControlServiceAccessor mTTSControl;
@@ -92,6 +94,8 @@ public class TTSToolbarDlg implements Settings {
 			new Handler(Looper.getMainLooper());
 	private MotionWatchdogHandler mMotionWatchdog;
 	private boolean changedPageMode;
+	private boolean documentCleanedUp;
+	private boolean closeFinished;
 	private Runnable mOnCloseListener;
 	private Selection mCurrentSelection;
 	private boolean isSpeaking;
@@ -119,8 +123,20 @@ public class TTSToolbarDlg implements Settings {
 	private HandlerThread wordTimingCalcHandlerThread;
 	private Handler wordTimingCalcHandler;
 
-	static public TTSToolbarDlg showDialog( CoolReader coolReader, ReaderView readerView, TTSControlServiceAccessor ttsacc) {
-		TTSToolbarDlg dlg = new TTSToolbarDlg(coolReader, readerView, ttsacc);
+	static TTSToolbarDlg showDialog(
+			CoolReader coolReader,
+			View anchor,
+			Engine engine,
+			TtsDocumentSnapshot documentSnapshot,
+			TtsDocumentHandler documentHandler,
+			TTSControlServiceAccessor ttsacc) {
+		TTSToolbarDlg dlg = new TTSToolbarDlg(
+				coolReader,
+				anchor,
+				engine,
+				documentSnapshot,
+				documentHandler,
+				ttsacc);
 		log.d("popup: " + dlg.mWindow.getWidth() + "x" + dlg.mWindow.getHeight());
 		return dlg;
 	}
@@ -135,23 +151,45 @@ public class TTSToolbarDlg implements Settings {
 		isSpeaking = false;
 		stopMotionWatchdog();
 		stopAudiobookWork();
-		mTTSControl.bind(ttsbinder -> {
-			ttsbinder.stop(result -> {
-				BackgroundThread.instance().postGUI(() -> {
-					if (null != mTTSControl)
-						mTTSControl.unbind();
-					Intent intent = new Intent(mCoolReader, TTSControlService.class);
-					mCoolReader.stopService(intent);
-					restoreReaderMode();
-					mReaderView.clearSelection();
-					if (mOnCloseListener != null)
-						mOnCloseListener.run();
-					if ( mWindow.isShowing() )
-						mWindow.dismiss();
-					mReaderView.save();
-				});
-			});
+		boolean stopRequested =
+				mTTSControl.bind(ttsbinder ->
+						ttsbinder.stop(
+								result -> finishClose()));
+		if (!stopRequested)
+			finishClose();
+	}
+
+	private void finishClose() {
+		BackgroundThread.instance().postGUI(() -> {
+			if (closeFinished)
+				return;
+			closeFinished = true;
+			mTTSControl.unbind();
+			Intent intent = new Intent(
+					mCoolReader, TTSControlService.class);
+			mCoolReader.stopService(intent);
+			cleanupDocument();
+			if (mOnCloseListener != null)
+				mOnCloseListener.run();
+			if (mWindow.isShowing())
+				mWindow.dismiss();
 		});
+	}
+
+	void stopAndCloseForDocumentChange() {
+		BackgroundThread.ensureGUI();
+		cleanupDocument();
+		stopAndClose();
+	}
+
+	private void cleanupDocument() {
+		BackgroundThread.ensureGUI();
+		if (documentCleanedUp)
+			return;
+		documentCleanedUp = true;
+		restoreReaderMode();
+		documentHandler.clearSelection();
+		documentHandler.savePosition();
 	}
 
 	private void stopAudiobookWork() {
@@ -167,9 +205,20 @@ public class TTSToolbarDlg implements Settings {
 
 	private void postGuiIfOpen(Runnable task) {
 		BackgroundThread.instance().postGUI(() -> {
-			if (!workLifecycle.isClosed())
+			if (isDocumentOpen())
 				task.run();
 		});
+	}
+
+	private boolean isDocumentOpen() {
+		return !workLifecycle.isClosed()
+				&& documentHandler.isActive();
+	}
+
+	private boolean isDocumentWorkActive(
+			CloseableTaskGate.Token token) {
+		return workLifecycle.isActive(token)
+				&& documentHandler.isActive();
 	}
 
 	public void pause() {
@@ -193,18 +242,13 @@ public class TTSToolbarDlg implements Settings {
 		}
 	}
 	private void setReaderMode() {
-		String oldViewSetting = mReaderView.getSetting( ReaderView.PROP_PAGE_VIEW_MODE );
-		if ( "1".equals(oldViewSetting) ) {
-			changedPageMode = true;
-			mReaderView.setViewModeNonPermanent(ViewMode.SCROLL);
-		}
+		changedPageMode =
+				documentHandler.enterReaderMode();
 		moveSelection(ReaderCommand.DCMD_SELECT_FIRST_SENTENCE, null);
 	}
 
 	private void restoreReaderMode() {
-		if ( changedPageMode ) {
-			mReaderView.setViewModeNonPermanent(ViewMode.PAGES);
-		}
+		documentHandler.restoreReaderMode(changedPageMode);
 	}
 
 	private SentenceInfo fetchSelectedSentenceInfo() {
@@ -252,15 +296,19 @@ public class TTSToolbarDlg implements Settings {
 	 * @param cmd move command. DCMD_SELECT_NEXT_SENTENCE, DCMD_SELECT_PREV_SENTENCE, DCMD_SELECT_FIRST_SENTENCE.
 	 * @param callback optional completion callback
 	 */
-	private void moveSelection( ReaderCommand cmd, ReaderView.MoveSelectionCallback callback )
+	private void moveSelection(
+			ReaderCommand cmd,
+			TtsDocumentHandler.SelectionHandler callback)
 	{
-		if (workLifecycle.isClosed())
+		if (!isDocumentOpen())
 			return;
-		mReaderView.moveSelection(cmd, 0, new ReaderView.MoveSelectionCallback() {
+		documentHandler.moveSelection(
+				cmd,
+				new TtsDocumentHandler.SelectionHandler() {
 
 			@Override
 			public void onNewSelection(Selection selection) {
-				if (workLifecycle.isClosed())
+				if (!isDocumentOpen())
 					return;
 				log.d("onNewSelection: " + selection.text + " : " + selection.startY + " x " + selection.startX);
 				mCurrentSelection = selection;
@@ -281,7 +329,7 @@ public class TTSToolbarDlg implements Settings {
 
 			@Override
 			public void onFail() {
-				if (workLifecycle.isClosed())
+				if (!isDocumentOpen())
 					return;
 				log.e("fail()");
 				if (isSpeaking) {
@@ -316,7 +364,7 @@ public class TTSToolbarDlg implements Settings {
 		log.d("startMotionWatchdog() enter");
 
 		stopMotionWatchdog();
-		if (mMotionTimeout <= 0 || workLifecycle.isClosed()) {
+		if (mMotionTimeout <= 0 || !isDocumentOpen()) {
 			Log.d(TAG, "startMotionWatchdog() early exit - timeout is 0");
 			return;
 		}
@@ -397,7 +445,11 @@ public class TTSToolbarDlg implements Settings {
 				ttsbinder.setAudioFile(null, 0);
 				initAudiobookWordTimings(new InitAudiobookWordTimingsCallback(){
 					public void onComplete(){
-						moveSelection(ReaderCommand.DCMD_SELECT_FIRST_SENTENCE, new ReaderView.MoveSelectionCallback() {
+						moveSelection(
+								ReaderCommand
+										.DCMD_SELECT_FIRST_SENTENCE,
+								new TtsDocumentHandler
+										.SelectionHandler() {
 							@Override
 							public void onNewSelection(Selection selection) {
 								if (isSpeaking) {
@@ -501,7 +553,7 @@ public class TTSToolbarDlg implements Settings {
 						new OnTTSStatusListener() {
 			@Override
 			public void onUtteranceStart() {
-				if (!workLifecycle.isClosed())
+				if (isDocumentOpen())
 					isSpeaking = true;
 			}
 
@@ -518,7 +570,7 @@ public class TTSToolbarDlg implements Settings {
 			@Override
 			public void onStateChanged(
 					TTSControlService.State state) {
-				if (workLifecycle.isClosed())
+				if (!isDocumentOpen())
 					return;
 				switch (state) {
 					case PLAYING:
@@ -569,7 +621,7 @@ public class TTSToolbarDlg implements Settings {
 			@Override
 			public void onCurrentSentenceRequested(
 					TTSControlBinder ttsbinder) {
-				if (workLifecycle.isClosed())
+				if (!isDocumentOpen())
 					return;
 				if (mCurrentSelection != null) {
 					ttsbinder.say(
@@ -582,7 +634,7 @@ public class TTSToolbarDlg implements Settings {
 			@Override
 			public void onNextSentenceRequested(
 					TTSControlBinder ttsbinder) {
-				if (workLifecycle.isClosed())
+				if (!isDocumentOpen())
 					return;
 				moveSelection(
 						ReaderCommand.DCMD_SELECT_NEXT_SENTENCE,
@@ -592,7 +644,7 @@ public class TTSToolbarDlg implements Settings {
 			@Override
 			public void onPreviousSentenceRequested(
 					TTSControlBinder ttsbinder) {
-				if (workLifecycle.isClosed())
+				if (!isDocumentOpen())
 					return;
 				moveSelection(
 						ReaderCommand.DCMD_SELECT_PREV_SENTENCE,
@@ -607,13 +659,13 @@ public class TTSToolbarDlg implements Settings {
 		}));
 	}
 
-	private ReaderView.MoveSelectionCallback
+	private TtsDocumentHandler.SelectionHandler
 			createSpeechSelectionCallback(
 					TTSControlBinder ttsbinder) {
-		return new ReaderView.MoveSelectionCallback() {
+		return new TtsDocumentHandler.SelectionHandler() {
 			@Override
 			public void onNewSelection(Selection selection) {
-				if (workLifecycle.isClosed())
+				if (!isDocumentOpen())
 					return;
 				String utterance =
 						preprocessUtterance(selection.text);
@@ -630,11 +682,28 @@ public class TTSToolbarDlg implements Settings {
 	}
 
 	@SuppressLint("ClickableViewAccessibility")
-	public TTSToolbarDlg(CoolReader coolReader, ReaderView readerView, TTSControlServiceAccessor ttsacc) {
+	TTSToolbarDlg(
+			CoolReader coolReader,
+			View anchor,
+			Engine engine,
+			TtsDocumentSnapshot documentSnapshot,
+			TtsDocumentHandler documentHandler,
+			TTSControlServiceAccessor ttsacc) {
+		if (anchor == null
+				|| engine == null
+				|| documentSnapshot == null
+				|| documentHandler == null
+				|| !documentHandler.isActive())
+			throw new IllegalArgumentException(
+					"active TTS document handler is required");
 		mCoolReader = coolReader;
-		mReaderView = readerView;
+		mEngine = engine;
+		this.documentSnapshot = documentSnapshot;
+		this.documentHandler = documentHandler;
 		mTTSControl = ttsacc;
-		View anchor = readerView.getSurface();
+		mBookAuthors = documentSnapshot.getAuthors();
+		mBookTitle = documentSnapshot.getTitle();
+		mBookLanguage = documentSnapshot.getLanguage();
 
 		//Context context = mCoolReader.getApplicationContext();
 		Context context = anchor.getContext();
@@ -670,7 +739,7 @@ public class TTSToolbarDlg implements Settings {
 		optionsButton.setOnClickListener(v -> mTTSControl.bind(ttsbinder -> {
 			OptionsDialog dlg = new OptionsDialog(
 					mCoolReader,
-					mReaderView.getEngine(),
+					mEngine,
 					OptionsDialog.Mode.TTS,
 					null,
 					ttsbinder);
@@ -742,14 +811,6 @@ public class TTSToolbarDlg implements Settings {
 				case KeyEvent.KEYCODE_BACK:
 					stopAndClose();
 					return true;
-//					case KeyEvent.KEYCODE_DPAD_LEFT:
-//					case KeyEvent.KEYCODE_DPAD_UP:
-//						//mReaderView.findNext(pattern, true, caseInsensitive);
-//						return true;
-//					case KeyEvent.KEYCODE_DPAD_RIGHT:
-//					case KeyEvent.KEYCODE_DPAD_DOWN:
-//						//mReaderView.findNext(pattern, false, caseInsensitive);
-//						return true;
 				}
 			} else if ( event.getAction()==KeyEvent.ACTION_DOWN ) {
 				switch ( keyCode ) {
@@ -819,30 +880,40 @@ public class TTSToolbarDlg implements Settings {
 
 		panel.requestFocus();
 
-		// All tasks bellow after service start
-		// Fetch book's metadata
-		BookInfo bookInfo = mReaderView.getBookInfo();
+		// All tasks below after service start.
 		wordTimingFile = null;
 		sentenceInfoFile = null;
 		sentenceTimingCacheFile = null;
-		if (null != bookInfo) {
-			FileInfo fileInfo = bookInfo.getFileInfo();
-			if (null != fileInfo) {
-				mBookAuthors = fileInfo.authors;
-				mBookTitle = fileInfo.title;
-				mBookLanguage = fileInfo.language;
-				mBookCover = Bitmap.createBitmap(MEDIA_COVER_WIDTH, MEDIA_COVER_HEIGHT, Bitmap.Config.RGB_565);
-				mReaderView.getCoverpageManager().drawCoverpageFor(mCoolReader.getDB(), fileInfo, mBookCover, true,
-						(file, bitmap) -> mTTSControl.bind(ttsbinder -> ttsbinder.setMediaItemInfo(mBookAuthors, mBookTitle, bitmap)));
-				String pathName = fileInfo.getPathName();
-				String wordTimingPath = pathName.replaceAll("\\.\\w+$", ".wordtiming");
-				String sentenceInfoPath = pathName.replaceAll("\\.\\w+$", ".sentenceinfo");
-				String sentenceTimingCachePath = pathName.replaceAll("\\.\\w+$", ".sentencetimingcache");
-				if(wordTimingPath.matches(".*\\.wordtiming$")){
-					wordTimingFile = new File(wordTimingPath);
-					sentenceInfoFile = new File(sentenceInfoPath);
-					sentenceTimingCacheFile = new File(sentenceTimingCachePath);
-				}
+		String pathName = documentSnapshot.getPath();
+		if (pathName != null) {
+			mBookCover = Bitmap.createBitmap(
+					MEDIA_COVER_WIDTH,
+					MEDIA_COVER_HEIGHT,
+					Bitmap.Config.RGB_565);
+			documentHandler.drawCover(
+					mBookCover,
+					bitmap -> mTTSControl.bind(
+							ttsbinder -> ttsbinder.setMediaItemInfo(
+									mBookAuthors,
+									mBookTitle,
+									bitmap)));
+			String wordTimingPath =
+					pathName.replaceAll(
+							"\\.\\w+$", ".wordtiming");
+			String sentenceInfoPath =
+					pathName.replaceAll(
+							"\\.\\w+$", ".sentenceinfo");
+			String sentenceTimingCachePath =
+					pathName.replaceAll(
+							"\\.\\w+$",
+							".sentencetimingcache");
+			if (wordTimingPath.matches(
+					".*\\.wordtiming$")) {
+				wordTimingFile = new File(wordTimingPath);
+				sentenceInfoFile = new File(
+						sentenceInfoPath);
+				sentenceTimingCacheFile = new File(
+						sentenceTimingCachePath);
 			}
 		}
 		// Show volume
@@ -874,6 +945,8 @@ public class TTSToolbarDlg implements Settings {
 
 	public void initAudiobookWordTimings(
 			InitAudiobookWordTimingsCallback callback) {
+		if (!documentHandler.isActive())
+			return;
 		CloseableTaskGate.Token token = workLifecycle.replace();
 		if (token == null)
 			return;
@@ -907,38 +980,41 @@ public class TTSToolbarDlg implements Settings {
 
 		mCoolReader.showToast("matching audiobook word timings");
 		wordTimingCalcHandler.post(() -> {
-			if (!workLifecycle.isActive(token))
+			if (!isDocumentWorkActive(token))
 				return;
 			List<SentenceInfo> allSentences =
 					SentenceInfoCache.maybeReadCache(infoFile);
-			if (!workLifecycle.isActive(token))
+			if (!isDocumentWorkActive(token))
 				return;
 			if (allSentences == null) {
-				allSentences = mReaderView.getAllSentences();
-				if (!workLifecycle.isActive(token))
+				allSentences =
+						documentHandler.getAllSentences();
+				if (!isDocumentWorkActive(token))
+					return;
+				if (allSentences == null)
 					return;
 				SentenceInfoCache.maybeWriteCache(
 						infoFile, allSentences);
 			}
-			if (!workLifecycle.isActive(token))
+			if (!isDocumentWorkActive(token))
 				return;
 
 			WordTimingAudiobookMatcher matcher =
 					new WordTimingAudiobookMatcher(
 							timingFile, allSentences);
 			matcher.maybeReadSentenceTimingCache(timingCacheFile);
-			if (!workLifecycle.isActive(token))
+			if (!isDocumentWorkActive(token))
 				return;
 			if (!matcher.isSentenceTimingReady()) {
 				// This can be very long. Its result must not escape
 				// the task generation that requested it.
 				matcher.parseWordTimingsFile();
-				if (!workLifecycle.isActive(token))
+				if (!isDocumentWorkActive(token))
 					return;
 				matcher.maybeWriteSentenceTimingCache(
 						timingCacheFile);
 			}
-			if (!workLifecycle.isActive(token))
+			if (!isDocumentWorkActive(token))
 				return;
 
 			BackgroundThread.instance().postGUI(() ->
@@ -951,7 +1027,7 @@ public class TTSToolbarDlg implements Settings {
 			CloseableTaskGate.Token token,
 			WordTimingAudiobookMatcher matcher,
 			InitAudiobookWordTimingsCallback callback) {
-		if (!workLifecycle.isActive(token))
+		if (!isDocumentWorkActive(token))
 			return;
 		wordTimingAudiobookMatcher = matcher;
 		moveSelection(
@@ -968,7 +1044,7 @@ public class TTSToolbarDlg implements Settings {
 
 	private void scheduleAudiobookPositionPoll(
 			CloseableTaskGate.Token token) {
-		if (workLifecycle.isActive(token)) {
+		if (isDocumentWorkActive(token)) {
 			audioBookPosHandler.postDelayed(
 					() -> pollAudiobookPosition(token), 500);
 		}
@@ -976,14 +1052,14 @@ public class TTSToolbarDlg implements Settings {
 
 	private void pollAudiobookPosition(
 			CloseableTaskGate.Token token) {
-		if (!workLifecycle.isActive(token))
+		if (!isDocumentWorkActive(token))
 			return;
 		try {
 			SentenceInfo currentSentence =
 					fetchSelectedSentenceInfo();
 			if (currentSentence != null) {
 				mTTSControl.bind(ttsbinder -> {
-					if (!workLifecycle.isActive(token))
+					if (!isDocumentWorkActive(token))
 						return;
 					ttsbinder.isAudioBookPlaybackAfterSentence(
 							currentSentence,
@@ -991,8 +1067,8 @@ public class TTSToolbarDlg implements Settings {
 									BackgroundThread.instance()
 											.postGUI(() -> {
 												if (isAfter
-														&& workLifecycle
-																.isActive(token)) {
+														&& isDocumentWorkActive(
+																token)) {
 													moveSelection(
 															ReaderCommand
 																	.DCMD_SELECT_NEXT_SENTENCE,

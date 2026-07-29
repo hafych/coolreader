@@ -3666,6 +3666,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			log.i("DCMD_TTS_PLAY: skipping re-init of active TTS");
 			return;
 		}
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		final TtsDocumentSnapshot documentSnapshot =
+				TtsDocumentSnapshot.capture(expectedBook);
+		if (documentSnapshot == null
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return;
 		CloseableTaskGate.Token owner =
 				ttsInitializationLifecycle.beginIfIdle();
 		if (owner == null) {
@@ -3674,21 +3683,37 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 		log.i("DCMD_TTS_PLAY: initializing TTS");
 		mActivity.initTTS(
-				ttsacc -> finishTtsInitialization(owner, ttsacc),
+				ttsacc -> finishTtsInitialization(
+						owner,
+						ttsacc,
+						expectedBook,
+						interaction,
+						documentSnapshot),
 				() -> ttsInitializationLifecycle.complete(owner));
 	}
 
 	private void finishTtsInitialization(
 			CloseableTaskGate.Token owner,
-			TTSControlServiceAccessor ttsAccessor) {
+			TTSControlServiceAccessor ttsAccessor,
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction,
+			TtsDocumentSnapshot documentSnapshot) {
 		BackgroundThread.ensureGUI();
 		if (!ttsInitializationLifecycle.complete(owner)
 				|| !mServiceLifecycle.isActive()
-				|| ttsAccessor == null)
+				|| ttsAccessor == null
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
 			return;
 		log.i("TTS created: opening TTS toolbar");
 		TTSToolbarDlg toolbar = TTSToolbarDlg.showDialog(
-				mActivity, this, ttsAccessor);
+				mActivity,
+				surface,
+				mEngine,
+				documentSnapshot,
+				ttsDocumentHandler(
+						expectedBook, interaction),
+				ttsAccessor);
 		ttsToolbar = toolbar;
 		toolbar.setOnCloseListener(() -> {
 			if (ttsToolbar == toolbar)
@@ -3698,14 +3723,119 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		toolbar.initAudiobookWordTimings(null);
 	}
 
+	private TtsDocumentHandler ttsDocumentHandler(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		return new TtsDocumentHandler() {
+			@Override
+			public boolean isActive() {
+				return isDocumentInteractionCurrent(
+						expectedBook, interaction);
+			}
+
+			@Override
+			public void clearSelection() {
+				ReaderView.this.clearSelection(
+						expectedBook, interaction);
+			}
+
+			@Override
+			public void savePosition() {
+				if (isActive())
+					ReaderView.this.save();
+			}
+
+			@Override
+			public boolean enterReaderMode() {
+				if (!isActive())
+					return false;
+				if ("1".equals(getSetting(
+						PROP_PAGE_VIEW_MODE))) {
+					setViewModeNonPermanent(ViewMode.SCROLL);
+					return true;
+				}
+				return false;
+			}
+
+			@Override
+			public void restoreReaderMode(boolean changed) {
+				if (changed && isActive())
+					setViewModeNonPermanent(ViewMode.PAGES);
+			}
+
+			@Override
+			public void moveSelection(
+					ReaderCommand command,
+					SelectionHandler selectionHandler) {
+				ReaderView.this.moveSelection(
+						command,
+						0,
+						new MoveSelectionCallback() {
+							@Override
+							public void onNewSelection(
+									Selection selection) {
+								selectionHandler
+										.onNewSelection(
+												selection);
+							}
+
+							@Override
+							public void onFail() {
+								selectionHandler.onFail();
+							}
+						},
+						expectedBook,
+						interaction);
+			}
+
+			@Override
+			public void drawCover(
+					Bitmap bitmap,
+					CoverHandler coverHandler) {
+				if (!isActive()
+						|| bitmap == null
+						|| mActivity.getDB() == null)
+					return;
+				mCoverpageManager.drawCoverpageFor(
+						mActivity.getDB(),
+						expectedBook.getFileInfo(),
+						bitmap,
+						true,
+						(file, readyBitmap) -> {
+							if (isActive())
+								coverHandler.onCoverReady(
+										readyBitmap);
+						});
+			}
+
+			@Override
+			public List<SentenceInfo> getAllSentences() {
+				return BackgroundThread.instance()
+						.callBackground(() -> {
+							if (!isActive())
+								return null;
+							List<SentenceInfo> sentences =
+									doc.getAllSentences();
+							return isActive()
+									? sentences
+									: null;
+						});
+			}
+		};
+	}
+
 	private void stopTts() {
 		BackgroundThread.ensureGUI();
 		ttsInitializationLifecycle.cancel();
 		TTSToolbarDlg toolbar = ttsToolbar;
 		if (toolbar != null) {
 			log.i("DCMD_TTS_STOP: stopping TTS");
-			toolbar.stopAndClose();
+			toolbar.stopAndCloseForDocumentChange();
 		}
+	}
+
+	public void stopTtsForDocumentChange() {
+		stopTts();
 	}
 
 	public void pauseTTS() {
@@ -4013,8 +4143,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	 *
 	 * @return true if opened successfully
 	 */
+	private DocumentLoadLifecycle.Request replaceDocumentLoad() {
+		BackgroundThread.ensureGUI();
+		stopTts();
+		return documentLoadLifecycle.replace();
+	}
+
 	public boolean showManual() {
-		return showManual(documentLoadLifecycle.replace());
+		return showManual(replaceDocumentLoad());
 	}
 
 	public boolean showManual(
@@ -4262,6 +4398,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public boolean reloadDocument() {
 		if (this.mBookInfo != null && this.mBookInfo.getFileInfo() != null) {
+			stopTts();
 			save(); // save current position
 			DocumentSource source =
 					DocumentSource.fromFileInfo(this.mBookInfo.getFileInfo());
@@ -4271,7 +4408,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return true;
 			}
 			DocumentLoadLifecycle.Request loadOwner =
-					documentLoadLifecycle.replace();
+					replaceDocumentLoad();
 			return enqueueDocumentLoad(
 					loadOwner, this.mBookInfo, source, null,
 					null, null, null, null);
@@ -4281,7 +4418,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public boolean loadDocument(final FileInfo fileInfo, final Runnable doneHandler, final Runnable errorHandler) {
 		return loadDocument(
-				documentLoadLifecycle.replace(),
+				replaceDocumentLoad(),
 				fileInfo, DocumentSource.fromFileInfo(fileInfo),
 				doneHandler, errorHandler);
 	}
@@ -4338,7 +4475,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return false;
 		}
 		final DocumentLoadLifecycle.Request loadOwner =
-				documentLoadLifecycle.replace();
+				replaceDocumentLoad();
 		if (loadOwner == null) {
 			try {
 				inputStream.close();
@@ -4427,7 +4564,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 												 final Runnable doneHandler,
 												 final Runnable errorHandler) {
 		return loadDocumentFromFileDescriptor(
-				documentLoadLifecycle.replace(), pfd, source,
+				replaceDocumentLoad(), pfd, source,
 				doneHandler, errorHandler);
 	}
 
@@ -4566,7 +4703,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			DocumentSource initialSource, final Runnable doneHandler,
 			final Runnable errorHandler) {
 		return loadDocument(
-				documentLoadLifecycle.replace(), initialSource,
+				replaceDocumentLoad(), initialSource,
 				doneHandler, errorHandler);
 	}
 
@@ -7807,6 +7944,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void closeCurrentDocument(boolean cancelDocumentLoad) {
 		BackgroundThread.ensureGUI();
 		log.i("ReaderView.close() is called");
+		stopTts();
 		if (cancelDocumentLoad)
 			documentLoadLifecycle.cancel();
 		stopTracking();
@@ -7851,8 +7989,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void destroy() {
 		log.i("ReaderView.destroy() is called");
-		cancelDelayedReaderWork();
 		stopTts();
+		cancelDelayedReaderWork();
 		if (mInitialized) {
 			//close();
 			BackgroundThread.instance().postBackground(() -> {

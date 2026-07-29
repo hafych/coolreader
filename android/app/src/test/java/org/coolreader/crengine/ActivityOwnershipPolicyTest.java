@@ -902,7 +902,10 @@ public class ActivityOwnershipPolicyTest {
 				ReaderView.class.getDeclaredMethod(
 						"finishTtsInitialization",
 						CloseableTaskGate.Token.class,
-						TTSControlServiceAccessor.class);
+						TTSControlServiceAccessor.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class,
+						TtsDocumentSnapshot.class);
 		assertTrue(Modifier.isPrivate(
 				finishTtsInitialization.getModifiers()));
 		Method initTts =
@@ -1093,6 +1096,46 @@ public class ActivityOwnershipPolicyTest {
 		assertFalse(Modifier.isStatic(lifecycle.getModifiers()));
 		assertTrue(Modifier.isPrivate(lifecycle.getModifiers()));
 		assertTrue(Modifier.isFinal(lifecycle.getModifiers()));
+		assertTrue(TtsDocumentHandler.class.isInterface());
+		assertTrue(Modifier.isFinal(
+				TtsDocumentSnapshot.class.getModifiers()));
+		for (Field field :
+				TtsDocumentSnapshot.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		assertPrivateFinalField(
+				TTSToolbarDlg.class,
+				"documentHandler",
+				TtsDocumentHandler.class);
+		assertPrivateFinalField(
+				TTSToolbarDlg.class,
+				"documentSnapshot",
+				TtsDocumentSnapshot.class);
+		for (Field field : TTSToolbarDlg.class.getDeclaredFields()) {
+			assertFalse(
+					"TTSToolbarDlg must retain only a narrow "
+							+ "document handler",
+					field.getType() == ReaderView.class);
+		}
+		Method createDocumentHandler =
+				ReaderView.class.getDeclaredMethod(
+						"ttsDocumentHandler",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				createDocumentHandler.getModifiers()));
+		Method stopForDocumentChange =
+				ReaderView.class.getDeclaredMethod(
+						"stopTtsForDocumentChange");
+		assertTrue(Modifier.isPublic(
+				stopForDocumentChange.getModifiers()));
+		Method toolbarStopForDocumentChange =
+				TTSToolbarDlg.class.getDeclaredMethod(
+						"stopAndCloseForDocumentChange");
+		assertFalse(Modifier.isPublic(
+				toolbarStopForDocumentChange.getModifiers()));
 
 		Field pollingHandler =
 				TTSToolbarDlg.class.getDeclaredField(

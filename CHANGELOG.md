@@ -446,9 +446,12 @@ The historical Debian changelog remains in [`changelog`](changelog).
   toolbar cannot clear a replacement. Service binding state and pending
   callbacks are serialized under one connector lock and cleared on unbind.
 - TTS audiobook timing work and its periodic position poll now belong to the
-  dialog lifecycle. Reinitialization rejects stale results, while close removes
-  pending callbacks, retires the timing thread and prevents late service or
-  background callbacks from changing the dismissed reader UI.
+  dialog lifecycle and exact book/document handler. The toolbar no longer
+  retains `ReaderView`; document replacement, browser/root navigation and
+  teardown synchronously stop it before rotating ownership. Reinitialization
+  rejects stale results, while close removes pending callbacks, retires the
+  timing thread, and prevents late service or background work from moving,
+  clearing or saving a replacement book.
 - The TTS motion watchdog now runs on its owned background Looper instead of
   the UI thread. Pause, replacement and close unregister sensors, clear queued
   fade work, restore volume and quit the thread without blocking sleeps;

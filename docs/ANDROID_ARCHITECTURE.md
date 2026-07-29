@@ -57,6 +57,17 @@ while its service generation is active. The application-context TTS connector
 serializes binder registration, binder publication and pending callbacks under
 one lock, snapshots callbacks before delivery, reports bind failure and clears
 queued work on unbind.
+The toolbar itself receives an immutable `TtsDocumentSnapshot` and a narrow
+`TtsDocumentHandler` for the captured book/interaction; it never retains
+`ReaderView`. Selection movement, temporary view mode, cover publication,
+audiobook sentence extraction and stop/save cleanup all revalidate that exact
+handler. Native sentence extraction is serialized on the Engine queue.
+Document replace, pending-open cancellation, close and Activity teardown stop
+and clean up TTS before rotating the interaction, while late service callbacks
+are gated by both toolbar and document ownership. They therefore cannot move,
+clear, restore or save a replacement book. The foreground service receives the
+captured book metadata at startup, and bind failure follows the same idempotent
+close-completion path.
 Long-lived dialog work uses a closeable generation gate when cancellation must
 also be permanent after teardown. `TTSToolbarDlg` assigns audiobook timing
 initialization and its periodic position poll to the current gate token.

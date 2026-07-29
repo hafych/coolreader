@@ -260,6 +260,14 @@ DRM или ограничений доступа, подбор/получени�
   инициализация инвалидирует старую публикацию, закрытие очищает main-handler
   и завершает owned `HandlerThread`, а stale service/background callbacks не
   меняют selection или UI закрытого диалога.
+  Toolbar больше не хранит `ReaderView`: immutable `TtsDocumentSnapshot` и
+  узкий `TtsDocumentHandler` переносят captured book+interaction через
+  selection moves, mode restore, cover callback, audiobook sentence scan и
+  stop/save cleanup. Sentence scan сериализован с Engine queue, а все
+  `replace/cancelPending/close` entry points синхронно закрывают TTS до смены
+  interaction; late service stop не может очистить, переместить или сохранить
+  replacement-книгу. Foreground service сразу получает metadata исходной книги,
+  а bind failure завершает toolbar close без зависшего owner.
   Motion watchdog того же диалога теперь действительно выполняется на Looper
   своего `HandlerThread`, повторный PLAYING заменяет старого owner, а
   pause/stop/close идемпотентно отписывает sensor, очищает messages,
