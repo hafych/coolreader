@@ -290,6 +290,14 @@ through the pure `BacklightOptions` owner; callers receive copies and localized
 titles are built per Activity instead of mutating a global array. Document
 style codes and label resources are paired in one immutable
 `StyleOptionCatalog`, preventing the former parallel arrays from drifting.
+The nested font picker gives each language-filter scan an exact
+`FontFilterSession` request and a deep-copied candidate snapshot. Replacing or
+unchecking a request and dismissing the picker physically stop its
+`Scanner.ScanControl`; completion may update the adapter only after claiming
+the same request. The picker performs cleanup through an overridden
+`BaseDialog.onClose()` rather than replacing the base dismiss listener, so
+Activity dialog bookkeeping is preserved and a closed picker cannot publish
+late font results.
 Reader-mode options additionally capture the exact `BookInfo` and document
 interaction before fetching the native font catalog. The dialog receives an
 immutable `ReaderDocumentOptions` snapshot plus a narrow generation-aware

@@ -1409,7 +1409,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 	}
 
 	protected interface FontScanCompleted {
-		void onComplete(ArrayList<Pair> list, boolean canceled);
+		void onComplete(ArrayList<Pair> list);
 	}
 
 	protected class FontSelectOption extends ListOption {
@@ -1430,38 +1430,59 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			}
 		}
 
-		private void asyncFilterFontsByLanguage(String langTag, FontScanCompleted onComplete) {
+		private void asyncFilterFontsByLanguage(
+				String langTag,
+				List<Pair> candidates,
+				Scanner.ScanControl control,
+				FontScanCompleted onComplete) {
 			BackgroundThread.ensureGUI();
-			final Scanner.ScanControl control = new Scanner.ScanControl();
 			final Engine.ProgressControl progress = mEngine.createProgress(R.string.scanning_font_files, control);
 			final ArrayList<Pair> filtered = new ArrayList<Pair>();
 			BackgroundThread.instance().postBackground(() -> {
-				int i = 0;
-				for (Pair pair : list) {
-					if (control.isStopped())
-						break;
-					String faceName = pair.value;
-					Engine.font_lang_compat status = Engine.checkFontLanguageCompatibility(faceName, langTag);
-					switch (status) {
-						case font_lang_compat_full:
-						case font_lang_compat_partial:
-							filtered.add(new Pair(faceName, faceName));
+				try {
+					int i = 0;
+					for (Pair pair : candidates) {
+						if (control.isStopped())
 							break;
-						default:
-							break;
+						String faceName = pair.value;
+						Engine.font_lang_compat status =
+								Engine.checkFontLanguageCompatibility(
+										faceName, langTag);
+						switch (status) {
+							case font_lang_compat_full:
+							case font_lang_compat_partial:
+								filtered.add(
+										new Pair(faceName, faceName));
+								break;
+							default:
+								break;
+						}
+						i++;
+						progress.setProgress(
+								(int) (10000L * i
+										/ candidates.size()));
 					}
-					i++;
-					progress.setProgress(10000*i/list.size());
+					onComplete.onComplete(filtered);
+				} finally {
+					progress.hide();
 				}
-				onComplete.onComplete(filtered, control.isStopped());
-				progress.hide();
 			});
 		}
 
 		public void onSelect() {
 			if (!enabled)
 				return;
-			final BaseDialog dlg = new BaseDialog(mActivity, label, false, false);
+			final FontFilterSession filterSession =
+					new FontFilterSession();
+			final BaseDialog dlg = new BaseDialog(
+					mActivity, label, false, false) {
+				@Override
+				protected void onClose() {
+					filterSession.close();
+					FontSelectOption.this.closed();
+					super.onClose();
+				}
+			};
 
 			LinearLayout layout = new LinearLayout(mActivity);
 			layout.setOrientation(LinearLayout.VERTICAL);
@@ -1488,32 +1509,51 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 				Pair item = (Pair) listAdapter.getItem(position);
 				onClick(item);
 				dlg.dismiss();
-				closed();
 			});
 
 			filter_by_lang.setOnCheckedChangeListener((buttonView, isChecked) -> {
 				if (isChecked) {
-					asyncFilterFontsByLanguage(langTag, (list, canceled) -> {
-						if (!canceled) {
-							BackgroundThread.instance().executeGUI(() -> {
-								FontSelectOption.this.sourceList = FontSelectOption.this.list;
-								FontSelectOption.this.list = list;
-								listAdapter = new ListOptionAdapter(listView, list);
-								int selindex = getSelectedItemIndex();
-								if ( selindex<0 )
-									selindex = 0;
-								listView.setAdapter(listAdapter);
-								listView.setSelection(selindex);
-							});
-						} else {
-							BackgroundThread.instance().executeGUI(() -> {
-								filter_by_lang.setChecked(false);
-							});
-						}
-					});
+					Scanner.ScanControl control =
+							new Scanner.ScanControl();
+					FontFilterSession.Request request =
+							filterSession.replace(control::stop);
+					if (request == null) {
+						filter_by_lang.setChecked(false);
+						return;
+					}
+					ArrayList<Pair> unfilteredList =
+							FontSelectOption.this.list;
+					ArrayList<Pair> candidates =
+							copyPairs(unfilteredList);
+					asyncFilterFontsByLanguage(
+							langTag,
+							candidates,
+							control,
+							filtered -> BackgroundThread.instance()
+									.executeGUI(() -> {
+										if (!filterSession.complete(
+												request))
+											return;
+										FontSelectOption.this.sourceList =
+												unfilteredList;
+										FontSelectOption.this.list =
+												filtered;
+										listAdapter =
+												new ListOptionAdapter(
+														listView,
+														filtered);
+										int selindex =
+												getSelectedItemIndex();
+										if (selindex < 0)
+											selindex = 0;
+										listView.setAdapter(listAdapter);
+										listView.setSelection(selindex);
+									}));
 				} else {
+					filterSession.cancel();
 					if (null != sourceList) {
 						list = sourceList;
+						sourceList = null;
 						listAdapter = new ListOptionAdapter(listView, list);
 						int selindex = getSelectedItemIndex();
 						if (selindex < 0)
@@ -1524,17 +1564,24 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 				}
 			});
 
-			dlg.setOnDismissListener(dialog -> closed());
-
 			// TODO: set checked for for filter_by_lang (save in settings)
 
 			dlg.setView(layout);
 			dlg.show();
 		}
 
+		private ArrayList<Pair> copyPairs(List<Pair> values) {
+			ArrayList<Pair> copy = new ArrayList<>(values.size());
+			for (Pair pair : values)
+				copy.add(new Pair(pair.value, pair.label));
+			return copy;
+		}
+
 		protected void closed() {
-			if (null != sourceList)
+			if (null != sourceList) {
 				list = sourceList;
+				sourceList = null;
+			}
 		}
 	}
 

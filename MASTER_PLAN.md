@@ -352,6 +352,11 @@ DRM или ограничений доступа, подбор/получени�
   один раз. Поэтому dismiss после submit больше не вызывает вторую отмену через
   `BaseDialog.onClose()`, а service-generation gate не публикует результат
   уничтоженной Activity.
+  Фоновая language-фильтрация font picker теперь принадлежит отдельной
+  `FontFilterSession`: scan читает deep-copied candidate snapshot, replacement,
+  uncheck и dismiss физически вызывают `ScanControl.stop()`, а late completion
+  публикуется только exact request. Вложенный picker больше не заменяет
+  `BaseDialog` dismiss-listener и сохраняет Activity dialog-close bookkeeping.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
