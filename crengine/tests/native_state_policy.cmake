@@ -54,6 +54,7 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/CMakeLists.txt" LEGACY_GUI_CMAKE_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.h" MODERN_QT_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.cpp" MODERN_QT_VIEW_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3qt/src/crqtutil.cpp" MODERN_QT_UTIL_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3qt/CMakeLists.txt" MODERN_QT_CMAKE_SOURCE)
 set(MODERN_QT_UI_FILES
   aboutdlg
@@ -571,6 +572,28 @@ require_source_text(
   "${MODERN_QT_UI_SOURCE}"
   "ui->view->setPropsChangeCallback(nullptr);"
   "the modern Qt property observer must detach before its owner is destroyed"
+)
+require_source_text(
+  "${MODERN_QT_UTIL_SOURCE}"
+  "QSharedPointer<CRPropsImpl>::create(ref);"
+  "modern Qt property adapters must use shared in-place construction"
+)
+string(REGEX MATCHALL "return makeProps"
+  MODERN_QT_PROPERTY_FACTORIES "${MODERN_QT_UTIL_SOURCE}")
+list(LENGTH MODERN_QT_PROPERTY_FACTORIES MODERN_QT_PROPERTY_FACTORY_COUNT)
+if(NOT MODERN_QT_PROPERTY_FACTORY_COUNT EQUAL 7)
+  message(FATAL_ERROR
+    "all modern Qt property factories must retain centralized shared ownership")
+endif()
+forbid_source_text(
+  "${MODERN_QT_UTIL_SOURCE}"
+  "((CRPropsImpl*)"
+  "modern Qt property operations must not return to implementation downcasts"
+)
+forbid_source_text(
+  "${MODERN_QT_UTIL_SOURCE}"
+  "QSharedPointer<Props>( new CRPropsImpl"
+  "modern Qt property factories must not duplicate raw shared construction"
 )
 require_source_text(
   "${MODERN_QT_CMAKE_SOURCE}"

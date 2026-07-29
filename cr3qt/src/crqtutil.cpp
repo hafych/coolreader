@@ -40,13 +40,12 @@ class CRPropsImpl : public Props
 {
     CRPropRef _ref;
 public:
-    CRPropRef getRef() { return _ref; }
-    CRPropsImpl(CRPropRef ref) : _ref( ref ) { }
-    virtual int count() { return _ref->getCount(); }
-    virtual const char * name( int index ) { return _ref->getName( index ); }
-    virtual QString value( int index ) { return cr2qt(_ref->getValue( index )); }
-    virtual bool hasProperty( const char * propName ) const { return _ref->hasProperty(propName); }
-    virtual bool getString( const char * prop, QString & result )
+    explicit CRPropsImpl(CRPropRef ref) : _ref( ref ) { }
+    int count() override { return _ref->getCount(); }
+    const char * name( int index ) override { return _ref->getName( index ); }
+    QString value( int index ) override { return cr2qt(_ref->getValue( index )); }
+    bool hasProperty( const char * propName ) const override { return _ref->hasProperty(propName); }
+    bool getString( const char * prop, QString & result ) override
     {
         lString32 value;
         if ( !_ref->getString(prop, value) )
@@ -54,49 +53,58 @@ public:
         result = cr2qt( value );
         return true;
     }
-    virtual QString getStringDef( const char * prop, const char * defValue )
+    QString getStringDef( const char * prop, const char * defValue ) override
     {
         return cr2qt( _ref->getStringDef(prop, defValue) );
     }
-    virtual void setString( const char * prop, const QString & value )
+    void setString( const char * prop, const QString & value ) override
     {
         _ref->setString( prop, qt2cr(value) );
     }
-    virtual bool getInt( const char * prop, int & result )
+    bool getInt( const char * prop, int & result ) override
     {
         return _ref->getInt(prop, result);
     }
-    virtual void setInt( const char * prop, int value )
+    void setInt( const char * prop, int value ) override
     {
         _ref->setInt( prop, value );
     }
-    virtual int  getIntDef( const char * prop, int defValue )
+    int getIntDef( const char * prop, int defValue ) override
     {
         return _ref->getIntDef(prop, defValue);
     }
-    virtual unsigned getColorDef( const char * prop, unsigned defValue )
+    unsigned getColorDef( const char * prop, unsigned defValue ) override
     {
         return _ref->getColorDef(prop, defValue);
     }
-    virtual bool  getBoolDef( const char * prop, bool defValue )
+    bool getBoolDef( const char * prop, bool defValue ) override
     {
         return _ref->getBoolDef(prop, defValue);
     }
 
-    virtual void setHex( const char * propName, int value )
+    void setHex( const char * propName, int value ) override
     {
         _ref->setHex( propName, value );
     }
-    virtual CRPropRef & accessor()
+    const CRPropRef & accessor() override
     {
         return _ref;
     }
-    virtual ~CRPropsImpl() { }
+    ~CRPropsImpl() override = default;
 };
+
+static PropsRef makeProps(CRPropRef ref)
+{
+#if QT_VERSION >= 0x050100
+    return QSharedPointer<CRPropsImpl>::create(ref);
+#else
+    return QSharedPointer<Props>(new CRPropsImpl(ref));
+#endif
+}
 
 PropsRef cr2qt( CRPropRef & ref )
 {
-    return QSharedPointer<Props>( new CRPropsImpl(ref) );
+    return makeProps(ref);
 }
 
 const CRPropRef & qt2cr( PropsRef & ref )
@@ -107,36 +115,36 @@ const CRPropRef & qt2cr( PropsRef & ref )
 
 PropsRef Props::create()
 {
-    return QSharedPointer<Props>( new CRPropsImpl(LVCreatePropsContainer()) );
+    return makeProps(LVCreatePropsContainer());
 }
 
 PropsRef Props::clone( PropsRef v )
 {
-    return QSharedPointer<Props>( new CRPropsImpl(LVClonePropsContainer( ((CRPropsImpl*)v.data())->getRef() )) );
+    return makeProps(LVClonePropsContainer(v->accessor()));
 }
 
 /// returns common items from props1 not containing in props2
 PropsRef operator - ( PropsRef props1, PropsRef props2 )
 {
-    return QSharedPointer<Props>( new CRPropsImpl(((CRPropsImpl*)props1.data())->getRef() - ((CRPropsImpl*)props2.data())->getRef()));
+    return makeProps(props1->accessor() - props2->accessor());
 }
 
 /// returns common items containing in props1 or props2
 PropsRef operator | ( PropsRef props1, PropsRef props2 )
 {
-    return QSharedPointer<Props>( new CRPropsImpl(((CRPropsImpl*)props1.data())->getRef() | ((CRPropsImpl*)props2.data())->getRef()));
+    return makeProps(props1->accessor() | props2->accessor());
 }
 
 /// returns common items of props1 and props2
 PropsRef operator & ( PropsRef props1, PropsRef props2 )
 {
-    return QSharedPointer<Props>( new CRPropsImpl(((CRPropsImpl*)props1.data())->getRef() & ((CRPropsImpl*)props2.data())->getRef()));
+    return makeProps(props1->accessor() & props2->accessor());
 }
 
 /// returns added or changed items of props2 compared to props1
 PropsRef operator ^ ( PropsRef props1, PropsRef props2 )
 {
-    return QSharedPointer<Props>( new CRPropsImpl(((CRPropsImpl*)props1.data())->getRef() ^ ((CRPropsImpl*)props2.data())->getRef()));
+    return makeProps(props1->accessor() ^ props2->accessor());
 }
 
 void cr2qt( QStringList & dst, const lString32Collection & src )
