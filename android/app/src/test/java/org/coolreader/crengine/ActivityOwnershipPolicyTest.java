@@ -1002,7 +1002,15 @@ public class ActivityOwnershipPolicyTest {
 				"isDrawable");
 		assertSynchronizedMethod(
 				ReaderSurfaceState.class,
+				"isClosed");
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
 				"close");
+		Method closeSurfaceCallbacks =
+				ReaderView.class.getDeclaredMethod(
+						"closeSurfaceCallbacks");
+		assertTrue(Modifier.isPrivate(
+				closeSurfaceCallbacks.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				KeyDoubleClickState.class.getModifiers()));
 		for (Field field :

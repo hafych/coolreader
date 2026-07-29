@@ -184,6 +184,12 @@ DRM или ограничений доступа, подбор/получени�
   дают один ready refresh, delayed E-Ink focus refresh принадлежит exact token
   и reader scheduler, focus loss/hide/surface destroy/replacement инвалидируют
   его, а draw и callback требуют тот же open surface/service generation.
+  `destroy()` теперь сначала permanently закрывает surface state, снимает
+  touch/key/focus listeners и `SurfaceHolder.Callback`, а затем закрывает
+  остальные reader owners. Inner SurfaceView visibility/focus/size/draw,
+  holder change, input/focus handlers и delayed redraw проверяют closed state
+  до Activity access или нового scheduling, поэтому platform callback после
+  teardown не оживляет reader.
   Delayed current-position save переведён с numeric generation/global Handler
   на exact `CloseableTaskGate` token и owned GUI scheduler: replacement,
   sync/pause/reload отменяют pending callback, destroy закрывает gate, а

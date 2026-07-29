@@ -72,6 +72,10 @@ final class ReaderSurfaceState {
 		return !closed && surfaceCreated;
 	}
 
+	synchronized boolean isClosed() {
+		return closed;
+	}
+
 	synchronized boolean close() {
 		if (closed)
 			return false;

@@ -123,6 +123,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		protected void onDraw(Canvas canvas) {
+			if (readerSurfaceState.isClosed())
+				return;
 			try {
 				log.d("onDraw() called");
 				draw();
@@ -139,6 +141,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public boolean onTrackballEvent(MotionEvent event) {
+			if (readerSurfaceState.isClosed())
+				return super.onTrackballEvent(event);
 			log.d("onTrackballEvent(" + event + ")");
 			if (mSettings.getBool(PROP_APP_TRACKBALL_DISABLED, false)) {
 				log.d("trackball is disabled in settings");
@@ -150,13 +154,21 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		protected void onSizeChanged(final int w, final int h, int oldw, int oldh) {
-			log.i("onSizeChanged(" + w + ", " + h + ")" + " activity.isDialogActive=" + getActivity().isDialogActive());
 			super.onSizeChanged(w, h, oldw, oldh);
+			if (readerSurfaceState.isClosed())
+				return;
+			log.i("onSizeChanged(" + w + ", " + h + ")"
+					+ " activity.isDialogActive="
+					+ getActivity().isDialogActive());
 			requestResize(w, h);
 		}
 
 		@Override
 		public void onWindowVisibilityChanged(int visibility) {
+			if (readerSurfaceState.isClosed()) {
+				super.onWindowVisibilityChanged(visibility);
+				return;
+			}
 			boolean visible = visibility == VISIBLE;
 			boolean refresh =
 					readerSurfaceState.changeVisibility(visible);
@@ -174,6 +186,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public void onWindowFocusChanged(boolean hasWindowFocus) {
+			if (readerSurfaceState.isClosed()) {
+				super.onWindowFocusChanged(hasWindowFocus);
+				return;
+			}
 			ReaderSurfaceState.FocusRefresh refresh =
 					readerSurfaceState.changeFocus(
 							hasWindowFocus);
@@ -5348,6 +5364,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	@Override
 	public void surfaceChanged(SurfaceHolder holder, int format, final int width,
 							   final int height) {
+		if (readerSurfaceState.isClosed())
+			return;
 		log.i("surfaceChanged(" + width + ", " + height + ")");
 
 		if (hackMemorySize <= 0) {
@@ -7990,6 +8008,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void destroy() {
 		log.i("ReaderView.destroy() is called");
+		closeSurfaceCallbacks();
 		stopTts();
 		cancelDelayedReaderWork();
 		if (mInitialized) {
@@ -8007,6 +8026,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
+	private void closeSurfaceCallbacks() {
+		BackgroundThread.ensureGUI();
+		readerSurfaceState.close();
+		einkRefreshScheduler.cancel();
+		surface.setOnTouchListener(null);
+		surface.setOnKeyListener(null);
+		surface.setOnFocusChangeListener(null);
+		surface.getHolder().removeCallback(this);
+	}
+
 	private void cancelDelayedReaderWork() {
 		cancelDocumentAnimation();
 		gcTask.cancel();
@@ -8017,8 +8046,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		drawTaskLifecycle.close();
 		ttsInitializationLifecycle.close();
 		documentLoadLifecycle.close();
-		readerSurfaceState.close();
-		einkRefreshScheduler.cancel();
 		closeGestureTimeouts();
 		synchronized (viewportResizeState) {
 			viewportResizeState.close();
@@ -8723,6 +8750,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	@Override
 	public boolean onKey(View v, int keyCode, KeyEvent event) {
+		if (readerSurfaceState.isClosed())
+			return false;
 		// TODO Auto-generated method stub
 		if (event.getAction() == KeyEvent.ACTION_DOWN)
 			return onKeyDown(keyCode, event);
@@ -8733,10 +8762,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	@Override
 	public boolean onTouch(View v, MotionEvent event) {
+		if (readerSurfaceState.isClosed())
+			return false;
 		return onTouchEvent(event);
 	}
 
 	public boolean onKeyDown(int keyCode, final KeyEvent event) {
+		if (readerSurfaceState.isClosed())
+			return false;
 
 		if (keyCode == 0)
 			keyCode = event.getScanCode();
@@ -8858,6 +8891,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public boolean onKeyUp(int keyCode, final KeyEvent event) {
+		if (readerSurfaceState.isClosed())
+			return false;
 		if (keyCode == 0)
 			keyCode = event.getScanCode();
 		mActivity.onUserActivity();
@@ -8950,6 +8985,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public boolean onTouchEvent(MotionEvent event) {
+		if (readerSurfaceState.isClosed())
+			return false;
 
 		if (!isTouchScreenEnabled) {
 			return true;
@@ -8985,6 +9022,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	@Override
 	public void onFocusChange(View arg0, boolean arg1) {
+		if (readerSurfaceState.isClosed())
+			return;
 		stopTracking();
 		if (isAutoScrollActive())
 			stopAutoScroll();
@@ -8992,6 +9031,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void redraw() {
 		BackgroundThread.instance().executeGUI(() -> {
+			if (readerSurfaceState.isClosed())
+				return;
 			surface.invalidate();
 			invalidImages = true;
 			drawPage();

@@ -345,6 +345,11 @@ uses a reader-owned scheduler; focus loss, hiding, surface destruction,
 replacement and reader destruction invalidate it. Execution additionally
 requires the same visible surface and active service generation, while every
 draw checks the same closeable surface state before locking a canvas.
+Reader destruction closes that state before every other reader owner, removes
+the touch, key and focus listeners, and unregisters the
+`SurfaceHolder.Callback`. Inner `SurfaceView` visibility, focus, size and draw
+callbacks, holder changes, input/focus handlers and delayed redraw all reject
+closed state before touching the Activity or scheduling more work.
 Delayed current-position persistence is owned by a `CloseableTaskGate` and a
 dedicated GUI scheduler rather than a numeric generation left in the global
 Handler. Replacement, synchronous save, pause and book reload remove the exact

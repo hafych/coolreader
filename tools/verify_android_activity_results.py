@@ -2282,6 +2282,11 @@ def main() -> None:
         "private final DocumentLoadLifecycle documentLoadLifecycle",
         "private final ReaderSurfaceState readerSurfaceState",
         "private final DelayedExecutor einkRefreshScheduler",
+        "private void closeSurfaceCallbacks()",
+        "surface.setOnTouchListener(null)",
+        "surface.setOnKeyListener(null)",
+        "surface.setOnFocusChangeListener(null)",
+        "surface.getHolder().removeCallback(this)",
         "private final KeyDoubleClickState<ReaderAction>",
         "private final DelayedExecutor keyDoubleClickScheduler",
         "private final CloseableTaskGate tapGestureLifecycle",
@@ -2399,6 +2404,7 @@ def main() -> None:
         "readerSurfaceState.markSurfaceCreated()",
         "readerSurfaceState.markSurfaceDestroyed()",
         "readerSurfaceState.isDrawable()",
+        "closeSurfaceCallbacks();\n\t\tstopTts();",
         "keyDoubleClickState.resolvePress(",
         "keyDoubleClickState.defer(",
         "keyDoubleClickState.claimSingle(pending)",
@@ -2420,6 +2426,11 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} bypasses TTS-aware document "
             "replacement")
+    if reader_view_text.count(
+            "readerSurfaceState.isClosed()") < 13:
+        violations.append(
+            f"{relative(READER_VIEW)} does not gate every surface/input "
+            "entry point after teardown")
     auto_scroll_start = reader_view_text.find(
         "\n\tclass AutoScrollAnimation {")
     auto_scroll_end = reader_view_text.find(
@@ -2690,6 +2701,7 @@ def main() -> None:
         "synchronized FocusRefresh changeFocus(boolean focused)",
         "synchronized boolean claimFocusRefresh(FocusRefresh refresh)",
         "synchronized boolean isDrawable()",
+        "synchronized boolean isClosed()",
         "synchronized boolean close()",
         "static final class FocusRefresh",
     ):

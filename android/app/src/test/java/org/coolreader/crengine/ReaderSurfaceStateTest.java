@@ -82,6 +82,7 @@ public class ReaderSurfaceStateTest {
 
 		assertTrue(state.close());
 		assertFalse(state.close());
+		assertTrue(state.isClosed());
 		assertFalse(state.isDrawable());
 		assertFalse(state.claimFocusRefresh(refresh));
 		assertFalse(state.markSurfaceCreated());
