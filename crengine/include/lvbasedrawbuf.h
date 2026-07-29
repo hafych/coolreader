@@ -31,6 +31,8 @@
 
 #include "lvdrawbuf.h"
 
+#include <limits>
+
 /// LVDrawBufferBase
 class LVBaseDrawBuf : public LVDrawBuf
 {
@@ -46,8 +48,23 @@ protected:
     bool _invertImages;
     bool _ditherImages;
     bool _smoothImages;
-    int _drawnImagesCount;
-    int _drawnImagesSurface;
+    lUInt64 _drawnImagesCount;
+    lUInt64 _drawnImagesSurface;
+
+    void recordDrawnImage(int width, int height)
+    {
+        const lUInt64 maximum =
+                std::numeric_limits<lUInt64>::max();
+        if (_drawnImagesCount < maximum)
+            ++_drawnImagesCount;
+        const lUInt64 surface =
+                static_cast<lUInt64>(width)
+                * static_cast<lUInt64>(height);
+        if (surface > maximum - _drawnImagesSurface)
+            _drawnImagesSurface = maximum;
+        else
+            _drawnImagesSurface += surface;
+    }
 public:
     /// set to true for drawing in Paged mode, false for Scroll mode
     virtual void setHidePartialGlyphs( bool hide ) { _hidePartialGlyphs = hide; }
@@ -81,9 +98,9 @@ public:
     virtual int  GetRowSize() const { return _rowsize; }
     virtual void DrawLine(int x0, int y0, int x1, int y1, lUInt32 color0,int length1,int length2,int direction)=0;
     /// Get nb of images drawn on buffer
-    int getDrawnImagesCount() const { return _drawnImagesCount; }
+    lUInt64 getDrawnImagesCount() const { return _drawnImagesCount; }
     /// Get surface of images drawn on buffer
-    int getDrawnImagesSurface() const { return _drawnImagesSurface; }
+    lUInt64 getDrawnImagesSurface() const { return _drawnImagesSurface; }
 
     LVBaseDrawBuf() : _dx(0), _dy(0), _rowsize(0), _data(NULL), _hidePartialGlyphs(true),
                         _invertImages(false), _ditherImages(false), _smoothImages(false),

@@ -217,6 +217,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.cpp" UNPACKED_I
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.h" UNPACKED_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.cpp" SCALED_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.h" SCALED_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvbasedrawbuf.h" BASE_DRAW_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvcolordrawbuf.cpp" COLOR_DRAW_BUFFER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvcolordrawbuf.h" COLOR_DRAW_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvgraydrawbuf.cpp" GRAY_DRAW_BUFFER_SOURCE)
@@ -4119,6 +4120,50 @@ require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "draw buffers entered an invalid image draw request"
   "invalid image draw requests must retain native regression coverage"
+)
+require_source_text(
+  "${BASE_DRAW_BUFFER_HEADER}"
+  "lUInt64 _drawnImagesCount"
+  "draw-image counts must use overflow-safe storage"
+)
+require_source_text(
+  "${BASE_DRAW_BUFFER_HEADER}"
+  "lUInt64 _drawnImagesSurface"
+  "draw-image surface totals must use overflow-safe storage"
+)
+require_source_text(
+  "${BASE_DRAW_BUFFER_HEADER}"
+  "static_cast<lUInt64>(width)"
+  "draw-image area multiplication must widen before evaluation"
+)
+require_source_text(
+  "${BASE_DRAW_BUFFER_HEADER}"
+  "maximum - _drawnImagesSurface"
+  "draw-image surface accumulation must saturate before overflow"
+)
+foreach(DRAW_BUFFER_SOURCE
+    "${COLOR_DRAW_BUFFER_SOURCE}"
+    "${GRAY_DRAW_BUFFER_SOURCE}")
+  require_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "recordDrawnImage(width, height)"
+    "draw buffers must use the shared overflow-safe statistics path"
+  )
+  forbid_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "_drawnImagesSurface += width*height"
+    "draw-image surface totals must not use signed multiplication"
+  )
+endforeach()
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "image draw surface statistics overflowed"
+  "large draw-image surfaces must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "image draw surface statistics wrapped"
+  "draw-image surface saturation must retain native regression coverage"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"

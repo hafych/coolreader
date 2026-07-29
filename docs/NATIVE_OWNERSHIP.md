@@ -319,6 +319,10 @@ does not run the smooth post-processing pass over a partial snapshot. Color
 and grayscale draw entry points reject null or dimension-invalid image
 sources, invalid destination sizes and unusable backing buffers before
 constructing that callback, entering decode or changing render statistics.
+Successful entry uses one shared 64-bit accounting path; both the image count
+and aggregate surface avoid signed overflow, and area multiplication widens
+each positive dimension before evaluation. Repeated accumulation saturates at
+the 64-bit maximum instead of wrapping either statistic.
 
 The legacy C-style `draw_buf_t` allocation boundary validates bit depth,
 dimensions, row layout and total byte multiplication before allocation. It

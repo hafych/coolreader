@@ -6139,6 +6139,48 @@ static int testImageSourceOwnership() {
         return fail(
                 "draw buffers entered an invalid image draw request");
 
+    static const int largeDrawDimension = 50000;
+    static const lUInt64 largeDrawSurface = 2500000000ULL;
+    LVImageSourceRef largeDrawFixture(
+            new DimensionOnlyImageSource(
+                    largeDrawDimension, largeDrawDimension,
+                    rejectedDrawCalls));
+    guardedColorDraw.Draw(
+            largeDrawFixture, 0, 0,
+            largeDrawDimension, largeDrawDimension, false);
+    guardedGrayDraw.Draw(
+            largeDrawFixture, 0, 0,
+            largeDrawDimension, largeDrawDimension, false);
+    if (rejectedDrawCalls != 2
+            || guardedColorDraw.getDrawnImagesCount() != 1
+            || guardedColorDraw.getDrawnImagesSurface()
+                    != largeDrawSurface
+            || guardedGrayDraw.getDrawnImagesCount() != 1
+            || guardedGrayDraw.getDrawnImagesSurface()
+                    != largeDrawSurface)
+        return fail("image draw surface statistics overflowed");
+
+    int saturatedDrawCalls = 0;
+    const int maximumDrawDimension =
+            std::numeric_limits<int>::max();
+    LVImageSourceRef maximumDrawFixture(
+            new DimensionOnlyImageSource(
+                    maximumDrawDimension,
+                    maximumDrawDimension,
+                    saturatedDrawCalls));
+    LVColorDrawBuf saturatedDraw(2, 2, 32);
+    for (int i = 0; i < 5; ++i) {
+        saturatedDraw.Draw(
+                maximumDrawFixture, 0, 0,
+                maximumDrawDimension,
+                maximumDrawDimension, false);
+    }
+    if (saturatedDrawCalls != 5
+            || saturatedDraw.getDrawnImagesCount() != 5
+            || saturatedDraw.getDrawnImagesSurface()
+                    != std::numeric_limits<lUInt64>::max())
+        return fail("image draw surface statistics wrapped");
+
     CountingImageDecodeCallback xpmCallback;
     if (!xpm->Decode(&xpmCallback) || !xpm->Decode(&xpmCallback))
         return fail("XPM source could not reuse its RAII buffers");

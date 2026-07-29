@@ -715,8 +715,7 @@ void LVColorDrawBuf::Draw( LVImageSourceRef img, int x, int y, int width, int he
         return;
     LVImageScaledDrawCallback drawcb( this, img, x, y, width, height, dither, _invertImages, _smoothImages );
     img->Decode( &drawcb );
-    _drawnImagesCount++;
-    _drawnImagesSurface += width*height;
+    recordDrawnImage(width, height);
 }
 
 /// fills buffer with specified color
