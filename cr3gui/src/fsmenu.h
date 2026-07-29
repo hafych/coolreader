@@ -33,8 +33,6 @@ class CRFullScreenMenu : public CRMenu
 public:
     CRFullScreenMenu(CRGUIWindowManager *wm, int id,
                      const lString32 &caption, int numItems, lvRect &rc);
-    CRFullScreenMenu(CRGUIWindowManager *wm, int id,
-                     const lString16 &caption, int numItems, lvRect &rc);
 
     const lvRect & getRect() override;
 

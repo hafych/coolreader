@@ -39,14 +39,6 @@ CRFullScreenMenu::CRFullScreenMenu(
     _fullscreen = true;
 }
 
-CRFullScreenMenu::CRFullScreenMenu(
-        CRGUIWindowManager *wm, int id, const lString16 &caption,
-        int numItems, lvRect &rc)
-    : CRFullScreenMenu(
-            wm, id, Utf16ToUnicode(caption), numItems, rc)
-{
-}
-
 lString32 CRFullScreenMenu::getCommandKeyName( int cmd, int param )
 {
     int k, f;

@@ -7662,10 +7662,15 @@ require_source_text(
   "const lString32 &caption"
   "fullscreen menus must accept the current caption width"
 )
-require_source_text(
+forbid_source_text(
   "${FULLSCREEN_MENU_SOURCE}"
-  "wm, id, Utf16ToUnicode(caption), numItems, rc"
-  "legacy fullscreen captions must cross an explicit compatibility boundary"
+  "Utf16ToUnicode(caption)"
+  "fullscreen menus must not retain the retired caption adapter"
+)
+forbid_source_text(
+  "${FULLSCREEN_MENU_HEADER}"
+  "lString16"
+  "fullscreen menus must not expose the retired caption width"
 )
 require_source_text(
   "${MAIN_WINDOW_HEADER}"
