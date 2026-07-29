@@ -35,6 +35,7 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/citecore.h" CITE_SELECTION_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/citedlg.cpp" CITE_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.h" LINKS_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.cpp" LINKS_DIALOG_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/logoconv.cpp" LOGO_CONVERTER_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7526,6 +7527,41 @@ forbid_source_text(
   "${LINKS_DIALOG_HEADER}"
   "_docwin"
   "link dialogs must not retain unused window borrows"
+)
+require_source_text(
+  "${LOGO_CONVERTER_SOURCE}"
+  "lString32 startPath = Utf8ToUnicode(lString8(argv[1]));"
+  "logo converter input paths must use the current string width"
+)
+require_source_text(
+  "${LOGO_CONVERTER_SOURCE}"
+  "LVStreamRef out = LVOpenFileStream(outputPath.c_str(), LVOM_WRITE);"
+  "logo converter output must use scoped stream ownership"
+)
+require_source_text(
+  "${LOGO_CONVERTER_SOURCE}"
+  "startWritten != startSize"
+  "logo converter must reject partial first-image writes"
+)
+require_source_text(
+  "${LOGO_CONVERTER_SOURCE}"
+  "argv[2], stopimg->GetWidth(), stopimg->GetHeight()"
+  "logo converter stop-image diagnostics must describe the stop image"
+)
+forbid_source_text(
+  "${LOGO_CONVERTER_SOURCE}"
+  "lString16(argv"
+  "logo converter paths must not narrow to UTF-16"
+)
+forbid_source_text(
+  "${LOGO_CONVERTER_SOURCE}"
+  "FILE * out"
+  "logo converter output must not retain a raw file owner"
+)
+forbid_source_text(
+  "${LOGO_CONVERTER_SOURCE}"
+  "fwrite("
+  "logo converter output must use exact stream writes"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

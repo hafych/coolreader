@@ -19,39 +19,61 @@
  ***************************************************************************/
 
 #include <crengine.h>
-#include <stdlib.h>
 
 int main(int argc, char **argv)
 {
     if ( argc<4 ) {
         printf("Usage: logocnv startlogo stoplogo outfile\n");
-        exit(1);
+        return 1;
     }
-    LVImageSourceRef startimg = LVCreateFileCopyImageSource( lString16(argv[1]) );
+    lString32 startPath = Utf8ToUnicode(lString8(argv[1]));
+    LVImageSourceRef startimg = LVCreateFileCopyImageSource(startPath);
     if ( startimg.isNull() ) {
         printf("Cannot open image from file %s\n", argv[1]);
-        exit(1);
+        return 1;
     }
     printf("Start image: %s %d x %d\n", argv[1], startimg->GetWidth(), startimg->GetHeight());
     LVGrayDrawBuf buf1( 600, 800, 3 );
     buf1.Draw(startimg, 0, 0, 600, 800, true);
-    LVImageSourceRef stopimg = LVCreateFileCopyImageSource( lString16(argv[2]) );
+    lString32 stopPath = Utf8ToUnicode(lString8(argv[2]));
+    LVImageSourceRef stopimg = LVCreateFileCopyImageSource(stopPath);
     if ( stopimg.isNull() ) {
         printf("Cannot open image from file %s\n", argv[2]);
-        exit(1);
+        return 1;
     }
-    printf("Stop image: %s %d x %d\n", argv[1], startimg->GetWidth(), startimg->GetHeight());
+    printf(
+            "Stop image: %s %d x %d\n",
+            argv[2], stopimg->GetWidth(), stopimg->GetHeight());
     LVGrayDrawBuf buf2( 600, 800, 3 );
     buf2.Draw(stopimg, 0, 0, 600, 800, true);
 
-    FILE * out = fopen( argv[3], "wb" );
-    if ( !out ) {
+    lString32 outputPath = Utf8ToUnicode(lString8(argv[3]));
+    LVStreamRef out = LVOpenFileStream(outputPath.c_str(), LVOM_WRITE);
+    if ( out.isNull() ) {
         printf("Cannot create output file %s", argv[3]);
-        exit(1);
+        return 1;
     }
-    int written = 0;
-    written += fwrite(buf1.GetScanLine(0), 1, buf1.GetRowSize()*buf1.GetHeight(), out );
-    written += fwrite(buf2.GetScanLine(0), 1, buf2.GetRowSize()*buf2.GetHeight(), out );
-    fclose(out);
-    printf("%d bytes written to file %s\n", written, argv[3]);
+    const lvsize_t startSize =
+            static_cast<lvsize_t>(buf1.GetRowSize())
+            * static_cast<lvsize_t>(buf1.GetHeight());
+    const lvsize_t stopSize =
+            static_cast<lvsize_t>(buf2.GetRowSize())
+            * static_cast<lvsize_t>(buf2.GetHeight());
+    lvsize_t startWritten = 0;
+    lvsize_t stopWritten = 0;
+    if ( out->Write(
+                buf1.GetScanLine(0), startSize, &startWritten) != LVERR_OK
+            || startWritten != startSize
+            || out->Write(
+                buf2.GetScanLine(0), stopSize, &stopWritten) != LVERR_OK
+            || stopWritten != stopSize
+            || out->Flush(true) != LVERR_OK) {
+        printf("Cannot write complete output file %s\n", argv[3]);
+        return 1;
+    }
+    printf(
+            "%llu bytes written to file %s\n",
+            static_cast<unsigned long long>(startWritten + stopWritten),
+            argv[3]);
+    return 0;
 }

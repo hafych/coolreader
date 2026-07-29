@@ -85,6 +85,8 @@ DRM или ограничений доступа, подбор/получени�
   и T9 layout storage приведены к текущим `lString32`/UTF-32 контрактам.
   Link-selection invalidation переведён с удалённого range geometry API
   на текущую геометрию экрана без device-specific размеров.
+  Logo converter использует UTF-32 image/output paths, RAII stream и
+  проверку полного write/flush вместо ручного `FILE *`.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,
