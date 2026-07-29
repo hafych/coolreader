@@ -29,8 +29,10 @@ class LVAlphaTransformImgSource : public LVImageSource, public LVImageDecoderCal
 {
 protected:
     LVImageSourceRef _src;
+    /// non-owning view valid only during Decode()
     LVImageDecoderCallback * _callback;
     int _alpha;
+    bool _decodeStarted;
 public:
     LVAlphaTransformImgSource(LVImageSourceRef src, int alpha);
     virtual ~LVAlphaTransformImgSource();

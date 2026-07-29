@@ -272,6 +272,14 @@ teardown also closes the legacy 16-bit leak caused by checking the unrelated
 through `std::unique_ptr`; a failed source decode releases the partial pixel
 snapshot and returns the original source instead of publishing invalid data.
 
+`LVAlphaTransformImgSource` keeps its downstream callback as an explicit
+synchronous borrow. The borrow is initialized and cleared around every
+`Decode()` call, including callback exceptions. A source that starts but does
+not finish decoding receives a synthesized error completion before the borrow
+is released, while null callbacks and null source factories are rejected.
+Native coverage verifies success, reuse, source failure, aborted lifecycle and
+exception recovery.
+
 `LVImageScaledDrawCallback` owns nearest-neighbor and nine-patch coordinate
 maps plus its full smooth-scaling RGBA snapshot through `std::vector`. The
 allocator-specific result returned by `qSmoothScaleImage()` is held by a

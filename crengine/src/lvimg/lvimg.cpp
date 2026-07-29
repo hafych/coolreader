@@ -179,7 +179,7 @@ LVImageSourceRef LVCreateColorTransformImageSource(LVImageSourceRef srcImage, lU
 
 /// creates image source which applies alpha to another image source (0 is no change, 255 is totally transparent)
 LVImageSourceRef LVCreateAlphaTransformImageSource(LVImageSourceRef srcImage, int alpha) {
-    if (alpha <= 0)
+    if (srcImage.isNull() || alpha <= 0)
         return srcImage;
     return LVImageSourceRef(new LVAlphaTransformImgSource(srcImage, alpha));
 }

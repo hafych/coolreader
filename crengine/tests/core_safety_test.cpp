@@ -6051,6 +6051,38 @@ static int testImageSourceOwnership() {
                 LVImageSourceRef(), 0x808080, 0x202020).isNull())
         return fail("color-transform factory wrapped a null source");
 
+    LVImageSourceRef alphaTransform =
+            LVCreateAlphaTransformImageSource(xpm, 1);
+    CapturingImageDecodeCallback alphaCapture(
+            alphaTransform.get(), xpm.get(), 2);
+    if (alphaTransform.isNull()
+            || !alphaTransform->Decode(&alphaCapture)
+            || !alphaTransform->Decode(&alphaCapture)
+            || alphaCapture.sourceMismatch
+            || alphaCapture.starts != 2
+            || alphaCapture.lines != 4
+            || alphaCapture.ends != 2
+            || alphaCapture.errorEnds != 0)
+        return fail("alpha-transform callback borrow could not be reused");
+    ThrowingImageDecodeCallback throwingAlphaCallback;
+    bool alphaCallbackThrew = false;
+    try {
+        alphaTransform->Decode(&throwingAlphaCallback);
+    } catch (const std::runtime_error &) {
+        alphaCallbackThrew = true;
+    }
+    CountingImageDecodeCallback recoveredAlphaCallback;
+    if (!alphaCallbackThrew
+            || !alphaTransform->Decode(&recoveredAlphaCallback)
+            || recoveredAlphaCallback.starts != 1
+            || recoveredAlphaCallback.lines != 2
+            || recoveredAlphaCallback.ends != 1
+            || alphaTransform->Decode(NULL))
+        return fail("alpha-transform borrow survived callback exception");
+    if (!LVCreateAlphaTransformImageSource(
+                LVImageSourceRef(), 1).isNull())
+        return fail("alpha-transform factory wrapped a null source");
+
     int failedTransformCalls = 0;
     LVImageSourceRef failedTransform =
             LVCreateColorTransformImageSource(
@@ -6066,6 +6098,21 @@ static int testImageSourceOwnership() {
             || failedTransformCallback.ends != 0
             || failedTransformCallback.errorEnds != 2)
         return fail("failed color transform published partial rows");
+    int failedAlphaCalls = 0;
+    LVImageSourceRef failedAlpha =
+            LVCreateAlphaTransformImageSource(
+                    LVImageSourceRef(
+                            new FailingImageSource(failedAlphaCalls)),
+                    1);
+    CountingImageDecodeCallback failedAlphaCallback;
+    if (failedAlpha->Decode(&failedAlphaCallback)
+            || failedAlpha->Decode(&failedAlphaCallback)
+            || failedAlphaCalls != 2
+            || failedAlphaCallback.starts != 2
+            || failedAlphaCallback.lines != 2
+            || failedAlphaCallback.ends != 0
+            || failedAlphaCallback.errorEnds != 2)
+        return fail("failed alpha transform retained its callback borrow");
     LVImageSourceRef abortedTransform =
             LVCreateColorTransformImageSource(
                     LVImageSourceRef(new AbortedImageSource()),
@@ -6077,6 +6124,16 @@ static int testImageSourceOwnership() {
             || abortedTransformCallback.ends != 0
             || abortedTransformCallback.errorEnds != 1)
         return fail("aborted color transform retained its workspace");
+    LVImageSourceRef abortedAlpha =
+            LVCreateAlphaTransformImageSource(
+                    LVImageSourceRef(new AbortedImageSource()), 1);
+    CountingImageDecodeCallback abortedAlphaCallback;
+    if (abortedAlpha->Decode(&abortedAlphaCallback)
+            || abortedAlphaCallback.starts != 1
+            || abortedAlphaCallback.lines != 1
+            || abortedAlphaCallback.ends != 0
+            || abortedAlphaCallback.errorEnds != 1)
+        return fail("aborted alpha transform retained its callback borrow");
 
     const std::vector<int> ninePatchMap =
             LVImageScaledDrawCallback::GenNinePatchMap(6, 8, 1, 1);

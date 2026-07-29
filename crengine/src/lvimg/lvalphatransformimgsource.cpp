@@ -23,20 +23,26 @@
 
 LVAlphaTransformImgSource::LVAlphaTransformImgSource(LVImageSourceRef src, int alpha)
     : _src( src )
+    , _callback(NULL)
     , _alpha(alpha ^ 0xFF)
+    , _decodeStarted(false)
 {
 }
 
-LVAlphaTransformImgSource::~LVAlphaTransformImgSource() {
-}
+LVAlphaTransformImgSource::~LVAlphaTransformImgSource() = default;
 
 void LVAlphaTransformImgSource::OnStartDecode(LVImageSource *)
 {
+    if (!_callback)
+        return;
+    _decodeStarted = true;
     _callback->OnStartDecode(this);
 }
 
 bool LVAlphaTransformImgSource::OnLineDecoded(LVImageSource *obj, int y, lUInt32 *data) {
-    CR_UNUSED(obj);
+    if (!_callback || !_decodeStarted || !data
+            || y < 0 || y >= _src->GetHeight())
+        return false;
     int dx = _src->GetWidth();
     
     for (int x = 0; x < dx; x++) {
@@ -54,11 +60,31 @@ bool LVAlphaTransformImgSource::OnLineDecoded(LVImageSource *obj, int y, lUInt32
 void LVAlphaTransformImgSource::OnEndDecode(LVImageSource *obj, bool res)
 {
     CR_UNUSED(obj);
+    if (!_callback || !_decodeStarted)
+        return;
+    _decodeStarted = false;
     _callback->OnEndDecode(this, res);
 }
 
 bool LVAlphaTransformImgSource::Decode(LVImageDecoderCallback *callback)
 {
+    if (!callback || _src.isNull())
+        return false;
     _callback = callback;
-    return _src->Decode( this );
+    _decodeStarted = false;
+    bool result = false;
+    try {
+        result = _src->Decode(this);
+        if (_decodeStarted) {
+            _decodeStarted = false;
+            _callback->OnEndDecode(this, true);
+            result = false;
+        }
+    } catch (...) {
+        _decodeStarted = false;
+        _callback = NULL;
+        throw;
+    }
+    _callback = NULL;
+    return result;
 }
