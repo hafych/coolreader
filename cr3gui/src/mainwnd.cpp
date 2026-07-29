@@ -841,7 +841,7 @@ void V3DocViewWin::showMainMenu()
 {
     lvRect fullRc = _wm->getScreen()->getRect();
     CRFullScreenMenu * menu_win = new CRFullScreenMenu(
-            _wm, 0, lString16(_("Main Menu")), 8, fullRc );
+            _wm, 0, Utf8ToUnicode(lString8(_("Main Menu"))), 8, fullRc);
 /*
 VIEWER_MENU_GOTOFIRSTPAGE=Go to first page
 VIEWER_MENU_GOTOENDPAGE=Go to last page
@@ -850,7 +850,7 @@ VIEWER_MENU_GOTOINDEX=Go to index
 VIEWER_MENU_5ABOUT=About...
 VIEWER_MENU_4ABOUT=About...
 */
-    menu_win->setSkinName(lString16("#main"));
+    menu_win->setSkinName(cs32("#main"));
 	CRGUIAcceleratorTableRef menuItems =
             _wm->getAccTables().get(cs32("mainMenuItems"));
 	if ( !menuItems.isNull() && menuItems->length()>1 ) {
@@ -936,14 +936,19 @@ VIEWER_MENU_4ABOUT=About...
 
     menu_win->setAccelerators( getMenuAccelerators() );
 
-    lString16 s(_("$1 - choose command\n$2, $3 - close"));
+    lString32 s = Utf8ToUnicode(
+            lString8(_("$1 - choose command\n$2, $3 - close")));
 #ifdef CR_POCKETBOOK
-	s.replaceParam(1, menu_win->getCommandKeyName( MCMD_SELECT ));
+	s.replaceParam(
+            1, Utf16ToUnicode(menu_win->getCommandKeyName(MCMD_SELECT)));
 #else
-    s.replaceParam(1, menu_win->getItemNumberKeysName());
+    s.replaceParam(
+            1, Utf16ToUnicode(menu_win->getItemNumberKeysName()));
 #endif
-    s.replaceParam(2, menu_win->getCommandKeyName(MCMD_OK));
-    s.replaceParam(3, menu_win->getCommandKeyName(MCMD_CANCEL) );
+    s.replaceParam(
+            2, Utf16ToUnicode(menu_win->getCommandKeyName(MCMD_OK)));
+    s.replaceParam(
+            3, Utf16ToUnicode(menu_win->getCommandKeyName(MCMD_CANCEL)));
     menu_win->setStatusText( s );
     menu_win->setFullscreen( true );
 
@@ -951,24 +956,25 @@ VIEWER_MENU_4ABOUT=About...
     _wm->activateWindow( menu_win );
 }
 
-void addPropLine( lString8 & buf, const char * description, const lString16 & value )
+void addPropLine(
+        lString8 & buf, const char * description, const lString32 & value)
 {
     if ( !value.empty() ) {
         buf << "<tr><td>" << description << "</td><td>" << UnicodeToUtf8(value).c_str() << "</td></tr>\n";
     }
 }
 
-lString16 getDocText( ldomDocument * doc, const char * path, const char * delim )
+lString32 getDocText( ldomDocument * doc, const char * path, const char * delim )
 {
-    lString16 res;
+    lString32 res;
     for ( int i=0; i<100; i++ ) {
         lString8 p = lString8(path) + "[" + lString8::itoa(i+1) + "]";
         //CRLog::trace("checking doc path %s", p.c_str() );
-        lString16 p16 = Utf8ToUnicode(p);
-        ldomXPointer ptr = doc->createXPointer( p16 );
+        lString32 p32 = Utf8ToUnicode(p);
+        ldomXPointer ptr = doc->createXPointer(p32);
         if ( ptr.isNull() )
             break;
-        lString16 s = ptr.getText( L' ' );
+        lString32 s = ptr.getText(U' ');
         if ( s.empty() )
             continue;
         if ( !res.empty() && delim!=NULL )
@@ -978,19 +984,19 @@ lString16 getDocText( ldomDocument * doc, const char * path, const char * delim 
     return res;
 }
 
-lString16 getDocAuthors( ldomDocument * doc, const char * path, const char * delim )
+lString32 getDocAuthors( ldomDocument * doc, const char * path, const char * delim )
 {
-    lString16 res;
+    lString32 res;
     for ( int i=0; i<100; i++ ) {
         lString8 p = lString8(path) + "[" + lString8::itoa(i+1) + "]";
         //CRLog::trace("checking doc path %s", p.c_str() );
-        lString16 firstName = getDocText( doc, (p + "/first-name").c_str(), " " );
-        lString16 lastName = getDocText( doc, (p + "/last-name").c_str(), " " );
-        lString16 middleName = getDocText( doc, (p + "/middle-name").c_str(), " " );
-        lString16 nickName = getDocText( doc, (p + "/nickname").c_str(), " " );
-        lString16 homePage = getDocText( doc, (p + "/homepage").c_str(), " " );
-        lString16 email = getDocText( doc, (p + "/email").c_str(), " " );
-        lString16 s = firstName;
+        lString32 firstName = getDocText( doc, (p + "/first-name").c_str(), " " );
+        lString32 lastName = getDocText( doc, (p + "/last-name").c_str(), " " );
+        lString32 middleName = getDocText( doc, (p + "/middle-name").c_str(), " " );
+        lString32 nickName = getDocText( doc, (p + "/nickname").c_str(), " " );
+        lString32 homePage = getDocText( doc, (p + "/homepage").c_str(), " " );
+        lString32 email = getDocText( doc, (p + "/email").c_str(), " " );
+        lString32 s = firstName;
         if ( !middleName.empty() )
             s << " " << middleName;
         if ( !lastName.empty() ) {
@@ -1032,7 +1038,7 @@ void V3DocViewWin::showAboutDialog()
 {
 	_docview->savePosition();
 	CRFileHistRecord * hist = _docview->getCurrentFileHistRecord();
-    lString16 title("Cool Reader ");
+    lString32 title = cs32("Cool Reader ");
 #ifndef PACKAGE_VERSION
 #define PACKAGE_VERSION CR_ENGINE_VERSION
 #endif
@@ -1044,9 +1050,13 @@ void V3DocViewWin::showAboutDialog()
     CRPropRef props = _docview->getDocProps();
 
     lString8 statusInfo;
-	addPropLine( statusInfo, _("Current page"), lString16::itoa(_docview->getCurPage()+1) );
-	addPropLine( statusInfo, _("Total pages"), lString16::itoa(_docview->getPageCount()) );
-    addPropLine( statusInfo, _("Battery state"), _docview->getBatteryState()==-1 ? lString16(_("charging...")) : lString16::itoa(_docview->getBatteryState()) + "%" );
+	addPropLine( statusInfo, _("Current page"), lString32::itoa(_docview->getCurPage()+1) );
+	addPropLine( statusInfo, _("Total pages"), lString32::itoa(_docview->getPageCount()) );
+    lString32 batteryState = _docview->getBatteryState()
+                    == CR_BATTERY_STATE_CHARGING
+            ? Utf8ToUnicode(lString8(_("charging...")))
+            : lString32::itoa(_docview->getBatteryState()) + "%";
+    addPropLine(statusInfo, _("Battery state"), batteryState);
 	addPropLine( statusInfo, _("Current Time"), _docview->getTimeString() );
 	// TODO:
 	if ( hist ) {
@@ -1111,7 +1121,8 @@ void V3DocViewWin::showAboutDialog()
     //CRLog::trace(txt.c_str());
     //=========================================================
     txt = CRViewDialog::makeFb2Xml(txt);
-    CRViewDialog * dlg = new CRViewDialog( _wm, title, txt, lvRect(), true, true );
+    CRViewDialog * dlg = new CRViewDialog(
+            _wm, UnicodeToUtf16(title), txt, lvRect(), true, true);
     dlg->getDocView()->setVisiblePageCount(1);
     int fs = _props->getIntDef( PROP_FILE_PROPS_FONT_SIZE, 22 );
     dlg->getDocView()->setFontSize(fs);
@@ -1225,11 +1236,12 @@ void V3DocViewWin::OnLoadFileFirstPagesReady()
         return;
     }
     CRLog::info( "OnLoadFileFirstPagesReady() - painting first page" );
-    _docview->setPageHeaderOverride(lString16(_("Loading: please wait...")));
+    _docview->setPageHeaderOverride(
+            Utf8ToUnicode(lString8(_("Loading: please wait..."))));
     //update();
     _wm->update(true);
     CRLog::info( "OnLoadFileFirstPagesReady() - painting done" );
-    _docview->setPageHeaderOverride(lString16::empty_str);
+    _docview->setPageHeaderOverride(lString32::empty_str);
     _docview->requestRender();
     // TODO: remove debug sleep
     //sleep(5);

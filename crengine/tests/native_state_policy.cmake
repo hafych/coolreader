@@ -7099,6 +7099,41 @@ forbid_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
+  "void addPropLine(\n        lString8 & buf, const char * description, const lString32 & value)"
+  "document metadata rendering must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "lString32 getDocText("
+  "document metadata extraction must preserve the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "lString32 getDocAuthors("
+  "document author extraction must preserve the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "menu_win->setSkinName(cs32(\"#main\"));"
+  "main-menu skin identifiers must use the current string width"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "void addPropLine( lString8 & buf, const char * description, const lString16"
+  "document metadata rendering must not narrow to UTF-16"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "lString16 getDocText("
+  "document metadata extraction must not narrow to UTF-16"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "setPageHeaderOverride(lString16"
+  "document page-header text must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
   "V3DocViewWin::OnLoadFileStart( lString32 filename )"
   "document load-start callback definitions must keep the current width"
 )
