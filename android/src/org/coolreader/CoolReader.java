@@ -809,7 +809,7 @@ public class CoolReader extends BaseActivity {
 							uri.toString(), persistedReadPermission);
 			}
 		} else {
-			for (ReaderAction ra: ReaderAction.AVAILABLE_ACTIONS) {
+			for (ReaderAction ra: ReaderAction.availableActions()) {
 				String raIntentName = "org.coolreader.cmd." + ra.id;
 				if (raIntentName.equals(intent.getAction())) {
 					mReaderView.onCommand(ra.cmd, ra.param, null);

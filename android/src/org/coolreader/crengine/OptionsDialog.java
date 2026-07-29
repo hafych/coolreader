@@ -853,7 +853,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 	class ActionOption extends ListOption {
 		public ActionOption( OptionOwner owner, String label, String property, boolean isTap, boolean allowRepeat ) {
 			super(owner, label, property);
-			ReaderAction[] actions = ReaderAction.AVAILABLE_ACTIONS;
+			ReaderAction[] actions = ReaderAction.availableActions();
 			for ( ReaderAction a : actions )
 				if ( !isTap || a.mayAssignOnTap() )
 					add(a.id, getString(a.nameId));

@@ -105,6 +105,19 @@ uses the actual row stride; the legacy surface estimate widens before
 multiplication. Replacement reader generations therefore cannot share pool or
 diagnostic accounting state.
 
+`ReaderAction` definitions are immutable command metadata. The assignable
+catalog is exposed only as copies, and its device-specific addition is selected
+by an explicit accessor rather than during class initialization. Theme
+drawable overrides live in an immutable `ActionIconSet` snapshot owned by each
+`BaseActivity`; toolbars resolve icons through their current Activity instead
+of reading a process-wide mutable action field.
+
+Key and tap defaults are built as one immutable `DefaultInputActions` snapshot
+per `SettingsManager`. Device flags are captured at construction. Nook
+navigation mappings may replace conflicting generated defaults, while an
+explicit user mapping remains authoritative; menu-access fallback logic is
+covered without constructing an Activity.
+
 ## Migration rule
 
 New Android components should:

@@ -413,9 +413,14 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 
 	private InterfaceTheme currentTheme = null;
+	private ActionIconSet actionIcons = ActionIconSet.empty();
 
 	public InterfaceTheme getCurrentTheme() {
 		return currentTheme;
+	}
+
+	int getActionIconId(ReaderAction action) {
+		return actionIcons.iconFor(action);
 	}
 
 	public void setCurrentTheme(String themeCode) {
@@ -510,60 +515,36 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		int btnLogDrawableRes = a.getResourceId(22, 0);
 		int btnLightDrawableRes = a.getResourceId(23, 0);
 		a.recycle();
-		if (btnPrevDrawableRes != 0) {
-			ReaderAction.GO_BACK.setIconId(btnPrevDrawableRes);
-			ReaderAction.FILE_BROWSER_UP.setIconId(btnPrevDrawableRes);
-		}
-		if (btnNextDrawableRes != 0)
-			ReaderAction.GO_FORWARD.setIconId(btnNextDrawableRes);
-		if (viewerTocDrawableRes != 0)
-			ReaderAction.TOC.setIconId(viewerTocDrawableRes);
-		if (viewerFindDrawableRes != 0)
-			ReaderAction.SEARCH.setIconId(viewerFindDrawableRes);
-		if (viewerSettingDrawableRes != 0)
-			ReaderAction.OPTIONS.setIconId(viewerSettingDrawableRes);
-		if (btnBookmarksDrawableRes != 0)
-			ReaderAction.BOOKMARKS.setIconId(btnBookmarksDrawableRes);
-		if (brFolderRootDrawableRes != 0)
-			ReaderAction.FILE_BROWSER_ROOT.setIconId(brFolderRootDrawableRes);
-		if (optionNightDrawableRes != 0)
-			ReaderAction.TOGGLE_DAY_NIGHT.setIconId(optionNightDrawableRes);
-		if (optionTouchDrawableRes != 0)
-			ReaderAction.TOGGLE_SELECTION_MODE.setIconId(optionTouchDrawableRes);
-		if (btnGoPageDrawableRes != 0)
-			ReaderAction.GO_PAGE.setIconId(btnGoPageDrawableRes);
-		if (btnGoPercentDrawableRes != 0)
-			ReaderAction.GO_PERCENT.setIconId(btnGoPercentDrawableRes);
-		if (brFolderDrawableRes != 0)
-			ReaderAction.FILE_BROWSER.setIconId(brFolderDrawableRes);
-		if (btnTtsDrawableRes != 0)
-			ReaderAction.TTS_PLAY.setIconId(btnTtsDrawableRes);
-		if (brFolderRecentDrawableRes != 0)
-			ReaderAction.RECENT_BOOKS.setIconId(brFolderRecentDrawableRes);
-		if (btnScrollGoDrawableRes != 0)
-			ReaderAction.TOGGLE_AUTOSCROLL.setIconId(btnScrollGoDrawableRes);
-		if (btnBooksSwapDrawableRes != 0)
-			ReaderAction.OPEN_PREVIOUS_BOOK.setIconId(btnBooksSwapDrawableRes);
-		if (logoBtnDrawableRes != 0)
-			ReaderAction.ABOUT.setIconId(logoBtnDrawableRes);
-		if (viewerExitDrawableRes != 0)
-			ReaderAction.EXIT.setIconId(viewerExitDrawableRes);
-		if (btnBookOpenDrawableRes != 0)
-			ReaderAction.CURRENT_BOOK.setIconId(btnBookOpenDrawableRes);
-		if (brFolderCurrBookDrawableRes != 0)
-			ReaderAction.CURRENT_BOOK_DIRECTORY.setIconId(brFolderCurrBookDrawableRes);
-		if (brFolderOpdsDrawableRes != 0)
-			ReaderAction.OPDS_CATALOGS.setIconId(brFolderOpdsDrawableRes);
-		/*
-		if (googleDriveDrawableRes != 0) {
-			ReaderAction.GDRIVE_SYNCTO.setIconId(googleDriveDrawableRes);
-			ReaderAction.GDRIVE_SYNCFROM.setIconId(googleDriveDrawableRes);
-		}
-		 */
-		if (btnLogDrawableRes != 0)
-			ReaderAction.SAVE_LOGCAT.setIconId(btnLogDrawableRes);
-		if (btnLightDrawableRes != 0)
-			ReaderAction.SHOW_SYSTEM_BACKLIGHT_DIALOG.setIconId(btnLightDrawableRes);
+		actionIcons = ActionIconSet.builder()
+				.override(ReaderAction.GO_BACK, btnPrevDrawableRes)
+				.override(ReaderAction.FILE_BROWSER_UP, btnPrevDrawableRes)
+				.override(ReaderAction.GO_FORWARD, btnNextDrawableRes)
+				.override(ReaderAction.TOC, viewerTocDrawableRes)
+				.override(ReaderAction.SEARCH, viewerFindDrawableRes)
+				.override(ReaderAction.OPTIONS, viewerSettingDrawableRes)
+				.override(ReaderAction.BOOKMARKS, btnBookmarksDrawableRes)
+				.override(ReaderAction.FILE_BROWSER_ROOT, brFolderRootDrawableRes)
+				.override(ReaderAction.TOGGLE_DAY_NIGHT, optionNightDrawableRes)
+				.override(ReaderAction.TOGGLE_SELECTION_MODE, optionTouchDrawableRes)
+				.override(ReaderAction.GO_PAGE, btnGoPageDrawableRes)
+				.override(ReaderAction.GO_PERCENT, btnGoPercentDrawableRes)
+				.override(ReaderAction.FILE_BROWSER, brFolderDrawableRes)
+				.override(ReaderAction.TTS_PLAY, btnTtsDrawableRes)
+				.override(ReaderAction.RECENT_BOOKS, brFolderRecentDrawableRes)
+				.override(ReaderAction.TOGGLE_AUTOSCROLL, btnScrollGoDrawableRes)
+				.override(ReaderAction.OPEN_PREVIOUS_BOOK, btnBooksSwapDrawableRes)
+				.override(ReaderAction.ABOUT, logoBtnDrawableRes)
+				.override(ReaderAction.EXIT, viewerExitDrawableRes)
+				.override(ReaderAction.CURRENT_BOOK, btnBookOpenDrawableRes)
+				.override(
+						ReaderAction.CURRENT_BOOK_DIRECTORY,
+						brFolderCurrBookDrawableRes)
+				.override(ReaderAction.OPDS_CATALOGS, brFolderOpdsDrawableRes)
+				.override(ReaderAction.SAVE_LOGCAT, btnLogDrawableRes)
+				.override(
+						ReaderAction.SHOW_SYSTEM_BACKLIGHT_DIALOG,
+						btnLightDrawableRes)
+				.build();
 	}
 
 	public void setCurrentTheme(InterfaceTheme theme) {
@@ -1383,22 +1364,11 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		if (noticeDialogVisible)
 			return;
 		Properties props = settings();
-		boolean menuKeyActionFound = false;
-		for (SettingsManager.DefKeyAction ka : SettingsManager.DEF_KEY_ACTIONS) {
-			if (ReaderAction.READER_MENU.id.equals(ka.action.id)) {
-				if (ka.keyCode != KeyEvent.KEYCODE_MENU || hasHardwareMenuKey()) {
-					menuKeyActionFound = true;
-					break;
-				}
-			}
-		}
-		boolean menuTapActionFound = false;
-		for (SettingsManager.DefTapAction ka : SettingsManager.DEF_TAP_ACTIONS) {
-			String paramName = ka.longPress ? ReaderView.PROP_APP_TAP_ZONE_ACTIONS_TAP + ".long." + ka.zone : ReaderView.PROP_APP_TAP_ZONE_ACTIONS_TAP + "." + ka.zone;
-			String value = props.getProperty(paramName);
-			if (ReaderAction.READER_MENU.id.equals(value))
-				menuTapActionFound = true;
-		}
+		DefaultInputActions inputDefaults =
+				mSettingsManager.getDefaultInputActions();
+		boolean menuKeyActionFound =
+				inputDefaults.hasAvailableMenuKey(hasHardwareMenuKey());
+		boolean menuTapActionFound = inputDefaults.hasMenuTap(props);
 		boolean propToolbarEnabled = props.getInt(Settings.PROP_TOOLBAR_LOCATION, Settings.VIEWER_TOOLBAR_NONE) != Settings.VIEWER_TOOLBAR_NONE;
 		boolean toolbarEnabled = ((propToolbarEnabled && !isFullscreen())
 				|| (propToolbarEnabled && isFullscreen() && !props.getBool(PROP_TOOLBAR_HIDE_IN_FULLSCREEN, false)));
@@ -1595,11 +1565,20 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		private final BaseActivity mActivity;
 		private Properties mSettings;
 		private final File defaultSettingsDir;
+		private final DefaultInputActions defaultInputActions;
 
 		public SettingsManager(BaseActivity activity) {
 			this.mActivity = activity;
+			defaultInputActions = DefaultInputActions.create(
+					DeviceInfo.EINK_SONY,
+					DeviceInfo.NAVIGATE_LEFTRIGHT,
+					DeviceInfo.EINK_NOOK);
 			defaultSettingsDir = activity.getDir("settings", Context.MODE_PRIVATE);
 			mSettings = loadSettings();
+		}
+
+		DefaultInputActions getDefaultInputActions() {
+			return defaultInputActions;
 		}
 
 		//int lastSaveId = 0;
@@ -1642,128 +1621,6 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			props.setProperty(name, value);
 			setSettings(props, 1000, notify);
 		}
-
-		private static class DefKeyAction {
-			public int keyCode;
-			public int type;
-			public ReaderAction action;
-
-			public DefKeyAction(int keyCode, int type, ReaderAction action) {
-				this.keyCode = keyCode;
-				this.type = type;
-				this.action = action;
-			}
-
-			public String getProp() {
-				return ReaderView.PROP_APP_KEY_ACTIONS_PRESS + ReaderAction.getTypeString(type) + keyCode;
-			}
-		}
-
-
-		private static class DefTapAction {
-			public int zone;
-			public boolean longPress;
-			public ReaderAction action;
-
-			public DefTapAction(int zone, boolean longPress, ReaderAction action) {
-				this.zone = zone;
-				this.longPress = longPress;
-				this.action = action;
-			}
-		}
-
-		private static DefKeyAction[] DEF_KEY_ACTIONS = {
-				new DefKeyAction(KeyEvent.KEYCODE_BACK, ReaderAction.NORMAL, ReaderAction.GO_BACK),
-				new DefKeyAction(KeyEvent.KEYCODE_BACK, ReaderAction.LONG, ReaderAction.EXIT),
-				new DefKeyAction(KeyEvent.KEYCODE_BACK, ReaderAction.DOUBLE, ReaderAction.EXIT),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_CENTER, ReaderAction.NORMAL, ReaderAction.RECENT_BOOKS),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_CENTER, ReaderAction.LONG, ReaderAction.BOOKMARKS),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_UP, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_DOWN, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_UP, ReaderAction.LONG, (DeviceInfo.EINK_SONY ? ReaderAction.PAGE_UP_10 : ReaderAction.REPEAT)),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_DOWN, ReaderAction.LONG, (DeviceInfo.EINK_SONY ? ReaderAction.PAGE_DOWN_10 : ReaderAction.REPEAT)),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_LEFT, ReaderAction.NORMAL, (DeviceInfo.NAVIGATE_LEFTRIGHT ? ReaderAction.PAGE_UP : ReaderAction.PAGE_UP_10)),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_RIGHT, ReaderAction.NORMAL, (DeviceInfo.NAVIGATE_LEFTRIGHT ? ReaderAction.PAGE_DOWN : ReaderAction.PAGE_DOWN_10)),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_LEFT, ReaderAction.LONG, ReaderAction.REPEAT),
-				new DefKeyAction(KeyEvent.KEYCODE_DPAD_RIGHT, ReaderAction.LONG, ReaderAction.REPEAT),
-				new DefKeyAction(KeyEvent.KEYCODE_VOLUME_UP, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(KeyEvent.KEYCODE_VOLUME_DOWN, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(KeyEvent.KEYCODE_VOLUME_UP, ReaderAction.LONG, ReaderAction.REPEAT),
-				new DefKeyAction(KeyEvent.KEYCODE_VOLUME_DOWN, ReaderAction.LONG, ReaderAction.REPEAT),
-				new DefKeyAction(KeyEvent.KEYCODE_MENU, ReaderAction.NORMAL, ReaderAction.READER_MENU),
-				new DefKeyAction(KeyEvent.KEYCODE_MENU, ReaderAction.LONG, ReaderAction.OPTIONS),
-				new DefKeyAction(KeyEvent.KEYCODE_CAMERA, ReaderAction.NORMAL, ReaderAction.NONE),
-				new DefKeyAction(KeyEvent.KEYCODE_CAMERA, ReaderAction.LONG, ReaderAction.NONE),
-				new DefKeyAction(KeyEvent.KEYCODE_SEARCH, ReaderAction.NORMAL, ReaderAction.SEARCH),
-				new DefKeyAction(KeyEvent.KEYCODE_SEARCH, ReaderAction.LONG, ReaderAction.TOGGLE_SELECTION_MODE),
-
-				new DefKeyAction(KeyEvent.KEYCODE_PAGE_UP, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(KeyEvent.KEYCODE_PAGE_UP, ReaderAction.LONG, ReaderAction.NONE),
-				new DefKeyAction(KeyEvent.KEYCODE_PAGE_UP, ReaderAction.DOUBLE, ReaderAction.NONE),
-				new DefKeyAction(KeyEvent.KEYCODE_PAGE_DOWN, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(KeyEvent.KEYCODE_PAGE_DOWN, ReaderAction.LONG, ReaderAction.NONE),
-				new DefKeyAction(KeyEvent.KEYCODE_PAGE_DOWN, ReaderAction.DOUBLE, ReaderAction.NONE),
-
-				new DefKeyAction(ReaderView.SONY_DPAD_DOWN_SCANCODE, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(ReaderView.SONY_DPAD_UP_SCANCODE, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(ReaderView.SONY_DPAD_DOWN_SCANCODE, ReaderAction.LONG, ReaderAction.PAGE_DOWN_10),
-				new DefKeyAction(ReaderView.SONY_DPAD_UP_SCANCODE, ReaderAction.LONG, ReaderAction.PAGE_UP_10),
-
-				new DefKeyAction(KeyEvent.KEYCODE_8, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(KeyEvent.KEYCODE_2, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(KeyEvent.KEYCODE_8, ReaderAction.LONG, ReaderAction.PAGE_DOWN_10),
-				new DefKeyAction(KeyEvent.KEYCODE_2, ReaderAction.LONG, ReaderAction.PAGE_UP_10),
-
-				new DefKeyAction(ReaderView.KEYCODE_ESCAPE, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(ReaderView.KEYCODE_ESCAPE, ReaderAction.LONG, ReaderAction.REPEAT),
-
-//		    public static final int KEYCODE_PAGE_BOTTOMLEFT = 0x5d; // fwd
-//		    public static final int KEYCODE_PAGE_BOTTOMRIGHT = 0x5f; // fwd
-//		    public static final int KEYCODE_PAGE_TOPLEFT = 0x5c; // back
-//		    public static final int KEYCODE_PAGE_TOPRIGHT = 0x5e; // back
-
-		};
-		// Some key codes on Nook devices conflicted with standard keyboard, for example, KEYCODE_PAGE_BOTTOMLEFT with PAGE_DOWN
-		private static DefKeyAction[] DEF_NOOK_KEY_ACTIONS = {
-				new DefKeyAction(ReaderView.NOOK_KEY_NEXT_RIGHT, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(ReaderView.NOOK_KEY_SHIFT_DOWN, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(ReaderView.NOOK_KEY_PREV_LEFT, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(ReaderView.NOOK_KEY_PREV_RIGHT, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(ReaderView.NOOK_KEY_SHIFT_UP, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-
-				new DefKeyAction(ReaderView.NOOK_12_KEY_NEXT_LEFT, ReaderAction.NORMAL, (DeviceInfo.EINK_NOOK ? ReaderAction.PAGE_UP : ReaderAction.PAGE_DOWN)),
-				new DefKeyAction(ReaderView.NOOK_12_KEY_NEXT_LEFT, ReaderAction.LONG, (DeviceInfo.EINK_NOOK ? ReaderAction.PAGE_UP_10 : ReaderAction.PAGE_DOWN_10)),
-
-				new DefKeyAction(ReaderView.KEYCODE_PAGE_BOTTOMLEFT, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-//			    new DefKeyAction(ReaderView.KEYCODE_PAGE_BOTTOMRIGHT, ReaderAction.NORMAL, ReaderAction.PAGE_UP),
-				new DefKeyAction(ReaderView.KEYCODE_PAGE_TOPLEFT, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(ReaderView.KEYCODE_PAGE_TOPRIGHT, ReaderAction.NORMAL, ReaderAction.PAGE_DOWN),
-				new DefKeyAction(ReaderView.KEYCODE_PAGE_BOTTOMLEFT, ReaderAction.LONG, ReaderAction.PAGE_UP_10),
-//			    new DefKeyAction(ReaderView.KEYCODE_PAGE_BOTTOMRIGHT, ReaderAction.LONG, ReaderAction.PAGE_UP_10),
-				new DefKeyAction(ReaderView.KEYCODE_PAGE_TOPLEFT, ReaderAction.LONG, ReaderAction.PAGE_DOWN_10),
-				new DefKeyAction(ReaderView.KEYCODE_PAGE_TOPRIGHT, ReaderAction.LONG, ReaderAction.PAGE_DOWN_10),
-		};
-		private static DefTapAction[] DEF_TAP_ACTIONS = {
-				new DefTapAction(1, false, ReaderAction.PAGE_UP),
-				new DefTapAction(2, false, ReaderAction.PAGE_UP),
-				new DefTapAction(4, false, ReaderAction.PAGE_UP),
-				new DefTapAction(1, true, ReaderAction.GO_BACK), // back by link
-				new DefTapAction(2, true, ReaderAction.TOGGLE_DAY_NIGHT),
-				new DefTapAction(4, true, ReaderAction.PAGE_UP_10),
-				new DefTapAction(3, false, ReaderAction.PAGE_DOWN),
-				new DefTapAction(6, false, ReaderAction.PAGE_DOWN),
-				new DefTapAction(7, false, ReaderAction.PAGE_DOWN),
-				new DefTapAction(8, false, ReaderAction.PAGE_DOWN),
-				new DefTapAction(9, false, ReaderAction.PAGE_DOWN),
-				new DefTapAction(3, true, ReaderAction.TOGGLE_AUTOSCROLL),
-				new DefTapAction(6, true, ReaderAction.PAGE_DOWN_10),
-				new DefTapAction(7, true, ReaderAction.PAGE_DOWN_10),
-				new DefTapAction(8, true, ReaderAction.PAGE_DOWN_10),
-				new DefTapAction(9, true, ReaderAction.PAGE_DOWN_10),
-				new DefTapAction(5, false, ReaderAction.READER_MENU),
-				new DefTapAction(5, true, ReaderAction.OPTIONS),
-		};
-
 
 		private boolean isValidFontFace(String face) {
 			String[] fontFaces = Engine.getFontFaceList();
@@ -1881,47 +1738,14 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				}
 			}
 
-			// default key actions
-			for (DefKeyAction ka : DEF_KEY_ACTIONS) {
-				props.applyDefault(ka.getProp(), ka.action.id);
-			}
-			if (DeviceInfo.NOOK_NAVIGATION_KEYS) {
-				// Add default key mappings for Nook devices & also override defaults for some keys (PAGE_UP, PAGE_DOWN)
-				for (DefKeyAction ka : DEF_NOOK_KEY_ACTIONS) {
-					props.applyDefault(ka.getProp(), ka.action.id);
-				}
-			}
-
-			boolean menuKeyActionFound = false;
-			for (DefKeyAction ka : DEF_KEY_ACTIONS) {
-				if (ReaderAction.READER_MENU.id.equals(ka.action.id)) {
-					menuKeyActionFound = true;
-					break;
-				}
-			}
-
-			boolean menuTapActionFound = false;
-			for (DefTapAction ka : DEF_TAP_ACTIONS) {
-				String paramName = ka.longPress ? ReaderView.PROP_APP_TAP_ZONE_ACTIONS_TAP + ".long." + ka.zone : ReaderView.PROP_APP_TAP_ZONE_ACTIONS_TAP + "." + ka.zone;
-				String value = props.getProperty(paramName);
-				if (ReaderAction.READER_MENU.id.equals(value))
-					menuTapActionFound = true;
-			}
-
 			boolean toolbarEnabled = props.getInt(Settings.PROP_TOOLBAR_LOCATION, Settings.VIEWER_TOOLBAR_NONE) != Settings.VIEWER_TOOLBAR_NONE;
-
-			// default tap zone actions
-			for (DefTapAction ka : DEF_TAP_ACTIONS) {
-				String paramName = ka.longPress ? ReaderView.PROP_APP_TAP_ZONE_ACTIONS_TAP + ".long." + ka.zone : ReaderView.PROP_APP_TAP_ZONE_ACTIONS_TAP + "." + ka.zone;
-
-				if (ka.zone == 5 && !ka.longPress && !menuTapActionFound && !(activity.hasHardwareMenuKey() && menuKeyActionFound) && !toolbarEnabled) {
-					// force assignment of central tap zone
-					log.w("force assignment of central tap zone to " + ka.action.id);
-					props.setProperty(paramName, ka.action.id);
-				} else {
-					props.applyDefault(paramName, ka.action.id);
-				}
-			}
+			if (defaultInputActions.applyTo(
+					props,
+					DeviceInfo.NOOK_NAVIGATION_KEYS,
+					activity.hasHardwareMenuKey(),
+					toolbarEnabled))
+				log.w("force assignment of central tap zone to "
+						+ ReaderAction.READER_MENU.id);
 
 			if (DeviceInfo.EINK_NOOK) {
 				props.applyDefault(ReaderView.PROP_PAGE_ANIMATION, ReaderView.PAGE_ANIMATION_NONE);

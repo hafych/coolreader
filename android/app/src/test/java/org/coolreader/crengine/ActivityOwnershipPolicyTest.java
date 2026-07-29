@@ -195,6 +195,50 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void readerActionUiConfigurationIsImmutableAndActivityOwned()
+			throws Exception {
+		Field actionIcons =
+				BaseActivity.class.getDeclaredField("actionIcons");
+		assertFalse(Modifier.isStatic(actionIcons.getModifiers()));
+		assertTrue(Modifier.isPrivate(actionIcons.getModifiers()));
+
+		for (Field field : ReaderAction.class.getDeclaredFields()) {
+			if (!Modifier.isStatic(field.getModifiers())) {
+				assertTrue(
+						"ReaderAction definitions must be immutable: "
+								+ field.getName(),
+						Modifier.isFinal(field.getModifiers()));
+			}
+			assertFalse(
+					"ReaderAction must not expose mutable static arrays: "
+							+ field.getName(),
+					Modifier.isStatic(field.getModifiers())
+							&& field.getType().isArray());
+		}
+		for (Field field : ActionIconSet.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field : DefaultInputActions.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+
+		Class<?> settingsManager = null;
+		for (Class<?> nested : BaseActivity.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("SettingsManager"))
+				settingsManager = nested;
+		}
+		assertTrue(settingsManager != null);
+		Field defaults =
+				settingsManager.getDeclaredField("defaultInputActions");
+		assertFalse(Modifier.isStatic(defaults.getModifiers()));
+		assertTrue(Modifier.isFinal(defaults.getModifiers()));
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

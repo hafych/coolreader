@@ -116,7 +116,12 @@ public class CRToolBar extends ViewGroup {
 		final LinearLayout view = (LinearLayout)inflater.inflate(R.layout.popup_toolbar_item, null);
 		ImageView icon = view.findViewById(R.id.action_icon);
 		TextView label = view.findViewById(R.id.action_label);
-		icon.setImageResource(action != null ? action.iconId : Utils.resolveResourceIdByAttr(activity, R.attr.cr3_button_more_drawable, R.drawable.cr3_button_more));
+		icon.setImageResource(action != null
+				? activity.getActionIconId(action)
+				: Utils.resolveResourceIdByAttr(
+						activity,
+						R.attr.cr3_button_more_drawable,
+						R.drawable.cr3_button_more));
 		//icon.setMinimumHeight(buttonHeight);
 		icon.setMinimumWidth(buttonWidth);
 		Utils.setContentDescription(icon, activity.getString(action != null ? action.nameId : R.string.btn_toolbar_more));
@@ -179,7 +184,7 @@ public class CRToolBar extends ViewGroup {
 			buttonHeight = sz / 2;
 		for (int i=0; i<actions.size(); i++) {
 			ReaderAction item = actions.get(i);
-			int iconId = item.iconId;
+			int iconId = activity.getActionIconId(item);
 			if (iconId == 0) {
 				itemsOverflow.add(item);
 				visibleNonButtonCount++;
@@ -230,9 +235,9 @@ public class CRToolBar extends ViewGroup {
 		}
 	}
 	
-	private static boolean allActionsHaveIcon(ArrayList<ReaderAction> list) {
+	private boolean allActionsHaveIcon(ArrayList<ReaderAction> list) {
 		for (ReaderAction item : list) {
-			if (item.iconId == 0)
+			if (activity.getActionIconId(item) == 0)
 				return false;
 		}
 		return true;
@@ -325,7 +330,7 @@ public class CRToolBar extends ViewGroup {
 			return null;
 		ImageButton ib = new ImageButton(getContext());
 		if (item != null) {
-			setButtonImageResource(ib,item.iconId);
+			setButtonImageResource(ib, activity.getActionIconId(item));
 			Utils.setContentDescription(ib, getContext().getString(item.nameId));
 			ib.setTag(item);
 		} else {
@@ -451,7 +456,7 @@ public class CRToolBar extends ViewGroup {
 
 		visibleButtonCount = 0;
 		for (int i=0; i<actions.size(); i++) {
-			if (actions.get(i).iconId != 0)
+			if (activity.getActionIconId(actions.get(i)) != 0)
 				visibleButtonCount++;
 		}
 		
@@ -483,7 +488,7 @@ public class CRToolBar extends ViewGroup {
 				itemsOverflow.add(item);
 				continue;
 			}
-			if (item.iconId == 0) {
+			if (activity.getActionIconId(item) == 0) {
 				itemsOverflow.add(item);
 				continue;
 			}

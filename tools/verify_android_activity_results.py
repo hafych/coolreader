@@ -12,6 +12,10 @@ SOURCE = ROOT / "android" / "src" / "org" / "coolreader"
 COOL_READER = SOURCE / "CoolReader.java"
 DICTIONARIES = SOURCE / "Dictionaries.java"
 BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
+READER_ACTION = SOURCE / "crengine" / "ReaderAction.java"
+ACTION_ICON_SET = SOURCE / "crengine" / "ActionIconSet.java"
+DEFAULT_INPUT_ACTIONS = SOURCE / "crengine" / "DefaultInputActions.java"
+CR_TOOLBAR = SOURCE / "crengine" / "CRToolBar.java"
 NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
 NOOK_CONTROLLER_BINDINGS = (
     SOURCE / "crengine" / "NookEpdControllerBindings.java"
@@ -183,6 +187,30 @@ BITMAP_MEMORY_ACCOUNTING_TEST = (
     / "crengine"
     / "BitmapMemoryAccountingTest.java"
 )
+ACTION_ICON_SET_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ActionIconSetTest.java"
+)
+DEFAULT_INPUT_ACTIONS_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "DefaultInputActionsTest.java"
+)
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
 COVERPAGE_MANAGER = SOURCE / "crengine" / "CoverpageManager.java"
@@ -290,6 +318,115 @@ def main() -> None:
     if "private static long lastUserActivityTime" in base_text:
         violations.append(
             f"{relative(BASE_ACTIVITY)} retains process-wide user activity")
+    for marker in (
+        "private ActionIconSet actionIcons = ActionIconSet.empty()",
+        "int getActionIconId(ReaderAction action)",
+        "actionIcons = ActionIconSet.builder()",
+        "private final DefaultInputActions defaultInputActions",
+        "DefaultInputActions.create(",
+        "defaultInputActions.applyTo(",
+    ):
+        if marker not in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} omits Activity-owned action "
+                f"marker: {marker}")
+    for legacy in (
+        "DEF_KEY_ACTIONS",
+        "DEF_NOOK_KEY_ACTIONS",
+        "DEF_TAP_ACTIONS",
+        ".setIconId(",
+    ):
+        if legacy in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} retains shared action state: "
+                f"{legacy}")
+
+    reader_action_text = READER_ACTION.read_text(encoding="utf-8")
+    for marker in (
+        "final public int iconId",
+        "private final boolean canRepeat",
+        "private final boolean mayAssignOnTap",
+        "private ReaderAction withIcon(int iconId)",
+        "private final static List<ReaderAction> ASSIGNABLE_ACTIONS",
+        "static ReaderAction[] availableActions(",
+        "Collections.unmodifiableList(",
+        "switch (type)",
+    ):
+        if marker not in reader_action_text:
+            violations.append(
+                f"{relative(READER_ACTION)} omits immutable action marker: "
+                f"{marker}")
+    for legacy in (
+        "TYPE_PROP_SUBPATH",
+        "public final static ReaderAction[] AVAILABLE_ACTIONS",
+        "public ReaderAction setIconId(",
+    ):
+        if legacy in reader_action_text:
+            violations.append(
+                f"{relative(READER_ACTION)} exposes mutable action state: "
+                f"{legacy}")
+
+    action_icon_text = ACTION_ICON_SET.read_text(encoding="utf-8")
+    for marker in (
+        "final class ActionIconSet",
+        "private final Map<String, Integer> overrides",
+        "Collections.unmodifiableMap(",
+        "new HashMap<>(overrides)",
+        "return override != null ? override : action.iconId",
+    ):
+        if marker not in action_icon_text:
+            violations.append(
+                f"{relative(ACTION_ICON_SET)} omits immutable icon marker: "
+                f"{marker}")
+
+    default_input_text = DEFAULT_INPUT_ACTIONS.read_text(encoding="utf-8")
+    for marker in (
+        "final class DefaultInputActions",
+        "private final List<KeyAction> keyActions",
+        "private final List<KeyAction> nookKeyActions",
+        "private final List<TapAction> tapActions",
+        "Set<String> userNookMappings = new HashSet<>()",
+        "if (!userNookMappings.contains(action.propertyName))",
+        "boolean hasAvailableMenuKey(boolean hasHardwareMenuKey)",
+        "boolean hasMenuTap(java.util.Properties properties)",
+    ):
+        if marker not in default_input_text:
+            violations.append(
+                f"{relative(DEFAULT_INPUT_ACTIONS)} omits input default "
+                f"marker: {marker}")
+
+    toolbar_text = CR_TOOLBAR.read_text(encoding="utf-8")
+    if "activity.getActionIconId(" not in toolbar_text:
+        violations.append(
+            f"{relative(CR_TOOLBAR)} does not resolve Activity-owned icons")
+    if re.search(r"\b(?:item|action)\.iconId\b", toolbar_text):
+        violations.append(
+            f"{relative(CR_TOOLBAR)} bypasses the Activity icon snapshot")
+
+    action_icon_test_text = ACTION_ICON_SET_TEST.read_text(encoding="utf-8")
+    for marker in (
+        "activitySnapshotsRemainIndependent",
+        "availableActionsCannotBeReplacedThroughReturnedArray",
+        "deviceSpecificActionIsAddedOnlyToRequestedSnapshot",
+        "actionTypePropertiesHaveNoMutableArrayBacking",
+    ):
+        if marker not in action_icon_test_text:
+            violations.append(
+                f"{relative(ACTION_ICON_SET_TEST)} omits action regression: "
+                f"{marker}")
+
+    default_input_test_text = DEFAULT_INPUT_ACTIONS_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "deviceFlagsSelectLegacyNavigationDefaults",
+        "nookDefaultsOverrideOnlyConflictingGeneratedDefaults",
+        "inaccessibleMenuForcesOnlyCentralTapFallback",
+        "existingMenuTapPreventsCentralOverride",
+    ):
+        if marker not in default_input_test_text:
+            violations.append(
+                f"{relative(DEFAULT_INPUT_ACTIONS_TEST)} omits input "
+                f"regression: {marker}")
 
     backlight_timeout_policy_text = BACKLIGHT_TIMEOUT_POLICY.read_text(
         encoding="utf-8")
