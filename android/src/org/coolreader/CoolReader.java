@@ -2451,13 +2451,25 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void askDeleteCatalog(final FileInfo item) {
+		if (item == null || !item.isOPDSDir()
+				|| item.id == null)
+			return;
+		Long catalogId = item.id;
+		ServiceLifecycle lifecycle = mServiceLifecycle;
 		askConfirmation(R.string.win_title_confirm_catalog_delete, () -> {
-			if (item != null && item.isOPDSDir()) {
-				waitForCRDBService(() -> {
-					getDB().removeOPDSCatalog(item.id);
-					directoryUpdated(mScanner.createOPDSRoot());
-				});
-			}
+			if (!lifecycle.isActive())
+				return;
+			waitForCRDBService(() -> {
+				if (!lifecycle.isActive())
+					return;
+				CRDBService.LocalBinder db = getDB();
+				if (db == null)
+					return;
+				db.removeOPDSCatalog(catalogId);
+				if (lifecycle.isActive())
+					directoryUpdated(
+							mScanner.createOPDSRoot());
+			});
 		});
 	}
 

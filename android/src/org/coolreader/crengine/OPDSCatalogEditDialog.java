@@ -21,7 +21,9 @@ package org.coolreader.crengine;
 
 import org.coolreader.CoolReader;
 import org.coolreader.R;
+import org.coolreader.db.CRDBService;
 
+import android.app.AlertDialog;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
@@ -34,6 +36,9 @@ public class OPDSCatalogEditDialog extends BaseDialog {
 	private final EditText nameEdit;
 	private final EditText urlEdit;
 	private final Runnable mOnUpdate;
+	private final ServiceLifecycle serviceLifecycle;
+	private final CatalogEditSession editSession =
+			new CatalogEditSession();
 
 	public OPDSCatalogEditDialog(CoolReader activity, FileInfo item, Runnable onUpdate) {
 		super(activity, activity.getString((item.id == null) ? R.string.dlg_catalog_add_title
@@ -42,6 +47,8 @@ public class OPDSCatalogEditDialog extends BaseDialog {
 		mActivity = activity;
 		mItem = item;
 		mOnUpdate = onUpdate;
+		serviceLifecycle =
+				activity.getServiceDependencies().getLifecycle();
 		mInflater = LayoutInflater.from(getContext());
 		View view = mInflater.inflate(R.layout.catalog_edit_dialog, null);
 		nameEdit = (EditText) view.findViewById(R.id.catalog_name);
@@ -56,27 +63,41 @@ public class OPDSCatalogEditDialog extends BaseDialog {
 	@Override
 	protected void onPositiveButtonClick() {
 		String url = urlEdit.getText().toString();
-		boolean blacklist = checkBlackList(url);
-		if (OPDSConst.BLACK_LIST_MODE == OPDSConst.BLACK_LIST_MODE_FORCE) {
+		String name = nameEdit.getText().toString();
+		boolean blacklisted = checkBlackList(url);
+		if (blacklisted
+				&& OPDSConst.BLACK_LIST_MODE
+						== OPDSConst.BLACK_LIST_MODE_FORCE) {
 			mActivity.showToast(R.string.black_list_enforced);
-		} else if (OPDSConst.BLACK_LIST_MODE == OPDSConst.BLACK_LIST_MODE_WARN) {
-			mActivity.askConfirmation(R.string.black_list_warning, new Runnable() {
-				@Override
-				public void run() {
-					save();
-					OPDSCatalogEditDialog.super.onPositiveButtonClick();
-				}
-				
-			}, new Runnable() {
-				@Override
-				public void run() {
-					onNegativeButtonClick();
-				}
-			});
+		} else if (blacklisted
+				&& OPDSConst.BLACK_LIST_MODE
+						== OPDSConst.BLACK_LIST_MODE_WARN) {
+			showBlacklistWarning(url, name);
 		} else {
-			save();
-			super.onPositiveButtonClick();
+			saveAndClose(url, name);
 		}
+	}
+
+	private void showBlacklistWarning(
+			String url,
+			String name) {
+		if (!editSession.beginConfirmation())
+			return;
+		AlertDialog warning =
+				new AlertDialog.Builder(mActivity)
+						.setMessage(R.string.black_list_warning)
+						.setPositiveButton(
+								R.string.dlg_button_ok,
+								(dialog, which) ->
+										saveAndClose(url, name))
+						.setNegativeButton(
+								R.string.dlg_button_cancel,
+								(dialog, which) ->
+										onNegativeButtonClick())
+						.create();
+		warning.setOnCancelListener(
+				dialog -> editSession.cancelConfirmation());
+		warning.show();
 	}
 	
 	private boolean checkBlackList(String url) {
@@ -87,20 +108,70 @@ public class OPDSCatalogEditDialog extends BaseDialog {
 		return false;
 	}
 	
-	private void save() {
-		activity.getDB().saveOPDSCatalog(mItem.id,
-				urlEdit.getText().toString(), nameEdit.getText().toString());
-		mOnUpdate.run();
+	private void saveAndClose(String url, String name) {
+		if (!editSession.claim(
+				CatalogEditSession.TerminalAction.SAVE))
+			return;
+		persistCatalog(
+				mActivity,
+				serviceLifecycle,
+				mItem.id,
+				url,
+				name,
+				mOnUpdate);
 		super.onPositiveButtonClick();
+	}
+
+	private static void persistCatalog(
+			CoolReader activity,
+			ServiceLifecycle lifecycle,
+			Long id,
+			String url,
+			String name,
+			Runnable onUpdate) {
+		if (!lifecycle.isActive())
+			return;
+		CRDBService.LocalBinder db = activity.getDB();
+		if (db != null) {
+			saveCatalog(db, id, url, name);
+			if (onUpdate != null && lifecycle.isActive())
+				onUpdate.run();
+			return;
+		}
+		activity.waitForCRDBService(() -> {
+			if (!lifecycle.isActive())
+				return;
+			CRDBService.LocalBinder connectedDb =
+					activity.getDB();
+			if (connectedDb == null)
+				return;
+			saveCatalog(connectedDb, id, url, name);
+			if (onUpdate != null && lifecycle.isActive())
+				onUpdate.run();
+		});
+	}
+
+	private static void saveCatalog(
+			CRDBService.LocalBinder db,
+			Long id,
+			String url,
+			String name) {
+		db.saveOPDSCatalog(id, url, name);
 	}
 
 	@Override
 	protected void onNegativeButtonClick() {
+		if (!editSession.claim(
+				CatalogEditSession.TerminalAction.CANCEL))
+			return;
 		super.onNegativeButtonClick();
 	}
 
 	@Override
 	protected void onThirdButtonClick() {
+		if (!editSession.claim(
+				CatalogEditSession.TerminalAction.DELETE))
+			return;
 		mActivity.askDeleteCatalog(mItem);
 		super.onThirdButtonClick();
 	}

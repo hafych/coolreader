@@ -202,6 +202,13 @@ visible back button. Edited metadata updates the captured book and browser
 snapshot once, while persistence uses a copied `BookInfo`; a temporary database
 disconnect queues only that persistence callback and cannot retain the dialog
 or dereference a null binder.
+OPDS catalog editing serializes warning confirmation and save/cancel/delete
+through a `CatalogEditSession`. Only the first terminal action can win, so
+`BaseDialog` dismiss bookkeeping cannot repeat a save or close path. The
+blacklist warning is entered only for a matching URL. Save and confirmed delete
+capture immutable IDs/text, recheck the service generation, and queue through a
+temporary database disconnect without dereferencing a missing binder or
+retaining the editor dialog.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

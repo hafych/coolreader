@@ -380,6 +380,13 @@ DRM или ограничений доступа, подбор/получени�
   один раз. Metadata сначала обновляет captured book/browser snapshot, затем
   сохраняется через immutable `BookInfo` copy; временный DB disconnect ставит
   только persistence callback без удержания dialog и больше не приводит к NPE.
+  Редактор OPDS-каталога теперь сериализует warning confirmation и
+  save/cancel/delete через `CatalogEditSession`: первый terminal action
+  выигрывает, dismiss bookkeeping не запускает второй save/close, а
+  blacklist warning применяется только к совпавшему URL. Save и подтверждённый
+  delete захватывают immutable значения, повторно проверяют service generation
+  и переживают DB disconnect без nullable-binder crash; persistence callbacks
+  не удерживают editor dialog.
   Фоновая language-фильтрация font picker теперь принадлежит отдельной
   `FontFilterSession`: scan читает deep-copied candidate snapshot, replacement,
   uncheck и dismiss физически вызывают `ScanControl.stop()`, а late completion

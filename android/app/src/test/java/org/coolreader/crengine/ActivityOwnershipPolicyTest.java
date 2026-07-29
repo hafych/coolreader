@@ -1058,6 +1058,45 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void opdsEditorOwnsConfirmationAndTerminalAction()
+			throws Exception {
+		for (String name : new String[]{
+				"serviceLifecycle",
+				"editSession"}) {
+			Field field =
+					OPDSCatalogEditDialog.class
+							.getDeclaredField(name);
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+		}
+		Method persistCatalog =
+				OPDSCatalogEditDialog.class.getDeclaredMethod(
+						"persistCatalog",
+						CoolReader.class,
+						ServiceLifecycle.class,
+						Long.class,
+						String.class,
+						String.class,
+						Runnable.class);
+		assertTrue(Modifier.isPrivate(
+				persistCatalog.getModifiers()));
+		assertTrue(Modifier.isStatic(
+				persistCatalog.getModifiers()));
+
+		assertSynchronizedMethod(
+				CatalogEditSession.class,
+				"beginConfirmation");
+		assertSynchronizedMethod(
+				CatalogEditSession.class,
+				"cancelConfirmation");
+		assertSynchronizedMethod(
+				CatalogEditSession.class,
+				"claim",
+				CatalogEditSession.TerminalAction.class);
+	}
+
+	@Test
 	public void bookInfoDialogOwnsOpenCoverAndCloseLifecycle()
 			throws Exception {
 		Field openRequests =
