@@ -80,7 +80,7 @@ DRM или ограничений доступа, подбор/получени�
   Legacy GUI warning cleanup/current command mapping, document callbacks/battery,
   controls/property/font-menu helpers, font property keys,
   CSS/image/document/history/settings/help paths,
-  dialog/menu/about/search/number-input text, on-screen keyboard layouts
+  dialog/menu/about/search/number-input/TOC text, on-screen keyboard layouts
   и T9 layout storage приведены к текущим `lString32`/UTF-32 контрактам.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,

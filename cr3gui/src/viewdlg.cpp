@@ -196,7 +196,7 @@ void CRViewDialog::showGoToPageDialog()
     if ( toc && toc->getChildCount()>0 ) {
 #endif
         dlg = new CRTOCDialog( _wm,
-            lString16( _("Table of contents") ),
+            Utf8ToUnicode(lString8(_("Table of contents"))),
             MCMD_GO_PAGE_APPLY, _docview->getPageCount(), _docview.get() );
 #if USE_SEPARATE_GO_TO_PAGE_DIALOG==1
     } else {

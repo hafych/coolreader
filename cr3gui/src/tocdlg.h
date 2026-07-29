@@ -38,17 +38,27 @@ class CRTOCDialog : public CRNumberEditDialog
         int _pageItems;
         LVDocView * _docview;
 
-        virtual void draw();
+        void draw() override;
     public:
-        CRTOCDialog( CRGUIWindowManager * wm, lString16 title, int resultCmd, int pageCount, LVDocView * docview );
-        virtual ~CRTOCDialog()
+        CRTOCDialog(
+                CRGUIWindowManager * wm, lString32 title,
+                int resultCmd, int pageCount, LVDocView * docview);
+        CRTOCDialog(
+                CRGUIWindowManager * wm, lString16 title,
+                int resultCmd, int pageCount, LVDocView * docview)
+            : CRTOCDialog(
+                    wm, Utf16ToUnicode(title),
+                    resultCmd, pageCount, docview)
         {
         }
-        bool digitEntered( lChar16 c );
+        ~CRTOCDialog() override
+        {
+        }
+        bool digitEntered( lChar32 c );
         int getCurItemIndex();
 
         /// returns true if command is processed
-        virtual bool onCommand( int command, int params );
+        bool onCommand( int command, int params ) override;
 };
 
 

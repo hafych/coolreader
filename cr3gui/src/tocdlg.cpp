@@ -28,13 +28,13 @@
 #include "tocdlg.h"
 #include <cri18n.h>
 
-lString16 limitTextWidth( lString16 s, int width, LVFontRef font )
+static lString32 limitTextWidth( lString32 s, int width, LVFontRef font )
 {
 
     int w = font->getTextWidth(s.c_str(), s.length());
     if ( w<width )
         return s;
-    lString16 sss("...");
+    lString32 sss(U"...");
     int www = font->getTextWidth(sss.c_str(), sss.length());
     while (s.length()>0) {
         s.erase(s.length()-1, 1);
@@ -42,7 +42,7 @@ lString16 limitTextWidth( lString16 s, int width, LVFontRef font )
         if ( w+www<=width )
             return s+sss;
     }
-    return lString16(".");
+    return lString32(U".");
 }
 
 void CRTOCDialog::draw()
@@ -86,8 +86,8 @@ void CRTOCDialog::draw()
 
 
 
-        lString16 titleString = item->getName();
-        lString16 pageString = lString16::itoa( item->getPage() + 1 );
+        lString32 titleString = item->getName();
+        lString32 pageString = lString32::itoa( item->getPage() + 1 );
         int pageNumWidth = valueSkin->getFont()->getTextWidth( pageString.c_str(), pageString.length() );
         int titleWidth = itemSkin->getFont()->getTextWidth( titleString.c_str(), titleString.length() );
         int level = item->getLevel();
@@ -100,7 +100,7 @@ void CRTOCDialog::draw()
         if ( !itemRect.isEmpty() ) {
             lvRect rc = itemRect;
             //rc.extendBy( borders );
-            lString16 s = limitTextWidth( titleString, rc.width()-borders.left-borders.right, itemSkin->getFont() );
+            lString32 s = limitTextWidth( titleString, rc.width()-borders.left-borders.right, itemSkin->getFont() );
             itemSkin->drawText( *drawbuf, rc, s );
         }
         if ( !pageNumRect.isEmpty() ) {
@@ -125,12 +125,15 @@ void CRTOCDialog::draw()
     }
 }
 
-CRTOCDialog::CRTOCDialog( CRGUIWindowManager * wm, lString16 title, int resultCmd, int pageCount, LVDocView * docview )
-: CRNumberEditDialog( wm, title, lString16::empty_str, resultCmd, 1, pageCount )
+CRTOCDialog::CRTOCDialog(
+        CRGUIWindowManager * wm, lString32 title,
+        int resultCmd, int pageCount, LVDocView * docview)
+: CRNumberEditDialog(
+        wm, title, lString32::empty_str, resultCmd, 1, pageCount)
 ,_docview(docview)
 {
     docview->getFlatToc( _items );
-    _skinName = "#toc";
+    _skinName = U"#toc";
     _skin = _wm->getSkin()->getMenuSkin(_skinName.c_str());
     CRRectSkinRef clientSkin = _skin->getClientSkin();
     CRRectSkinRef itemSkin = _skin->getItemSkin();
@@ -149,7 +152,6 @@ CRTOCDialog::CRTOCDialog( CRGUIWindowManager * wm, lString16 title, int resultCm
     _fullscreen = true;
     _rect = _wm->getScreen()->getRect();
     _caption = title;
-    lvRect clientRect = _skin->getClientRect( _rect );
     lvRect tocRect;
     getClientRect( tocRect );
     tocRect.shrinkBy(borders);
@@ -162,21 +164,23 @@ CRTOCDialog::CRTOCDialog( CRGUIWindowManager * wm, lString16 title, int resultCm
     _pages = (_items.length() + (_pageItems - 1)) / _pageItems;
     int curPage = _docview->getCurPage();
     int docPages = _docview->getPageCount();
-    lString16 pageString(_("Current page: $1 of $2\n"));
+    lString32 pageString =
+            Utf8ToUnicode(lString8(_("Current page: $1 of $2\n")));
     pageString.replaceIntParam(1, curPage+1);
     pageString.replaceIntParam(2, docPages);
-    _statusText = pageString + lString16(_("Enter page number:"));
-    _inputText = "_";
+    _statusText = pageString
+            + Utf8ToUnicode(lString8(_("Enter page number:")));
+    _inputText = U"_";
 }
 
-bool CRTOCDialog::digitEntered( lChar16 c )
+bool CRTOCDialog::digitEntered( lChar32 c )
 {
-    lString16 v = _value;
+    lString32 v = _value;
     v << c;
     int n = v.atoi();
     if ( n<=_maxvalue ) {
         _value = v;
-        _inputText = _value + "_";
+        _inputText = _value + U"_";
         setDirty();
         return true;
     }
@@ -216,7 +220,7 @@ bool CRTOCDialog::onCommand( int command, int params )
     case MCMD_CANCEL:
         if ( _value.length()>0 ) {
             _value.erase( _value.length()-1, 1 );
-            _inputText = _value + "_";
+            _inputText = _value + U"_";
             setDirty();
         } else {
             _wm->closeWindow( this );

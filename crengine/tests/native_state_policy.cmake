@@ -25,6 +25,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/viewdlg.h" VIEW_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/viewdlg.cpp" VIEW_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/numedit.h" NUMBER_EDIT_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/numedit.cpp" NUMBER_EDIT_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/tocdlg.h" TOC_DIALOG_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/tocdlg.cpp" TOC_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7310,6 +7312,31 @@ forbid_source_text(
   "${NUMBER_EDIT_SOURCE}"
   "getMenuSkin(L\"#toc\")"
   "number-editor skin identifiers must use the current character width"
+)
+require_source_text(
+  "${TOC_DIALOG_HEADER}"
+  "CRGUIWindowManager * wm, lString32 title,"
+  "TOC dialogs must accept current-width titles"
+)
+require_source_text(
+  "${TOC_DIALOG_HEADER}"
+  "wm, Utf16ToUnicode(title),"
+  "legacy TOC titles must cross an explicit compatibility boundary"
+)
+require_source_text(
+  "${TOC_DIALOG_SOURCE}"
+  "lString32 titleString = item->getName();"
+  "TOC item titles must preserve the document string width"
+)
+require_source_text(
+  "${TOC_DIALOG_SOURCE}"
+  "lString32 pageString = lString32::itoa"
+  "TOC page labels must use the current string width"
+)
+forbid_source_text(
+  "${TOC_DIALOG_SOURCE}"
+  "lString16"
+  "TOC dialog implementations must not narrow text to UTF-16"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
