@@ -325,6 +325,22 @@ WORD_TIMING_AUDIOBOOK_MATCHER = (
 TTS_CONTROL_SERVICE = SOURCE / "tts" / "TTSControlService.java"
 ABOUT_DIALOG = SOURCE / "crengine" / "AboutDialog.java"
 OPTIONS_DIALOG = SOURCE / "crengine" / "OptionsDialog.java"
+INTERFACE_THEME = SOURCE / "crengine" / "InterfaceTheme.java"
+INTERFACE_THEME_CATALOG = (
+    SOURCE / "crengine" / "InterfaceThemeCatalog.java"
+)
+INTERFACE_THEME_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "InterfaceThemeTest.java"
+)
 STYLE_OPTION_CATALOG = SOURCE / "crengine" / "StyleOptionCatalog.java"
 STYLE_OPTION_CATALOG_TEST = (
     ROOT
@@ -487,6 +503,16 @@ def main() -> None:
             violations.append(
                 f"{relative(BASE_ACTIVITY)} retains mutable/process config: "
                 f"{legacy}")
+    for marker in (
+        "private final InterfaceThemeCatalog interfaceThemes",
+        "InterfaceThemeCatalog.create(DeviceInfo.EINK_SCREEN)",
+        "InterfaceThemeCatalog getInterfaceThemes()",
+        "interfaceThemes.findByCode(themeCode)",
+    ):
+        if marker not in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} omits Activity-owned theme "
+                f"marker: {marker}")
 
     app_locale_text = APP_LOCALE_SELECTION.read_text(encoding="utf-8")
     for marker in (
@@ -1513,6 +1539,7 @@ def main() -> None:
         "private static final StyleOptionCatalog STYLE_OPTION_CATALOG",
         "STYLE_OPTION_CATALOG.entries()",
         "createStyleEditor(style.code(), style.titleId())",
+        "mActivity.getInterfaceThemes().themes()",
     ):
         if marker not in options_text:
             violations.append(
@@ -1531,10 +1558,68 @@ def main() -> None:
         "public static final String[] mBacklightLevelsTitles",
         "styleCodes",
         "styleTitles",
+        "InterfaceTheme.allThemes",
     ):
         if marker in options_text:
             violations.append(
                 f"{relative(OPTIONS_DIALOG)} retains process UI state: "
+                f"{marker}")
+
+    interface_theme_text = INTERFACE_THEME.read_text(encoding="utf-8")
+    for marker in (
+        "public final class InterfaceTheme",
+        "private final Visuals visuals",
+        "static InterfaceTheme create(",
+        "private static final class Visuals",
+        "private final int toolbarButtonAlpha",
+    ):
+        if marker not in interface_theme_text:
+            violations.append(
+                f"{relative(INTERFACE_THEME)} omits immutable theme "
+                f"marker: {marker}")
+    for legacy in (
+        "InterfaceTheme[] allThemes",
+        "setRootDelimiter(",
+        "setBackgrounds(",
+        "setToolbarButtonAlpha(",
+        "DeviceInfo.EINK_SCREEN",
+    ):
+        if legacy in interface_theme_text:
+            violations.append(
+                f"{relative(INTERFACE_THEME)} retains mutable/process theme "
+                f"state: {legacy}")
+
+    interface_theme_catalog_text = INTERFACE_THEME_CATALOG.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class InterfaceThemeCatalog",
+        "private final List<InterfaceTheme> themes",
+        "Collections.unmodifiableList(",
+        "new ArrayList<>(themes)",
+        "static InterfaceThemeCatalog create(boolean einkScreen)",
+        "List<InterfaceTheme> themes()",
+        "InterfaceTheme findByCode(String code)",
+        '"BLACK"',
+        '"HICONTRAST2"',
+    ):
+        if marker not in interface_theme_catalog_text:
+            violations.append(
+                f"{relative(INTERFACE_THEME_CATALOG)} omits generation-owned "
+                f"theme marker: {marker}")
+
+    interface_theme_test_text = INTERFACE_THEME_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "catalogPreservesLegacyOrderAndLookup",
+        "catalogCannotBeMutated",
+        "definitionsHaveOnlyFinalPrivateStorage",
+        "visualValuesMatchLegacyDefinitions",
+        "einkCatalogForcesOpaqueToolbarButtons",
+        "assertEquals(8, catalog.themes().size())",
+    ):
+        if marker not in interface_theme_test_text:
+            violations.append(
+                f"{relative(INTERFACE_THEME_TEST)} omits theme regression: "
                 f"{marker}")
 
     style_catalog_text = STYLE_OPTION_CATALOG.read_text(encoding="utf-8")

@@ -103,6 +103,10 @@ through the pure `BacklightOptions` owner; callers receive copies and localized
 titles are built per Activity instead of mutating a global array. Document
 style codes and label resources are paired in one immutable
 `StyleOptionCatalog`, preventing the former parallel arrays from drifting.
+Interface themes follow the same boundary: each `BaseActivity` owns an
+immutable `InterfaceThemeCatalog` built from its E-Ink snapshot. Theme visual
+metadata is final, the ordered catalog is unmodifiable, and `OptionsDialog`
+enumerates that Activity-owned view instead of a public process-wide array.
 
 Screen-backlight user-activity timestamps and scheduled timer tasks belong to
 the `ScreenBacklightControl` of one `BaseActivity` generation. Threshold and

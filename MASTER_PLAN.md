@@ -153,6 +153,8 @@ DRM или ограничений доступа, подбор/получени�
   time formatter без int narrowing для multi-day persisted durations.
   Также audio sibling lookup и filename transliteration вынесены в private
   immutable owners без process-wide array escape и зависимости от OPDS types.
+  Interface theme definitions теперь immutable values в generation-owned
+  catalog `BaseActivity`, с явным E-Ink snapshot и без public static array.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

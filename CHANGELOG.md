@@ -57,6 +57,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Gesture acceleration now uses an immutable curve owned by each reader and
   widened interpolation across the full integer range. Document style codes
   and labels now share one typed immutable catalog instead of parallel arrays.
+- Interface theme definitions and their E-Ink visual choices now belong to an
+  immutable catalog owned by each Activity; the legacy public theme array has
+  been removed.
 - External dictionary definitions, including intent data keys, now live in one
   immutable catalog; legacy array callers receive independent snapshots.
 - Audio sibling selection and filename transliteration now use private

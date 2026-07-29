@@ -1711,7 +1711,8 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		{
 			super( owner, label, PROP_APP_THEME );
 			setDefaultValue(DeviceInfo.FORCE_HC_THEME ? "HICONTRAST1" : "LIGHT");
-			for (InterfaceTheme theme : InterfaceTheme.allThemes)
+			for (InterfaceTheme theme :
+					mActivity.getInterfaceThemes().themes())
 				add(theme.getCode(), getString(theme.getDisplayNameResourceId()));
 		}
 	}

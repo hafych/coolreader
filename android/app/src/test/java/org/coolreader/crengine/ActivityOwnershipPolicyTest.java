@@ -474,6 +474,37 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void interfaceThemesAreImmutableAndActivityOwned()
+			throws Exception {
+		Field catalog =
+				BaseActivity.class.getDeclaredField("interfaceThemes");
+		assertFalse(Modifier.isStatic(catalog.getModifiers()));
+		assertTrue(Modifier.isPrivate(catalog.getModifiers()));
+		assertTrue(Modifier.isFinal(catalog.getModifiers()));
+
+		assertTrue(Modifier.isFinal(
+				InterfaceTheme.class.getModifiers()));
+		for (Field field : InterfaceTheme.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (Class<?> nested : InterfaceTheme.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				assertFalse(Modifier.isStatic(field.getModifiers()));
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (Field field :
+				InterfaceThemeCatalog.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

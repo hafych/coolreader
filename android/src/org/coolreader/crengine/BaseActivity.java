@@ -414,10 +414,16 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 
 	private InterfaceTheme currentTheme = null;
+	private final InterfaceThemeCatalog interfaceThemes =
+			InterfaceThemeCatalog.create(DeviceInfo.EINK_SCREEN);
 	private ActionIconSet actionIcons = ActionIconSet.empty();
 
 	public InterfaceTheme getCurrentTheme() {
 		return currentTheme;
+	}
+
+	InterfaceThemeCatalog getInterfaceThemes() {
+		return interfaceThemes;
 	}
 
 	int getActionIconId(ReaderAction action) {
@@ -425,9 +431,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	public void setCurrentTheme(String themeCode) {
-		InterfaceTheme theme = InterfaceTheme.findByCode(themeCode);
+		InterfaceTheme theme = interfaceThemes.findByCode(themeCode);
 		if (null == theme)
-			theme = DeviceInfo.FORCE_HC_THEME ? InterfaceTheme.HICONTRAST1 : InterfaceTheme.LIGHT;
+			theme = interfaceThemes.findByCode(
+					DeviceInfo.FORCE_HC_THEME
+							? "HICONTRAST1"
+							: "LIGHT");
 		if (currentTheme != theme) {
 			setCurrentTheme(theme);
 		}
