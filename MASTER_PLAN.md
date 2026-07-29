@@ -168,6 +168,10 @@ DRM или ограничений доступа, подбор/получени�
   ReaderView-owned lease tracker: overlapping clients восстанавливают исходный
   interval только после последнего matching release, а duplicate/unmatched
   transitions и отрицательные vendor intervals обрабатываются без sentinel.
+  Battery receiver/renderer boundary переведён с трёх параллельных mutable
+  полей на immutable `BatteryStatus`: provider level нормализуется по scale
+  widened arithmetic, Activity хранит один initial snapshot, а `ReaderView`
+  публикует один volatile snapshot без mixed-generation native update.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

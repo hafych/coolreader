@@ -15,6 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import org.coolreader.CoolReader;
 import org.coolreader.Dictionaries;
 import org.coolreader.plugins.litres.LitresPlugin;
 import org.junit.Test;
@@ -266,6 +267,56 @@ public class ActivityOwnershipPolicyTest {
 							+ field.getName(),
 					field.getName().equals("savedEinkUpdateInterval")
 							|| field.getName().equals("einkModeClients"));
+		}
+	}
+
+	@Test
+	public void batteryStatusIsAnAtomicReaderSnapshot()
+			throws Exception {
+		Field readerStatus =
+				ReaderView.class.getDeclaredField("batteryStatus");
+		assertFalse(Modifier.isStatic(readerStatus.getModifiers()));
+		assertTrue(Modifier.isPrivate(readerStatus.getModifiers()));
+		assertTrue(Modifier.isVolatile(readerStatus.getModifiers()));
+		assertEquals(BatteryStatus.class, readerStatus.getType());
+
+		Field initialStatus =
+				CoolReader.class.getDeclaredField(
+						"initialBatteryStatus");
+		assertFalse(Modifier.isStatic(initialStatus.getModifiers()));
+		assertTrue(Modifier.isPrivate(initialStatus.getModifiers()));
+		assertEquals(BatteryStatus.class, initialStatus.getType());
+
+		for (Field field : BatteryStatus.class.getDeclaredFields()) {
+			if (Modifier.isStatic(field.getModifiers())) {
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+				assertTrue(field.getType().isPrimitive());
+			} else {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (String legacy : new String[]{
+				"mBatteryState",
+				"mBatteryChargingConn",
+				"mBatteryChargeLevel"}) {
+			for (Field field : ReaderView.class.getDeclaredFields()) {
+				assertFalse(
+						"ReaderView retains parallel battery field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+		for (String legacy : new String[]{
+				"initialBatteryState",
+				"initialBatteryChargeConn",
+				"initialBatteryLevel"}) {
+			for (Field field : CoolReader.class.getDeclaredFields()) {
+				assertFalse(
+						"CoolReader retains parallel battery field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
 		}
 	}
 

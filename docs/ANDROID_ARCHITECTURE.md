@@ -151,6 +151,13 @@ release restores it. Duplicate or unmatched transitions are no-ops, and every
 integer interval—including negative vendor values—is preserved as data rather
 than overloaded as lifecycle state.
 
+Battery broadcasts cross the Activity/reader boundary as one immutable
+`BatteryStatus`. Android's raw level is normalized against its advertised scale
+with widened arithmetic and clamped to 0–100. `CoolReader` retains one initial
+snapshot before view creation, while `ReaderView` publishes a single volatile
+snapshot to render work and captures it once before updating the native
+document, avoiding mixed state/charger/level generations.
+
 Each `ReaderView` also owns its bitmap pool and `VMRuntimeHack`. The optional
 legacy VM reflection bindings are final, accounting is synchronized and uses a
 `long`, and failed vendor calls do not corrupt the local total. Bitmap memory

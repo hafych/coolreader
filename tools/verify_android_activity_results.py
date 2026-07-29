@@ -79,6 +79,7 @@ GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
 ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
 READING_TIME_TRACKER = SOURCE / "crengine" / "ReadingTimeTracker.java"
 READING_TIME_FORMATTER = SOURCE / "crengine" / "ReadingTimeFormatter.java"
+BATTERY_STATUS = SOURCE / "crengine" / "BatteryStatus.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
@@ -267,6 +268,18 @@ BITMAP_MEMORY_ACCOUNTING_TEST = (
     / "coolreader"
     / "crengine"
     / "BitmapMemoryAccountingTest.java"
+)
+BATTERY_STATUS_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "BatteryStatusTest.java"
 )
 ACTION_ICON_SET_TEST = (
     ROOT
@@ -1327,6 +1340,24 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} retains inline E-Ink refresh "
                 f"state: {legacy}")
+    for marker in (
+        "private volatile BatteryStatus batteryStatus",
+        "public void setBatteryStatus(BatteryStatus status)",
+        "private void applyBatteryStatusToDocument()",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits atomic battery snapshot: "
+                f"{marker}")
+    for legacy in (
+        "mBatteryState",
+        "mBatteryChargingConn",
+        "mBatteryChargeLevel",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains parallel battery field: "
+                f"{legacy}")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(
@@ -1667,6 +1698,58 @@ def main() -> None:
             violations.append(
                 f"{relative(EINK_REFRESH_LEASE_TRACKER_TEST)} omits E-Ink "
                 f"lease regression: {marker}")
+
+    battery_status_text = BATTERY_STATUS.read_text(encoding="utf-8")
+    for marker in (
+        "public final class BatteryStatus",
+        "private final int state",
+        "private final int chargingConnection",
+        "private final int chargeLevel",
+        "public static BatteryStatus unavailable()",
+        "public static BatteryStatus fromRawLevel(",
+        "(long) rawLevel * 100 / scale",
+        "Math.min(percent, 100)",
+    ):
+        if marker not in battery_status_text:
+            violations.append(
+                f"{relative(BATTERY_STATUS)} omits immutable battery "
+                f"snapshot marker: {marker}")
+
+    battery_status_test_text = BATTERY_STATUS_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "rawLevelIsNormalizedAgainstProviderScale",
+        "invalidAndOutOfRangeLevelsAreSafelyClamped",
+        "unavailableStatusMatchesNativeNoBatteryContract",
+        "statusIsAnImmutableComparableSnapshot",
+        "level(Integer.MAX_VALUE, 1)",
+        "Modifier.isFinal(BatteryStatus.class.getModifiers())",
+    ):
+        if marker not in battery_status_test_text:
+            violations.append(
+                f"{relative(BATTERY_STATUS_TEST)} omits battery snapshot "
+                f"regression: {marker}")
+
+    cool_reader_battery_text = COOL_READER.read_text(encoding="utf-8")
+    for marker in (
+        "private BatteryStatus initialBatteryStatus",
+        "BatteryManager.EXTRA_SCALE",
+        "BatteryStatus.fromRawLevel(",
+        "mReaderView.setBatteryStatus(",
+    ):
+        if marker not in cool_reader_battery_text:
+            violations.append(
+                f"{relative(COOL_READER)} omits battery boundary marker: "
+                f"{marker}")
+    for legacy in (
+        "initialBatteryState",
+        "initialBatteryChargeConn",
+        "initialBatteryLevel",
+    ):
+        if legacy in cool_reader_battery_text:
+            violations.append(
+                f"{relative(COOL_READER)} retains parallel initial battery "
+                f"field: {legacy}")
 
     page_curve_tables_text = PAGE_CURVE_TABLES.read_text(encoding="utf-8")
     for marker in (

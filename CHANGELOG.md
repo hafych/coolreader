@@ -386,6 +386,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Temporary E-Ink full-refresh suppression now uses reader-owned client leases.
   Overlapping clients restore the saved interval exactly once, while duplicate
   or unmatched releases no longer restore an invalid sentinel interval.
+- Android battery percentages now honor the provider's advertised scale and
+  clamp malformed values. Activity, reader UI and native rendering share one
+  immutable status snapshot instead of independently observed parallel fields.
 - Scroll-view animation frames now use fractional progress instead of truncated
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates
