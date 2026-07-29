@@ -634,6 +634,22 @@ if(BUILD_TESTING AND UNIX)
   )
   add_test(NAME epub3_regression COMMAND epub3_regression_test)
 
+  add_executable(tinydict_regression_test
+    ${CMAKE_SOURCE_DIR}/crengine/tests/tinydict_regression_test.cpp
+  )
+  target_include_directories(tinydict_regression_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/tinydict
+  )
+  if(TARGET tinydict)
+    target_link_libraries(tinydict_regression_test tinydict)
+  else()
+    target_sources(tinydict_regression_test PRIVATE
+      ${CMAKE_SOURCE_DIR}/tinydict/tinydict.cpp
+    )
+  endif()
+  target_link_libraries(tinydict_regression_test ${ZLIB_LIBRARIES})
+  add_test(NAME tinydict_regression COMMAND tinydict_regression_test)
+
   add_test(NAME native_state_policy
     COMMAND ${CMAKE_COMMAND}
       "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}"
@@ -653,6 +669,7 @@ if(USE_CLANG_WARNING_GATE)
     css_regression_test
     hyphenation_regression_test
     epub3_regression_test
+    tinydict_regression_test
     fb2props
     fb2propstest
     cr3

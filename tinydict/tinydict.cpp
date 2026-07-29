@@ -22,6 +22,8 @@
 #include <stdlib.h>
 #include "tinydict.h"
 
+#include <limits>
+#include <vector>
 
 /// add word to list
 void TinyDictWordList::add( TinyDictWord * word )
@@ -129,18 +131,6 @@ public:
         crc = crc32( crc, (const unsigned char *)data, size );
         return crc;
     }
-    unsigned update( unsigned char b )
-    {
-        return update( &b, sizeof(b) );
-    }
-    unsigned update( unsigned short b )
-    {
-        return update( &b, sizeof(b) );
-    }
-    unsigned update( unsigned int b )
-    {
-        return update( &b, sizeof(b) );
-    }
     TinyDictCRC()
     {
         reset();
@@ -152,47 +142,24 @@ class TinyDictZStream
     FILE * f;
     TinyDictCRC crc;
 
-    int type;
     unsigned size;
 
-    unsigned headerLength;
     bool error;
-    unsigned short * chunks;
-    unsigned int * offsets;
-    unsigned extraLength;
-    unsigned char subfieldID1;
-    unsigned char subfieldID2;
-    unsigned subfieldLength;
-    unsigned subfieldVersion;
+    std::vector<unsigned short> chunks;
+    std::vector<unsigned int> offsets;
     unsigned chunkLength;
-    unsigned chunkCount;
 
     bool     zInitialized;
     z_stream zStream;
-    unsigned packed_size;
-    unsigned char * unp_buffer;
+    std::vector<unsigned char> unp_buffer;
     unsigned unp_buffer_start;
     unsigned unp_buffer_len;
-    unsigned unp_buffer_size;
 
     unsigned int readBytes( unsigned char * buf, unsigned size )
     {
         if ( error || !f )
             return 0;
-        unsigned int bytesRead = fread( buf, 1, size, f );
-        crc.update( buf, bytesRead );
-        return bytesRead;
-    }
-
-    unsigned int readU32()
-    {
-        unsigned char buf[4];
-        if ( !error && f && fread( buf, 1, 4, f )==4 ) {
-            crc.update( buf, 4 );
-            return (((((((unsigned int)buf[3]) << 8) + buf[2]) << 8) + buf[1]) << 8 ) + buf[0];
-        }
-        error = true;
-        return 0;
+        return fread( buf, 1, size, f );
     }
 
     unsigned short readU16()
@@ -241,51 +208,27 @@ public:
 class TinyDictDataFile : public TinyDictFileBase
 {
     bool compressed;
-    char * buf;
-    int    buf_size;
+    std::vector<char> buf;
 
     TinyDictZStream zstream;
 
-    void reserve( int sz )
-    {
-        if ( buf_size < sz ) {
-            char * oldptr = buf;
-            buf = (char*) realloc( buf, sizeof(char) * sz );
-            if ( !buf) {
-                free(oldptr);
-                fprintf(stderr, "out of memory\n");
-                exit(-2);
-            }
-            buf_size = sz;
-        }
-    }
-
-
 public:
 
-	void compact()
-	{
-		zstream.compact();
-		if ( buf ) {
-			free( buf );
-			buf = NULL;
-			buf_size = 0;
-		}
-	}
+    void compact()
+    {
+        zstream.compact();
+        std::vector<char>().swap(buf);
+    }
 	
-	const char * read( const TinyDictWord * w );
+    const char * read( const TinyDictWord * w );
 
     bool open( const char * filename );
 
-    TinyDictDataFile() : compressed(false), buf(0), buf_size(0)
+    TinyDictDataFile() : compressed(false)
     {
     }
 
-    virtual ~TinyDictDataFile()
-    {
-        if ( buf )
-            free( buf );
-    }
+    virtual ~TinyDictDataFile() = default;
 };
 
 
@@ -458,12 +401,6 @@ bool TinyDictIndexFile::open( const char * filename )
     return true;
 }
 
-enum { 
-    DICT_TEXT,
-    DICT_GZIP,
-    DICT_DZIP
-};
-
 bool TinyDictZStream::zinit( unsigned char * next_in, unsigned avail_in, unsigned char * next_out, unsigned avail_out )
 {
     zclose();
@@ -495,21 +432,16 @@ bool TinyDictZStream::zclose()
 
 void TinyDictZStream::compact()
 {
-	if ( unp_buffer ) {
-		free( unp_buffer );
-		unp_buffer_start = unp_buffer_len = unp_buffer_size = 0;
-		unp_buffer = NULL;
-	}
+    std::vector<unsigned char>().swap(unp_buffer);
+    unp_buffer_start = unp_buffer_len = 0;
 }
 
 bool TinyDictZStream::readChunk( unsigned n )
 {
-    if ( n >= chunkCount )
+    if ( n >= chunks.size() )
         return false;
-    if ( !unp_buffer ) {
-        unp_buffer = (unsigned char *)malloc( sizeof(unsigned char)*chunkLength );
-        unp_buffer_size = chunkLength;
-    }
+    if ( unp_buffer.size() != chunkLength )
+        unp_buffer.resize(chunkLength);
     unp_buffer_start = n * chunkLength;
 
     if ( fseek( f, offsets[ n ], SEEK_SET ) ) {
@@ -517,24 +449,17 @@ bool TinyDictZStream::readChunk( unsigned n )
         return false;
     }
     unsigned packsz = chunks[n];
-    unsigned char * tmp = (unsigned char *)malloc( sizeof(unsigned char) * packsz );
+    if ( !packsz )
+        return false;
+    std::vector<unsigned char> packedChunk(packsz);
 
-    crc.reset();
-    unsigned int bytesRead = readBytes( tmp, packsz );
-    unsigned crc1 = crc.get();
-    unsigned crc2 = readU32();
+    unsigned int bytesRead = readBytes( packedChunk.data(), packsz );
     if ( bytesRead != packsz || error ) {
         printf( "error reading packed data\n" );
-        free( tmp );
         return false;
     }
-    if ( crc1!=crc2  ) {
-        printf( "CRC error: real: %08x expected: %08x\n", crc1, crc2 );
-        //free( tmp );
-        //return false;
-    }
-    zclose();
-    if ( !zinit(tmp, packsz, unp_buffer, unp_buffer_size) ) {
+    if ( !zinit(packedChunk.data(), packsz, unp_buffer.data(),
+                static_cast<unsigned>(unp_buffer.size())) ) {
         printf("cannot init deflater\n");
         return false;
     }
@@ -543,24 +468,20 @@ bool TinyDictZStream::readChunk( unsigned n )
     printf("inflate result: %d\n", err);
     if ( err != Z_OK ) {
         printf("Inflate error %s (%d). avail_in=%d, avail_out=%d \n", zStream.msg, err, (int)zStream.avail_in, (int)zStream.avail_out);
-        free( tmp );
+        zclose();
         return false;
     }
     if ( zStream.avail_in ) {
         printf("Inflate: not all data read, still %d bytes available\n", (int)zStream.avail_in );
-        free( tmp );
+        zclose();
         return false;
     }
-    unp_buffer_len = unp_buffer_size - zStream.avail_out;
+    unp_buffer_len = static_cast<unsigned>(unp_buffer.size())
+            - zStream.avail_out;
 
-    printf("freeing tmp\n");
-    free( tmp );
-    printf("done\n");
-
-
-
-    if ( n < chunkCount-1 && unp_buffer_len!=chunkLength ) {
+    if ( n + 1 < chunks.size() && unp_buffer_len!=chunkLength ) {
         printf("wrong chunk length\n");
+        zclose();
         return false; // too short chunk data
     }
 
@@ -571,37 +492,34 @@ bool TinyDictZStream::readChunk( unsigned n )
 
 bool TinyDictZStream::read( unsigned char * buf, unsigned start, unsigned len )
 {
-    if ( start >= unp_buffer_start && start < unp_buffer_start + unp_buffer_len ) {
-        unsigned readyBytes = unp_buffer_len - (start-unp_buffer_start);
+    if ( !buf && len )
+        return false;
+    while ( len ) {
+        bool buffered = start >= unp_buffer_start
+                && start - unp_buffer_start < unp_buffer_len;
+        if ( !buffered ) {
+            if ( !chunkLength || !readChunk(start / chunkLength) )
+                return false;
+            if ( start < unp_buffer_start
+                    || start - unp_buffer_start >= unp_buffer_len )
+                return false;
+        }
+        unsigned bufferOffset = start - unp_buffer_start;
+        unsigned readyBytes = unp_buffer_len - bufferOffset;
         if ( readyBytes > len )
             readyBytes = len;
-        memcpy( buf, unp_buffer + (start-unp_buffer_start), readyBytes );
+        memcpy( buf, unp_buffer.data() + bufferOffset, readyBytes );
         buf += readyBytes;
         start += readyBytes;
         len -= readyBytes;
-        if ( !len )
-            return true;
     }
-    unsigned n = start / chunkLength;
-    if ( !readChunk( n ) )
-        return false;
-    unsigned readyBytes = unp_buffer_len - (start-unp_buffer_start);
-    if ( readyBytes > len )
-        readyBytes = len;
-    memcpy( buf, unp_buffer + (start-unp_buffer_start), readyBytes );
-    buf += readyBytes;
-    start += readyBytes;
-    len -= readyBytes;
-    if ( !len )
-        return true;
-    return false;
+    return true;
 }
 
 TinyDictZStream::TinyDictZStream()
 : f ( NULL ), size( 0 )
-, headerLength(0), error( false )
-, chunks(NULL), offsets(NULL), chunkLength(0), chunkCount(0)
-, zInitialized(false), packed_size(0), unp_buffer(NULL), unp_buffer_start(0), unp_buffer_len(0), unp_buffer_size(0)
+, error( false ), chunkLength(0)
+, zInitialized(false), unp_buffer_start(0), unp_buffer_len(0)
 {
     memset( &zStream, 0, sizeof(zStream) );
 }
@@ -609,22 +527,26 @@ TinyDictZStream::TinyDictZStream()
 TinyDictZStream::~TinyDictZStream()
 {
     zclose();
-    if ( unp_buffer )
-        free( unp_buffer );
-    if ( chunks )
-        delete [] chunks;
-    if ( offsets )
-        delete [] offsets;
 }
 
 bool TinyDictZStream::open( FILE * file )
 {
+    zclose();
+    chunks.clear();
+    offsets.clear();
+    compact();
+    size = 0;
+    chunkLength = 0;
     f = file;
     error = false;
+    if ( !f )
+        return false;
     if ( fseek( f, 0, SEEK_END ) ) {
         return false;
     }
-    packed_size = ftell( f );
+    long fileSize = ftell(f);
+    if ( fileSize < 0 )
+        return false;
     if ( fseek( f, 0, SEEK_SET ) ) {
         return false;
     }
@@ -636,7 +558,6 @@ bool TinyDictZStream::open( FILE * file )
     }
     crc.update( header, sizeof(header) );
     if ( header[0]!=0x1f || header[1]!=0x8b ) { // 0x1F 0x8B -- GZIP magic
-        type = DICT_TEXT;
         return true;
     }
     if ( header[2]!=8 ) {
@@ -644,7 +565,7 @@ bool TinyDictZStream::open( FILE * file )
         return false;
     }
     unsigned char flg = header[3];
-    headerLength = 10;
+    unsigned headerLength = 10;
 
     //const char FTEXT   = 1;    // Extra text
     const char FHCRC   = 2;    // Header CRC
@@ -652,25 +573,20 @@ bool TinyDictZStream::open( FILE * file )
     const char FNAME   = 8;    // File name
     const char FCOMMENT = 16;   // File comment
 
-    type = DICT_GZIP;
-
-    packed_size = size;
-
     // Optional extra field
     if ( flg & FEXTRA ) {
-        type = DICT_DZIP;
-        extraLength = readU16();
+        unsigned extraLength = readU16();
         headerLength += extraLength + 2;
-        subfieldID1 = readU8();
-        subfieldID2 = readU8();
-        subfieldLength = readU16(); // 2 bytes subfield length
-        subfieldVersion = readU16(); // 2 bytes subfield version
+        readU8(); // subfield ID 1
+        readU8(); // subfield ID 2
+        readU16(); // 2 bytes subfield length
+        readU16(); // 2 bytes subfield version
         chunkLength = readU16(); // 2 bytes chunk length
-        chunkCount = readU16(); // 2 bytes chunk count
-        if ( error ) {
+        unsigned chunkCount = readU16(); // 2 bytes chunk count
+        if ( error || !chunkLength || !chunkCount ) {
             return false;
         }
-        chunks = new unsigned short[ chunkCount ];
+        chunks.resize(chunkCount);
         for (unsigned i=0; i<chunkCount; i++) {
             chunks[i] = readU16();
         }
@@ -701,22 +617,25 @@ bool TinyDictZStream::open( FILE * file )
         headerLength += 2;
     }
 
-    if ( chunkCount ) {
-        offsets = new unsigned int[ chunkCount ];
-        offsets[0] = headerLength;
-        size = chunks[0];
-        for ( unsigned i=1; i<chunkCount; i++ ) {
-            offsets[i] = offsets[i-1] + chunks[i-1];
-            size += chunks[i];
-        }
+    offsets.resize(chunks.size());
+    std::size_t payloadEnd = headerLength;
+    for ( std::size_t i=0; i<chunks.size(); i++ ) {
+        if ( payloadEnd > std::numeric_limits<unsigned>::max() )
+            return false;
+        offsets[i] = static_cast<unsigned>(payloadEnd);
+        payloadEnd += chunks[i];
     }
+    if ( payloadEnd > static_cast<std::size_t>(fileSize)
+            || static_cast<std::size_t>(fileSize) - payloadEnd < 8 )
+        return false;
 
     if ( fseek( f, headerLength, SEEK_SET ) ) {
         return false;
     }
 
-    if ( !readChunk( chunkCount-1 ) ) {
-        printf("Error reading chunk %d\n", chunkCount-1 );
+    unsigned lastChunk = static_cast<unsigned>(chunks.size() - 1);
+    if ( !readChunk(lastChunk) ) {
+        printf("Error reading chunk %d\n", lastChunk);
         return false;
     }
     size = unp_buffer_start + unp_buffer_len;
@@ -727,27 +646,36 @@ bool TinyDictZStream::open( FILE * file )
 
 const char * TinyDictDataFile::read( const TinyDictWord * w )
 {
-    if ( !f || !w || w->getStart() + w->getSize() > size ) {
+    if ( !f || !w ) {
+        printf("article is out of file range (%d)\n", (int)size);
+        return NULL;
+    }
+    unsigned articleStart = w->getStart();
+    unsigned articleSize = w->getSize();
+    if ( articleStart > size || articleSize > size - articleStart
+            || articleSize == std::numeric_limits<unsigned>::max() ) {
         printf("article is out of file range (%d)\n", (int)size);
         return NULL;
     }
 
-    reserve( w->getSize() + 1 );
+    buf.resize(static_cast<std::size_t>(articleSize) + 1);
     if ( !compressed ) {
         // uncompressed
         printf("reading uncompressed article\n");
-        if ( fseek( f, w->getStart(), SEEK_SET ) )
+        if ( fseek( f, articleStart, SEEK_SET ) )
             return NULL;
-        if ( fread( buf, 1, w->getSize(), f ) != w->getSize() )
+        if ( fread( buf.data(), 1, articleSize, f ) != articleSize )
             return NULL;
     } else {
         // compressed
         printf("reading compressed article\n");
-        if ( !zstream.read( (unsigned char*)buf, w->getStart(), w->getSize() ) )
+        if ( !zstream.read(
+                    reinterpret_cast<unsigned char *>(buf.data()),
+                    articleStart, articleSize) )
             return NULL;
     }
-    buf[ w->getSize() ] = 0;
-    return buf;
+    buf[articleSize] = 0;
+    return buf.data();
 }
 
 bool TinyDictDataFile::open( const char * filename )

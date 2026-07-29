@@ -188,6 +188,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvgraydrawbuf.cpp" GRAY_DRAW_BU
 file(READ "${SOURCE_ROOT}/crengine/include/lvgraydrawbuf.h" GRAY_DRAW_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/tests/core_safety_test.cpp" CORE_SAFETY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/tests/thread_safety_test.cpp" THREAD_SAFETY_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/tests/tinydict_regression_test.cpp" TINYDICT_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.cpp" ZIP_STREAM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvzipdecodestream.h" ZIP_STREAM_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvstream/lvcachedstream.cpp" CACHED_STREAM_SOURCE)
@@ -274,6 +275,72 @@ forbid_source_text(
   "${TINYDICT_SOURCE}"
   "unsigned txtpos;"
   "dictionary streams must not retain unused private state"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::vector<unsigned short> chunks;"
+  "dictzip chunk sizes must retain value ownership"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::vector<unsigned int> offsets;"
+  "dictzip chunk offsets must retain value ownership"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::vector<unsigned char> unp_buffer;"
+  "dictzip output must retain value ownership"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::vector<char> buf;"
+  "dictionary article output must retain value ownership"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::vector<unsigned char> packedChunk(packsz);"
+  "dictzip scratch input must be scoped to one chunk read"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "static_cast<std::size_t>(fileSize) - payloadEnd < 8"
+  "dictzip payload bounds must reserve the GZIP trailer"
+)
+forbid_source_text(
+  "${TINYDICT_SOURCE}"
+  "unsigned short * chunks;"
+  "dictzip chunk sizes must not return to raw array ownership"
+)
+forbid_source_text(
+  "${TINYDICT_SOURCE}"
+  "unsigned int * offsets;"
+  "dictzip chunk offsets must not return to raw array ownership"
+)
+forbid_source_text(
+  "${TINYDICT_SOURCE}"
+  "unsigned char * unp_buffer;"
+  "dictzip output must not return to raw buffer ownership"
+)
+forbid_source_text(
+  "${TINYDICT_SOURCE}"
+  "char * buf;
+    int    buf_size;"
+  "dictionary article output must not return to realloc ownership"
+)
+forbid_source_text(
+  "${TINYDICT_SOURCE}"
+  "unsigned char * tmp ="
+  "dictzip scratch input must not return to raw allocation"
+)
+require_source_text(
+  "${TINYDICT_REGRESSION_SOURCE}"
+  "static int testCompressedChunkOwnership()"
+  "dictzip buffer ownership must retain native regression coverage"
+)
+require_source_text(
+  "${ROOT_CMAKE_SOURCE}"
+  "target_sources(tinydict_regression_test PRIVATE"
+  "dictzip coverage must remain available to headless sanitizer builds"
 )
 require_source_text(
   "${BUILD_WORKFLOW_SOURCE}"

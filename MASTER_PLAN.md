@@ -1,6 +1,6 @@
 # CoolReader Fork — мастер-план оставшихся работ
 
-Актуально на 28 июля 2026 года. Источник истины — текущий код форка
+Актуально на 29 июля 2026 года. Источник истины — текущий код форка
 `hafych/coolreader`, а не исторические планы upstream.
 
 ## Как вести этот файл
@@ -142,8 +142,10 @@ DRM или ограничений доступа, подбор/получени�
   legacy C bitmap-buffer publication, parser
   read/charset buffers, debug compare-stream/tinyDOM fixture scratch, RTF
   text/destination
-  ownership, TCR dictionary/index/decoded buffers, unpacked 8/16/32-bit pixel
-  storage, scoped stream-image decoder factory candidates, scaled-image
+  ownership, TCR dictionary/index/decoded buffers, dictzip chunk-size/offset
+  catalogs и scoped compressed/reusable unpacked/article buffers с корректным
+  multi-chunk read, unpacked 8/16/32-bit pixel storage,
+  scoped stream-image decoder factory candidates, scaled-image
   maps/RGBA snapshots, nine-patch metadata cache and color-transform
   workspaces, WOL TOC/image/LZSS buffers and
   reader result ownership, default stream-region buffers,
