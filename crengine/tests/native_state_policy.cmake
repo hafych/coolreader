@@ -6999,6 +6999,31 @@ require_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_HEADER}"
+  "bool loadDocument( lString32 filename );"
+  "document load paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadHistory( lString32 filename );"
+  "history load paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool saveHistory( lString32 filename, bool exportBookmarks = true );"
+  "history save paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadDictConfig( lString32 filename );"
+  "dictionary configuration paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "setBookmarkDir(Utf16ToUnicode(dir));"
+  "legacy bookmark paths must cross an explicit compatibility boundary"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
   "return loadCSS(Utf16ToUnicode(filename));"
   "legacy stylesheet paths must cross an explicit compatibility boundary"
 )
@@ -7016,6 +7041,26 @@ forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "V3DocViewWin::loadCSS( lString16"
   "document stylesheet implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::loadDocument( lString16"
+  "document load implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::loadHistory( lString16"
+  "history load implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::saveHistory( lString16"
+  "history save implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::loadDictConfig( lString16"
+  "dictionary configuration implementations must not retain legacy widths"
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"

@@ -117,18 +117,26 @@ protected:
     CRPropRef _newProps;
     lString16 _dataDir;
     lString16 _settingsFileName;
-    lString16 _historyFileName;
+    lString32 _historyFileName;
     lString8  _css;
-    lString16 _dictConfig;
-    lString16 _bookmarkDir;
+    lString32 _dictConfig;
+    lString32 _bookmarkDir;
 	lString16 _helpFile;
     lString32 _cssDir;
     time_t _loadFileStart;
 public:
-    lString16 getBookmarkDir() { return _bookmarkDir; }
-    void setBookmarkDir( lString16 dir ) { _bookmarkDir = dir; }
+    lString16 getBookmarkDir() { return UnicodeToUtf16(_bookmarkDir); }
+    void setBookmarkDir( lString32 dir ) { _bookmarkDir = dir; }
+    void setBookmarkDir( lString16 dir )
+    {
+        setBookmarkDir(Utf16ToUnicode(dir));
+    }
     void flush() override;
-    bool loadDocument( lString16 filename );
+    bool loadDocument( lString32 filename );
+    bool loadDocument( lString16 filename )
+    {
+        return loadDocument(Utf16ToUnicode(filename));
+    }
     bool loadDefaultCover( lString32 filename );
     bool loadDefaultCover( lString16 filename )
     {
@@ -141,11 +149,23 @@ public:
     }
     bool loadSettings( lString16 filename );
     bool saveSettings( lString16 filename );
-    bool loadHistory( lString16 filename );
-    bool saveHistory( lString16 filename, bool exportBookmarks = true );
+    bool loadHistory( lString32 filename );
+    bool loadHistory( lString16 filename )
+    {
+        return loadHistory(Utf16ToUnicode(filename));
+    }
+    bool saveHistory( lString32 filename, bool exportBookmarks = true );
+    bool saveHistory( lString16 filename, bool exportBookmarks = true )
+    {
+        return saveHistory(Utf16ToUnicode(filename), exportBookmarks);
+    }
     bool loadHistory( LVStreamRef stream );
     bool saveHistory( LVStreamRef stream );
-    bool loadDictConfig( lString16 filename );
+    bool loadDictConfig( lString32 filename );
+    bool loadDictConfig( lString16 filename )
+    {
+        return loadDictConfig(Utf16ToUnicode(filename));
+    }
 	bool setHelpFile( lString16 filename );
 	lString16 getHelpFile( );
 	/// on starting file loading

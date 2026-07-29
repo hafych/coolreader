@@ -507,7 +507,7 @@ bool V3DocViewWin::loadCSS( lString32 filename )
     return false;
 }
 
-bool V3DocViewWin::loadDictConfig( lString16 filename )
+bool V3DocViewWin::loadDictConfig( lString32 filename )
 {
     LVStreamRef stream = LVOpenFileStream( filename.c_str(), LVOM_READ );
     if ( !stream.isNull() ) {
@@ -537,7 +537,7 @@ bool V3DocViewWin::saveHistory( LVStreamRef stream )
     return _docview->getHistory()->saveToStream( stream.get() );
 }
 
-bool V3DocViewWin::loadHistory( lString16 filename )
+bool V3DocViewWin::loadHistory( lString32 filename )
 {
 	CRLog::trace("V3DocViewWin::loadHistory( %s )", UnicodeToUtf8(filename).c_str());
     _historyFileName = filename;
@@ -547,8 +547,9 @@ bool V3DocViewWin::loadHistory( lString16 filename )
 
 void V3DocViewWin::closing()
 {
-    if ( !_docview->getDocument() )
+    if ( !_docview->getDocument() ) {
         return;
+    }
     //_docview->getDocument()->swapToCacheIfNecessary();
     //_docview->getDocument()->updateMap();
 
@@ -557,10 +558,12 @@ void V3DocViewWin::closing()
 	_dict = NULL;
     _docview->savePosition();
     CRLog::trace("after docview->savePosition()");
-    saveHistory( lString16::empty_str, _props->getBoolDef( PROP_AUTOSAVE_BOOKMARKS, true ) );
+    saveHistory(
+            lString32::empty_str,
+            _props->getBoolDef(PROP_AUTOSAVE_BOOKMARKS, true));
 }
 
-bool V3DocViewWin::loadDocument( lString16 filename )
+bool V3DocViewWin::loadDocument( lString32 filename )
 {
     if ( !_docview->LoadDocument( filename.c_str() ) ) {
     	CRLog::error("V3DocViewWin::loadDocument( %s ) - failed!", UnicodeToUtf8(filename).c_str() );
@@ -571,7 +574,7 @@ bool V3DocViewWin::loadDocument( lString16 filename )
     return true;
 }
 
-bool V3DocViewWin::saveHistory( lString16 filename, bool exportBookmarks )
+bool V3DocViewWin::saveHistory( lString32 filename, bool exportBookmarks )
 {
     crtrace log;
     if ( filename.empty() )
@@ -588,9 +591,10 @@ bool V3DocViewWin::saveHistory( lString16 filename, bool exportBookmarks )
     log << "V3DocViewWin::saveHistory(" << filename << ")";
     LVStreamRef stream = LVOpenFileStream( filename.c_str(), LVOM_WRITE );
     if ( !stream ) {
-        lString16 path16 = LVExtractPath( filename );
-        lString8 path = UnicodeToLocal( path16 );
+        lString32 pathName = LVExtractPath(filename);
+        lString8 path = UnicodeToLocal(pathName);
 #ifdef _WIN32
+        lString16 path16 = UnicodeToUtf16(pathName);
         if ( !CreateDirectoryW( path16.c_str(), NULL ) ) {
             CRLog::error("Cannot create directory %s", path.c_str() );
         } else {
