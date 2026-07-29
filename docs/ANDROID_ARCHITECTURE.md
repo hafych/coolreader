@@ -54,6 +54,12 @@ Reinitialization invalidates older results; close removes owned handler
 callbacks and quits the dialog's timing thread. Completion is published on the
 GUI thread only while its exact token remains active, so stale work cannot
 restore controls or move selection after dismissal.
+The TTS motion watchdog is also owned by that dialog. Its `Handler` is bound to
+the Looper of the `HandlerThread` created for it; timeout and volume-fade work
+never sleeps or runs on the GUI Looper. Replacement, pause, stop and close use
+one idempotent cleanup path that unregisters the sensor, removes messages,
+restores the original volume and quits the thread. Its pure fade state clamps
+malformed provider values and reaches exactly zero without underflow.
 Repeated touch actions use the same exact-wrapper principle. Each press owns a
 `ReplaceableTaskSlot` callback and one pressed View. Release, cancellation, a
 new press or View detachment invalidates the pending wrapper and clears the

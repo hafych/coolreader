@@ -90,7 +90,7 @@ public class TTSToolbarDlg implements Settings {
 			new CloseableTaskGate();
 	private final Handler audioBookPosHandler =
 			new Handler(Looper.getMainLooper());
-	private HandlerThread mMotionWatchdog;
+	private MotionWatchdogHandler mMotionWatchdog;
 	private boolean changedPageMode;
 	private Runnable mOnCloseListener;
 	private Selection mCurrentSelection;
@@ -133,6 +133,7 @@ public class TTSToolbarDlg implements Settings {
 		if (!workLifecycle.close())
 			return;
 		isSpeaking = false;
+		stopMotionWatchdog();
 		stopAudiobookWork();
 		mTTSControl.bind(ttsbinder -> {
 			ttsbinder.stop(result -> {
@@ -310,19 +311,29 @@ public class TTSToolbarDlg implements Settings {
 	}
 
 	@TargetApi(Build.VERSION_CODES.ECLAIR)
-	private void startMotionWatchdog(){
+	private synchronized void startMotionWatchdog() {
 		String TAG = "MotionWatchdog";
 		log.d("startMotionWatchdog() enter");
 
-		if (mMotionTimeout == 0) {
+		stopMotionWatchdog();
+		if (mMotionTimeout <= 0 || workLifecycle.isClosed()) {
 			Log.d(TAG, "startMotionWatchdog() early exit - timeout is 0");
 			return;
 		}
 
-		mMotionWatchdog = new HandlerThread("MotionWatchdog");
-		mMotionWatchdog.start();
-		new MotionWatchdogHandler(this, mCoolReader, mMotionWatchdog, mMotionTimeout);
+		HandlerThread thread =
+				new HandlerThread("MotionWatchdog");
+		thread.start();
+		mMotionWatchdog = new MotionWatchdogHandler(
+				this, mCoolReader, thread, mMotionTimeout);
 		Log.d(TAG, "startMotionWatchdog() exit");
+	}
+
+	private synchronized void stopMotionWatchdog() {
+		MotionWatchdogHandler watchdog = mMotionWatchdog;
+		mMotionWatchdog = null;
+		if (watchdog != null)
+			watchdog.close();
 	}
 
 	/**
@@ -533,8 +544,7 @@ public class TTSToolbarDlg implements Settings {
 												mCoolReader,
 												R.attr.ic_media_play_drawable,
 												R.drawable.ic_media_play)));
-						if (mMotionWatchdog != null)
-							mMotionWatchdog.interrupt();
+						stopMotionWatchdog();
 						break;
 				}
 			}

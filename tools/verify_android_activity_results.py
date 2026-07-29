@@ -91,6 +91,36 @@ TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 TTS_TOOLBAR = SOURCE / "crengine" / "TTSToolbarDlg.java"
+MOTION_WATCHDOG = (
+    ROOT
+    / "android"
+    / "src"
+    / "com"
+    / "s_trace"
+    / "motion_watchdog"
+    / "MotionWatchdogHandler.java"
+)
+MOTION_WATCHDOG_FADE_STATE = (
+    ROOT
+    / "android"
+    / "src"
+    / "com"
+    / "s_trace"
+    / "motion_watchdog"
+    / "MotionWatchdogFadeState.java"
+)
+MOTION_WATCHDOG_FADE_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "com"
+    / "s_trace"
+    / "motion_watchdog"
+    / "MotionWatchdogFadeStateTest.java"
+)
 REPEAT_ON_TOUCH_LISTENER = (
     SOURCE / "crengine" / "RepeatOnTouchListener.java"
 )
@@ -1441,6 +1471,90 @@ def main() -> None:
             violations.append(
                 f"{relative(TTS_TOOLBAR)} retains unowned TTS lifecycle "
                 f"marker: {legacy}")
+    for marker in (
+        "private MotionWatchdogHandler mMotionWatchdog",
+        "private synchronized void startMotionWatchdog()",
+        "private synchronized void stopMotionWatchdog()",
+        "stopMotionWatchdog();",
+        "mMotionWatchdog = new MotionWatchdogHandler(",
+        "watchdog.close()",
+    ):
+        if marker not in tts_toolbar_text:
+            violations.append(
+                f"{relative(TTS_TOOLBAR)} omits owned motion watchdog "
+                f"marker: {marker}")
+    for legacy in (
+        "private HandlerThread mMotionWatchdog",
+        "mMotionWatchdog.interrupt()",
+        "new MotionWatchdogHandler(this, mCoolReader",
+    ):
+        if legacy in tts_toolbar_text:
+            violations.append(
+                f"{relative(TTS_TOOLBAR)} retains detached motion "
+                f"watchdog marker: {legacy}")
+
+    motion_watchdog_text = MOTION_WATCHDOG.read_text(
+        encoding="utf-8")
+    for marker in (
+        "public final class MotionWatchdogHandler",
+        "super(handlerThread.getLooper())",
+        "private final HandlerThread mHandlerThread",
+        "private final AtomicBoolean mClosing",
+        "public void close()",
+        "mClosing.compareAndSet(false, true)",
+        "mSensorManager.unregisterListener(this)",
+        "removeCallbacksAndMessages(null)",
+        "postAtFrontOfQueue(this::finishClose)",
+        "mHandlerThread.quitSafely()",
+        "BackgroundThread.instance().postGUI(",
+        "mTTSToolbarDlg::stopAndClose",
+    ):
+        if marker not in motion_watchdog_text:
+            violations.append(
+                f"{relative(MOTION_WATCHDOG)} omits owned background "
+                f"watchdog marker: {marker}")
+    for legacy in (
+        "Thread.sleep(",
+        "mHandlerThread.interrupt()",
+        "mHandlerThread.isInterrupted()",
+        "private HandlerThread mHandlerThread",
+    ):
+        if legacy in motion_watchdog_text:
+            violations.append(
+                f"{relative(MOTION_WATCHDOG)} retains UI/interrupt-driven "
+                f"watchdog marker: {legacy}")
+
+    motion_fade_text = MOTION_WATCHDOG_FADE_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class MotionWatchdogFadeState",
+        "private final int originalVolume",
+        "private int currentVolume",
+        "originalVolume = Math.max(0, observedVolume)",
+        "boolean isSilent()",
+        "if (currentVolume > 0)",
+        "currentVolume--",
+    ):
+        if marker not in motion_fade_text:
+            violations.append(
+                f"{relative(MOTION_WATCHDOG_FADE_STATE)} omits bounded "
+                f"volume fade marker: {marker}")
+
+    motion_fade_test_text = (
+        MOTION_WATCHDOG_FADE_STATE_TEST.read_text(
+            encoding="utf-8")
+    )
+    for marker in (
+        "fadeReachesZeroWithoutUnderflow",
+        "zeroVolumeIsAlreadySilent",
+        "malformedNegativeVolumeIsClamped",
+        "Integer.MIN_VALUE",
+        "assertEquals(0, state.step())",
+    ):
+        if marker not in motion_fade_test_text:
+            violations.append(
+                f"{relative(MOTION_WATCHDOG_FADE_STATE_TEST)} omits "
+                f"volume fade regression: {marker}")
 
     repeat_touch_text = REPEAT_ON_TOUCH_LISTENER.read_text(
         encoding="utf-8")

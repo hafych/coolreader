@@ -201,6 +201,11 @@ DRM или ограничений доступа, подбор/получени�
   инициализация инвалидирует старую публикацию, закрытие очищает main-handler
   и завершает owned `HandlerThread`, а stale service/background callbacks не
   меняют selection или UI закрытого диалога.
+  Motion watchdog того же диалога теперь действительно выполняется на Looper
+  своего `HandlerThread`, повторный PLAYING заменяет старого owner, а
+  pause/stop/close идемпотентно отписывает sensor, очищает messages,
+  восстанавливает volume и завершает thread без UI `sleep`; fade state
+  clamped и JVM-tested до точного нуля без underflow.
   Повторяемые touch-actions также используют exact one-shot generation:
   `UP`/`CANCEL`, новое нажатие и detach View отменяют pending wrapper, снимают
   pressed-state и не позволяют callback старого жеста действовать на новый.

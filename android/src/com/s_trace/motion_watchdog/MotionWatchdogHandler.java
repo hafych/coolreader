@@ -30,11 +30,15 @@ import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.Message;
-import org.coolreader.crengine.Log;
 
 import org.coolreader.CoolReader;
+import org.coolreader.crengine.BackgroundThread;
+import org.coolreader.crengine.Log;
 import org.coolreader.crengine.TTSToolbarDlg;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by s-trace on 13.03.18.
@@ -42,7 +46,8 @@ import org.coolreader.crengine.TTSToolbarDlg;
  */
 
 @TargetApi(Build.VERSION_CODES.ECLAIR)
-public class MotionWatchdogHandler extends Handler implements SensorEventListener {
+public final class MotionWatchdogHandler extends Handler
+        implements SensorEventListener {
     private static final int MSG_MOTION_DETECTED  = 0;
     private static final int MSG_MOTION_TIMEOUT   = 1;
     private static final int MSG_HANDLE_STOP_STEP = 2;
@@ -51,12 +56,11 @@ public class MotionWatchdogHandler extends Handler implements SensorEventListene
     private final SensorManager mSensorManager;
     private final CoolReader mCoolReader;
     private final TTSToolbarDlg mTTSToolbarDlg;
+    private final HandlerThread mHandlerThread;
+    private final AtomicBoolean mClosing = new AtomicBoolean();
     private boolean mIsStopping;
-    private boolean mIsStopped;
     private AudioManager mAudioService;
-    private int mOriginalVolume;
-    private int mCurrentVolume;
-    private HandlerThread mHandlerThread;
+    private MotionWatchdogFadeState mFadeState;
     private static final double MOTION_THRESHOLD = 1;
     private final double[] mLastValues = new double[3];
     private final double[] mDelta = new double[3];
@@ -64,6 +68,7 @@ public class MotionWatchdogHandler extends Handler implements SensorEventListene
 
     public MotionWatchdogHandler(TTSToolbarDlg ttsToolbarDlg, CoolReader coolReader,
                                  HandlerThread handlerThread, int timeout) {
+        super(handlerThread.getLooper());
         mHandlerThread = handlerThread;
         mCoolReader = coolReader;
         mTTSToolbarDlg = ttsToolbarDlg;
@@ -87,21 +92,19 @@ public class MotionWatchdogHandler extends Handler implements SensorEventListene
 
     @Override
     public void handleMessage(Message msg) {
-        if (mHandlerThread.isInterrupted()) {
-            Log.i(TAG, "handleMessage: mHandlerThread.isInterrupted() for msg=" + msg);
-            handleInterrupt();
+        if (mClosing.get())
             return;
-        }
         Log.d(TAG, "handleMessage: msg=" + msg);
-        if (mCoolReader == null || mIsStopped) {
-            return;
-        }
         switch (msg.what) {
             case MSG_MOTION_DETECTED:
                 mIsStopping = false;
                 if (mAudioService != null) {
-                    mAudioService.setStreamVolume(AudioManager.STREAM_MUSIC, mOriginalVolume, 0);
+                    mAudioService.setStreamVolume(
+                            AudioManager.STREAM_MUSIC,
+                            mFadeState.originalVolume(),
+                            0);
                     mAudioService = null;
+                    mFadeState = null;
                 }
                 this.removeMessages(MSG_MOTION_TIMEOUT);
                 this.removeMessages(MSG_HANDLE_STOP_STEP);
@@ -123,56 +126,75 @@ public class MotionWatchdogHandler extends Handler implements SensorEventListene
     }
 
     private void handleStop() {
-        Log.e(TAG, "handleStop: mCurrentVolume=" + mCurrentVolume);
-        if (mHandlerThread.isInterrupted()) {
-            Log.i(TAG, "handleStop: mHandlerThread.isInterrupted()");
-            handleInterrupt();
+        Log.e(TAG, "handleStop: fade=" +
+                (mFadeState == null
+                        ? "not started"
+                        : mFadeState.currentVolume()));
+        if (mClosing.get())
             return;
-        }
         if (mAudioService == null) {
             mAudioService = (AudioManager) mCoolReader.getSystemService(Context.AUDIO_SERVICE);
             if (mAudioService == null) {
                 Log.e(TAG, "handleStop: mAudioService == null! ");
                 return;
             }
-            mOriginalVolume = mAudioService.getStreamVolume(AudioManager.STREAM_MUSIC);
-            mCurrentVolume = mOriginalVolume;
+            mFadeState = new MotionWatchdogFadeState(
+                    mAudioService.getStreamVolume(
+                            AudioManager.STREAM_MUSIC));
+            if (mFadeState.isSilent()) {
+                finishTimeout();
+                return;
+            }
             Message message = Message.obtain();
             message.what = MSG_HANDLE_STOP_STEP;
             this.sendMessageDelayed(message, STEP_TIME);
             return;
         }
-        mAudioService.setStreamVolume(AudioManager.STREAM_MUSIC, --mCurrentVolume, 0);
-        if (mCurrentVolume > 0) {
+        mAudioService.setStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                mFadeState.step(),
+                0);
+        if (!mFadeState.isSilent()) {
             Message message = Message.obtain();
             message.what = MSG_HANDLE_STOP_STEP;
             this.sendMessageDelayed(message, STEP_TIME);
             return;
         }
 
-        Log.i(TAG, "Final stop");
-        mIsStopped = true;
-        mIsStopping = false;
-        mTTSToolbarDlg.stopAndClose();
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            handleInterrupt();
-            return;
-        }
-        handleInterrupt();
-        mHandlerThread.interrupt();
+        finishTimeout();
     }
 
-    private void handleInterrupt() {
-        Log.i(TAG, "handleInterrupt()");
-        mSensorManager.unregisterListener(this);
-        if (mAudioService != null) {
-            mAudioService.setStreamVolume(AudioManager.STREAM_MUSIC, mOriginalVolume, 0);
+    private void finishTimeout() {
+        Log.i(TAG, "Final stop");
+        mIsStopping = false;
+        BackgroundThread.instance().postGUI(
+                mTTSToolbarDlg::stopAndClose);
+        close();
+    }
+
+    public void close() {
+        if (!mClosing.compareAndSet(false, true))
+            return;
+        if (mSensorManager != null)
+            mSensorManager.unregisterListener(this);
+        removeCallbacksAndMessages(null);
+        if (Looper.myLooper() == getLooper()) {
+            finishClose();
+        } else if (!postAtFrontOfQueue(this::finishClose)) {
+            finishClose();
         }
-        removeMessages(MotionWatchdogHandler.MSG_MOTION_TIMEOUT);
-        removeMessages(MotionWatchdogHandler.MSG_HANDLE_STOP_STEP);
-        removeMessages(MotionWatchdogHandler.MSG_MOTION_DETECTED);
+    }
+
+    private void finishClose() {
+        if (mAudioService != null) {
+            mAudioService.setStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    mFadeState.originalVolume(),
+                    0);
+            mAudioService = null;
+            mFadeState = null;
+        }
+        mIsStopping = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2)
             mHandlerThread.quitSafely();
         else
@@ -181,12 +203,8 @@ public class MotionWatchdogHandler extends Handler implements SensorEventListene
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-//        Log.d(TAG, "onSensorChanged: event=" + event + " isInterrupted() ==" + mHandlerThread.isInterrupted());
-        if (mHandlerThread.isInterrupted()) {
-            Log.d(TAG, "onSensorChanged: isInterrupted()");
-            handleInterrupt();
+        if (mClosing.get())
             return;
-        }
 
         mDelta[0] = Math.abs(Math.abs(event.values[0]) - Math.abs(mLastValues[0]));
         mDelta[1] = Math.abs(Math.abs(event.values[1]) - Math.abs(mLastValues[1]));
@@ -213,12 +231,8 @@ public class MotionWatchdogHandler extends Handler implements SensorEventListene
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {
-        Log.d(TAG, "onAccuracyChanged: sensor=" + sensor + " i=" + i +
-                " isInterrupted() ==" + mHandlerThread.isInterrupted());
-        if (mHandlerThread.isInterrupted()) {
-            Log.d(TAG, "onAccuracyChanged: isInterrupted()");
-            handleInterrupt();
-        }
+        if (!mClosing.get())
+            Log.d(TAG, "onAccuracyChanged: sensor=" + sensor + " i=" + i);
     }
 
 }

@@ -402,6 +402,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   dialog lifecycle. Reinitialization rejects stale results, while close removes
   pending callbacks, retires the timing thread and prevents late service or
   background callbacks from changing the dismissed reader UI.
+- The TTS motion watchdog now runs on its owned background Looper instead of
+  the UI thread. Pause, replacement and close unregister sensors, clear queued
+  fade work, restore volume and quit the thread without blocking sleeps;
+  malformed or zero volume cannot underflow during fade-out.
 - Repeating touch buttons now cancel their exact pending callback on release,
   cancellation, replacement or View detachment. Stray terminal events are
   safe, pressed state is cleared, and an old gesture cannot repeat into a new

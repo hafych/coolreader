@@ -10,6 +10,7 @@
 package org.coolreader.crengine;
 
 import android.app.Activity;
+import android.os.HandlerThread;
 import android.view.View;
 
 import static org.junit.Assert.assertEquals;
@@ -20,6 +21,8 @@ import org.coolreader.CoolReader;
 import org.coolreader.Dictionaries;
 import org.coolreader.plugins.litres.LitresPlugin;
 import org.junit.Test;
+
+import com.s_trace.motion_watchdog.MotionWatchdogHandler;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -447,6 +450,40 @@ public class ActivityOwnershipPolicyTest {
 				Modifier.isPrivate(pollingHandler.getModifiers()));
 		assertTrue(
 				Modifier.isFinal(pollingHandler.getModifiers()));
+
+		Field motionWatchdog =
+				TTSToolbarDlg.class.getDeclaredField(
+						"mMotionWatchdog");
+		assertFalse(Modifier.isStatic(
+				motionWatchdog.getModifiers()));
+		assertTrue(Modifier.isPrivate(
+				motionWatchdog.getModifiers()));
+		assertEquals(
+				MotionWatchdogHandler.class,
+				motionWatchdog.getType());
+		for (String name : new String[]{
+				"startMotionWatchdog",
+				"stopMotionWatchdog"}) {
+			Method method =
+					TTSToolbarDlg.class.getDeclaredMethod(name);
+			assertTrue(Modifier.isPrivate(method.getModifiers()));
+			assertTrue(
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+
+		Field ownedThread =
+				MotionWatchdogHandler.class.getDeclaredField(
+						"mHandlerThread");
+		assertEquals(HandlerThread.class, ownedThread.getType());
+		assertTrue(Modifier.isPrivate(
+				ownedThread.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ownedThread.getModifiers()));
+		Method close =
+				MotionWatchdogHandler.class.getDeclaredMethod(
+						"close");
+		assertTrue(Modifier.isPublic(close.getModifiers()));
 
 		for (Field field :
 				CloseableTaskGate.class.getDeclaredFields()) {
