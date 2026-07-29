@@ -7228,6 +7228,16 @@ forbid_source_text(
   "main windows must not expose a legacy document path adapter"
 )
 forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool saveSettings( lString16"
+  "main windows must not expose a legacy settings-save path adapter"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "saveSettings(lString16"
+  "GUI platform settings-save callers must use current-width paths"
+)
+forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "loadDocument( lString16"
   "GUI platform document callers must use current-width paths"

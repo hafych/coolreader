@@ -956,7 +956,7 @@ protected:
             CRPropRef newProps = getNewProps();
             newProps->setInt(PROP_POCKETBOOK_ORIENTATION, newOrientation);
             applySettings();
-            saveSettings(lString16::empty_str);
+            saveSettings(lString32::empty_str);
         }
         int dx = _wm->getScreen()->getWidth();
         int dy = _wm->getScreen()->getHeight();
@@ -1652,7 +1652,8 @@ void CRPbDictionaryView::onDictionarySelect()
         int rc = OpenDictionary(_dictNames[index]);
         if (rc == 1) {
             _dictIndex = index;
-            CRPocketBookDocView::instance->saveSettings(lString16());
+            CRPocketBookDocView::instance->saveSettings(
+                    lString32::empty_str);
         } else {
             _dictIndex = -1;
             CRLog::error("OpenDictionary(%s) returned %d", _dictNames[_dictIndex], rc);

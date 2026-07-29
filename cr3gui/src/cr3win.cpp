@@ -491,7 +491,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         main_win->getDocView()->setFontSize( 20 );
         main_win->loadCSS( exedir + "fb2.css" );
         main_win->loadSettings( exedir + "cr3.ini" );
-        main_win->saveSettings(lString16::empty_str);
+        main_win->saveSettings(lString32::empty_str);
         main_win->setHelpFile( exedir + "cr3-manual-ru.fb2" );
         HyphMan::initDictionaries( exedir + "hyph\\" );
         main_win->loadDefaultCover( exedir + "cr3_def_cover.png" );

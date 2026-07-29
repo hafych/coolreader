@@ -135,10 +135,6 @@ public:
         return loadSettings(Utf16ToUnicode(filename));
     }
     bool saveSettings( lString32 filename );
-    bool saveSettings( lString16 filename )
-    {
-        return saveSettings(Utf16ToUnicode(filename));
-    }
     bool loadHistory( lString32 filename );
     bool loadHistory( lString16 filename )
     {
