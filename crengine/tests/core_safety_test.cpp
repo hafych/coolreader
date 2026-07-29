@@ -64,6 +64,7 @@
 #include "../src/wolutil_internal.h"
 #include "../../cr3gui/src/t9encoding.h"
 #if (USE_GIF==1)
+#include "../src/lvimg/clzwdecoder.h"
 #include "../src/lvimg/lvgifimagesource.h"
 #endif
 #if (USE_LIBPNG==1)
@@ -5540,6 +5541,29 @@ static int testPngDecoderOwnership() {
 #endif
 
 #if (USE_GIF==1)
+static int testGifLzwBoundedReads() {
+    unsigned char input = 0;
+    CLZWDecoder decoder;
+    decoder.SetInputStream(&input, 1);
+    decoder.Init(2);
+    if (decoder.ReadInCode() != 0 || decoder.ReadInCode() != 0)
+        return fail("GIF LZW decoder rejected complete buffered codes");
+    if (decoder.ReadInCode() != -1)
+        return fail("GIF LZW decoder read a code past the input boundary");
+
+    decoder.SetInputStream(NULL, 0);
+    decoder.Init(2);
+    if (decoder.ReadInCode() != -1)
+        return fail("GIF LZW decoder accepted an empty input stream");
+
+    unsigned char output = 0;
+    decoder.SetInputStream(&input, 1);
+    decoder.SetOutputStream(&output, 1);
+    if (decoder.Decode(LSWDECODER_MAX_BITS) != 0)
+        return fail("GIF LZW decoder accepted an oversized initial code");
+    return 0;
+}
+
 static int testGifDecoderOwnership() {
     static const unsigned char validGif[] = {
         'G', 'I', 'F', '8', '9', 'a',
@@ -7908,6 +7932,8 @@ int main() {
         return 1;
 #endif
 #if (USE_GIF==1)
+    if (testGifLzwBoundedReads() != 0)
+        return 1;
     if (testGifDecoderOwnership() != 0)
         return 1;
 #endif

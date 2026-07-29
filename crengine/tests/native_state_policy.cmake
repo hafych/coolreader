@@ -198,6 +198,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOU
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.h" GIF_FRAME_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/clzwdecoder.cpp" GIF_LZW_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.cpp" PNG_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.h" PNG_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvjpegimagesource.cpp" JPEG_IMAGE_SOURCE)
@@ -3281,6 +3282,21 @@ forbid_source_text(
   "${GIF_FRAME_SOURCE}"
   "new unsigned char"
   "GIF frame decoder must not use owning byte arrays"
+)
+require_source_text(
+  "${GIF_LZW_SOURCE}"
+  "in_stream_size < requiredBytes"
+  "GIF LZW decoder must validate every packed-code read"
+)
+require_source_text(
+  "${GIF_LZW_SOURCE}"
+  "sizecode >= LSWDECODER_MAX_BITS"
+  "GIF LZW decoder must reject code widths outside its table"
+)
+forbid_source_text(
+  "${GIF_LZW_SOURCE}"
+  "p_in_stream[2]"
+  "GIF LZW decoder must not read a fixed three-byte window"
 )
 
 # --- PNG decoder: longjmp-safe row and pixel ownership ---

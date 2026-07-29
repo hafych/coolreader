@@ -67,26 +67,27 @@ void CLZWDecoder::FillRestOfOutStream(unsigned char b) {
 }
 
 int CLZWDecoder::ReadInCode() {
-    int code = (p_in_stream[0])+
-            (p_in_stream[1]<<8)+
-            (p_in_stream[2]<<16);
-    code >>= in_bit_pos;
-    code &= (1<<bits)-1;
-    in_bit_pos += bits;
-    if (in_bit_pos >= 8) {
-        p_in_stream++;
-        in_stream_size--;
-        in_bit_pos -= 8;
-        if (in_bit_pos>=8) {
-            p_in_stream++;
-            in_stream_size--;
-            in_bit_pos -= 8;
-        }
-    }
-    if (in_stream_size<0)
+    if (!p_in_stream || in_stream_size <= 0
+            || in_bit_pos < 0 || in_bit_pos >= 8
+            || bits <= 0 || bits > LSWDECODER_MAX_BITS)
         return -1;
-    else
-        return code;
+
+    const int requiredBytes = (in_bit_pos + bits + 7) / 8;
+    if (in_stream_size < requiredBytes)
+        return -1;
+
+    unsigned int code = 0;
+    for (int i = 0; i < requiredBytes; i++)
+        code |= static_cast<unsigned int>(p_in_stream[i]) << (i * 8);
+    code >>= in_bit_pos;
+    code &= (1U << bits) - 1U;
+
+    in_bit_pos += bits;
+    const int consumedBytes = in_bit_pos / 8;
+    p_in_stream += consumedBytes;
+    in_stream_size -= consumedBytes;
+    in_bit_pos %= 8;
+    return static_cast<int>(code);
 }
 
 int CLZWDecoder::AddString(int OldCode, unsigned char NewChar) {
@@ -139,9 +140,15 @@ CLZWDecoder::~CLZWDecoder() {
 }
 
 void CLZWDecoder::Init(int sizecode) {
-    bits = sizecode + 1;
     // init table
     Clear();
+    if (sizecode < 0 || sizecode >= LSWDECODER_MAX_BITS) {
+        bits = 0;
+        clearcode = 0;
+        eoicode = 0;
+        return;
+    }
+    bits = sizecode + 1;
     //ResizeTable(1<<bits);
     for (int i=(1<<sizecode) + 1; i>=0; i--) {
         str_table[i] = i;
@@ -165,6 +172,8 @@ int CLZWDecoder::Decode(int init_code_size) {
     int code, oldcode;
     
     Init( init_code_size );
+    if (bits == 0)
+        return 0;
     
     code = ReadInCode(); // == 256, ignore
     if (code<0 || code>lastadd)
