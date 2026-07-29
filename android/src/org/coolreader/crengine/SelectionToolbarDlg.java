@@ -40,28 +40,25 @@ import org.coolreader.CoolReader;
 import org.coolreader.R;
 
 public class SelectionToolbarDlg {
-	PopupWindow mWindow;
-	View mAnchor;
-	CoolReader mCoolReader;
-	ReaderView mReaderView;
-	View mPanel;
-	Selection selection;
-	private final BookInfo expectedBook;
-	private final DocumentLoadLifecycle.Interaction interaction;
+	private final PopupWindow mWindow;
+	private final View mAnchor;
+	private final CoolReader mCoolReader;
+	private final SelectionToolbarHandler selectionToolbarHandler;
+	private final View mPanel;
+	private Selection selection;
 
-	static public void showDialog(
-			CoolReader coolReader, ReaderView readerView,
-			final Selection selection, BookInfo expectedBook,
-			DocumentLoadLifecycle.Interaction interaction)
+	static void showDialog(
+			CoolReader coolReader,
+			View anchor,
+			final Selection selection,
+			SelectionToolbarHandler selectionToolbarHandler)
 	{
 		SelectionToolbarDlg dlg = new SelectionToolbarDlg(
-				coolReader, readerView, selection,
-				expectedBook, interaction);
+				coolReader, anchor, selection,
+				selectionToolbarHandler);
 		//dlg.mWindow.update(dlg.mAnchor, width, height)
 		Log.d("cr3", "popup: " + dlg.mWindow.getWidth() + "x" + dlg.mWindow.getHeight());
 		//dlg.update();
-		//dlg.showAtLocation(readerView, Gravity.LEFT|Gravity.TOP, readerView.getLeft()+50, readerView.getTop()+50);
-		//dlg.showAsDropDown(readerView);
 		//dlg.update();
 	}
 
@@ -69,8 +66,7 @@ public class SelectionToolbarDlg {
 	private boolean changedPageMode;
 
 	private boolean isActive() {
-		return mReaderView.ownsDocumentInteraction(
-				expectedBook, interaction);
+		return selectionToolbarHandler.isActive();
 	}
 
 	private boolean requireActive() {
@@ -84,21 +80,15 @@ public class SelectionToolbarDlg {
 	{
 		if (pageModeSet || !isActive())
 			return;
-		//if (DeviceInfo.EINK_SCREEN) { return; } // switching to scroll view doesn't work well on eink screens
-		
-		String oldViewSetting = mReaderView.getSetting( ReaderView.PROP_PAGE_VIEW_MODE );
-		if ( "1".equals(oldViewSetting) ) {
-			changedPageMode = true;
-			mReaderView.setViewModeNonPermanent(ViewMode.SCROLL);
-		}
+		changedPageMode =
+				selectionToolbarHandler.enterAdjustmentMode();
 		pageModeSet = true;
 	}
 	
 	private void restoreReaderMode()
 	{
-		if (changedPageMode && isActive()) {
-			mReaderView.setViewModeNonPermanent(ViewMode.PAGES);
-		}
+		selectionToolbarHandler.restoreAdjustmentMode(
+				changedPageMode);
 	}
 	
 	private void changeSelectionBound(boolean start, int delta) {
@@ -106,9 +96,10 @@ public class SelectionToolbarDlg {
 			return;
 		L.d("changeSelectionBound(" + (start?"start":"end") + ", " + delta + ")");
 		setReaderMode();
-		ReaderCommand cmd = start ? ReaderCommand.DCMD_SELECT_MOVE_LEFT_BOUND_BY_WORDS : ReaderCommand.DCMD_SELECT_MOVE_RIGHT_BOUND_BY_WORDS; 
-		mReaderView.moveSelection(
-				cmd, delta, new ReaderView.MoveSelectionCallback() {
+		selectionToolbarHandler.moveSelectionBound(
+				start,
+				delta,
+				new SelectionToolbarHandler.SelectionUpdateHandler() {
 			
 			@Override
 			public void onNewSelection(Selection selection) {
@@ -121,7 +112,7 @@ public class SelectionToolbarDlg {
 				Log.d("cr3", "fail()");
 				//currentSelection = null;
 			}
-		}, expectedBook, interaction);
+		});
 	}
 	
 	private final static int SELECTION_CONTROL_STEP = 10; 
@@ -162,28 +153,29 @@ public class SelectionToolbarDlg {
 	
 	private void closeDialog(boolean clearSelection) {
 		if (clearSelection)
-			mReaderView.clearSelection(
-					expectedBook, interaction);
+			selectionToolbarHandler.clearSelection();
 		restoreReaderMode();
 		mWindow.dismiss();
 	}
 	
-	public SelectionToolbarDlg(
-			CoolReader coolReader, ReaderView readerView,
-			Selection sel, BookInfo expectedBook,
-			DocumentLoadLifecycle.Interaction interaction)
+	SelectionToolbarDlg(
+			CoolReader coolReader,
+			View anchor,
+			Selection sel,
+			SelectionToolbarHandler selectionToolbarHandler)
 	{
+		if (selectionToolbarHandler == null
+				|| !selectionToolbarHandler.isActive())
+			throw new IllegalArgumentException(
+					"active selection toolbar handler is required");
 		this.selection = sel;
-		this.expectedBook = expectedBook;
-		this.interaction = interaction;
 		mCoolReader = coolReader;
-		mReaderView = readerView;
-		mAnchor = readerView.getSurface();
+		mAnchor = anchor;
+		this.selectionToolbarHandler =
+				selectionToolbarHandler;
 
 		View panel = (LayoutInflater.from(coolReader.getApplicationContext()).inflate(R.layout.selection_toolbar, null));
 		panel.measure(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-		
-		//mReaderView.getS
 		
 		mWindow = new PopupWindow( mAnchor.getContext() );
 		mWindow.setTouchInterceptor((v, event) -> {
@@ -198,7 +190,8 @@ public class SelectionToolbarDlg {
 		mPanel.findViewById(R.id.selection_copy).setOnClickListener(v -> {
 			if (!requireActive())
 				return;
-			mReaderView.copyToClipboard(selection.text);
+			selectionToolbarHandler.copyToClipboard(
+					selection.text);
 			closeDialog(true);
 		});
 
@@ -206,7 +199,9 @@ public class SelectionToolbarDlg {
 			if (!requireActive())
 				return;
 			mCoolReader.findInDictionary( selection.text );
-			closeDialog(!mReaderView.getSettings().getBool(ReaderView.PROP_APP_SELECTION_PERSIST, false));
+			closeDialog(
+					!selectionToolbarHandler
+							.shouldPersistSelection());
 		});
 
 		mPanel.findViewById(R.id.selection_dict).setOnLongClickListener(v -> {
@@ -223,51 +218,50 @@ public class SelectionToolbarDlg {
 
 						@Override
 						public boolean shouldPersistSelection() {
-							return isActive()
-									&& mReaderView.getSettings().getBool(
-											ReaderView.PROP_APP_SELECTION_PERSIST,
-											false);
+							return selectionToolbarHandler
+									.shouldPersistSelection();
 						}
 
 						@Override
 						public void clearSelection() {
-							mReaderView.clearSelection(
-									expectedBook, interaction);
+							selectionToolbarHandler
+									.clearSelection();
 						}
 					});
 			dlg.show();
-			closeDialog(!mReaderView.getSettings().getBool(ReaderView.PROP_APP_SELECTION_PERSIST, false));
+			closeDialog(
+					!selectionToolbarHandler
+							.shouldPersistSelection());
 			return true;
 		});
 
 		mPanel.findViewById(R.id.selection_bookmark).setOnClickListener(v -> {
 			if (!requireActive())
 				return;
-			mReaderView.showNewBookmarkDialog(
-					selection, expectedBook, interaction);
+			selectionToolbarHandler.showNewBookmark(
+					selection);
 			closeDialog(true);
 		});
 
 		mPanel.findViewById(R.id.selection_bookmark).setOnLongClickListener(v -> {
 			if (!requireActive())
 				return true;
-			mReaderView.showBookmarksDialog(
-					expectedBook, interaction);
+			selectionToolbarHandler.showBookmarks();
 			closeDialog(true);
 			return true;
 		});
 		mPanel.findViewById(R.id.selection_email).setOnClickListener(v -> {
 			if (!requireActive())
 				return;
-			mReaderView.sendQuotationInEmail(selection);
+			selectionToolbarHandler.sendQuotation(
+					selection);
 			closeDialog(true);
 		});
 		mPanel.findViewById(R.id.selection_find).setOnClickListener(v -> {
 			if (!requireActive())
 				return;
-			mReaderView.showSearchDialog(
-					selection.text.trim(),
-					expectedBook, interaction);
+			selectionToolbarHandler.showSearch(
+					selection.text.trim());
 			closeDialog(true);
 		});
 		mPanel.findViewById(R.id.selection_find).setOnLongClickListener(v -> {
@@ -289,23 +283,9 @@ public class SelectionToolbarDlg {
 				case KeyEvent.KEYCODE_BACK:
 					closeDialog(true);
 					return true;
-//					case KeyEvent.KEYCODE_DPAD_LEFT:
-//					case KeyEvent.KEYCODE_DPAD_UP:
-//						//mReaderView.findNext(pattern, true, caseInsensitive);
-//						return true;
-//					case KeyEvent.KEYCODE_DPAD_RIGHT:
-//					case KeyEvent.KEYCODE_DPAD_DOWN:
-//						//mReaderView.findNext(pattern, false, caseInsensitive);
-//						return true;
 				}
 			} else if ( event.getAction()==KeyEvent.ACTION_DOWN ) {
 					switch ( keyCode ) {
-//						case KeyEvent.KEYCODE_BACK:
-//						case KeyEvent.KEYCODE_DPAD_LEFT:
-//						case KeyEvent.KEYCODE_DPAD_UP:
-//						case KeyEvent.KEYCODE_DPAD_RIGHT:
-//						case KeyEvent.KEYCODE_DPAD_DOWN:
-//							return true;
 					}
 				}
 			return keyCode == KeyEvent.KEYCODE_BACK;
@@ -313,8 +293,7 @@ public class SelectionToolbarDlg {
 
 		mWindow.setOnDismissListener(() -> {
 			restoreReaderMode();
-			mReaderView.clearSelection(
-					expectedBook, interaction);
+			selectionToolbarHandler.clearSelection();
 		});
 
 		if (!DeviceInfo.EINK_SCREEN) {
@@ -354,16 +333,14 @@ public class SelectionToolbarDlg {
 		int y = sel.startY;
 		if (y > sel.endY)
 			y = sel.endY;
-		int maxy = mReaderView.getSurface().getHeight() * 4 / 5; 
+		int maxy = mAnchor.getHeight() * 4 / 5;
 		if (y > maxy) {
 			setReaderMode(); // selection is overlapped by toolbar: set scroll mode and move
 			BackgroundThread.instance().postGUI(() -> {
-				//mReaderView.doEngineCommand(ReaderCommand.DCMD_REQUEST_RENDER, 0);
 				BackgroundThread.instance().postBackground(() -> BackgroundThread.instance().postGUI(() -> {
 					if (isActive())
-						mReaderView.doEngineCommand(
-								ReaderCommand.DCMD_SCROLL_BY,
-								mReaderView.getSurface().getHeight() / 3);
+						selectionToolbarHandler.scrollBy(
+								mAnchor.getHeight() / 3);
 				}));
 			});
 		}

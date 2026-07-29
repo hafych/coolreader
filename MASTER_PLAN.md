@@ -311,8 +311,11 @@ DRM или ограничений доступа, подбор/получени�
   forward/backward find, find-next popup, clear и bookmark highlight. Native
   work и GUI completion повторно проверяют обе identity; stale toolbar
   dismiss/click не очищает selection и не меняет view mode новой книги.
-  `SearchDlg`, `FindNextDlg` и dictionary picker больше не хранят
-  `ReaderView`, получая только узкие generation-aware callbacks.
+  `SelectionToolbarDlg`, `SearchDlg`, `FindNextDlg` и dictionary picker больше
+  не хранят `ReaderView`, получая только узкие generation-aware callbacks.
+  Toolbar adjustment, copy, dictionary persistence, bookmark/search actions,
+  quotation metadata и delayed overlap scroll делегированы exact handler, а
+  наружный document-ownership probe из `ReaderView` удалён.
   Bookmark list/editor chain теперь так же сохраняет captured
   book+interaction: list, edit, shortcut и selection entry points получают
   только узкий `BookmarkInteractionHandler`, а add/update/delete/go-to и

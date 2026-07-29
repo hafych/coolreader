@@ -127,6 +127,9 @@ DICTS_DIALOG = SOURCE / "crengine" / "DictsDlg.java"
 SELECTION_TOOLBAR_DIALOG = (
     SOURCE / "crengine" / "SelectionToolbarDlg.java"
 )
+SELECTION_TOOLBAR_HANDLER = (
+    SOURCE / "crengine" / "SelectionToolbarHandler.java"
+)
 BOOKMARKS_DIALOG = SOURCE / "crengine" / "BookmarksDlg.java"
 BOOKMARK_EDIT_DIALOG = (
     SOURCE / "crengine" / "BookmarkEditDialog.java"
@@ -2235,7 +2238,6 @@ def main() -> None:
         "private final DocumentLoadLifecycle.Interaction",
         "private boolean isDocumentInteractionCurrent(",
         "private boolean isOwnedDocumentLoadCurrent(",
-        "boolean ownsDocumentInteraction(",
         "private static boolean isDocumentPositionCommand(",
         "private void cancelDocumentAnimation()",
         "private void getCurrentPositionProperties(",
@@ -2382,10 +2384,12 @@ def main() -> None:
         (
             SELECTION_TOOLBAR_DIALOG,
             (
-                "private final BookInfo expectedBook",
-                "private final DocumentLoadLifecycle.Interaction interaction",
-                "mReaderView.ownsDocumentInteraction(",
-                "expectedBook, interaction",
+                "private final SelectionToolbarHandler "
+                "selectionToolbarHandler",
+                "selectionToolbarHandler.isActive()",
+                "selectionToolbarHandler.moveSelectionBound(",
+                "selectionToolbarHandler.clearSelection()",
+                "selectionToolbarHandler.sendQuotation(",
             ),
         ),
     ):
@@ -2396,10 +2400,49 @@ def main() -> None:
                     f"{relative(path)} omits exact selection/search "
                     f"marker: {marker}")
         if path in (
-                SEARCH_DIALOG, FIND_NEXT_DIALOG, DICTS_DIALOG
+                SEARCH_DIALOG, FIND_NEXT_DIALOG, DICTS_DIALOG,
+                SELECTION_TOOLBAR_DIALOG,
         ) and re.search(r"\bReaderView\s+\w+", text):
             violations.append(
                 f"{relative(path)} retains a mutable ReaderView")
+
+    selection_toolbar_handler_text = (
+        SELECTION_TOOLBAR_HANDLER.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "interface SelectionToolbarHandler",
+        "interface SelectionUpdateHandler",
+        "boolean isActive()",
+        "boolean enterAdjustmentMode()",
+        "void restoreAdjustmentMode(boolean changed)",
+        "void moveSelectionBound(",
+        "void clearSelection()",
+        "void copyToClipboard(String text)",
+        "boolean shouldPersistSelection()",
+        "void showNewBookmark(Selection selection)",
+        "void showBookmarks()",
+        "void sendQuotation(Selection selection)",
+        "void showSearch(String initialText)",
+        "void scrollBy(int delta)",
+    ):
+        if marker not in selection_toolbar_handler_text:
+            violations.append(
+                f"{relative(SELECTION_TOOLBAR_HANDLER)} omits narrow "
+                f"selection-toolbar marker: {marker}")
+
+    for marker in (
+        "private SelectionToolbarHandler selectionToolbarHandler(",
+        "sendQuotationInEmail(",
+        "selection, expectedBook, interaction",
+        "mActivity.sendBookFragment(",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits exact selection-toolbar "
+                f"marker: {marker}")
+    if "ownsDocumentInteraction(" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} exposes document ownership to UI")
 
     for path, markers in (
         (
@@ -2460,7 +2503,6 @@ def main() -> None:
         '"isDocumentPositionCommand"',
         '"isDocumentInteractionCurrent"',
         '"isOwnedDocumentLoadCurrent"',
-        '"ownsDocumentInteraction"',
         "SearchDlg.SearchHandler.class",
         "FindNextDlg.SearchNavigationHandler.class",
         "DictsDlg.SelectionHandler.class",
@@ -2475,7 +2517,9 @@ def main() -> None:
         "ProfileSwitchHandler.class.isInterface()",
         "SwitchProfileDialog.class,",
         '"applyProfileSelection"',
-        "SelectionToolbarDlg.class, \"expectedBook\"",
+        "SelectionToolbarHandler.class.isInterface()",
+        "SelectionToolbarDlg.class,",
+        '"selectionToolbarHandler"',
         "TOCDlg.PageSelectionHandler.class",
         '"TOC dialog must not retain a mutable reader"',
     ):

@@ -481,9 +481,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   longer retains `ReaderView`, and scheduled frames target one exact animation.
 - Selection and search now preserve that exact document identity through
   gesture completion, selection-toolbar actions, search-history callbacks,
-  native find/find-next, clear and bookmark highlighting. Search, find-next and
-  dictionary dialogs use narrow handlers instead of retaining `ReaderView`, so
-  stale dialog actions cannot clear or search within a replacement book.
+  native find/find-next, clear and bookmark highlighting. The selection
+  toolbar, search, find-next and dictionary dialogs use narrow handlers instead
+  of retaining `ReaderView`; toolbar mode, quotation, bookmark, search and
+  delayed-scroll effects cannot recapture a replacement book.
 - Bookmark list and editor dialogs now use a narrow generation-aware handler
   instead of retaining `ReaderView`. Add, edit, delete, shortcut and go-to
   effects, current-page bookmark lookup, and delayed position persistence keep

@@ -720,21 +720,39 @@ public class ActivityOwnershipPolicyTest {
 				BookmarkEditDialog.class,
 				"interactionHandler",
 				BookmarkInteractionHandler.class);
+		assertTrue(SelectionToolbarHandler.class.isInterface());
 		assertPrivateFinalField(
-				SelectionToolbarDlg.class, "expectedBook",
-				BookInfo.class);
-		assertPrivateFinalField(
-				SelectionToolbarDlg.class, "interaction",
-				DocumentLoadLifecycle.Interaction.class);
-		Method ownsDocumentInteraction =
+				SelectionToolbarDlg.class,
+				"selectionToolbarHandler",
+				SelectionToolbarHandler.class);
+		for (Field field :
+				SelectionToolbarDlg.class.getDeclaredFields()) {
+			assertFalse(
+					"SelectionToolbarDlg must retain only a narrow "
+							+ "document handler",
+					field.getType() == ReaderView.class);
+			assertFalse(
+					"SelectionToolbarDlg must not expose captured "
+							+ "document ownership",
+					field.getType() == BookInfo.class
+							|| field.getType()
+									== DocumentLoadLifecycle
+											.Interaction.class);
+		}
+		Method createSelectionToolbarHandler =
 				ReaderView.class.getDeclaredMethod(
-						"ownsDocumentInteraction",
+						"selectionToolbarHandler",
 						BookInfo.class,
 						DocumentLoadLifecycle.Interaction.class);
-		assertFalse(Modifier.isPublic(
-				ownsDocumentInteraction.getModifiers()));
-		assertFalse(Modifier.isStatic(
-				ownsDocumentInteraction.getModifiers()));
+		assertTrue(Modifier.isPrivate(
+				createSelectionToolbarHandler.getModifiers()));
+		for (Method method : ReaderView.class.getDeclaredMethods()) {
+			assertFalse(
+					"ReaderView must not expose document ownership "
+							+ "to toolbar UI",
+					method.getName().equals(
+							"ownsDocumentInteraction"));
+		}
 		Method exactSearchDialog =
 				ReaderView.class.getDeclaredMethod(
 						"showSearchDialog",
@@ -775,6 +793,14 @@ public class ActivityOwnershipPolicyTest {
 						DocumentLoadLifecycle.Interaction.class);
 		assertFalse(Modifier.isPublic(
 				exactNewBookmarkDialog.getModifiers()));
+		Method exactQuotation =
+				ReaderView.class.getDeclaredMethod(
+						"sendQuotationInEmail",
+						Selection.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				exactQuotation.getModifiers()));
 		for (String methodName : new String[]{
 				"goToBookmark",
 				"removeBookmark",

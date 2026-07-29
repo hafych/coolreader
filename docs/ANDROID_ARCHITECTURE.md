@@ -137,10 +137,14 @@ native gesture update through selection-toolbar actions, asynchronous search
 history, both forward/backward native search passes, the find-next popup,
 selection clearing and bookmark-highlight rendering. Every native phase and
 GUI completion revalidates that pair. A stale toolbar cannot restore view mode
-or clear selection on a replacement document. `SearchDlg`, `FindNextDlg` and
-the dictionary picker retain narrow generation-aware handlers instead of
-`ReaderView`, so a delayed dialog callback cannot recapture the new document
-as though it owned the original selection.
+or clear selection on a replacement document. `SelectionToolbarDlg`,
+`SearchDlg`, `FindNextDlg` and the dictionary picker retain narrow
+generation-aware handlers instead of `ReaderView`. Toolbar mode adjustment,
+selection-bound movement, copy/persistence decisions, bookmark/search actions,
+quotation metadata and delayed overlap scrolling all return through the exact
+handler; the UI cannot query or carry document ownership itself. A delayed
+dialog callback therefore cannot recapture the new document as though it owned
+the original selection.
 
 Bookmark list and editor actions follow the same ownership boundary. They
 retain a captured `BookInfo` plus a narrow `BookmarkInteractionHandler`, not

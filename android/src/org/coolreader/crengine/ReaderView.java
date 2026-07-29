@@ -664,8 +664,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		switch (iSelectionAction) {
 			case SELECTION_ACTION_TOOLBAR:
 				SelectionToolbarDlg.showDialog(
-						mActivity, ReaderView.this, sel,
-						expectedBook, interaction);
+						mActivity, surface, sel,
+						selectionToolbarHandler(
+								expectedBook, interaction));
 				break;
 			case SELECTION_ACTION_COPY:
 				copyToClipboard(sel.text);
@@ -691,6 +692,119 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				break;
 		}
 
+	}
+
+	private SelectionToolbarHandler selectionToolbarHandler(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		return new SelectionToolbarHandler() {
+			@Override
+			public boolean isActive() {
+				return isDocumentInteractionCurrent(
+						expectedBook, interaction);
+			}
+
+			@Override
+			public boolean enterAdjustmentMode() {
+				if (!isActive())
+					return false;
+				if ("1".equals(getSetting(
+						PROP_PAGE_VIEW_MODE))) {
+					setViewModeNonPermanent(ViewMode.SCROLL);
+					return true;
+				}
+				return false;
+			}
+
+			@Override
+			public void restoreAdjustmentMode(boolean changed) {
+				if (changed && isActive())
+					setViewModeNonPermanent(ViewMode.PAGES);
+			}
+
+			@Override
+			public void moveSelectionBound(
+					boolean start,
+					int delta,
+					SelectionUpdateHandler updateHandler) {
+				ReaderCommand command =
+						start
+								? ReaderCommand
+										.DCMD_SELECT_MOVE_LEFT_BOUND_BY_WORDS
+								: ReaderCommand
+										.DCMD_SELECT_MOVE_RIGHT_BOUND_BY_WORDS;
+				moveSelection(
+						command,
+						delta,
+						new MoveSelectionCallback() {
+							@Override
+							public void onNewSelection(
+									Selection selection) {
+								updateHandler.onNewSelection(
+										selection);
+							}
+
+							@Override
+							public void onFail() {
+								updateHandler.onFail();
+							}
+						},
+						expectedBook,
+						interaction);
+			}
+
+			@Override
+			public void clearSelection() {
+				ReaderView.this.clearSelection(
+						expectedBook, interaction);
+			}
+
+			@Override
+			public void copyToClipboard(String text) {
+				if (isActive())
+					ReaderView.this.copyToClipboard(text);
+			}
+
+			@Override
+			public boolean shouldPersistSelection() {
+				return isActive()
+						&& getSettings().getBool(
+								PROP_APP_SELECTION_PERSIST,
+								false);
+			}
+
+			@Override
+			public void showNewBookmark(Selection selection) {
+				ReaderView.this.showNewBookmarkDialog(
+						selection, expectedBook, interaction);
+			}
+
+			@Override
+			public void showBookmarks() {
+				ReaderView.this.showBookmarksDialog(
+						expectedBook, interaction);
+			}
+
+			@Override
+			public void sendQuotation(Selection selection) {
+				sendQuotationInEmail(
+						selection, expectedBook, interaction);
+			}
+
+			@Override
+			public void showSearch(String initialText) {
+				showSearchDialog(
+						initialText, expectedBook, interaction);
+			}
+
+			@Override
+			public void scrollBy(int delta) {
+				if (isActive())
+					doEngineCommand(
+							ReaderCommand.DCMD_SCROLL_BY,
+							delta);
+			}
+		};
 	}
 
 	public void showNewBookmarkDialog(Selection sel) {
@@ -736,16 +850,29 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		return true;
 	}
 
-	public void sendQuotationInEmail(Selection sel) {
+	private void sendQuotationInEmail(
+			Selection sel,
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (sel == null || !isDocumentInteractionCurrent(
+				expectedBook, interaction)
+				|| expectedBook.getFileInfo() == null)
+			return;
 		StringBuilder buf = new StringBuilder();
-		if (mBookInfo.getFileInfo().authors != null)
-			buf.append("|" + mBookInfo.getFileInfo().authors + "\n");
-		if (mBookInfo.getFileInfo().title != null)
-			buf.append("|" + mBookInfo.getFileInfo().title + "\n");
+		if (expectedBook.getFileInfo().authors != null)
+			buf.append("|")
+					.append(expectedBook.getFileInfo().authors)
+					.append("\n");
+		if (expectedBook.getFileInfo().title != null)
+			buf.append("|")
+					.append(expectedBook.getFileInfo().title)
+					.append("\n");
 		if (sel.chapter != null && sel.chapter.length() > 0)
-			buf.append("|" + sel.chapter + "\n");
-		buf.append(sel.text + "\n");
-		mActivity.sendBookFragment(mBookInfo, buf.toString());
+			buf.append("|").append(sel.chapter).append("\n");
+		buf.append(sel.text).append("\n");
+		mActivity.sendBookFragment(
+				expectedBook, buf.toString());
 	}
 
 	public void copyToClipboard(String text) {
@@ -3718,13 +3845,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				&& mBookInfo == expectedBook
 				&& documentLoadLifecycle.isInteractionActive(
 						interaction);
-	}
-
-	boolean ownsDocumentInteraction(
-			BookInfo expectedBook,
-			DocumentLoadLifecycle.Interaction interaction) {
-		return isDocumentInteractionCurrent(
-				expectedBook, interaction);
 	}
 
 	private void applySettings(Properties props) {
