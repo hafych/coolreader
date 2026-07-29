@@ -355,6 +355,10 @@ public class CoolReader extends BaseActivity {
 
 		if (mHomeFrame != null)
 			mHomeFrame.onClose();
+		if (mBrowser != null) {
+			mBrowser.onClose();
+			mBrowser = null;
+		}
 		mDestroyed = true;
 
 		//if ( mReaderView!=null )

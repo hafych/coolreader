@@ -379,6 +379,15 @@ DRM или ограничений доступа, подбор/получени�
   и свой token. `BaseActivity` хранит вложенные `BaseDialog` в owner stack:
   закрытие child восстанавливает parent, а Activity teardown dismisses все
   диалоги children-first.
+  Вся навигация `FileBrowser` теперь принадлежит одному exact
+  `FileBrowserNavigationSession`: новый каталог, уход в root/reader и teardown
+  инвалидируют предыдущий owner, физически останавливают его `ScanControl` или
+  OPDS `DownloadTask`, очищают progress, а CRDB group/list callbacks публикуют
+  только при совпадении token и service generation. OPDS partial pages требуют
+  active request, terminal/error/book-download completion могут завершить его
+  ровно один раз; direct и context-menu OPDS entry points проходят через тот же
+  navigation boundary. Close также снимает browser с `History`/`Scanner`
+  listeners, а last-directory сохраняется только при фактической смене owner.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

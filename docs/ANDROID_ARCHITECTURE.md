@@ -327,6 +327,21 @@ replaceable pointer. Closing a child restores its parent as the current dialog,
 and Activity destruction takes the stack children-first and dismisses every
 showing dialog. Each dialog's normal `onClose()` path therefore cancels its
 owned work during teardown without losing the parent's bookkeeping.
+File-browser navigation has one closeable exact owner as well.
+`FileBrowserNavigationSession` spans CRDB genre/author/series/state queries,
+filesystem scans and OPDS catalog or book transfers. Every public directory
+selection replaces the prior request. Replacement, leaving the browser and
+teardown invoke the cancellation attached to that request, so the exact
+`Scanner.ScanControl` or OPDS `DownloadTask` is stopped and stale progress is
+cleared. CRDB results and scan initial/final callbacks require both the captured
+service generation and navigation identity before changing the current
+directory.
+OPDS pagination may publish multiple partial pages while its request remains
+active; finish, error or book-download completion must claim that request
+exactly once. Direct clicks and context-menu OPDS actions enter through the same
+navigation boundary, so a late feed cannot pull the browser back to an abandoned
+catalog. Browser close permanently closes the owner and unregisters the View
+from `History` and `Scanner` change sources.
 Reader-mode options additionally capture the exact `BookInfo` and document
 interaction before fetching the native font catalog. The dialog receives an
 immutable `ReaderDocumentOptions` snapshot plus a narrow generation-aware
