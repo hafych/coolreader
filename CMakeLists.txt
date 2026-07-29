@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 
 # Bundled third-party targets are configured in sibling directories and are
 # linked together from this top-level fallback logic.

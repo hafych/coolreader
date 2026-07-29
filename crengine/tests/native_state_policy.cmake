@@ -3,6 +3,8 @@ if(NOT DEFINED SOURCE_ROOT)
 endif()
 
 file(READ "${SOURCE_ROOT}/CMakeLists.txt" ROOT_CMAKE_SOURCE)
+file(READ "${SOURCE_ROOT}/tools/KWWidgetsInternationalizationMacros.cmake"
+  GETTEXT_MACROS_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crsetup.h" CR_SETUP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtypes.h" LV_TYPES_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
@@ -229,6 +231,16 @@ function(forbid_source_text SOURCE_VALUE FORBIDDEN DESCRIPTION)
 endfunction()
 
 # --- warning gate coverage ---
+require_source_text(
+  "${ROOT_CMAKE_SOURCE}"
+  "cmake_minimum_required(VERSION 3.10)"
+  "desktop builds must retain a CMake 4-compatible policy floor"
+)
+forbid_source_text(
+  "${GETTEXT_MACROS_SOURCE}"
+  "cmake_minimum_required("
+  "included gettext macros must not reset the project policy version"
+)
 require_source_text(
   "${ROOT_CMAKE_SOURCE}"
   "$<$<COMPILE_LANGUAGE:C>:-Wall;-Wextra;-Wpedantic;"
