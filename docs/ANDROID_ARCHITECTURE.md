@@ -182,6 +182,16 @@ query or dialog close. Submit and cancel share a single terminal transition, so
 `BaseDialog.onClose()` cannot turn a confirmed search into a second
 cancellation. The backend also checks the captured service generation before
 delivering results to the dialog or browser.
+Reader document search has the same dialog boundary. Search-history loading
+must claim the dialog's exact `CloseableTaskGate` token while both its document
+interaction and service generation remain active. Dismiss closes that owner
+and detaches its one-shot database-bind wrapper before base-dialog cleanup.
+The pending connector queue therefore releases the dialog reference, and a late
+database result cannot attach Views to a closed dialog. Search submission
+persists a copied `BookInfo` through a temporary database disconnect without
+retaining the dialog itself. The find-next popup folds outside touch, close,
+Back and platform dismiss into one terminal selection cleanup instead of
+posting duplicate native work.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

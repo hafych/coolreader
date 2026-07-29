@@ -365,6 +365,14 @@ DRM или ограничений доступа, подбор/получени�
   один раз. Поэтому dismiss после submit больше не вызывает вторую отмену через
   `BaseDialog.onClose()`, а service-generation gate не публикует результат
   уничтоженной Activity.
+  Reader document search также получил dialog-owned lifecycle: загрузка истории
+  требует exact `CloseableTaskGate` token, активные document interaction и
+  service generation, а dismiss закрывает owner и detaches one-shot DB-bind
+  wrapper до `BaseDialog` cleanup, освобождая ссылку на dialog.
+  History save использует snapshot книги и переживает временный DB disconnect
+  без падения или удержания самого dialog. Find-next popup сводит outside,
+  close, Back и dismiss к одной terminal очистке selection вместо двойных
+  native задач.
   Фоновая language-фильтрация font picker теперь принадлежит отдельной
   `FontFilterSession`: scan читает deep-copied candidate snapshot, replacement,
   uncheck и dismiss физически вызывают `ScanControl.stop()`, а late completion

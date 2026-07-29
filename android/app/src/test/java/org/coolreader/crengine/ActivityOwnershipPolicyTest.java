@@ -1058,6 +1058,35 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void readerSearchUiOwnsItsCloseableLifecycle()
+			throws Exception {
+		for (String name : new String[]{
+				"serviceLifecycle",
+				"historyLoadLifecycle",
+				"historyBindCallback"}) {
+			Field field =
+					SearchDlg.class.getDeclaredField(name);
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+		}
+		Method onClose =
+				SearchDlg.class.getDeclaredMethod("onClose");
+		assertTrue(Modifier.isProtected(
+				onClose.getModifiers()));
+
+		Field popupLifecycle =
+				FindNextDlg.class.getDeclaredField(
+						"popupLifecycle");
+		assertTrue(Modifier.isPrivate(
+				popupLifecycle.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				popupLifecycle.getModifiers()));
+		assertFalse(Modifier.isStatic(
+				popupLifecycle.getModifiers()));
+	}
+
+	@Test
 	public void databaseConnectorOwnsExactDetachableBinding()
 			throws Exception {
 		for (String name : new String[]{

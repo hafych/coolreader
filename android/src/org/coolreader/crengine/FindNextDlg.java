@@ -42,6 +42,8 @@ public class FindNextDlg {
 	private final View mAnchor;
 	private final View mPanel;
 	private final SearchNavigationHandler searchHandler;
+	private final CloseableTaskGate popupLifecycle =
+			new CloseableTaskGate();
 
 	static public void showDialog(
 			BaseActivity coolReader, View anchor,
@@ -71,8 +73,7 @@ public class FindNextDlg {
 		mWindow = new PopupWindow( mAnchor.getContext() );
 		mWindow.setTouchInterceptor((v, event) -> {
 			if ( event.getAction()==MotionEvent.ACTION_OUTSIDE ) {
-				clearSelection();
-				mWindow.dismiss();
+				dismissAndClear();
 				return true;
 			}
 			return false;
@@ -83,17 +84,14 @@ public class FindNextDlg {
 				v -> findNext(true));
 		mPanel.findViewById(R.id.search_btn_next).setOnClickListener(
 				v -> findNext(false));
-		mPanel.findViewById(R.id.search_btn_close).setOnClickListener(v -> {
-			clearSelection();
-			mWindow.dismiss();
-		});
+		mPanel.findViewById(R.id.search_btn_close)
+				.setOnClickListener(v -> dismissAndClear());
 		mPanel.setFocusable(true);
 		mPanel.setOnKeyListener((v, keyCode, event) -> {
 			if ( event.getAction()==KeyEvent.ACTION_UP ) {
 				switch ( keyCode ) {
 				case KeyEvent.KEYCODE_BACK:
-					clearSelection();
-					mWindow.dismiss();
+					dismissAndClear();
 					return true;
 				case KeyEvent.KEYCODE_DPAD_LEFT:
 				case KeyEvent.KEYCODE_DPAD_UP:
@@ -147,15 +145,23 @@ public class FindNextDlg {
 	}
 
 	private void findNext(boolean reverse) {
-		if (!searchHandler.isActive()) {
-			mWindow.dismiss();
+		if (popupLifecycle.isClosed()
+				|| !searchHandler.isActive()) {
+			dismissAndClear();
 			return;
 		}
 		searchHandler.findNext(reverse);
 	}
 
+	private void dismissAndClear() {
+		clearSelection();
+		mWindow.dismiss();
+	}
+
 	private void clearSelection() {
-		searchHandler.clearSelection();
+		if (popupLifecycle.close()
+				&& searchHandler.isActive())
+			searchHandler.clearSelection();
 	}
 	
 }

@@ -22,6 +22,7 @@
 package org.coolreader.crengine;
 
 import org.coolreader.R;
+import org.coolreader.db.CRDBService;
 
 import android.content.Context;
 import android.database.DataSetObserver;
@@ -47,13 +48,17 @@ public class SearchDlg extends BaseDialog {
 
 	private final BaseActivity mCoolReader;
 	private final SearchHandler searchHandler;
+	private final ServiceLifecycle serviceLifecycle;
+	private final CloseableTaskGate historyLoadLifecycle =
+			new CloseableTaskGate();
+	private final DetachableRunnable historyBindCallback;
 	private LayoutInflater mInflater;
 	View mDialogView;
 	EditText mEditView;
 	CheckBox mCaseSensitive;
 	CheckBox mReverse;
 	private final BookInfo mBookInfo;
-	ArrayList<String> mSearches;
+	ArrayList<String> mSearches = new ArrayList<>();
 	private SearchList mList;
 
 
@@ -69,10 +74,9 @@ public class SearchDlg extends BaseDialog {
 		else if (!searchHandler.isActive())
 			Log.d("search", "Ignoring stale search dialog");
     	else {
-		    activity.getDB().saveSearchHistory(mBookInfo,
-				    mEditView.getText().toString());
+			saveSearchHistory(pattern);
 		    searchHandler.find(
-					mEditView.getText().toString(),
+					pattern,
 					mReverse.isChecked(),
 					!mCaseSensitive.isChecked());
 	    }
@@ -186,6 +190,8 @@ public class SearchDlg extends BaseDialog {
 		this.mCoolReader = coolReader;
 		this.mBookInfo = bookInfo;
 		this.searchHandler = searchHandler;
+		this.serviceLifecycle =
+				coolReader.getServiceDependencies().getLifecycle();
 		setPositiveButtonImage(R.drawable.cr3_button_find, R.string.action_search);
         mInflater = LayoutInflater.from(getContext());
         mDialogView = mInflater.inflate(R.layout.search_dialog, null);
@@ -194,22 +200,89 @@ public class SearchDlg extends BaseDialog {
     		mEditView.setText(initialText);
     	mCaseSensitive = mDialogView.findViewById(R.id.search_case_sensitive);
     	mReverse = mDialogView.findViewById(R.id.search_reverse);
-		activity.getDB().loadSearchHistory(this.mBookInfo, searches -> {
-			if (!this.searchHandler.isActive())
-				return;
-			mSearches = searches;
-			ViewGroup body = mDialogView.findViewById(R.id.history_list);
-			mList = new SearchList(activity);
-			body.addView(mList);
-		});
+		historyBindCallback =
+				createHistoryBindCallback();
+		if (historyBindCallback != null)
+			mCoolReader.waitForCRDBService(
+					historyBindCallback);
 		//setView(mDialogView);
 		//setFlingHandlers(mList, null, null);
 		// setup buttons
+	}
+
+	private DetachableRunnable createHistoryBindCallback() {
+		if (mBookInfo == null)
+			return null;
+		CloseableTaskGate.Token owner =
+				historyLoadLifecycle.beginIfIdle();
+		if (owner == null)
+			return null;
+		BookInfo historyBook = new BookInfo(mBookInfo);
+		return new DetachableRunnable(
+				() -> loadSearchHistory(owner, historyBook));
+	}
+
+	private void loadSearchHistory(
+			CloseableTaskGate.Token owner,
+			BookInfo historyBook) {
+		if (!serviceLifecycle.isActive()
+				|| !searchHandler.isActive()
+				|| !historyLoadLifecycle.isActive(owner))
+			return;
+		CRDBService.LocalBinder db = mCoolReader.getDB();
+		if (db == null) {
+			historyLoadLifecycle.complete(owner);
+			return;
+		}
+		db.loadSearchHistory(historyBook, searches -> {
+			if (!serviceLifecycle.isActive()
+					|| !searchHandler.isActive()
+					|| !historyLoadLifecycle.complete(owner))
+				return;
+			mSearches =
+					searches != null
+							? new ArrayList<>(searches)
+							: new ArrayList<>();
+			ViewGroup body =
+					mDialogView.findViewById(
+							R.id.history_list);
+			mList = new SearchList(mCoolReader);
+			body.addView(mList);
+		});
+	}
+
+	private void saveSearchHistory(String pattern) {
+		BaseActivity ownerActivity = mCoolReader;
+		ServiceLifecycle ownerLifecycle = serviceLifecycle;
+		BookInfo historyBook = new BookInfo(mBookInfo);
+		CRDBService.LocalBinder db = ownerActivity.getDB();
+		if (db != null) {
+			db.saveSearchHistory(historyBook, pattern);
+			return;
+		}
+		ownerActivity.waitForCRDBService(() -> {
+			if (!ownerLifecycle.isActive())
+				return;
+			CRDBService.LocalBinder connectedDb =
+					ownerActivity.getDB();
+			if (connectedDb != null)
+				connectedDb.saveSearchHistory(
+						historyBook,
+						pattern);
+		});
 	}
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setView(mDialogView);
+	}
+
+	@Override
+	protected void onClose() {
+		if (historyBindCallback != null)
+			historyBindCallback.detach();
+		historyLoadLifecycle.close();
+		super.onClose();
 	}
 }
