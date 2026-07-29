@@ -43,12 +43,11 @@ import org.coolreader.R;
 import java.util.ArrayList;
 
 public class BookmarksDlg  extends BaseDialog {
-	CoolReader mCoolReader;
-	ReaderView mReaderView;
-	private LayoutInflater mInflater;
-	BookInfo mBookInfo;
-	BookmarkList mList;
-	BookmarksDlg mThis;
+	private final CoolReader mCoolReader;
+	private final BookmarkInteractionHandler interactionHandler;
+	private final LayoutInflater mInflater;
+	private final BookInfo mBookInfo;
+	private final BookmarkList mList;
 
 	public final static int ITEM_POSITION=0;
 	public final static int ITEM_COMMENT=1;
@@ -239,11 +238,15 @@ public class BookmarksDlg  extends BaseDialog {
 		
 		@Override
 		public boolean performItemClick(View view, int position, long id) {
+			if (!interactionHandler.isActive()) {
+				dismiss();
+				return true;
+			}
 			if ( mShortcutMode ) {
 				Bookmark b = mBookInfo.findShortcutBookmark(position+1);
 				if ( b==null ) {
-					mReaderView.addBookmark(position+1);
-					mThis.dismiss();
+					interactionHandler.addBookmark(position+1);
+					dismiss();
 					return true;
 				}
 				selectedItem = position;
@@ -251,7 +254,7 @@ public class BookmarksDlg  extends BaseDialog {
 			} else {
 				Bookmark bm = (Bookmark)mAdapter.getItem(position);
 				if ( bm!=null ) {
-					mReaderView.goToBookmark(bm);
+					interactionHandler.goToBookmark(bm);
 					dismiss();
 				}
 			}
@@ -263,14 +266,15 @@ public class BookmarksDlg  extends BaseDialog {
 	
 	final static int SHORTCUT_COUNT = 10;
 	
-	public BookmarksDlg( CoolReader activity, ReaderView readerView )
+	BookmarksDlg(
+			CoolReader activity, BookInfo bookInfo,
+			BookmarkInteractionHandler interactionHandler)
 	{
 		super(activity, activity.getResources().getString(R.string.win_title_bookmarks), true, false);
-		mThis = this; // for inner classes
-        mInflater = LayoutInflater.from(getContext());
+		mInflater = LayoutInflater.from(getContext());
 		mCoolReader = activity;
-		mReaderView = readerView;
-		mBookInfo = mReaderView.getBookInfo();
+		mBookInfo = bookInfo;
+		this.interactionHandler = interactionHandler;
 		setPositiveButtonImage(Utils.resolveResourceIdByAttr(activity, R.attr.cr3_button_add_drawable, R.drawable.cr3_button_add), R.string.mi_bookmark_add);
 		View frame = mInflater.inflate(R.layout.bookmark_list_dialog, null);
 		ViewGroup body = frame.findViewById(R.id.bookmark_list);
@@ -283,7 +287,7 @@ public class BookmarksDlg  extends BaseDialog {
 	@Override
 	protected void onPositiveButtonClick() {
 		// add bookmark
-		mReaderView.addBookmark(0);
+		interactionHandler.addBookmark(0);
 		BookmarksDlg.this.dismiss();
 	}
 
@@ -298,8 +302,12 @@ public class BookmarksDlg  extends BaseDialog {
 	protected void onCreate(Bundle savedInstanceState) {
 		Log.v("cr3", "creating BookmarksDlg");
 		//setTitle(mCoolReader.getResources().getString(R.string.win_title_bookmarks));
-        setCancelable(true);
+		setCancelable(true);
 		super.onCreate(savedInstanceState);
+		if (!interactionHandler.isActive()) {
+			dismiss();
+			return;
+		}
 		registerForContextMenu(mList);
 	}
 	
@@ -309,6 +317,10 @@ public class BookmarksDlg  extends BaseDialog {
 	
 	@Override
 	public boolean onContextItemSelected(MenuItem item) {
+		if (!interactionHandler.isActive()) {
+			dismiss();
+			return true;
+		}
 		
 		int shortcut = selectedItem; //mList.getSelectedItemPosition();
 		Bookmark bm = mList.getSelectedBookmark();
@@ -316,16 +328,16 @@ public class BookmarksDlg  extends BaseDialog {
 			if ( shortcut>=0 && shortcut<SHORTCUT_COUNT ) {
 				switch (item.getItemId()) {
 				case R.id.bookmark_shortcut_add:
-					mReaderView.addBookmark(shortcut+1);
+					interactionHandler.addBookmark(shortcut+1);
 					listUpdated();
 					dismiss();
 					return true;
 				case R.id.bookmark_delete:
-					if (mReaderView.removeBookmark(bm) != null)
+					if (interactionHandler.removeBookmark(bm))
 						listUpdated();
 					return true;
 				case R.id.bookmark_shortcut_goto:
-					mReaderView.goToBookmark(shortcut+1);
+					interactionHandler.goToBookmark(shortcut+1);
 					dismiss();
 					return true;
 				}
@@ -334,22 +346,24 @@ public class BookmarksDlg  extends BaseDialog {
 		}
 		switch (item.getItemId()) {
 		case R.id.bookmark_add:
-			mReaderView.addBookmark(0);
+			interactionHandler.addBookmark(0);
 			listUpdated();
 			dismiss();
 			return true;
 		case R.id.bookmark_delete:
-			if (mReaderView.removeBookmark(bm) != null)
+			if (interactionHandler.removeBookmark(bm))
 				listUpdated();
 			return true;
 		case R.id.bookmark_goto:
 			if ( bm!=null )
-				mReaderView.goToBookmark(bm);
+				interactionHandler.goToBookmark(bm);
 			dismiss();
 			return true;
 		case R.id.bookmark_edit:
 			if ( bm!=null && (bm.getType()==Bookmark.TYPE_COMMENT || bm.getType()==Bookmark.TYPE_CORRECTION)) {
-				BookmarkEditDialog dlg = new BookmarkEditDialog(mCoolReader, mReaderView, bm, false);
+				BookmarkEditDialog dlg = new BookmarkEditDialog(
+						mCoolReader, interactionHandler,
+						bm, false);
 				dlg.show();
 			}
 			dismiss();
@@ -382,6 +396,11 @@ public class BookmarksDlg  extends BaseDialog {
 	@Override
 	public void onCreateContextMenu(ContextMenu menu, View v,
 			ContextMenuInfo menuInfo) {
+		if (!interactionHandler.isActive()) {
+			menu.clear();
+			dismiss();
+			return;
+		}
 	    MenuInflater inflater = mCoolReader.getMenuInflater();
 	    menu.clear();
 	    inflater.inflate(mList.isShortcutMode() ? R.menu.cr3_bookmark_shortcut_context_menu : R.menu.cr3_bookmark_context_menu, menu);

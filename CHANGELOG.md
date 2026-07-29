@@ -481,6 +481,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   native find/find-next, clear and bookmark highlighting. Search, find-next and
   dictionary dialogs use narrow handlers instead of retaining `ReaderView`, so
   stale dialog actions cannot clear or search within a replacement book.
+- Bookmark list and editor dialogs now use a narrow generation-aware handler
+  instead of retaining `ReaderView`. Add, edit, delete, shortcut and go-to
+  effects, current-page bookmark lookup, and delayed position persistence keep
+  the captured book/interaction pair, preventing stale UI or timers from
+  mutating or saving a replacement book.
 - Reader animation and GC schedulers are now generation-owned and canceled
   during every teardown. Animation updates no longer coordinate unrelated
   Activities through a class monitor or retain active state after destruction.

@@ -64,7 +64,6 @@ import org.coolreader.crengine.BatteryStatus;
 import org.coolreader.crengine.BookInfo;
 import org.coolreader.crengine.BookInfoEditDialog;
 import org.coolreader.crengine.Bookmark;
-import org.coolreader.crengine.BookmarksDlg;
 import org.coolreader.crengine.BrowserViewLayout;
 import org.coolreader.crengine.CRRootView;
 import org.coolreader.crengine.CRToolBar;
@@ -2336,10 +2335,8 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showBookmarksDialog() {
-		BackgroundThread.instance().executeGUI(() -> {
-			BookmarksDlg dlg = new BookmarksDlg(CoolReader.this, mReaderView);
-			dlg.show();
-		});
+		if (mReaderView != null)
+			mReaderView.showBookmarksDialog();
 	}
 
 	public void openURL(String url) {

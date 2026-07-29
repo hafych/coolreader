@@ -655,7 +655,8 @@ public class ActivityOwnershipPolicyTest {
 		}
 		for (Class<?> dialog : new Class<?>[]{
 				SearchDlg.class, FindNextDlg.class,
-				DictsDlg.class}) {
+				DictsDlg.class, BookmarksDlg.class,
+				BookmarkEditDialog.class}) {
 			for (Field field : dialog.getDeclaredFields()) {
 				assertFalse(
 						dialog.getSimpleName()
@@ -675,6 +676,17 @@ public class ActivityOwnershipPolicyTest {
 		assertPrivateFinalField(
 				DictsDlg.class, "selectionHandler",
 				DictsDlg.SelectionHandler.class);
+		assertTrue(BookmarkInteractionHandler.class.isInterface());
+		assertPrivateFinalField(
+				BookmarksDlg.class, "interactionHandler",
+				BookmarkInteractionHandler.class);
+		assertPrivateFinalField(
+				BookmarksDlg.class, "mBookInfo",
+				BookInfo.class);
+		assertPrivateFinalField(
+				BookmarkEditDialog.class,
+				"interactionHandler",
+				BookmarkInteractionHandler.class);
 		assertPrivateFinalField(
 				SelectionToolbarDlg.class, "expectedBook",
 				BookInfo.class);
@@ -715,6 +727,60 @@ public class ActivityOwnershipPolicyTest {
 						DocumentLoadLifecycle.Interaction.class);
 		assertFalse(Modifier.isPublic(
 				exactSelectionMove.getModifiers()));
+		Method exactBookmarksDialog =
+				ReaderView.class.getDeclaredMethod(
+						"showBookmarksDialog",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertFalse(Modifier.isPublic(
+				exactBookmarksDialog.getModifiers()));
+		Method exactNewBookmarkDialog =
+				ReaderView.class.getDeclaredMethod(
+						"showNewBookmarkDialog",
+						Selection.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertFalse(Modifier.isPublic(
+				exactNewBookmarkDialog.getModifiers()));
+		for (String methodName : new String[]{
+				"goToBookmark",
+				"removeBookmark",
+				"updateBookmark",
+				"addBookmark"}) {
+			Method exactBookmarkMutation =
+					ReaderView.class.getDeclaredMethod(
+							methodName,
+							Bookmark.class,
+							BookInfo.class,
+							DocumentLoadLifecycle.Interaction.class);
+			assertTrue(Modifier.isPrivate(
+					exactBookmarkMutation.getModifiers()));
+		}
+		Method exactShortcutBookmark =
+				ReaderView.class.getDeclaredMethod(
+						"addBookmark",
+						int.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				exactShortcutBookmark.getModifiers()));
+		Method exactPositionSave =
+				ReaderView.class.getDeclaredMethod(
+						"scheduleSaveCurrentPositionBookmark",
+						int.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				exactPositionSave.getModifiers()));
+		Method exactPositionSaveApply =
+				ReaderView.class.getDeclaredMethod(
+						"applyPositionSave",
+						CloseableTaskGate.Token.class,
+						BookInfo.class,
+						Bookmark.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				exactPositionSaveApply.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
 		for (Field field :

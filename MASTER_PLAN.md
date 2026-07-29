@@ -309,6 +309,13 @@ DRM или ограничений доступа, подбор/получени�
   dismiss/click не очищает selection и не меняет view mode новой книги.
   `SearchDlg`, `FindNextDlg` и dictionary picker больше не хранят
   `ReaderView`, получая только узкие generation-aware callbacks.
+  Bookmark list/editor chain теперь так же сохраняет captured
+  book+interaction: list, edit, shortcut и selection entry points получают
+  только узкий `BookmarkInteractionHandler`, а add/update/delete/go-to и
+  асинхронное получение bookmark текущей страницы повторно проверяют обе
+  identity перед mutation, DB effect и highlight. Отложенное сохранение
+  позиции захватывает эту пару до GUI-hop и переносит её до exact apply, поэтому
+  stale диалог или timer не может изменить либо сохранить replacement-книгу.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

@@ -127,6 +127,13 @@ DICTS_DIALOG = SOURCE / "crengine" / "DictsDlg.java"
 SELECTION_TOOLBAR_DIALOG = (
     SOURCE / "crengine" / "SelectionToolbarDlg.java"
 )
+BOOKMARKS_DIALOG = SOURCE / "crengine" / "BookmarksDlg.java"
+BOOKMARK_EDIT_DIALOG = (
+    SOURCE / "crengine" / "BookmarkEditDialog.java"
+)
+BOOKMARK_INTERACTION_HANDLER = (
+    SOURCE / "crengine" / "BookmarkInteractionHandler.java"
+)
 ACTIVITY_OWNERSHIP_POLICY_TEST = (
     ROOT
     / "android"
@@ -2175,7 +2182,10 @@ def main() -> None:
         "positionSaveLifecycle.complete(owner)",
         "positionSaveScheduler.postDelayed(",
         "private void applyPositionSave(",
-        "mBookInfo != bookInfo",
+        "delayMillis, mBookInfo,",
+        "final BookInfo expectedBook,",
+        "Bookmark bookmark,\n"
+        "\t\t\tDocumentLoadLifecycle.Interaction interaction)",
         "savePositionBookmark(bookInfo, bookmark)",
         "selectionUpdateLifecycle.replace()",
         "selectionUpdateLifecycle.isActive(owner)",
@@ -2235,7 +2245,7 @@ def main() -> None:
         "private void closeGestureTimeouts()",
         "currentTapHandler != handler",
         "== MotionEvent.ACTION_CANCEL",
-        "mBookInfo != gestureBook",
+        "gestureInteraction",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -2338,6 +2348,54 @@ def main() -> None:
             violations.append(
                 f"{relative(path)} retains a mutable ReaderView")
 
+    for path, markers in (
+        (
+            BOOKMARK_INTERACTION_HANDLER,
+            (
+                "interface BookmarkInteractionHandler",
+                "boolean isActive()",
+                "boolean addBookmark(Bookmark bookmark)",
+                "boolean removeBookmark(Bookmark bookmark)",
+                "boolean updateBookmark(Bookmark bookmark)",
+                "boolean goToBookmark(Bookmark bookmark)",
+            ),
+        ),
+        (
+            BOOKMARKS_DIALOG,
+            (
+                "private final BookmarkInteractionHandler "
+                "interactionHandler",
+                "private final BookInfo mBookInfo",
+                "interactionHandler.isActive()",
+                "interactionHandler.addBookmark(",
+                "interactionHandler.removeBookmark(",
+                "interactionHandler.goToBookmark(",
+            ),
+        ),
+        (
+            BOOKMARK_EDIT_DIALOG,
+            (
+                "private final BookmarkInteractionHandler "
+                "interactionHandler",
+                "interactionHandler.isActive()",
+                "interactionHandler.addBookmark(",
+                "interactionHandler.updateBookmark(",
+                "interactionHandler.removeBookmark(",
+            ),
+        ),
+    ):
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in text:
+                violations.append(
+                    f"{relative(path)} omits exact bookmark marker: "
+                    f"{marker}")
+        if path in (BOOKMARKS_DIALOG, BOOKMARK_EDIT_DIALOG) and re.search(
+                r"\bReaderView\s+\w+", text
+        ):
+            violations.append(
+                f"{relative(path)} retains a mutable ReaderView")
+
     activity_ownership_policy_test_text = (
         ACTIVITY_OWNERSHIP_POLICY_TEST.read_text(encoding="utf-8")
     )
@@ -2352,6 +2410,11 @@ def main() -> None:
         "SearchDlg.SearchHandler.class",
         "FindNextDlg.SearchNavigationHandler.class",
         "DictsDlg.SelectionHandler.class",
+        "BookmarkInteractionHandler.class.isInterface()",
+        "BookmarksDlg.class, \"interactionHandler\"",
+        "BookmarkEditDialog.class,",
+        '"scheduleSaveCurrentPositionBookmark"',
+        '"applyPositionSave"',
         "SelectionToolbarDlg.class, \"expectedBook\"",
         "TOCDlg.PageSelectionHandler.class",
         '"TOC dialog must not retain a mutable reader"',

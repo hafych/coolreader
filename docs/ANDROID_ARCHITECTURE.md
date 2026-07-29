@@ -142,6 +142,15 @@ the dictionary picker retain narrow generation-aware handlers instead of
 `ReaderView`, so a delayed dialog callback cannot recapture the new document
 as though it owned the original selection.
 
+Bookmark list and editor actions follow the same ownership boundary. They
+retain a captured `BookInfo` plus a narrow `BookmarkInteractionHandler`, not
+`ReaderView`; add, update, delete, shortcut and go-to effects revalidate the
+original interaction before touching the model, database or native document.
+Current-page bookmark lookup also carries that pair through engine completion.
+Position-save scheduling captures the pair before its GUI handoff and preserves
+it through delayed apply, so an older dialog or timer cannot mutate or persist
+the replacement book.
+
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.

@@ -552,10 +552,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final CloseableTaskGate selectionUpdateLifecycle =
 			new CloseableTaskGate();
 
-	private void updateSelection(int startX, int startY, int endX, int endY, final boolean isUpdateEnd) {
+	private void updateSelection(
+			int startX, int startY, int endX, int endY,
+			final boolean isUpdateEnd) {
 		final BookInfo expectedBook = mBookInfo;
 		final DocumentLoadLifecycle.Interaction interaction =
 				documentLoadLifecycle.interaction();
+		updateSelection(
+				startX, startY, endX, endY, isUpdateEnd,
+				expectedBook, interaction);
+	}
+
+	private void updateSelection(
+			int startX, int startY, int endX, int endY,
+			final boolean isUpdateEnd,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
 		if (!isDocumentInteractionCurrent(
 				expectedBook, interaction))
 			return;
@@ -665,7 +677,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				break;
 			case SELECTION_ACTION_BOOKMARK:
 				clearSelection(expectedBook, interaction);
-				showNewBookmarkDialog(sel);
+				showNewBookmarkDialog(
+						sel, expectedBook, interaction);
 				break;
 			case SELECTION_ACTION_FIND:
 				clearSelection(expectedBook, interaction);
@@ -680,8 +693,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void showNewBookmarkDialog(Selection sel) {
-		if (mBookInfo == null)
-			return;
+		BackgroundThread.ensureGUI();
+		showNewBookmarkDialog(
+				sel, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	boolean showNewBookmarkDialog(
+			Selection sel, BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (sel == null || !isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return false;
 		Bookmark bmk = new Bookmark();
 		bmk.setType(Bookmark.TYPE_COMMENT);
 		bmk.setPosText(sel.text);
@@ -689,8 +713,26 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		bmk.setEndPos(sel.endPos);
 		bmk.setPercent(sel.percent);
 		bmk.setTitleText(sel.chapter);
-		BookmarkEditDialog dlg = new BookmarkEditDialog(mActivity, this, bmk, true);
+		showBookmarkEditDialog(
+				bmk, true, expectedBook, interaction);
+		return true;
+	}
+
+	private boolean showBookmarkEditDialog(
+			Bookmark bookmark, boolean isNew,
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (bookmark == null || !isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return false;
+		BookmarkEditDialog dlg = new BookmarkEditDialog(
+				mActivity,
+				bookmarkInteractionHandler(
+						expectedBook, interaction),
+				bookmark, isNew);
 		dlg.show();
+		return true;
 	}
 
 	public void sendQuotationInEmail(Selection sel) {
@@ -1161,12 +1203,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 			// check link before executing action
 			final BookInfo gestureBook = mBookInfo;
+			final DocumentLoadLifecycle.Interaction
+					gestureInteraction =
+							documentLoadLifecycle.interaction();
 			mEngine.execute(new Task() {
 				String link;
 				ImageInfo image;
 				Bookmark bookmark;
+				boolean internalLinkMoved;
 
 				public void work() {
+					if (!isDocumentInteractionCurrent(
+							gestureBook,
+							gestureInteraction))
+						return;
 					image = new ImageInfo();
 					image.bufWidth = internalDX;
 					image.bufHeight = internalDY;
@@ -1179,8 +1229,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					if (link != null) {
 						if (link.startsWith("#")) {
 							log.d("go to " + link);
-							doc.goLink(link);
-							drawPage();
+							internalLinkMoved =
+									doc.goLink(link) != 0;
+							if (internalLinkMoved
+									&& isDocumentInteractionCurrent(
+											gestureBook,
+											gestureInteraction))
+								updateCurrentPositionStatus(
+										gestureBook,
+										gestureInteraction);
 						}
 						return;
 					}
@@ -1190,10 +1247,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 
 				public void done() {
-					if (!mServiceLifecycle.isActive()
-							|| mBookInfo != gestureBook)
-						return;
-					if (bookmark != null && gestureBook == null)
+					if (!isDocumentInteractionCurrent(
+							gestureBook,
+							gestureInteraction))
 						return;
 					if (bookmark != null)
 						bookmark = gestureBook.findBookmark(
@@ -1203,8 +1259,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					} else if (image != null) {
 						startImageViewer(image);
 					} else if (bookmark != null) {
-						BookmarkEditDialog dlg = new BookmarkEditDialog(mActivity, ReaderView.this, bookmark, false);
-						dlg.show();
+						showBookmarkEditDialog(
+								bookmark, false,
+								gestureBook,
+								gestureInteraction);
+					} else if (internalLinkMoved) {
+						drawPage();
+						scheduleSaveCurrentPositionBookmark(
+								DEF_SAVE_POSITION_INTERVAL,
+								gestureBook,
+								gestureInteraction);
 					} else if (!link.startsWith("#")) {
 						log.d("external link " + link);
 						if (link.startsWith("http://") || link.startsWith("https://")) {
@@ -1217,10 +1281,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								return;
 							}
 							File baseDir = null;
-							if (mBookInfo != null && mBookInfo.getFileInfo() != null) {
-								if (!mBookInfo.getFileInfo().isArchive) {
+							if (gestureBook.getFileInfo() != null) {
+								if (!gestureBook.getFileInfo().isArchive) {
 									// relatively to base directory
-									File f = new File(mBookInfo.getFileInfo().getBasePath());
+									File f = new File(
+											gestureBook.getFileInfo()
+													.getBasePath());
 									baseDir = f.getParentFile();
 									String url = link;
 									while (baseDir != null && url != null && url.startsWith("../")) {
@@ -1236,7 +1302,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 									}
 								} else {
 									// from archive
-									fi = new FileInfo(mBookInfo.getFileInfo().getArchiveName() + FileInfo.ARC_SEPARATOR + link);
+									fi = new FileInfo(
+											gestureBook.getFileInfo()
+													.getArchiveName()
+													+ FileInfo.ARC_SEPARATOR
+													+ link);
 									if (fi.exists()) {
 										mActivity.loadDocument(fi, true);
 										return;
@@ -1257,11 +1327,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			cancelTapGestureTimeout();
 			state = STATE_SELECTION;
 			// check link before executing action
+			final BookInfo gestureBook = mBookInfo;
+			final DocumentLoadLifecycle.Interaction
+					gestureInteraction =
+							documentLoadLifecycle.interaction();
 			mEngine.execute(new Task() {
 				ImageInfo image;
 				Bookmark bookmark;
 
 				public void work() {
+					if (!isDocumentInteractionCurrent(
+							gestureBook,
+							gestureInteraction))
+						return;
 					image = new ImageInfo();
 					image.bufWidth = internalDX;
 					image.bufHeight = internalDY;
@@ -1275,19 +1353,28 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 				public void done() {
 					if (currentTapHandler != TapHandler.this
-							|| !mServiceLifecycle.isActive())
+							|| !isDocumentInteractionCurrent(
+									gestureBook,
+									gestureInteraction))
 						return;
 					if (bookmark != null)
-						bookmark = mBookInfo.findBookmark(bookmark);
+						bookmark = gestureBook.findBookmark(
+								bookmark);
 					if (image != null) {
 						cancel();
 						startImageViewer(image);
 					} else if (bookmark != null) {
 						cancel();
-						BookmarkEditDialog dlg = new BookmarkEditDialog(mActivity, ReaderView.this, bookmark, false);
-						dlg.show();
+						showBookmarkEditDialog(
+								bookmark, false,
+								gestureBook,
+								gestureInteraction);
 					} else {
-						updateSelection(start_x, start_y, start_x, start_y, false);
+						updateSelection(
+								start_x, start_y,
+								start_x, start_y, false,
+								gestureBook,
+								gestureInteraction);
 					}
 				}
 			});
@@ -1767,13 +1854,21 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void goToBookmark(Bookmark bm) {
 		BackgroundThread.ensureGUI();
-		final String pos = bm.getStartPos();
 		final BookInfo expectedBook = mBookInfo;
 		final DocumentLoadLifecycle.Interaction interaction =
 				documentLoadLifecycle.interaction();
-		if (!isDocumentInteractionCurrent(
+		goToBookmark(bm, expectedBook, interaction);
+	}
+
+	private boolean goToBookmark(
+			final Bookmark bookmark,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (bookmark == null || !isDocumentInteractionCurrent(
 				expectedBook, interaction))
-			return;
+			return false;
+		final String pos = bookmark.getStartPos();
 		mEngine.execute(new Task() {
 			public void work() {
 				BackgroundThread.ensureBackground();
@@ -1792,74 +1887,150 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return;
 				drawPage();
 				scheduleSaveCurrentPositionBookmark(
-						DEF_SAVE_POSITION_INTERVAL);
+						DEF_SAVE_POSITION_INTERVAL,
+						expectedBook, interaction);
 			}
 		});
+		return true;
 	}
 
 	public boolean goToBookmark(final int shortcut) {
 		BackgroundThread.ensureGUI();
-		if (mBookInfo != null) {
-			Bookmark bm = mBookInfo.findShortcutBookmark(shortcut);
-			if (bm == null) {
-				addBookmark(shortcut);
-				return true;
-			} else {
-				// go to bookmark
-				goToBookmark(bm);
-				return false;
-			}
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return false;
+		Bookmark bm =
+				expectedBook.findShortcutBookmark(shortcut);
+		if (bm == null) {
+			addBookmark(shortcut, expectedBook, interaction);
+			return true;
 		}
+		goToBookmark(bm, expectedBook, interaction);
 		return false;
 	}
 
 	public Bookmark removeBookmark(final Bookmark bookmark) {
-		Bookmark removed = mBookInfo.removeBookmark(bookmark);
+		BackgroundThread.ensureGUI();
+		return removeBookmark(
+				bookmark, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	private Bookmark removeBookmark(
+			final Bookmark bookmark,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (bookmark == null || !isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return null;
+		Bookmark removed =
+				expectedBook.removeBookmark(bookmark);
 		if (removed != null) {
-			if (removed.getId() != null) {
+			if (removed.getId() != null
+					&& mActivity.getDB() != null) {
 				mActivity.getDB().deleteBookmark(removed);
 			}
-			highlightBookmarks();
+			highlightBookmarks(expectedBook, interaction);
 		}
 		return removed;
 	}
 
 	public Bookmark updateBookmark(final Bookmark bookmark) {
-		Bookmark bm = mBookInfo.updateBookmark(bookmark);
+		BackgroundThread.ensureGUI();
+		return updateBookmark(
+				bookmark, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	private Bookmark updateBookmark(
+			final Bookmark bookmark,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (bookmark == null || !isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return null;
+		Bookmark bm = expectedBook.updateBookmark(bookmark);
 		if (bm != null) {
-			scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
-			highlightBookmarks();
+			scheduleSaveCurrentPositionBookmark(
+					DEF_SAVE_POSITION_INTERVAL,
+					expectedBook, interaction);
+			highlightBookmarks(expectedBook, interaction);
 		}
 		return bm;
 	}
 
 	public void addBookmark(final Bookmark bookmark) {
-		mBookInfo.addBookmark(bookmark);
-		highlightBookmarks();
-		scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
+		BackgroundThread.ensureGUI();
+		addBookmark(
+				bookmark, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	private boolean addBookmark(
+			final Bookmark bookmark,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (bookmark == null || !isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return false;
+		expectedBook.addBookmark(bookmark);
+		highlightBookmarks(expectedBook, interaction);
+		scheduleSaveCurrentPositionBookmark(
+				DEF_SAVE_POSITION_INTERVAL,
+				expectedBook, interaction);
+		return true;
 	}
 
 	public void addBookmark(final int shortcut) {
 		BackgroundThread.ensureGUI();
+		addBookmark(
+				shortcut, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	private boolean addBookmark(
+			final int shortcut,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return false;
 		// set bookmark instead
 		mEngine.execute(new Task() {
 			Bookmark bm;
 
 			public void work() {
 				BackgroundThread.ensureBackground();
-				if (mBookInfo != null) {
-					bm = doc.getCurrentPageBookmark();
+				if (isDocumentInteractionCurrent(
+						expectedBook, interaction)) {
+					Bookmark current =
+							doc.getCurrentPageBookmark();
+					if (current == null)
+						return;
+					bm = current;
 					bm.setShortcut(shortcut);
 				}
 			}
 
 			public void done() {
-				if (mBookInfo != null && bm != null) {
+				if (bm != null
+						&& isDocumentInteractionCurrent(
+								expectedBook, interaction)) {
 					if (shortcut == 0)
-						mBookInfo.addBookmark(bm);
+						expectedBook.addBookmark(bm);
 					else
-						mBookInfo.setShortcutBookmark(shortcut, bm);
-					mActivity.getDB().saveBookInfo(mBookInfo);
+						expectedBook.setShortcutBookmark(
+								shortcut, bm);
+					if (mActivity.getDB() != null)
+						mActivity.getDB().saveBookInfo(
+								expectedBook);
 					String s;
 					if (shortcut == 0)
 						s = mActivity.getString(R.string.toast_position_bookmark_is_set);
@@ -1867,12 +2038,96 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						s = mActivity.getString(R.string.toast_shortcut_bookmark_is_set);
 						s.replace("$1", String.valueOf(shortcut));
 					}
-					highlightBookmarks();
+					highlightBookmarks(
+							expectedBook, interaction);
 					mActivity.showToast(s);
-					scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
+					scheduleSaveCurrentPositionBookmark(
+							DEF_SAVE_POSITION_INTERVAL,
+							expectedBook, interaction);
 				}
 			}
 		});
+		return true;
+	}
+
+	public void showBookmarksDialog() {
+		BackgroundThread.ensureGUI();
+		showBookmarksDialog(
+				mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	void showBookmarksDialog(
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
+		BookmarksDlg dlg = new BookmarksDlg(
+				mActivity, expectedBook,
+				bookmarkInteractionHandler(
+						expectedBook, interaction));
+		dlg.show();
+	}
+
+	private BookmarkInteractionHandler bookmarkInteractionHandler(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		return new BookmarkInteractionHandler() {
+			@Override
+			public boolean isActive() {
+				return isDocumentInteractionCurrent(
+						expectedBook, interaction);
+			}
+
+			@Override
+			public boolean addBookmark(Bookmark bookmark) {
+				return ReaderView.this.addBookmark(
+						bookmark, expectedBook, interaction);
+			}
+
+			@Override
+			public boolean addBookmark(int shortcut) {
+				return ReaderView.this.addBookmark(
+						shortcut, expectedBook, interaction);
+			}
+
+			@Override
+			public boolean removeBookmark(Bookmark bookmark) {
+				return ReaderView.this.removeBookmark(
+						bookmark, expectedBook, interaction)
+						!= null;
+			}
+
+			@Override
+			public boolean updateBookmark(Bookmark bookmark) {
+				return ReaderView.this.updateBookmark(
+						bookmark, expectedBook, interaction)
+						!= null;
+			}
+
+			@Override
+			public boolean goToBookmark(Bookmark bookmark) {
+				return ReaderView.this.goToBookmark(
+						bookmark, expectedBook, interaction);
+			}
+
+			@Override
+			public boolean goToBookmark(int shortcut) {
+				if (!isActive())
+					return false;
+				Bookmark bookmark =
+						expectedBook.findShortcutBookmark(
+								shortcut);
+				if (bookmark == null)
+					return ReaderView.this.addBookmark(
+							shortcut, expectedBook,
+							interaction);
+				return ReaderView.this.goToBookmark(
+						bookmark, expectedBook, interaction);
+			}
+		};
 	}
 
 	public boolean onMenuItem(final int itemId) {
@@ -2717,7 +2972,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					// successful
 					drawPage();
 					scheduleSaveCurrentPositionBookmark(
-							DEF_SAVE_POSITION_INTERVAL);
+							DEF_SAVE_POSITION_INTERVAL,
+							expectedBook, interaction);
 				} else {
 					// cannot navigate - no data on stack
 					if (cmd == ReaderCommand.DCMD_LINK_BACK) {
@@ -3065,7 +3321,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					drawPage(doneHandler, false);
 				}
 				if (movesDocument)
-					scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
+					scheduleSaveCurrentPositionBookmark(
+							DEF_SAVE_POSITION_INTERVAL,
+							expectedBook, interaction);
 			}
 		});
 	}
@@ -5320,7 +5578,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			if (ownsDocument()) {
 				scheduleSaveCurrentPositionBookmark(
-						DEF_SAVE_POSITION_INTERVAL);
+						DEF_SAVE_POSITION_INTERVAL,
+						expectedBook, interaction);
 				lastSavedBookmark = null;
 				updateCurrentPositionStatus(
 						expectedBook, interaction);
@@ -6815,12 +7074,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final static int DEF_SAVE_POSITION_INTERVAL = 180000; // 3 minutes
 
 	private void scheduleSaveCurrentPositionBookmark(final int delayMillis) {
+		scheduleSaveCurrentPositionBookmark(
+				delayMillis, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	private void scheduleSaveCurrentPositionBookmark(
+			final int delayMillis,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.instance().executeGUI(() -> {
+			if (!isDocumentInteractionCurrent(
+					expectedBook, interaction))
+				return;
 			CloseableTaskGate.Token owner =
 					replacePositionSave();
 			if (owner == null)
 				return;
-			if (!isBookLoaded() || mBookInfo == null) {
+			if (!isBookLoaded() || mBookInfo != expectedBook) {
 				positionSaveLifecycle.complete(owner);
 				return;
 			}
@@ -6830,10 +7101,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				positionSaveLifecycle.complete(owner);
 				return;
 			}
-			final BookInfo bookInfo = mBookInfo;
+			final BookInfo bookInfo = expectedBook;
 			if (delayMillis <= 1) {
 				if (mActivity.getDB() != null
-						&& positionSaveLifecycle.complete(owner)) {
+						&& positionSaveLifecycle.complete(owner)
+						&& isDocumentInteractionCurrent(
+								bookInfo, interaction)) {
 					log.v("saving last position immediately");
 					savePositionBookmark(bookInfo, bookmark);
 					mHistory.updateBookAccess(
@@ -6847,7 +7120,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							() -> applyPositionSave(
 									owner,
 									bookInfo,
-									bookmark),
+									bookmark,
+									interaction),
 							delayMillis);
 				}
 			}
@@ -6881,12 +7155,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void applyPositionSave(
 			CloseableTaskGate.Token owner,
 			BookInfo bookInfo,
-			Bookmark bookmark) {
+			Bookmark bookmark,
+			DocumentLoadLifecycle.Interaction interaction) {
 		if (!positionSaveLifecycle.complete(owner))
 			return;
-		if (!mServiceLifecycle.isActive()
+		if (!isDocumentInteractionCurrent(
+				bookInfo, interaction)
 				|| !isBookLoaded()
-				|| mBookInfo != bookInfo
 				|| mActivity.getDB() == null)
 			return;
 		log.v("saving last position");
@@ -7460,7 +7735,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return;
 				drawPage();
 				scheduleSaveCurrentPositionBookmark(
-						DEF_SAVE_POSITION_INTERVAL);
+						DEF_SAVE_POSITION_INTERVAL,
+						expectedBook, interaction);
 			}
 		});
 	}
@@ -7529,7 +7805,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return;
 				drawPage();
 				scheduleSaveCurrentPositionBookmark(
-						DEF_SAVE_POSITION_INTERVAL);
+						DEF_SAVE_POSITION_INTERVAL,
+						expectedBook, interaction);
 			}
 		});
 		return true;

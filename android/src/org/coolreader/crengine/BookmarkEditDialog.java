@@ -33,17 +33,20 @@ public class BookmarkEditDialog extends BaseDialog {
 	
 	private final CoolReader mCoolReader;
 	private final LayoutInflater mInflater;
-	private final ReaderView mReaderView;
+	private final BookmarkInteractionHandler interactionHandler;
 	private final Bookmark mOriginalBookmark;
 	private final Bookmark mBookmark;
 	private final boolean mIsNew;
 	final EditText commentEdit;
 	
-	public BookmarkEditDialog( CoolReader activity, ReaderView readerView, Bookmark bookmark, boolean isNew)
+	BookmarkEditDialog(
+			CoolReader activity,
+			BookmarkInteractionHandler interactionHandler,
+			Bookmark bookmark, boolean isNew)
 	{
 		super(activity, "", true, false);
 		mCoolReader = activity;
-		mReaderView = readerView;
+		this.interactionHandler = interactionHandler;
 		mIsNew = isNew;
 		mOriginalBookmark = bookmark;
 		//if ( !isNew )
@@ -98,13 +101,18 @@ public class BookmarkEditDialog extends BaseDialog {
 
 	@Override
 	protected void onPositiveButtonClick() {
+		if (!interactionHandler.isActive()) {
+			super.onPositiveButtonClick();
+			return;
+		}
 		if ( mIsNew ) {
 			mBookmark.setCommentText( commentEdit.getText().toString() );
-			mReaderView.addBookmark(mBookmark);
+			interactionHandler.addBookmark(mBookmark);
 		} else {
 			if ( mOriginalBookmark.setCommentText(commentEdit.getText().toString()) ) {
 				mOriginalBookmark.setTimeStamp(System.currentTimeMillis());
-				mReaderView.updateBookmark(mOriginalBookmark);
+				interactionHandler.updateBookmark(
+						mOriginalBookmark);
 			}
 		}
 		super.onPositiveButtonClick();
@@ -117,8 +125,13 @@ public class BookmarkEditDialog extends BaseDialog {
 
 	@Override
 	protected void onThirdButtonClick() {
+		if (!interactionHandler.isActive()) {
+			onNegativeButtonClick();
+			return;
+		}
 		mCoolReader.askConfirmation(R.string.win_title_confirm_bookmark_delete, () -> {
-			mReaderView.removeBookmark(mBookmark);
+			interactionHandler.removeBookmark(
+					mOriginalBookmark);
 			onNegativeButtonClick();
 		});
 	}

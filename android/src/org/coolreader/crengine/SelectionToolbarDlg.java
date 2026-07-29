@@ -243,15 +243,16 @@ public class SelectionToolbarDlg {
 		mPanel.findViewById(R.id.selection_bookmark).setOnClickListener(v -> {
 			if (!requireActive())
 				return;
-			mReaderView.showNewBookmarkDialog(selection);
+			mReaderView.showNewBookmarkDialog(
+					selection, expectedBook, interaction);
 			closeDialog(true);
 		});
 
 		mPanel.findViewById(R.id.selection_bookmark).setOnLongClickListener(v -> {
 			if (!requireActive())
 				return true;
-			BookmarksDlg dlg = new BookmarksDlg(mCoolReader, mReaderView);
-			dlg.show();
+			mReaderView.showBookmarksDialog(
+					expectedBook, interaction);
 			closeDialog(true);
 			return true;
 		});
