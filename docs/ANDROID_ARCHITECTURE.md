@@ -118,6 +118,20 @@ document left by a parse that became stale mid-flight. Only the current token
 may publish reader UI, run failure recovery, or replace the stream book with a
 late database/cache result.
 
+Operations against the selected document carry a second exact
+`DocumentLoadLifecycle.Interaction` identity together with their captured
+`BookInfo`. Replacement, close, destruction and navigation to browser/root
+rotate that identity even when a published load request itself must remain
+alive for stream reconciliation. History and bookmark navigation, position
+engine commands, scroll/go-to work, position queries/status publication, TOC
+and go-to dialog callbacks, and gesture or programmatic page flips validate
+both identities before native mutation and again before GUI completion.
+`TOCDlg` retains only a narrow page-selection callback, not `ReaderView`.
+Each animation owns the exact book/interaction pair, scheduled frames address
+that same animation instance, and document teardown clears queued updates
+before native close. A callback or page flip from an older book therefore
+cannot move, draw, report, or persist a position for its replacement.
+
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.

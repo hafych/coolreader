@@ -447,6 +447,35 @@ public class ActivityOwnershipPolicyTest {
 		assertFalse(Modifier.isStatic(animation.getModifiers()));
 		assertTrue(Modifier.isPrivate(animation.getModifiers()));
 		assertTrue(Modifier.isVolatile(animation.getModifiers()));
+		Class<?> viewAnimationBase = null;
+		Class<?> animationUpdate = null;
+		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("ViewAnimationBase"))
+				viewAnimationBase = nested;
+			if (nested.getSimpleName().equals("AnimationUpdate"))
+				animationUpdate = nested;
+		}
+		assertTrue(viewAnimationBase != null);
+		assertTrue(animationUpdate != null);
+		for (Class<?> owner : new Class<?>[]{
+				viewAnimationBase, animationUpdate}) {
+			Field expectedBook =
+					owner.getDeclaredField("expectedBook");
+			assertEquals(BookInfo.class, expectedBook.getType());
+			assertTrue(Modifier.isPrivate(
+					expectedBook.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					expectedBook.getModifiers()));
+			Field interaction =
+					owner.getDeclaredField("interaction");
+			assertEquals(
+					DocumentLoadLifecycle.Interaction.class,
+					interaction.getType());
+			assertTrue(Modifier.isPrivate(
+					interaction.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					interaction.getModifiers()));
+		}
 		Field autoScrollSpeed =
 				ReaderView.class.getDeclaredField(
 						"autoScrollSpeed");
@@ -533,6 +562,16 @@ public class ActivityOwnershipPolicyTest {
 				loadOwner.getType());
 		assertTrue(Modifier.isPrivate(loadOwner.getModifiers()));
 		assertTrue(Modifier.isFinal(loadOwner.getModifiers()));
+		Field loadInteraction =
+				loadDocumentTask.getDeclaredField(
+						"loadInteraction");
+		assertEquals(
+				DocumentLoadLifecycle.Interaction.class,
+				loadInteraction.getType());
+		assertTrue(Modifier.isPrivate(
+				loadInteraction.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				loadInteraction.getModifiers()));
 		Field taskBook =
 				loadDocumentTask.getDeclaredField("bookInfo");
 		assertEquals(BookInfo.class, taskBook.getType());
@@ -557,6 +596,63 @@ public class ActivityOwnershipPolicyTest {
 				readerDocumentLoads.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				readerDocumentLoads.getModifiers()));
+		assertSynchronizedMethod(
+				DocumentLoadLifecycle.class,
+				"interaction");
+		assertSynchronizedMethod(
+				DocumentLoadLifecycle.class,
+				"isInteractionActive",
+				DocumentLoadLifecycle.Interaction.class);
+		Method documentPositionCommand =
+				ReaderView.class.getDeclaredMethod(
+						"isDocumentPositionCommand",
+						ReaderCommand.class);
+		assertTrue(Modifier.isPrivate(
+				documentPositionCommand.getModifiers()));
+		assertTrue(Modifier.isStatic(
+				documentPositionCommand.getModifiers()));
+		documentPositionCommand.setAccessible(true);
+		assertTrue((Boolean) documentPositionCommand.invoke(
+				null, ReaderCommand.DCMD_GO_POS));
+		assertTrue((Boolean) documentPositionCommand.invoke(
+				null,
+				ReaderCommand.DCMD_GO_PAGE_DONT_SAVE_HISTORY));
+		assertFalse((Boolean) documentPositionCommand.invoke(
+				null, ReaderCommand.DCMD_ZOOM_IN));
+		Method documentInteractionGuard =
+				ReaderView.class.getDeclaredMethod(
+						"isDocumentInteractionCurrent",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				documentInteractionGuard.getModifiers()));
+		Method documentLoadGuard =
+				ReaderView.class.getDeclaredMethod(
+						"isOwnedDocumentLoadCurrent",
+						BookInfo.class,
+						DocumentLoadLifecycle.Request.class);
+		assertTrue(Modifier.isPrivate(
+				documentLoadGuard.getModifiers()));
+		Method cancelDocumentAnimation =
+				ReaderView.class.getDeclaredMethod(
+						"cancelDocumentAnimation");
+		assertTrue(Modifier.isPrivate(
+				cancelDocumentAnimation.getModifiers()));
+		Field tocSelectionHandler =
+				TOCDlg.class.getDeclaredField(
+						"pageSelectionHandler");
+		assertEquals(
+				TOCDlg.PageSelectionHandler.class,
+				tocSelectionHandler.getType());
+		assertTrue(Modifier.isPrivate(
+				tocSelectionHandler.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				tocSelectionHandler.getModifiers()));
+		for (Field field : TOCDlg.class.getDeclaredFields()) {
+			assertFalse(
+					"TOC dialog must not retain a mutable reader",
+					field.getType() == ReaderView.class);
+		}
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
 		for (Field field :

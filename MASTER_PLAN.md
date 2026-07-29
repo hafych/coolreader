@@ -291,6 +291,17 @@ DRM или ограничений доступа, подбор/получени�
   recovery и позднее stream-to-cache/fingerprint reconciliation. Закрытие
   старой книги сохраняет её позицию до публикации metadata новой, а native
   engine boundary закрывает документ, оставшийся от уже заменённой parse-задачи.
+  Операции уже выбранного документа используют отдельную exact
+  `DocumentLoadLifecycle.Interaction`, связанную с captured `BookInfo`:
+  replacement, close, destroy и уход в browser/root сразу меняют generation.
+  History/bookmark/engine navigation, scroll/go-to, запросы и публикация
+  position status, TOC и go-to dialog callbacks, а также gesture/programmatic
+  page-flip обязаны повторно подтвердить обе identity до native mutation и UI
+  completion. TOC-диалог хранит узкий page callback вместо `ReaderView`;
+  animation scheduler адресует конкретный animation instance, а teardown
+  очищает pending update до закрытия native document. Поэтому старый callback,
+  dialog или page-flip не может переместить, отрисовать или сохранить позицию
+  книги, которая его заменила.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

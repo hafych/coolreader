@@ -34,13 +34,16 @@ import org.coolreader.R;
 import java.util.ArrayList;
 
 public class TOCDlg extends BaseDialog {
-	//CoolReader mCoolReader;
-	ReaderView mReaderView;
-	TOCItem mTOC;
-	ListView mListView;
-	int mCurrentPage;
-	TOCItem mCurrentPageItem;
-	ArrayList<TOCItem> mItems = new ArrayList<>();
+	public interface PageSelectionHandler {
+		void selectPage(int pageNumber);
+	}
+
+	private final PageSelectionHandler pageSelectionHandler;
+	private final TOCItem mTOC;
+	private ListView mListView;
+	private final int mCurrentPage;
+	private TOCItem mCurrentPageItem;
+	private final ArrayList<TOCItem> mItems = new ArrayList<>();
 	private LayoutInflater mInflater;
 	
 	private void initItems( TOCItem toc, boolean expanded )
@@ -177,19 +180,21 @@ public class TOCDlg extends BaseDialog {
 		});
 	}
 
-	public TOCDlg(BaseActivity coolReader, ReaderView readerView, TOCItem toc, int currentPage )
+	public TOCDlg(
+			BaseActivity coolReader, TOCItem toc, int currentPage,
+			PageSelectionHandler pageSelectionHandler)
 	{
 		super(coolReader, coolReader.getResources().getString(R.string.win_title_toc), false, false);
         setCancelable(true);
-//		this.mCoolReader = coolReader;
-		this.mReaderView = readerView;
 		this.mTOC = toc;
 		this.mCurrentPage = currentPage;
+		this.pageSelectionHandler = pageSelectionHandler;
 		this.mListView = new BaseListView(getContext(), true);
 		mListView.setOnItemClickListener((listview, view, position, id) -> {
 			TOCItem item = mItems.get(position);
 			if ( item.getChildCount()==0 || item.getExpanded() ) {
-				mReaderView.goToPage(item.getPage()+1);
+				this.pageSelectionHandler.selectPage(
+						item.getPage() + 1);
 				dismiss();
 			} else {
 				expand(item);
@@ -198,7 +203,8 @@ public class TOCDlg extends BaseDialog {
 		mListView.setOnItemLongClickListener((listview, view, position, id) -> {
 			TOCItem item = mItems.get(position);
 			if ( item.getChildCount()==0 ) {
-				mReaderView.goToPage(item.getPage()+1);
+				this.pageSelectionHandler.selectPage(
+						item.getPage() + 1);
 				dismiss();
 			} else {
 				if ( item.getExpanded() )

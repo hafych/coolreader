@@ -12,13 +12,25 @@ public class DocumentLoadLifecycleTest {
 	public void replacementInvalidatesTheWholePriorOpenChain() {
 		DocumentLoadLifecycle lifecycle =
 				new DocumentLoadLifecycle();
+		DocumentLoadLifecycle.Interaction firstInteraction =
+				lifecycle.interaction();
 		DocumentLoadLifecycle.Request first =
 				lifecycle.replace();
+		DocumentLoadLifecycle.Interaction secondInteraction =
+				lifecycle.interaction();
 		DocumentLoadLifecycle.Request second =
 				lifecycle.replace();
+		DocumentLoadLifecycle.Interaction currentInteraction =
+				lifecycle.interaction();
 
 		assertFalse(lifecycle.isActive(first));
 		assertTrue(lifecycle.isActive(second));
+		assertFalse(lifecycle.isInteractionActive(
+				firstInteraction));
+		assertFalse(lifecycle.isInteractionActive(
+				secondInteraction));
+		assertTrue(lifecycle.isInteractionActive(
+				currentInteraction));
 	}
 
 	@Test
@@ -29,11 +41,15 @@ public class DocumentLoadLifecycleTest {
 				lifecycle.replace();
 		DocumentLoadLifecycle.Request current =
 				lifecycle.replace();
+		DocumentLoadLifecycle.Interaction currentInteraction =
+				lifecycle.interaction();
 
 		assertFalse(lifecycle.complete(stale));
 		assertTrue(lifecycle.isActive(current));
 		assertTrue(lifecycle.complete(current));
 		assertFalse(lifecycle.isActive(current));
+		assertFalse(lifecycle.isInteractionActive(
+				currentInteraction));
 	}
 
 	@Test
@@ -42,10 +58,15 @@ public class DocumentLoadLifecycleTest {
 				new DocumentLoadLifecycle();
 		DocumentLoadLifecycle.Request first =
 				lifecycle.replace();
+		DocumentLoadLifecycle.Interaction firstInteraction =
+				lifecycle.interaction();
 
 		lifecycle.cancel();
 
 		assertFalse(lifecycle.isActive(first));
+		assertFalse(lifecycle.isInteractionActive(
+				firstInteraction));
+		assertNotNull(lifecycle.interaction());
 		assertNotNull(lifecycle.replace());
 	}
 
@@ -55,15 +76,38 @@ public class DocumentLoadLifecycleTest {
 				new DocumentLoadLifecycle();
 		DocumentLoadLifecycle.Request pending =
 				lifecycle.replace();
+		DocumentLoadLifecycle.Interaction pendingInteraction =
+				lifecycle.interaction();
 
 		assertTrue(lifecycle.cancelPending());
 		assertFalse(lifecycle.isActive(pending));
+		assertFalse(lifecycle.isInteractionActive(
+				pendingInteraction));
 
 		DocumentLoadLifecycle.Request published =
 				lifecycle.replace();
+		DocumentLoadLifecycle.Interaction publishedInteraction =
+				lifecycle.interaction();
 		assertTrue(lifecycle.markPublished(published));
 		assertFalse(lifecycle.cancelPending());
 		assertTrue(lifecycle.isActive(published));
+		assertFalse(lifecycle.isInteractionActive(
+				publishedInteraction));
+		assertNotNull(lifecycle.interaction());
+	}
+
+	@Test
+	public void publishedCompletionKeepsCurrentDocumentInteraction() {
+		DocumentLoadLifecycle lifecycle =
+				new DocumentLoadLifecycle();
+		DocumentLoadLifecycle.Request published =
+				lifecycle.replace();
+		DocumentLoadLifecycle.Interaction interaction =
+				lifecycle.interaction();
+
+		assertTrue(lifecycle.markPublished(published));
+		assertTrue(lifecycle.complete(published));
+		assertTrue(lifecycle.isInteractionActive(interaction));
 	}
 
 	@Test
@@ -90,6 +134,7 @@ public class DocumentLoadLifecycleTest {
 		assertFalse(lifecycle.close());
 		assertTrue(lifecycle.isClosed());
 		assertFalse(lifecycle.isActive(request));
+		assertNull(lifecycle.interaction());
 		assertNull(lifecycle.replace());
 	}
 }

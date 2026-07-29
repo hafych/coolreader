@@ -471,6 +471,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   published book. Replaced loads cannot reopen Reader, publish UI or overwrite
   current metadata, stale descriptors are closed, and each engine task uses
   its own `BookInfo` instead of a mutable pointer shared with a newer request.
+- Reader navigation and position work now carries an exact document-interaction
+  identity alongside `BookInfo`. History, bookmarks, engine moves, go-to and
+  status queries, TOC/dialog callbacks and page-flip animations reject stale
+  native or UI work after document replacement or navigation away; TOC no
+  longer retains `ReaderView`, and scheduled frames target one exact animation.
 - Reader animation and GC schedulers are now generation-owned and canceled
   during every teardown. Animation updates no longer coordinate unrelated
   Activities through a class monitor or retain active state after destruction.

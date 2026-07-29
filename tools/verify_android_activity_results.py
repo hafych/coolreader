@@ -120,6 +120,19 @@ SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
+TOC_DIALOG = SOURCE / "crengine" / "TOCDlg.java"
+ACTIVITY_OWNERSHIP_POLICY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ActivityOwnershipPolicyTest.java"
+)
 TTS_TOOLBAR = SOURCE / "crengine" / "TTSToolbarDlg.java"
 MOTION_WATCHDOG = (
     ROOT
@@ -1682,6 +1695,8 @@ def main() -> None:
         "public final class DocumentLoadLifecycle",
         "public synchronized Request replace()",
         "public synchronized boolean isActive(Request request)",
+        "public synchronized Interaction interaction()",
+        "public synchronized boolean isInteractionActive(",
         "public synchronized boolean complete(Request request)",
         "public synchronized void cancel()",
         "public synchronized boolean markPublished(Request request)",
@@ -1689,6 +1704,7 @@ def main() -> None:
         "public synchronized boolean close()",
         "public synchronized boolean isClosed()",
         "public static final class Request",
+        "public static final class Interaction",
     ):
         if marker not in document_load_lifecycle_text:
             violations.append(
@@ -1703,10 +1719,13 @@ def main() -> None:
         "staleCompletionCannotClearReplacement",
         "cancelAllowsAnotherRequest",
         "navigationCancelsPendingButPreservesPublishedDocument",
+        "publishedCompletionKeepsCurrentDocumentInteraction",
         "staleRequestCannotPublishReplacement",
         "closePermanentlyRejectsRequests",
         "assertFalse(lifecycle.complete(stale))",
         "assertFalse(lifecycle.markPublished(stale))",
+        "assertFalse(lifecycle.isInteractionActive(",
+        "assertNull(lifecycle.interaction())",
         "assertNull(lifecycle.replace())",
     ):
         if marker not in document_load_lifecycle_test_text:
@@ -2170,12 +2189,22 @@ def main() -> None:
         "documentLoadLifecycle.cancel()",
         "documentLoadLifecycle.close()",
         "documentLoadLifecycle.markPublished(loadOwner)",
+        "documentLoadLifecycle.interaction()",
+        "documentLoadLifecycle.isInteractionActive(",
         "private final DocumentLoadLifecycle.Request loadOwner",
+        "private final DocumentLoadLifecycle.Interaction",
+        "private boolean isDocumentInteractionCurrent(",
+        "private boolean isOwnedDocumentLoadCurrent(",
+        "private static boolean isDocumentPositionCommand(",
+        "private void cancelDocumentAnimation()",
+        "private void getCurrentPositionProperties(",
+        "scheduleAnimation(this)",
+        "currentAnimation == animation",
         "private BookInfo bookInfo",
         "private boolean enqueueDocumentLoad(",
         "closeDescriptorQuietly(parcelFileDescriptor)",
         "closeCurrentDocument(false)",
-        "restorePositionBackground(\n\t\t\t\t\t\t\t\tpos, bookInfo, loadOwner)",
+        "pos, bookInfo, loadOwner,\n\t\t\t\t\t\t\t\tloadInteraction)",
         "if (ttsToolbar == toolbar)",
         "readerSurfaceState.changeVisibility(visible)",
         "readerSurfaceState.changeFocus(",
@@ -2229,6 +2258,38 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} retains unowned reader "
                 f"lifecycle marker: {legacy}")
+
+    toc_dialog_text = TOC_DIALOG.read_text(encoding="utf-8")
+    for marker in (
+        "public interface PageSelectionHandler",
+        "private final PageSelectionHandler pageSelectionHandler",
+        "pageSelectionHandler.selectPage(",
+    ):
+        if marker not in toc_dialog_text:
+            violations.append(
+                f"{relative(TOC_DIALOG)} omits exact navigation callback "
+                f"marker: {marker}")
+    if "ReaderView mReaderView" in toc_dialog_text:
+        violations.append(
+            f"{relative(TOC_DIALOG)} retains a mutable ReaderView")
+
+    activity_ownership_policy_test_text = (
+        ACTIVITY_OWNERSHIP_POLICY_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        '"loadInteraction"',
+        'nested.getSimpleName().equals("ViewAnimationBase")',
+        'nested.getSimpleName().equals("AnimationUpdate")',
+        '"isDocumentPositionCommand"',
+        '"isDocumentInteractionCurrent"',
+        '"isOwnedDocumentLoadCurrent"',
+        "TOCDlg.PageSelectionHandler.class",
+        '"TOC dialog must not retain a mutable reader"',
+    ):
+        if marker not in activity_ownership_policy_test_text:
+            violations.append(
+                f"{relative(ACTIVITY_OWNERSHIP_POLICY_TEST)} omits "
+                f"document-interaction regression: {marker}")
 
     reader_surface_state_text = READER_SURFACE_STATE.read_text(
         encoding="utf-8")

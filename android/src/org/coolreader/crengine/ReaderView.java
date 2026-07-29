@@ -1467,21 +1467,37 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void showTOC() {
 		BackgroundThread.ensureGUI();
-		final ReaderView view = this;
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		mEngine.post(new Task() {
 			TOCItem toc;
 			PositionProperties pos;
 
 			public void work() {
 				BackgroundThread.ensureBackground();
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				toc = doc.getTOC();
 				pos = doc.getPositionProps(null, false);
 			}
 
 			public void done() {
 				BackgroundThread.ensureGUI();
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				if (toc != null && pos != null) {
-					TOCDlg dlg = new TOCDlg(mActivity, view, toc, pos.pageNumber);
+					TOCDlg dlg = new TOCDlg(
+							mActivity, toc, pos.pageNumber,
+							pageNumber -> goToPage(
+									pageNumber,
+									expectedBook,
+									interaction));
 					dlg.show();
 				} else {
 					mActivity.showToast("No Table of Contents found");
@@ -1593,15 +1609,31 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void goToBookmark(Bookmark bm) {
 		BackgroundThread.ensureGUI();
 		final String pos = bm.getStartPos();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		mEngine.execute(new Task() {
 			public void work() {
 				BackgroundThread.ensureBackground();
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				doc.goToPosition(pos, true);
+				updateCurrentPositionStatus(
+						expectedBook, interaction);
 			}
 
 			public void done() {
 				BackgroundThread.ensureGUI();
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				drawPage();
+				scheduleSaveCurrentPositionBookmark(
+						DEF_SAVE_POSITION_INTERVAL);
 			}
 		});
 	}
@@ -1763,6 +1795,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void showReadingPositionPopup() {
 		if (mBookInfo == null)
 			return;
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		final StringBuilder buf = new StringBuilder();
 //		if (mActivity.isFullscreen()) {
 		buf.append(Utils.formatTime(mActivity, System.currentTimeMillis()) + " ");
@@ -1773,6 +1811,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 			@Override
 			public void work() {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				bm = doc.getCurrentPageBookmark();
 				if (bm != null) {
 					PositionProperties prop = doc.getPositionProps(bm.getStartPos(), true);
@@ -1818,6 +1859,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 
 			public void done() {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				mActivity.showToast(buf.toString());
 			}
 		});
@@ -2492,12 +2536,29 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void navigateByHistory(final ReaderCommand cmd) {
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		BackgroundThread.instance().postBackground(() -> {
+			if (!isDocumentInteractionCurrent(
+					expectedBook, interaction))
+				return;
 			final boolean res = doc.doCommand(cmd.nativeId, 0);
+			if (res)
+				updateCurrentPositionStatus(
+						expectedBook, interaction);
 			BackgroundThread.instance().postGUI(() -> {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				if (res) {
 					// successful
 					drawPage();
+					scheduleSaveCurrentPositionBookmark(
+							DEF_SAVE_POSITION_INTERVAL);
 				} else {
 					// cannot navigate - no data on stack
 					if (cmd == ReaderCommand.DCMD_LINK_BACK) {
@@ -2813,61 +2874,76 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void doEngineCommand(final ReaderCommand cmd, final int param, final Runnable doneHandler) {
 		BackgroundThread.ensureGUI();
 		log.d("doCommand(" + cmd + ", " + param + ")");
+		final boolean movesDocument =
+				isDocumentPositionCommand(cmd);
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
 		post(new Task() {
 			boolean res;
-			boolean isMoveCommand;
 
 			public void work() {
 				BackgroundThread.ensureBackground();
+				if (movesDocument
+						&& !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
 				res = doc.doCommand(cmd.nativeId, param);
-				switch (cmd) {
-					case DCMD_BEGIN:
-					case DCMD_LINEUP:
-					case DCMD_PAGEUP:
-					case DCMD_PAGEDOWN:
-					case DCMD_LINEDOWN:
-					case DCMD_LINK_FORWARD:
-					case DCMD_LINK_BACK:
-					case DCMD_LINK_NEXT:
-					case DCMD_LINK_PREV:
-					case DCMD_LINK_GO:
-					case DCMD_END:
-					case DCMD_GO_POS:
-					case DCMD_GO_PAGE:
-					case DCMD_MOVE_BY_CHAPTER:
-					case DCMD_GO_SCROLL_POS:
-					case DCMD_LINK_FIRST:
-					case DCMD_SCROLL_BY:
-						isMoveCommand = true;
-						break;
-					default:
-						// do nothing
-						break;
-				}
-				if (isMoveCommand && isBookLoaded())
-					updateCurrentPositionStatus();
+				if (movesDocument
+						&& isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					updateCurrentPositionStatus(
+							expectedBook, interaction);
 			}
 
 			public void done() {
+				if (movesDocument
+						&& !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
 				if (res) {
 					invalidImages = true;
 					drawPage(doneHandler, false);
 				}
-				if (isMoveCommand && isBookLoaded())
+				if (movesDocument)
 					scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
 			}
 		});
 	}
 
-	// update book and position info in status bar
-	private void updateCurrentPositionStatus() {
-		updateCurrentPositionStatus(mBookInfo, null);
+	private static boolean isDocumentPositionCommand(
+			ReaderCommand command) {
+		switch (command) {
+			case DCMD_BEGIN:
+			case DCMD_LINEUP:
+			case DCMD_PAGEUP:
+			case DCMD_PAGEDOWN:
+			case DCMD_LINEDOWN:
+			case DCMD_LINK_FORWARD:
+			case DCMD_LINK_BACK:
+			case DCMD_LINK_NEXT:
+			case DCMD_LINK_PREV:
+			case DCMD_LINK_GO:
+			case DCMD_END:
+			case DCMD_GO_POS:
+			case DCMD_GO_PAGE:
+			case DCMD_GO_PAGE_DONT_SAVE_HISTORY:
+			case DCMD_MOVE_BY_CHAPTER:
+			case DCMD_GO_SCROLL_POS:
+			case DCMD_LINK_FIRST:
+			case DCMD_SCROLL_BY:
+				return true;
+			default:
+				return false;
+		}
 	}
 
+	// update book and position info in status bar
 	private void updateCurrentPositionStatus(
 			final BookInfo expectedBook,
-			final DocumentLoadLifecycle.Request loadOwner) {
-		if (expectedBook == null)
+			final DocumentLoadLifecycle.Interaction interaction) {
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
 			return;
 		// in background thread
 		final FileInfo fileInfo = expectedBook.getFileInfo();
@@ -2876,9 +2952,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		final Bookmark bmk = doc != null ? doc.getCurrentPageBookmark() : null;
 		final PositionProperties props = bmk != null ? doc.getPositionProps(bmk.getStartPos(), false) : null;
 		if (props != null) BackgroundThread.instance().postGUI(() -> {
-			if (mBookInfo != expectedBook
-					|| (loadOwner != null
-							&& !documentLoadLifecycle.isActive(loadOwner)))
+			if (!isDocumentInteractionCurrent(
+					expectedBook, interaction))
 				return;
 			mActivity.updateCurrentPositionStatus(fileInfo, bmk, props);
 
@@ -2888,15 +2963,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	public void doCommandFromBackgroundThread(final ReaderCommand cmd, final int param) {
-		log.d("doCommandFromBackgroundThread(" + cmd + ", " + param + ")");
-		BackgroundThread.ensureBackground();
-		boolean res = doc.doCommand(cmd.nativeId, param);
-		if (res) {
-			BackgroundThread.instance().executeGUI(this::drawPage);
-		}
-	}
-
 	volatile private boolean mInitialized = false;
 	volatile private boolean mOpened = false;
 
@@ -2904,14 +2970,25 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void updateLoadedBookInfo(
 			BookInfo bookInfo, boolean updatePath,
-			DocumentLoadLifecycle.Request loadOwner) {
+			DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.ensureBackground();
 		// get title, authors, genres, etc.
 		doc.updateBookInfo(bookInfo, updatePath);
-		updateCurrentPositionStatus(bookInfo, loadOwner);
+		updateCurrentPositionStatus(
+				bookInfo, interaction);
 		// check whether current book properties updated on another devices
 		// TODO: fix and reenable
 		//syncUpdater.syncExternalChanges(bookInfo);
+	}
+
+	private boolean isDocumentInteractionCurrent(
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		return mServiceLifecycle.isActive()
+				&& expectedBook != null
+				&& mBookInfo == expectedBook
+				&& documentLoadLifecycle.isInteractionActive(
+						interaction);
 	}
 
 	private void applySettings(Properties props) {
@@ -4322,6 +4399,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private volatile ViewAnimationControl currentAnimation = null;
 
+	private void cancelDocumentAnimation() {
+		animationScheduler.cancel();
+		synchronized (animationUpdateLock) {
+			currentAnimationUpdate = null;
+			currentAnimation = null;
+		}
+	}
+
 	private int pageFlipAnimationSpeedMs = DEF_PAGE_FLIP_MS; // if 0 : no animation
 	private int pageFlipAnimationMode = PAGE_ANIMATION_SLIDE2; //PAGE_ANIMATION_PAPER; // if 0 : no animation
 
@@ -4329,11 +4414,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //		animatePageFlip(dir, null);
 //	}
 	private void animatePageFlip(final int dir, final Runnable onFinishHandler) {
-		if (!mOpened)
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
 			return;
 		BackgroundThread.instance().executeBackground(() -> {
 			BackgroundThread.ensureBackground();
-			if (currentAnimation == null) {
+			if (isDocumentInteractionCurrent(
+					expectedBook, interaction)
+					&& currentAnimation == null) {
 				PositionProperties currPos = doc.getPositionProps(null, false);
 				if (currPos == null)
 					return;
@@ -4353,23 +4444,45 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				if (currPos.pageMode != 0) {
 					int fromX = dir2 > 0 ? w : 0;
 					int toX = dir2 > 0 ? 0 : w;
-					new PageViewAnimation(fromX, w, dir2);
-					if (currentAnimation != null) {
+					ViewAnimationControl animation =
+							new PageViewAnimation(
+									fromX, w, dir2,
+									expectedBook, interaction);
+					if (currentAnimation == animation
+							&& isDocumentInteractionCurrent(
+									expectedBook, interaction)) {
 						invalidateTapHighlight();
-						currentAnimation.update(toX, h / 2);
-						currentAnimation.move(speed, true);
-						currentAnimation.stop(-1, -1);
+						animation.update(toX, h / 2);
+						animation.move(speed, true);
+						animation.stop(-1, -1);
 						if (onFinishHandler != null)
-							BackgroundThread.instance().executeGUI(onFinishHandler);
+							BackgroundThread.instance().executeGUI(() -> {
+								if (isDocumentInteractionCurrent(
+										expectedBook, interaction))
+									onFinishHandler.run();
+							});
+					} else {
+						((ViewAnimationBase) animation).close();
 					}
 				} else {
-					new ScrollViewAnimation(dir > 0 ? h*7/8 : 0-(h*7/8));
-					if (currentAnimation != null) {
+					ViewAnimationControl animation =
+							new ScrollViewAnimation(
+									dir > 0 ? h * 7 / 8 : -(h * 7 / 8),
+									expectedBook, interaction);
+					if (currentAnimation == animation
+							&& isDocumentInteractionCurrent(
+									expectedBook, interaction)) {
 						invalidateTapHighlight();
-						currentAnimation.move(speed, true);
-						currentAnimation.stop(-1, -1);
+						animation.move(speed, true);
+						animation.stop(-1, -1);
 						if (onFinishHandler != null)
-							BackgroundThread.instance().executeGUI(onFinishHandler);
+							BackgroundThread.instance().executeGUI(() -> {
+								if (isDocumentInteractionCurrent(
+										expectedBook, interaction))
+									onFinishHandler.run();
+							});
+					} else {
+						((ViewAnimationBase) animation).close();
 					}
 				}
 			}
@@ -4788,26 +4901,46 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 
 	private void startAnimation(final int startX, final int startY, final int maxX, final int maxY, final int newX, final int newY) {
-		if (!mOpened)
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
 			return;
 		alog.d("startAnimation(" + startX + ", " + startY + ")");
 		BackgroundThread.instance().executeBackground(() -> {
 			BackgroundThread.ensureBackground();
+			if (!isDocumentInteractionCurrent(
+					expectedBook, interaction))
+				return;
+			if (currentAnimation != null)
+				return;
 			PositionProperties currPos = doc.getPositionProps(null, false);
-			if (currPos != null && currPos.pageMode != 0) {
+			ViewAnimationControl animation;
+			if (currPos == null) {
+				return;
+			} else if (currPos.pageMode != 0) {
 				//int dir = startX > maxX/2 ? currPos.pageMode : -currPos.pageMode;
 				//int dir = startX > maxX/2 ? 1 : -1;
 				int dir = newX - startX < 0 ? 1 : -1;
 				int sx = startX;
 //					if ( dir<0 )
 //						sx = 0;
-				new PageViewAnimation(sx, maxX, dir);
+				animation = new PageViewAnimation(
+						sx, maxX, dir,
+						expectedBook, interaction);
 			} else {
 				int dir = newX < startX || newY < startY ? -1 : 1;
-				new ScrollViewAnimation(dir * currPos.pageHeight * 7 / 8);
+				animation = new ScrollViewAnimation(
+						dir * currPos.pageHeight * 7 / 8,
+						expectedBook, interaction);
 			}
-			if (currentAnimation != null) {
+			if (currentAnimation == animation
+					&& isDocumentInteractionCurrent(
+							expectedBook, interaction)) {
 				invalidateTapHighlight();
+			} else {
+				((ViewAnimationBase) animation).close();
 			}
 		});
 	}
@@ -4815,6 +4948,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private class AnimationUpdate {
 		private int x;
 		private int y;
+		private final BookInfo expectedBook;
+		private final DocumentLoadLifecycle.Interaction interaction;
 
 		//ViewAnimationControl myAnimation;
 		public void set(int x, int y) {
@@ -4825,6 +4960,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		public AnimationUpdate(int x, int y) {
 			this.x = x;
 			this.y = y;
+			this.expectedBook = mBookInfo;
+			this.interaction = documentLoadLifecycle.interaction();
 			//this.myAnimation = currentAnimation;
 			scheduleUpdate();
 		}
@@ -4832,17 +4969,23 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private void scheduleUpdate() {
 			BackgroundThread.instance().postBackground(() -> {
 				alog.d("updating(" + x + ", " + y + ")");
-				boolean animate = false;
+				ViewAnimationControl animation = null;
 				synchronized (animationUpdateLock) {
 
-					if (currentAnimation != null && currentAnimationUpdate == AnimationUpdate.this) {
+					if (currentAnimation != null
+							&& currentAnimationUpdate == AnimationUpdate.this
+							&& isDocumentInteractionCurrent(
+									expectedBook, interaction)) {
+						animation = currentAnimation;
 						currentAnimationUpdate = null;
-						currentAnimation.update(x, y);
-						animate = true;
+						animation.update(x, y);
+					} else if (currentAnimationUpdate
+							== AnimationUpdate.this) {
+						currentAnimationUpdate = null;
 					}
 				}
-				if (animate)
-					currentAnimation.animate();
+				if (animation != null)
+					animation.animate();
 			});
 		}
 
@@ -4870,26 +5013,30 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void stopAnimation(final int x, final int y) {
-		if (!mOpened)
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
 			return;
 		alog.d("stopAnimation(" + x + ", " + y + ")");
 		BackgroundThread.instance().executeBackground(() -> {
-			if (currentAnimation != null) {
-				currentAnimation.stop(x, y);
-			}
+			ViewAnimationControl animation = currentAnimation;
+			if (animation != null
+					&& isDocumentInteractionCurrent(
+							expectedBook, interaction))
+				animation.stop(x, y);
 		});
 	}
 
 	private final DelayedExecutor animationScheduler =
 			DelayedExecutor.createBackground("animation");
 
-	private void scheduleAnimation() {
-		if (!mOpened)
-			return;
+	private void scheduleAnimation(
+			final ViewAnimationControl animation) {
 		animationScheduler.post(() -> {
-			if (currentAnimation != null) {
-				currentAnimation.animate();
-			}
+			if (currentAnimation == animation)
+				animation.animate();
 		});
 	}
 
@@ -4974,24 +5121,47 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	abstract class ViewAnimationBase implements ViewAnimationControl {
 		//long startTimeStamp;
 		boolean started;
+		private final BookInfo expectedBook;
+		private final DocumentLoadLifecycle.Interaction interaction;
 
 		public boolean isStarted() {
 			return started;
 		}
 
-		ViewAnimationBase() {
+		ViewAnimationBase(
+				BookInfo expectedBook,
+				DocumentLoadLifecycle.Interaction interaction) {
 			//startTimeStamp = android.os.SystemClock.uptimeMillis();
+			this.expectedBook = expectedBook;
+			this.interaction = interaction;
 			cancelGc();
 		}
 
-		public void close() {
-			animationScheduler.cancel();
-			currentAnimation = null;
-			scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
-			lastSavedBookmark = null;
-			updateCurrentPositionStatus();
+		final boolean ownsDocument() {
+			return isDocumentInteractionCurrent(
+					expectedBook, interaction);
+		}
 
-			scheduleGc();
+		final boolean isCurrentAnimation() {
+			return currentAnimation == this && ownsDocument();
+		}
+
+		public void close() {
+			boolean wasCurrent = currentAnimation == this;
+			if (wasCurrent) {
+				animationScheduler.cancel();
+				currentAnimation = null;
+			}
+			if (ownsDocument()) {
+				scheduleSaveCurrentPositionBookmark(
+						DEF_SAVE_POSITION_INTERVAL);
+				lastSavedBookmark = null;
+				updateCurrentPositionStatus(
+						expectedBook, interaction);
+			}
+
+			if (wasCurrent || currentAnimation == null)
+				scheduleGc();
 		}
 
 		public void draw() {
@@ -4999,6 +5169,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void draw(boolean isPartially) {
+			if (!isCurrentAnimation())
+				return;
 			//	long startTs = android.os.SystemClock.uptimeMillis();
 			drawCallback(this::draw, null, isPartially);
 		}
@@ -5016,40 +5188,61 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		Bitmap imgStart;
 		Bitmap imgEnd;
 
-		ScrollViewAnimation(int offset) {
-			super();
+		ScrollViewAnimation(
+				int offset, BookInfo expectedBook,
+				DocumentLoadLifecycle.Interaction interaction) {
+			super(expectedBook, interaction);
+			if (!ownsDocument())
+				return;
 			log.v("ScrollViewAnimation -- creating: drawing two pages to buffer");
 			this.offset = offset;
 			this.dir = offset < 0 ? -1 : 1;
 
 			PositionProperties currPos = doc.getPositionProps(null, false);
+			if (currPos == null)
+				return;
 			this.posStart = currPos.y;
 			this.posEnd = posStart + offset;
 			this.pageHeight = currPos.pageHeight;
 			this.pageWidth = currPos.pageWidth;
 			this.progress = 0.0;
-			this.imgStart = preparePageImage(0).bitmap;
-			this.imgEnd = preparePageImage(offset).bitmap;
-			if (this.imgStart == null || this.imgEnd == null) {
+			BitmapInfo startImage = preparePageImage(0);
+			BitmapInfo endImage = preparePageImage(offset);
+			if (startImage == null || endImage == null
+					|| startImage.bitmap == null
+					|| endImage.bitmap == null) {
 				log.v("ScrollViewAnimation -- not started: image is null");
 				return;
 			}
+			this.imgStart = startImage.bitmap;
+			this.imgEnd = endImage.bitmap;
+			if (!ownsDocument())
+				return;
 			currentAnimation = this;
 		}
 
 		@Override
 		public void stop(int x, int y) {
-			if (currentAnimation == null)
+			if (!isCurrentAnimation()) {
+				close();
 				return;
+			}
 			this.progress = 1.0;
 			draw();
+			if (!isCurrentAnimation()) {
+				close();
+				return;
+			}
 			doc.doCommand(ReaderCommand.DCMD_GO_POS.nativeId, this.posEnd);
-			scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
 			close();
 		}
 
 		@Override
 		public void move(int duration, boolean accelerated) {
+			if (!isCurrentAnimation()) {
+				close();
+				return;
+			}
 			if (duration > 0 && pageFlipAnimationSpeedMs != 0) {
 				int steps = (int) (duration / getAvgAnimationDrawDuration()) + 2;
 				for (int i = 1; i < steps; i++) {
@@ -5067,6 +5260,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void animate() {
+			if (!isCurrentAnimation()) {
+				close();
+				return;
+			}
 			if (!started) {
 				started = true;
 			}
@@ -5084,12 +5281,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			draw();
 			if (progress < 1.0) {
-				scheduleAnimation();
+				scheduleAnimation(this);
 			}
 		}
 
 		public void draw(Canvas canvas) {
-			if (imgStart == null || imgEnd == null){
+			if (!isCurrentAnimation()
+					|| imgStart == null || imgEnd == null) {
 				return;
 			}
 			int h = this.pageHeight;
@@ -5136,8 +5334,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BitmapInfo image1;
 		BitmapInfo image2;
 
-		PageViewAnimation(int startX, int maxX, int direction) {
-			super();
+		PageViewAnimation(
+				int startX, int maxX, int direction,
+				BookInfo expectedBook,
+				DocumentLoadLifecycle.Interaction interaction) {
+			super(expectedBook, interaction);
 			this.startX = startX;
 			this.maxX = maxX;
 			this.direction = direction;
@@ -5145,6 +5346,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			this.destShift = 0;
 			this.naturalPageFlip = (pageFlipAnimationMode == PAGE_ANIMATION_PAPER);
 			this.flipTwoPages = (pageFlipAnimationMode == PAGE_ANIMATION_SLIDE2);
+			if (!ownsDocument())
+				return;
 
 			long start = android.os.SystemClock.uptimeMillis();
 			log.v("PageViewAnimation -- creating: drawing two pages to buffer");
@@ -5152,10 +5355,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			PositionProperties currPos = mCurrentPageInfo == null ? null : mCurrentPageInfo.position;
 			if (currPos == null)
 				currPos = doc.getPositionProps(null, false);
+			if (currPos == null)
+				return;
 			page1 = currPos.pageNumber;
 			page2 = currPos.pageNumber + direction;
 			if (page2 < 0 || page2 >= currPos.pageCount) {
-				currentAnimation = null;
 				return;
 			}
 			this.pageCount = currPos.pageMode;
@@ -5170,6 +5374,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return;
 			}
 			page2 = image2.position.pageNumber;
+			if (!ownsDocument())
+				return;
 			currentAnimation = this;
 			divPaint = new Paint();
 			divPaint.setStyle(Paint.Style.FILL);
@@ -5352,6 +5558,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public void move(int duration, boolean accelerated) {
+			if (!isCurrentAnimation()) {
+				close();
+				return;
+			}
 			if (duration > 0 && pageFlipAnimationSpeedMs != 0) {
 				int steps = (int) (duration / getAvgAnimationDrawDuration()) + 2;
 				int x0 = currShift;
@@ -5370,8 +5580,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public void stop(int x, int y) {
-			if (currentAnimation == null)
+			if (!isCurrentAnimation()) {
+				close();
 				return;
+			}
 			alog.v("PageViewAnimation.stop(" + x + ", " + y + ")");
 			//if ( started ) {
 			boolean moved = false;
@@ -5400,20 +5612,28 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			} else {
 				moved = true;
 			}
+			if (!isCurrentAnimation()) {
+				close();
+				return;
+			}
 			doc.doCommand(ReaderCommand.DCMD_GO_PAGE_DONT_SAVE_HISTORY.nativeId, moved ? page2 : page1);
 			//}
-			scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
 			close();
 			// preparing images for next page flip
-			preparePageImage(0);
-			preparePageImage(direction);
-			updateCurrentPositionStatus();
+			if (ownsDocument()) {
+				preparePageImage(0);
+				preparePageImage(direction);
+			}
 			//if ( started )
 			//	drawPage();
 		}
 
 		@Override
 		public void update(int x, int y) {
+			if (!isCurrentAnimation()) {
+				close();
+				return;
+			}
 			alog.v("PageViewAnimation.update(" + x + ", " + y + ")");
 			int delta = direction > 0 ? startX - x : x - startX;
 			if (delta <= 0)
@@ -5425,6 +5645,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void animate() {
+			if (!isCurrentAnimation()) {
+				close();
+				return;
+			}
 			alog.v("PageViewAnimation.animate(" + currShift + " => " + destShift + ") speed=" + pageFlipAnimationSpeedMs);
 			//log.d("animate() is called");
 			if (currShift != destShift) {
@@ -5452,11 +5676,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				//pointerCurrPos = pointerDestPos;
 				draw();
 				if (currShift != destShift)
-					scheduleAnimation();
+					scheduleAnimation(this);
 			}
 		}
 
 		public void draw(Canvas canvas) {
+			if (!isCurrentAnimation())
+				return;
 			alog.v("PageViewAnimation.draw(" + currShift + ")");
 //			BitmapInfo image1 = mCurrentPageInfo;
 //			BitmapInfo image2 = mNextPageInfo;
@@ -5734,6 +5960,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private class LoadDocumentTask extends Task {
 		private final DocumentLoadLifecycle.Request loadOwner;
+		private final DocumentLoadLifecycle.Interaction
+				loadInteraction;
 		private BookInfo bookInfo;
 		private final DocumentSource documentSource;
 		private String filename;
@@ -5769,6 +5997,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				Runnable errorHandler) {
 			BackgroundThread.ensureGUI();
 			this.loadOwner = loadOwner;
+			this.loadInteraction =
+					documentLoadLifecycle.interaction();
 			this.bookInfo = bookInfo;
 			this.documentSource = documentSource;
 			this.parcelFileDescriptor = parcelFileDescriptor;
@@ -5886,7 +6116,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				preparePageImage(0);
 				log.v("updating loaded book info");
 				updateLoadedBookInfo(
-						bookInfo, null != docBuffer, loadOwner);
+						bookInfo, null != docBuffer,
+						loadInteraction);
 				if (!documentLoadLifecycle.isActive(loadOwner))
 					return;
 				if (null == docBuffer) {
@@ -5895,7 +6126,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					if (pos != null) {
 						log.i("Restoring position : " + pos);
 						restorePositionBackground(
-								pos, bookInfo, loadOwner);
+								pos, bookInfo, loadOwner,
+								loadInteraction);
 					}
 				} else {
 					// Opened from memory buffer
@@ -6104,7 +6336,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						return;
 					log.i("Restoring position : " + finalPos);
 					restorePositionBackground(
-							finalPos, bookInfo, loadOwner);
+							finalPos, bookInfo, loadOwner,
+							loadInteraction);
 				});
 			}
 			mHistory.updateBookAccess(bookInfo, getTimeElapsed());
@@ -6376,29 +6609,36 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	private void restorePositionBackground(String pos) {
-		restorePositionBackground(pos, mBookInfo, null);
-	}
-
 	private void restorePositionBackground(
 			String pos, BookInfo expectedBook,
-			DocumentLoadLifecycle.Request loadOwner) {
+			DocumentLoadLifecycle.Request loadOwner,
+			DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.ensureBackground();
 		if (pos != null) {
-			if (loadOwner != null
-					&& !documentLoadLifecycle.isActive(loadOwner))
+			if (!isOwnedDocumentLoadCurrent(
+					expectedBook, loadOwner))
 				return;
 			doc.goToPosition(pos, false);
-			if (loadOwner != null
-					&& !documentLoadLifecycle.isActive(loadOwner))
+			if (!isOwnedDocumentLoadCurrent(
+					expectedBook, loadOwner))
 				return;
 			preparePageImage(0);
-			if (loadOwner != null
-					&& !documentLoadLifecycle.isActive(loadOwner))
+			if (!isOwnedDocumentLoadCurrent(
+					expectedBook, loadOwner))
 				return;
 			drawPage();
-			updateCurrentPositionStatus(expectedBook, loadOwner);
+			updateCurrentPositionStatus(
+					expectedBook, interaction);
 		}
+	}
+
+	private boolean isOwnedDocumentLoadCurrent(
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Request loadOwner) {
+		return mServiceLifecycle.isActive()
+				&& expectedBook != null
+				&& mBookInfo == expectedBook
+				&& documentLoadLifecycle.isActive(loadOwner);
 	}
 
 	private final CloseableTaskGate positionSaveLifecycle =
@@ -6540,26 +6780,52 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void getCurrentPositionProperties(final PositionPropertiesCallback callback) {
+		BackgroundThread.ensureGUI();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		getCurrentPositionProperties(
+				expectedBook, interaction, callback);
+	}
+
+	private void getCurrentPositionProperties(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction,
+			final PositionPropertiesCallback callback) {
+		BackgroundThread.ensureGUI();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction)) {
+			callback.onPositionProperties(null, null);
+			return;
+		}
 		BackgroundThread.instance().postBackground(() -> {
+			if (!isDocumentInteractionCurrent(
+					expectedBook, interaction))
+				return;
 			final Bookmark bmk = (doc != null) ? doc.getCurrentPageBookmarkNoRender() : null;
 			final PositionProperties props = (bmk != null) ? doc.getPositionProps(bmk.getStartPos(), true) : null;
-			BackgroundThread.instance().postBackground(() -> {
-				String posText = null;
-				if (props != null) {
-					String percentText =
-							DocumentPositionPolicy.formatPercent(
-									props.getPercent());
-					posText = ""
-							+ DocumentPositionPolicy.displayPageNumber(
-									props.pageNumber,
-									props.pageCount)
-							+ " / "
-							+ props.pageCount
-							+ " ("
-							+ percentText
-							+ ")";
-				}
-				callback.onPositionProperties(props, posText);
+			String computedPositionText = null;
+			if (props != null) {
+				String percentText =
+						DocumentPositionPolicy.formatPercent(
+								props.getPercent());
+				computedPositionText = ""
+						+ DocumentPositionPolicy.displayPageNumber(
+								props.pageNumber,
+								props.pageCount)
+						+ " / "
+						+ props.pageCount
+						+ " ("
+						+ percentText
+						+ ")";
+			}
+			final String positionText = computedPositionText;
+			BackgroundThread.instance().postGUI(() -> {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				callback.onPositionProperties(
+						props, positionText);
 			});
 		});
 	}
@@ -6660,6 +6926,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (cancelDocumentLoad)
 			documentLoadLifecycle.cancel();
 		stopTracking();
+		cancelDocumentAnimation();
 		invalidateTapHighlight();
 		cancelSelectionUpdates();
 		if (!mOpened)
@@ -6718,7 +6985,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void cancelDelayedReaderWork() {
-		animationScheduler.cancel();
+		cancelDocumentAnimation();
 		gcTask.cancel();
 		closeSwapTasks();
 		closeTapHighlight();
@@ -6737,10 +7004,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		synchronized (autoScrollSessions) {
 			autoScrollSessions.close();
 			autoScrollScheduler.cancel();
-		}
-		synchronized (animationUpdateLock) {
-			currentAnimationUpdate = null;
-			currentAnimation = null;
 		}
 	}
 
@@ -7002,40 +7265,108 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void moveBy(final int delta) {
 		BackgroundThread.ensureGUI();
 		log.d("moveBy(" + delta + ")");
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		post(new Task() {
+			private boolean moved;
+
 			public void work() {
 				BackgroundThread.ensureBackground();
-				doc.doCommand(ReaderCommand.DCMD_SCROLL_BY.nativeId, delta);
-				scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				moved = doc.doCommand(
+						ReaderCommand.DCMD_SCROLL_BY.nativeId,
+						delta);
+				if (moved)
+					updateCurrentPositionStatus(
+							expectedBook, interaction);
 			}
 
 			public void done() {
+				if (!moved
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
 				drawPage();
+				scheduleSaveCurrentPositionBookmark(
+						DEF_SAVE_POSITION_INTERVAL);
 			}
 		});
 	}
 
 	public void goToPage(int pageNumber) {
 		BackgroundThread.ensureGUI();
+		goToPage(
+				pageNumber, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	private boolean goToPage(
+			int pageNumber, BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return false;
 		doEngineCommand(ReaderCommand.DCMD_GO_PAGE, pageNumber - 1);
+		return true;
 	}
 
 	public void goToPercent(final int percent) {
 		BackgroundThread.ensureGUI();
-		if (percent >= 0 && percent <= 100)
-			post(new Task() {
-				public void work() {
-					PositionProperties pos = doc.getPositionProps(null, true);
-					if (pos != null) {
-						int pageNumber =
-								DocumentPositionPolicy.pageIndexForPercent(
-										pos.pageCount, percent);
-						if (pageNumber < 0)
-							return;
-						doCommandFromBackgroundThread(ReaderCommand.DCMD_GO_PAGE, pageNumber);
-					}
+		goToPercent(
+				percent, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	private boolean goToPercent(
+			final int percent, final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (percent < 0 || percent > 100
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return false;
+		post(new Task() {
+			private boolean moved;
+
+			public void work() {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				PositionProperties pos =
+						doc.getPositionProps(null, true);
+				if (pos != null) {
+					int pageNumber =
+							DocumentPositionPolicy.pageIndexForPercent(
+									pos.pageCount, percent);
+					if (pageNumber < 0)
+						return;
+					moved = doc.doCommand(
+							ReaderCommand.DCMD_GO_PAGE.nativeId,
+							pageNumber);
+					if (moved)
+						updateCurrentPositionStatus(
+								expectedBook, interaction);
 				}
-			});
+			}
+
+			public void done() {
+				if (!moved
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
+				drawPage();
+				scheduleSaveCurrentPositionBookmark(
+						DEF_SAVE_POSITION_INTERVAL);
+			}
+		});
+		return true;
 	}
 
 	public interface MoveSelectionCallback {
@@ -7214,8 +7545,32 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
+	private void showInputDialog(
+			final String title, final String prompt,
+			final boolean isNumberEdit, final int minValue,
+			final int maxValue, final int lastValue,
+			final InputHandler handler,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!isDocumentInteractionCurrent(
+					expectedBook, interaction))
+				return;
+			final InputDialog dlg = new InputDialog(
+					mActivity, title, prompt, isNumberEdit,
+					minValue, maxValue, lastValue, handler);
+			dlg.show();
+		});
+	}
+
 	public void showGoToPageDialog() {
-		getCurrentPositionProperties((props, positionText) -> {
+		BackgroundThread.ensureGUI();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		getCurrentPositionProperties(
+				expectedBook, interaction,
+				(props, positionText) -> {
 			if (props == null)
 				return;
 			if (props.pageCount <= 0)
@@ -7237,18 +7592,27 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 						@Override
 						public void onOk(String s) {
-							goToPage(pageNumber);
+							goToPage(
+									pageNumber,
+									expectedBook,
+									interaction);
 						}
 
 						@Override
 						public void onCancel() {
 						}
-					});
-		});
+					}, expectedBook, interaction);
+				});
 	}
 
 	public void showGoToPercentDialog() {
-		getCurrentPositionProperties((props, positionText) -> {
+		BackgroundThread.ensureGUI();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		getCurrentPositionProperties(
+				expectedBook, interaction,
+				(props, positionText) -> {
 			if (props == null)
 				return;
 			String pos = mActivity.getString(R.string.dlg_goto_current_position) + " " + positionText;
@@ -7266,14 +7630,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 						@Override
 						public void onOk(String s) {
-							goToPercent(percent);
+							goToPercent(
+									percent,
+									expectedBook,
+									interaction);
 						}
 
 						@Override
 						public void onCancel() {
 						}
-					});
-		});
+					}, expectedBook, interaction);
+				});
 	}
 
 	@Override
