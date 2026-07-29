@@ -230,6 +230,126 @@ static xcb_window_t window = NULL;
 static xcb_screen_t *screen = NULL;
 static V3DocViewWin * main_win = NULL;
 
+class XcbShmImage
+{
+    static constexpr uint32_t INVALID_SHMID = UINT32_MAX;
+
+    xcb_connection_t *_connection;
+    xcb_image_t *_image;
+    xcb_shm_segment_info_t _segment;
+    bool _serverAttached;
+    bool _removalScheduled;
+
+    void clearState() noexcept
+    {
+        _connection = NULL;
+        _image = NULL;
+        _segment.shmseg = 0;
+        _segment.shmid = INVALID_SHMID;
+        _segment.shmaddr = NULL;
+        _serverAttached = false;
+        _removalScheduled = false;
+    }
+
+public:
+    XcbShmImage()
+    {
+        clearState();
+    }
+
+    XcbShmImage(const XcbShmImage &) = delete;
+    XcbShmImage &operator=(const XcbShmImage &) = delete;
+
+    ~XcbShmImage()
+    {
+        reset();
+    }
+
+    bool create(
+            xcb_connection_t *xcbConnection, uint16_t width,
+            uint16_t height, xcb_image_format_t format,
+            uint8_t imageDepth)
+    {
+        reset();
+        _connection = xcbConnection;
+        _image = xcb_image_create_native(
+                xcbConnection, width, height, format, imageDepth,
+                NULL, ~0U, NULL);
+        if (!_image) {
+            clearState();
+            return false;
+        }
+
+        int shmid = shmget(
+                IPC_PRIVATE, _image->size, IPC_CREAT | 0777);
+        if (shmid == -1) {
+            reset();
+            return false;
+        }
+        _segment.shmid = static_cast<uint32_t>(shmid);
+
+        void *address = shmat(shmid, NULL, 0);
+        if (address == reinterpret_cast<void *>(-1)) {
+            reset();
+            return false;
+        }
+        _segment.shmaddr = static_cast<uint8_t *>(address);
+        _image->data = _segment.shmaddr;
+
+        _segment.shmseg = xcb_generate_id(xcbConnection);
+        xcb_void_cookie_t attachCookie =
+                xcb_shm_attach_checked(
+                        xcbConnection, _segment.shmseg,
+                        _segment.shmid, 0);
+        CFreePtr<xcb_generic_error_t> attachError(
+                xcb_request_check(
+                        xcbConnection, attachCookie));
+        if (attachError) {
+            reset();
+            return false;
+        }
+        _serverAttached = true;
+
+        if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+            reset();
+            return false;
+        }
+        _removalScheduled = true;
+        return true;
+    }
+
+    void reset() noexcept
+    {
+        if (_segment.shmid != INVALID_SHMID
+                && !_removalScheduled) {
+            shmctl(
+                    static_cast<int>(_segment.shmid),
+                    IPC_RMID, NULL);
+        }
+        if (_serverAttached && _connection) {
+            xcb_shm_detach(_connection, _segment.shmseg);
+            xcb_flush(_connection);
+        }
+        if (_segment.shmaddr)
+            shmdt(_segment.shmaddr);
+        if (_image) {
+            _image->data = NULL;
+            xcb_image_destroy(_image);
+        }
+        clearState();
+    }
+
+    xcb_image_t *get() const noexcept
+    {
+        return _image;
+    }
+
+    xcb_shm_segment_info_t segment() const noexcept
+    {
+        return _segment;
+    }
+};
+
 
 /// WXWidget support: draw to wxImage
 class CRXCBScreen : public CRGUIScreenBase
@@ -298,8 +418,7 @@ class CRXCBScreen : public CRGUIScreenBase
         unsigned int pal16_[16];
         unsigned int pal256_[256];
         xcb_drawable_t rect;
-        xcb_shm_segment_info_t shminfo;
-        xcb_image_t *im;
+        XcbShmImage _image;
         unsigned int *pal;
         uint8_t depth;
         int bufDepth;
@@ -312,15 +431,12 @@ class CRXCBScreen : public CRGUIScreenBase
         {
             if ( !CRGUIScreenBase::setSize( dx, dy ) )
                 return false;
-            createImage();
-            return true;
+            return createImage();
         }
-        void createImage()
+        bool createImage()
         {
             CRLog::info("CRXCBScreen::createImage(%d, %d)", _width, _height);
-            if ( im )
-                xcb_image_destroy( im );
-            im = NULL;
+            _image.reset();
             CFreePtr<xcb_shm_query_version_reply_t> rep_shm(
                     xcb_shm_query_version_reply(
                             connection,
@@ -328,7 +444,6 @@ class CRXCBScreen : public CRGUIScreenBase
                             NULL));
             if(rep_shm) {
                 xcb_image_format_t format;
-                int shmctl_status;
 
                 if (rep_shm->shared_pixmaps &&
                         (rep_shm->major_version > 1 || rep_shm->minor_version > 0))
@@ -336,33 +451,28 @@ class CRXCBScreen : public CRGUIScreenBase
                 else
                     format = XCB_IMAGE_FORMAT_Z_PIXMAP;
 
-                im = xcb_image_create_native (connection, _width, _height,
-                     format, depth, NULL, ~0, NULL);
-                //format, depth, NULL, ~0, NULL);
-                //format, depth, NULL, ~0, NULL);
-                assert(im);
-
-                shminfo.shmid = shmget (IPC_PRIVATE,
-                        im->stride*im->height,
-                        IPC_CREAT | 0777);
-                assert(shminfo.shmid != (unsigned)-1);
-                shminfo.shmaddr = (uint8_t*)shmat (shminfo.shmid, 0, 0);
-                assert(shminfo.shmaddr);
-                im->data = shminfo.shmaddr;
+                if (!_image.create(
+                            connection, _width, _height,
+                            format, depth)) {
+                    CRLog::error(
+                            "Cannot create XCB shared-memory image");
+                    return false;
+                }
+                xcb_image_t *im = _image.get();
                 printf("Created image depth=%d bpp=%d stride=%d\n", (int)im->depth, (int)im->bpp, (int)im->stride );
-
-                shminfo.shmseg = xcb_generate_id (connection);
-                xcb_shm_attach (connection, shminfo.shmseg,
-                        shminfo.shmid, 0);
-                shmctl_status = shmctl(shminfo.shmid, IPC_RMID, 0);
-                assert(shmctl_status != -1);
-
+                return true;
             } else {
                 printf("Can't get shm\n");
+                return false;
             }
         }
         virtual void update( const lvRect & a_rc, bool full )
         {
+            xcb_image_t *im = _image.get();
+            if (!im) {
+                CRLog::error("Cannot update an empty XCB image");
+                return;
+            }
             lvRect rc(a_rc);
             CRLog::debug("update screen, bpp=%d width=%d, height=%d, rect={%d, %d, %d, %d} full=%d", (int)im->bpp,im->width,im->height, (int)rc.left, (int)rc.top, (int)rc.right, (int)rc.bottom, full?1:0 );
             if ( _forceNextUpdate && !_forceUpdateRect.isEmpty() ) {
@@ -402,7 +512,7 @@ class CRXCBScreen : public CRGUIScreenBase
             //if (
             int i;
             i = xcb_image_shm_get (connection, window,
-                    im, shminfo,
+                    im, _image.segment(),
                     0, 0,
                     XCB_ALL_PLANES);
             if (!i) {
@@ -522,7 +632,7 @@ class CRXCBScreen : public CRGUIScreenBase
             //view()->paint();
 
             xcb_image_shm_put (connection, window, gc,
-                    im, shminfo,
+                    im, _image.segment(),
                     rc.left, rc.top, rc.left, rc.top, rc.width(), rc.height(), 0);
             xcb_flush(connection);
             if ( _mode == PrepareMode ) {
@@ -551,10 +661,11 @@ class CRXCBScreen : public CRGUIScreenBase
         }
         virtual ~CRXCBScreen()
         {
-            if ( im )
-                xcb_image_destroy( im );
+            _image.reset();
             if ( connection )
                 xcb_disconnect( connection );
+            connection = NULL;
+            screen = NULL;
         }
         CRXCBScreen( int width, int height )
         :  CRGUIScreenBase( 0, 0, true )
@@ -581,7 +692,6 @@ class CRXCBScreen : public CRGUIScreenBase
             uint32_t              values[2];
             int                   screen_number;
             //uint8_t               is_hand = 0;
-            im = NULL;
 
             /* getting the connection */
             connection = xcb_connect (NULL, &screen_number);
@@ -712,9 +822,14 @@ class CRXCBScreen : public CRGUIScreenBase
 
             _width = width;
             _height = height;
-            createImage();
+            if (!createImage()) {
+                CRLog::error(
+                        "Cannot initialize the XCB screen image");
+                exit(-1);
+            }
 
             // substitute GRAY_BACKBUFFER_BITS with depth of screen
+            xcb_image_t *im = _image.get();
             int d = im->depth;
             if ( d==32 || d==24 )
                 d = GRAY_BACKBUFFER_BITS; // 8 colors for desktop simulation

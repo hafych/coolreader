@@ -6921,6 +6921,51 @@ require_source_text(
   "XcbKeySymbolsPtr keysyms;"
   "XCB key-symbol tables must use their API-specific owner"
 )
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "class XcbShmImage"
+  "XCB images and shared-memory segments must share one lifecycle owner"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "xcb_shm_detach(_connection, _segment.shmseg);"
+  "XCB image teardown must detach the server from shared memory"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "xcb_shm_attach_checked("
+  "XCB shared-memory publication must validate the server attachment"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "shmdt(_segment.shmaddr);"
+  "XCB image teardown must detach the client from shared memory"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "_image->data = NULL;\n            xcb_image_destroy(_image);"
+  "XCB image teardown must clear its borrowed SHM data before destruction"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "XcbShmImage _image;"
+  "XCB screens must retain their SHM image through scoped ownership"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "xcb_shm_segment_info_t shminfo;"
+  "XCB screens must not split shared-memory state from its owner"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "xcb_image_t *im;"
+  "XCB screens must not retain raw image ownership"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "shminfo.shmaddr ="
+  "XCB screens must not publish shared memory outside its owner"
+)
 forbid_source_text(
   "${XCB_GUI_SOURCE}"
   "free(reply)"
