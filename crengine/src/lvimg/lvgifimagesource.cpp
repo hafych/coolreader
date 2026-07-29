@@ -155,9 +155,10 @@ int LVGifImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImage
             {
                 LVGifFrame frame(this);
                 int cbRead = 0;
-                if (frame.DecodeFromBuffer(p, (int)(buf_size - (p - buf)), cbRead) ) {
+                if (frame.DecodeFromBuffer(
+                            p, (int)(buf_size - (p - buf)), cbRead)
+                        && frame.Draw(callback)) {
                     found = true;
-                    frame.Draw( callback );
                 }
                 res = false; // first frame found, stop!
             }

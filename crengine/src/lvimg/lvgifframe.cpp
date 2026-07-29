@@ -43,59 +43,77 @@ lUInt32 *LVGifFrame::GetColorTable() {
         return m_pImage->GetColorTable();
 }
 
-void LVGifFrame::Draw(LVImageDecoderCallback *callback)
+bool LVGifFrame::Draw(LVImageDecoderCallback *callback)
 {
+    if (!m_pImage || !callback)
+        return false;
     int w = m_pImage->GetWidth();
     int h = m_pImage->GetHeight();
     if ( w<=0 || w>4096 || h<=0 || h>4096 )
-        return; // wrong image width
-    callback->OnStartDecode( m_pImage );
-    std::vector<lUInt32> line(w);
-    int background_color = m_pImage->m_background_color;
-    int transparent_color = m_pImage->m_transparent_color;
-    bool defined_transparent = m_pImage->defined_transparent_color;
-    lUInt32 * pColorTable = GetColorTable();
-    int interlacePos = 0;
-    int interlaceTable[] = {8, 0, 8, 4, 4, 2, 2, 1, 1, 1}; // pairs: step, offset
-    int dy = interlaceTable[interlacePos];
-    int y = 0;
-    for ( int i=0; i<h; i++ ) {
-        for ( int j=0; j<w; j++ ) {
-            line[j] = pColorTable[background_color];
-        }
-        if ( i >= m_top  && i < m_top+m_cy ) {
-            unsigned char * p_line = m_buffer.data() + (i-m_top)*m_cx;
-            for ( int x=0; x<m_cx; x++ ) {
-                unsigned char b = p_line[x];
-                if (b!=background_color) {
-                    if (defined_transparent && b==transparent_color)
-                        line[x + m_left] = 0xFF000000;
-                    else line[x + m_left] = pColorTable[b];
-                }
-                else if (defined_transparent && b==transparent_color)  {
-                    line[x + m_left] = 0xFF000000;
-                }
-            }
-        }
-        callback->OnLineDecoded( m_pImage, y, line.data() );
-        if ( m_flg_interlaced ) {
-            y += dy;
-            if ( y>=m_cy ) {
-                interlacePos += 2;
-                dy = interlaceTable[interlacePos];
-                y = interlaceTable[interlacePos+1];
-            }
-        } else {
-            y++;
-        }
+        return false; // wrong image width
+    if (m_cx <= 0 || m_cy <= 0
+            || m_buffer.size() != static_cast<std::size_t>(m_cx) * m_cy)
+        return false;
+
+    lUInt32 *pColorTable = GetColorTable();
+    const std::size_t colorCount = m_flg_ltc
+            ? m_local_color_table.size()
+            : m_pImage->m_global_color_table.size();
+    const unsigned int backgroundColor = m_pImage->m_background_color;
+    const unsigned int transparentColor = m_pImage->m_transparent_color;
+    const bool definedTransparent = m_pImage->defined_transparent_color;
+    if (!pColorTable || backgroundColor >= colorCount)
+        return false;
+    for (std::size_t i = 0; i < m_buffer.size(); i++) {
+        const unsigned int color = m_buffer[i];
+        if ((!definedTransparent || color != transparentColor)
+                && color >= colorCount)
+            return false;
     }
-    callback->OnEndDecode( m_pImage, false );
+
+    std::vector<int> sourceRows;
+    if (m_flg_interlaced) {
+        sourceRows.assign(m_cy, -1);
+        static const int starts[] = {0, 4, 2, 1};
+        static const int steps[] = {8, 8, 4, 2};
+        int sourceRow = 0;
+        for (int pass = 0; pass < 4; pass++) {
+            for (int destinationRow = starts[pass];
+                    destinationRow < m_cy; destinationRow += steps[pass])
+                sourceRows[destinationRow] = sourceRow++;
+        }
+        if (sourceRow != m_cy)
+            return false;
+    }
+
+    callback->OnStartDecode(m_pImage);
+    std::vector<lUInt32> line(w);
+    for (int y = 0; y < h; y++) {
+        std::fill(line.begin(), line.end(), pColorTable[backgroundColor]);
+        if (y >= m_top && y < m_top + m_cy) {
+            const int frameRow = y - m_top;
+            const int sourceRow = m_flg_interlaced
+                    ? sourceRows[frameRow] : frameRow;
+            const unsigned char *pLine =
+                    m_buffer.data() + sourceRow * m_cx;
+            for (int x = 0; x < m_cx; x++) {
+                const unsigned int color = pLine[x];
+                if (definedTransparent && color == transparentColor)
+                    line[x + m_left] = 0xFF000000;
+                else
+                    line[x + m_left] = pColorTable[color];
+            }
+        }
+        callback->OnLineDecoded(m_pImage, y, line.data());
+    }
+    callback->OnEndDecode(m_pImage, false);
+    return true;
 }
 
 int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_read )
 {
     bytes_read = 0;
-    if (!buf || buf_size <= 10 || buf[0] != ',')
+    if (!m_pImage || !buf || buf_size <= 10 || buf[0] != ',')
         return 0;
     unsigned char * p = buf;
     p++;

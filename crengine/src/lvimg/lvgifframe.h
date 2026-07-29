@@ -51,7 +51,7 @@ public:
     ~LVGifFrame();
     void Clear();
     lUInt32 * GetColorTable();
-    void Draw( LVImageDecoderCallback * callback );
+    bool Draw( LVImageDecoderCallback * callback );
 };
 
 #endif  // (USE_GIF==1)

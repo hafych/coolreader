@@ -139,7 +139,7 @@ DRM или ограничений доступа, подбор/получени�
   Выполнено: ownership для hyphenation registry/method и TeX pattern
   bucket/chain graphs, text-language/font-manager; временные буферы INI,
   cache-file, SVG/GIF/XPM/image rows и bounded GIF record/sub-block/LZW
-  bitstream parsing,
+  bitstream parsing, palette validation и interlaced-frame row mapping,
   encoding autodetect/offline
   statistic input и parser format detection; parser selection, draw-buffer
   source и owned/borrowed

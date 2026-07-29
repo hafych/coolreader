@@ -3313,6 +3313,26 @@ require_source_text(
   "blockSize > blocksSize - blockOffset"
   "GIF raster parsing must validate each sub-block"
 )
+require_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "backgroundColor >= colorCount"
+  "GIF frame drawing must validate its color table"
+)
+require_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "color >= colorCount"
+  "GIF frame drawing must validate every decoded color index"
+)
+require_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "sourceRows.assign(m_cy, -1)"
+  "interlaced GIF frames must use bounded row mapping"
+)
+forbid_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "interlaceTable"
+  "interlaced GIF frames must not walk a sentinel-free pass table"
+)
 forbid_source_text(
   "${GIF_FRAME_SOURCE}"
   "stream_buffer_size + 3"

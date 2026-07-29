@@ -5646,6 +5646,67 @@ static int testGifDecoderOwnership() {
             || extensionCallback.lines != 0
             || extensionCallback.ends != 0)
         return fail("truncated GIF extension entered the callback lifecycle");
+
+    unsigned char missingPalette[] = {
+        'G', 'I', 'F', '8', '9', 'a',
+        0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+        0x2c, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x00,
+        0x02, 0x02, 0x4c, 0x01, 0x00, 0x3b,
+        0x00, 0x00, 0x00
+    };
+    LVGifImageSource missingPaletteImage(
+            NULL, LVCreateMemoryStream(
+                    missingPalette, static_cast<int>(sizeof(missingPalette)),
+                    true, LVOM_READ));
+    CountingImageDecodeCallback missingPaletteCallback;
+    if (missingPaletteImage.Decode(&missingPaletteCallback))
+        return fail("GIF decoder accepted a frame without a color table");
+    if (missingPaletteCallback.starts != 0
+            || missingPaletteCallback.lines != 0
+            || missingPaletteCallback.ends != 0)
+        return fail("palette-less GIF entered the callback lifecycle");
+
+    unsigned char invalidColor[] = {
+        'G', 'I', 'F', '8', '9', 'a',
+        0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+        0x2c, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x00,
+        0x02, 0x02, 0x5c, 0x01, 0x00, 0x3b
+    };
+    LVGifImageSource invalidColorImage(
+            NULL, LVCreateMemoryStream(
+                    invalidColor, static_cast<int>(sizeof(invalidColor)),
+                    true, LVOM_READ));
+    CountingImageDecodeCallback invalidColorCallback;
+    if (invalidColorImage.Decode(&invalidColorCallback))
+        return fail("GIF decoder accepted a pixel outside its color table");
+    if (invalidColorCallback.starts != 0
+            || invalidColorCallback.lines != 0
+            || invalidColorCallback.ends != 0)
+        return fail("invalid GIF color index entered the callback lifecycle");
+
+    unsigned char shortInterlacedFrame[] = {
+        'G', 'I', 'F', '8', '9', 'a',
+        0x01, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+        0x2c, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x40,
+        0x02, 0x02, 0x4c, 0x01, 0x00, 0x3b
+    };
+    LVGifImageSource interlacedImage(
+            NULL, LVCreateMemoryStream(
+                    shortInterlacedFrame,
+                    static_cast<int>(sizeof(shortInterlacedFrame)),
+                    true, LVOM_READ));
+    CountingImageDecodeCallback interlacedCallback;
+    if (!interlacedImage.Decode(&interlacedCallback))
+        return fail("GIF decoder rejected a bounded interlaced frame");
+    if (interlacedCallback.starts != 1
+            || interlacedCallback.lines != 16
+            || interlacedCallback.ends != 1)
+        return fail("interlaced GIF callback lifecycle is incomplete");
     return 0;
 }
 #endif
