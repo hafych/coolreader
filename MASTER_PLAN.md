@@ -159,7 +159,7 @@ DRM или ограничений доступа, подбор/получени�
   downstream cancellation,
   scoped stream-image decoder factory candidates, scaled-image
   maps/RGBA snapshots, nine-patch metadata cache and color-transform
-  workspaces, WOL TOC/image/LZSS buffers and
+  workspaces/cancellation/64-bit statistics, WOL TOC/image/LZSS buffers and
   reader result ownership, default stream-region buffers,
   owned/borrowed memory streams, block write-cache buffers/LRU, mapped-file
   regions/OS handles, file-stream FILE/HANDLE/owned/borrowed descriptor

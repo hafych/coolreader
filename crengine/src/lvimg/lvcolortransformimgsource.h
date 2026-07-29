@@ -24,6 +24,8 @@
 
 #include "lvimagesource.h"
 #include "lvimagedecodercallback.h"
+
+#include <cstdint>
 #include <memory>
 
 class LVColorDrawBuf;
@@ -38,10 +40,11 @@ protected:
     LVImageDecoderCallback * _callback;
     std::unique_ptr<LVColorDrawBuf> _drawbuf;
     bool _decodeStarted;
-    int _sumR;
-    int _sumG;
-    int _sumB;
-    int _countPixels;
+    bool _decodeSucceeded;
+    std::uint64_t _sumR;
+    std::uint64_t _sumG;
+    std::uint64_t _sumB;
+    std::uint64_t _countPixels;
 public:
     LVColorTransformImgSource(LVImageSourceRef src, lUInt32 addRGB, lUInt32 multiplyRGB);
     virtual ~LVColorTransformImgSource();

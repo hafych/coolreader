@@ -262,7 +262,10 @@ partial metadata. `LVColorTransformImgSource` likewise owns its full-image
 workspace with `std::unique_ptr`, while its downstream callback is borrowed
 only during synchronous `Decode()`. Decoder errors discard buffered rows, and
 a source that omits `OnEndDecode()` is closed with an error callback before the
-workspace and borrowed callback view are cleared.
+workspace and borrowed callback view are cleared. RGB statistics use 64-bit
+accumulators, and transformed rows stop at the first downstream cancellation;
+that cancellation receives an error completion and makes `Decode()` fail
+without preventing later reuse.
 
 `LVUnpackedImgSource` owns grayscale, RGB565 and 32-bit pixel snapshots through
 separate `std::vector` buffers and uses a scoped vector for conversion rows.

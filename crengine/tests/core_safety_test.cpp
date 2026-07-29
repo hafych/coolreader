@@ -6082,6 +6082,13 @@ static int testImageSourceOwnership() {
             sourceCapture.pixels.begin(), sourceCapture.pixels.end());
     if (transformedCapture.pixels != expectedTransformed)
         return fail("neutral color transform changed decoded pixels");
+    RejectingImageDecodeCallback rejectingColorTransformCallback;
+    if (colorTransform->Decode(
+                &rejectingColorTransformCallback)
+            || rejectingColorTransformCallback.starts != 1
+            || rejectingColorTransformCallback.lines != 1
+            || rejectingColorTransformCallback.errorEnds != 1)
+        return fail("color transform ignored callback cancellation");
     ThrowingImageDecodeCallback throwingTransformCallback;
     bool transformCallbackThrew = false;
     try {

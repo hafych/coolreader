@@ -3571,6 +3571,21 @@ require_source_text(
   "color-transform workspace cleanup must be scope-independent"
 )
 require_source_text(
+  "${COLOR_TRANSFORM_IMAGE_HEADER}"
+  "std::uint64_t _sumR"
+  "color-transform RGB accumulation must not use signed narrow counters"
+)
+require_source_text(
+  "${COLOR_TRANSFORM_IMAGE_HEADER}"
+  "bool _decodeSucceeded"
+  "color-transform result state must track completed downstream publication"
+)
+require_source_text(
+  "${COLOR_TRANSFORM_IMAGE_SOURCE}"
+  "result = result && _decodeSucceeded"
+  "color-transform decode must report downstream cancellation"
+)
+require_source_text(
   "${IMAGE_FACTORY_SOURCE}"
   "LVCreateColorTransformImageSource(LVImageSourceRef srcImage"
   "color-transform construction must stay behind its checked factory"
@@ -3604,6 +3619,11 @@ require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "color-transform workspace survived callback exception"
   "color-transform exception cleanup must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "color transform ignored callback cancellation"
+  "color-transform cancellation must retain native regression coverage"
 )
 require_source_text(
   "${ALPHA_TRANSFORM_IMAGE_HEADER}"

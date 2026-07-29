@@ -37,6 +37,7 @@ LVColorTransformImgSource::LVColorTransformImgSource(LVImageSourceRef src, lUInt
     , _multiply(multiplyRGB)
     , _callback(NULL)
     , _decodeStarted(false)
+    , _decodeSucceeded(false)
     , _sumR(0)
     , _sumG(0)
     , _sumB(0)
@@ -48,12 +49,15 @@ LVColorTransformImgSource::~LVColorTransformImgSource() = default;
 
 void LVColorTransformImgSource::OnStartDecode(LVImageSource *)
 {
+    if (!_callback)
+        return;
     std::unique_ptr<LVColorDrawBuf> candidate(
             new LVColorDrawBuf(
                     _src->GetWidth(), _src->GetHeight(), 32));
     _drawbuf.swap(candidate);
     _sumR = _sumG = _sumB = _countPixels = 0;
     _decodeStarted = true;
+    _decodeSucceeded = false;
     _callback->OnStartDecode(this);
 }
 
@@ -85,11 +89,13 @@ void LVColorTransformImgSource::OnEndDecode(
     if (!_decodeStarted || !_callback) {
         _drawbuf.reset();
         _decodeStarted = false;
+        _decodeSucceeded = false;
         return;
     }
     if (errors || !_drawbuf) {
         _drawbuf.reset();
         _decodeStarted = false;
+        _decodeSucceeded = false;
         _callback->OnEndDecode(this, true);
         return;
     }
@@ -104,9 +110,12 @@ void LVColorTransformImgSource::OnEndDecode(
     int mg = ((_multiply >> 8) & 0xFF) << 3;
     int mb = ((_multiply >> 0) & 0xFF) << 3;
     
-    int avgR = _countPixels > 0 ? _sumR / _countPixels : 128;
-    int avgG = _countPixels > 0 ? _sumG / _countPixels : 128;
-    int avgB = _countPixels > 0 ? _sumB / _countPixels : 128;
+    int avgR = _countPixels > 0
+            ? static_cast<int>(_sumR / _countPixels) : 128;
+    int avgG = _countPixels > 0
+            ? static_cast<int>(_sumG / _countPixels) : 128;
+    int avgB = _countPixels > 0
+            ? static_cast<int>(_sumB / _countPixels) : 128;
     
     for (int y = 0; y < dy; y++) {
         lUInt32 * row = (lUInt32*)_drawbuf->GetScanLine(y);
@@ -123,10 +132,17 @@ void LVColorTransformImgSource::OnEndDecode(
                 row[x] = a | (limit256(r) << 16) | (limit256(g) << 8) | (limit256(b) << 0);
             }
         }
-        _callback->OnLineDecoded(obj, y, row);
+        if (!_callback->OnLineDecoded(obj, y, row)) {
+            _drawbuf.reset();
+            _decodeStarted = false;
+            _decodeSucceeded = false;
+            _callback->OnEndDecode(this, true);
+            return;
+        }
     }
     _drawbuf.reset();
     _decodeStarted = false;
+    _decodeSucceeded = true;
     _callback->OnEndDecode(this, false);
 }
 
@@ -136,22 +152,27 @@ bool LVColorTransformImgSource::Decode(LVImageDecoderCallback *callback)
         return false;
     _callback = callback;
     _decodeStarted = false;
+    _decodeSucceeded = false;
     bool result = false;
     try {
         result = _src->Decode(this);
         if (_decodeStarted) {
             _drawbuf.reset();
             _decodeStarted = false;
+            _decodeSucceeded = false;
             _callback->OnEndDecode(this, true);
             result = false;
         }
+        result = result && _decodeSucceeded;
     } catch (...) {
         _drawbuf.reset();
         _decodeStarted = false;
+        _decodeSucceeded = false;
         _callback = NULL;
         throw;
     }
     _drawbuf.reset();
     _callback = NULL;
+    _decodeSucceeded = false;
     return result;
 }
