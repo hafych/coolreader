@@ -73,7 +73,7 @@ static bool firstDocUpdate = true;
 
 status_info_t lastState = {};
 
-static char last_bookmark[2048]= {0};
+static lString8 lastBookmark;
 static int last_bookmark_page = 0;
 
 //static bool shuttingDown = false;
@@ -966,7 +966,6 @@ public:
                 char buf[128]={0};
                 GrClearArea(m_state->wid,10,770,400,28,0);
                 GrSetFontSize(m_state->fontid,24);
-                sprintf(buf,"mouse down: x=%d y=%d",event.mouse.x,event.mouse.y);
                 GrText(m_state->wid,m_state->gc,10,770,(char *)buf,-1,GR_TFASCII|GR_TFTOP);
                 GrPartialPrint(m_state->wid,10,770,400,28);
 */
@@ -979,7 +978,6 @@ public:
                 char buf[128]={0};
                 GrClearArea(m_state->wid,10,770,400,28,0);
                 GrSetFontSize(m_state->fontid,24);
-                sprintf(buf,"mouse up: x=%d y=%d",event.mouse.x,event.mouse.y);
                 GrText(m_state->wid,m_state->gc,10,770,(char *)buf,-1,GR_TFASCII|GR_TFTOP);
                     GrPartialPrint(m_state->wid,10,770,400,28);
 */
@@ -992,7 +990,6 @@ public:
                 char buf[128]={0};
                     GrClearArea(m_state->wid,10,770,400,28,0);
                 GrSetFontSize(m_state->fontid,24);
-                sprintf(buf,"mouse move: x=%d y=%d",event.mouse.x,event.mouse.y);
                 GrText(m_state->wid,m_state->gc,10,770,(char *)buf,-1,GR_TFASCII|GR_TFTOP);
                     GrPartialPrint(m_state->wid,10,770,400,28);
 
@@ -1105,7 +1102,7 @@ public:
     }
     void closing() override
     {
-        strcpy( last_bookmark, GetCurrentPositionBookmark() );
+        lastBookmark = GetCurrentPositionBookmark();
         last_bookmark_page = CRJinkeDocView::instance->getDocView()->getCurPage();
         V3DocViewWin::closing();
     }
@@ -1211,7 +1208,8 @@ int main( int argc, const char * argv[] )
 }
 
 
-static char history_file_name[1024] = "/root/abook/.cr3hist";
+static lString32 historyFileName(
+        U"/root/abook/.cr3hist");
 
 static const char * getLang( )
 {
@@ -1315,10 +1313,13 @@ int InitDoc(char *fileName)
     {
         lString8 fn(fileName);
         if ( fn.startsWith(lString8("/home")) ) {
-            strcpy( history_file_name, "/home/.cr3hist" );
+            historyFileName = U"/home/.cr3hist";
             bookmarkDir = U"/home/bookmarks/";
         }
-        CRLog::info( "History file name: %s", history_file_name );
+        CRLog::info(
+                "History file name: %s",
+                UnicodeToUtf8(
+                        historyFileName).c_str());
     }
 
     lString32 manualFile;
@@ -1478,9 +1479,11 @@ int InitDoc(char *fileName)
         }
         CRLog::debug("settings at %s", UnicodeToUtf8(ini).c_str() );
 #if USE_JINKE_USER_DATA!=1
-    if ( !main_win->loadHistory(
-                Utf8ToUnicode(lString8(history_file_name))) ) {
-        CRLog::error("Cannot read history file %s", history_file_name);
+    if ( !main_win->loadHistory(historyFileName) ) {
+        CRLog::error(
+                "Cannot read history file %s",
+                UnicodeToUtf8(
+                        historyFileName).c_str());
     }
 #endif
 
@@ -1511,13 +1514,7 @@ int InitDoc(char *fileName)
 const char * GetCurrentPositionBookmark()
 {
     if ( !CRJinkeDocView::instance )
-        return last_bookmark;
+        return lastBookmark.c_str();
     CRLog::trace("GetCurrentPositionBookmark() - returning empty string");
-    //ldomXPointer ptr = main_win->getDocView()->getBookmark();
-    //lString16 bmtext( !ptr ? L"" : ptr.toString() );
-    static char buf[1024];
-    //strcpy( buf, UnicodeToUtf8( bmtext ).c_str() );
-    strcpy( buf, "" );
-    CRLog::trace("   return bookmark=%s", buf);
-    return buf;
+    return "";
 }

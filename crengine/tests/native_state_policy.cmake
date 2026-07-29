@@ -7342,6 +7342,36 @@ forbid_source_text(
   "NanoX child-process handling must not use a libc-internal type"
 )
 require_source_text(
+  "${NANOX_SOURCE}"
+  "static lString8 lastBookmark;"
+  "NanoX bookmark ABI state must retain bounded string storage"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "static lString32 historyFileName("
+  "NanoX history paths must retain current-width storage"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "static char last_bookmark["
+  "NanoX bookmark ABI state must not use a fixed global buffer"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "history_file_name"
+  "NanoX history paths must not use a fixed global buffer"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "strcpy("
+  "NanoX plugin state must not use unbounded C string copies"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "sprintf("
+  "NanoX plugin source must not retain unbounded formatting examples"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testGuiScreenOwnership()"
   "GUI screen ownership must retain native lifecycle coverage"
