@@ -659,25 +659,21 @@ LVFreeTypeFace::LVFreeTypeFace(LVMutex &mutex, FT_Library library,
           _scale_div(1),
           _features(0)
 #if USE_HARFBUZZ == 1
-        , _glyph_cache2(globalCache),
+        , _hb_font(nullptr),
+          _hb_buffer(hb_buffer_create()),
+          _glyph_cache2(globalCache),
           _width_cache2(1024)
 #endif
 {
     _aa_mode = fontMan->GetAntialiasMode();
     _hintingMode = fontMan->GetHintingMode();
 #if USE_HARFBUZZ == 1
-    _hb_font = 0;
-    _hb_buffer = hb_buffer_create();
     _hb_features.reserve(22);
     setupHBFeatures();
 #endif
 }
 
 LVFreeTypeFace::~LVFreeTypeFace() {
-#if USE_HARFBUZZ == 1
-    if (_hb_buffer)
-        hb_buffer_destroy(_hb_buffer);
-#endif
     Clear();
 }
 
@@ -723,10 +719,8 @@ void LVFreeTypeFace::setHintingMode(hinting_mode_t mode) {
     // Also update HB load flags with the updated hinting mode.
     // We need this destroy/create, as only these will clear some internal HB caches
     // (ft_font->advance_cache, ft_font->cached_x_scale); hb_ft_font_set_load_flags will not.
-    if (_hb_font)
-        hb_font_destroy(_hb_font);
-    _hb_font = hb_ft_font_create(_face, NULL);
-    if (_hb_font) {
+    HarfBuzzFontOwner candidate(hb_ft_font_create(_face, NULL));
+    if (candidate) {
         // Use the same load flags as we do when using FT directly, to avoid mismatching advances & raster
         int flags = FT_LOAD_DEFAULT;
         flags |= (!_drawMonochrome ? FT_LOAD_TARGET_LIGHT : FT_LOAD_TARGET_MONO);
@@ -739,7 +733,8 @@ void LVFreeTypeFace::setHintingMode(hinting_mode_t mode) {
         else if (_hintingMode == HINTING_MODE_DISABLED) {
             flags |= FT_LOAD_NO_AUTOHINT | FT_LOAD_NO_HINTING;
         }
-        hb_ft_font_set_load_flags(_hb_font, flags);
+        hb_ft_font_set_load_flags(candidate.get(), flags);
+        _hb_font = std::move(candidate);
     }
     #endif
 }
@@ -751,7 +746,7 @@ void LVFreeTypeFace::setShapingMode( shaping_mode_t shapingMode )
 #if USE_HARFBUZZ==1
     setupHBFeatures();
     // Reset buffer (to have it shrunk if HB full > light that will need only a 3 slots buffer)
-    hb_buffer_reset(_hb_buffer);
+    hb_buffer_reset(_hb_buffer.get());
     // in cache may be found some ligatures, so clear it
     clearCache();
 #endif
@@ -907,10 +902,8 @@ bool LVFreeTypeFace::loadFromBuffer(LVByteArrayRef buf, int index, int size, css
     }
 #if USE_HARFBUZZ == 1
     if (FT_Err_Ok == error) {
-        if (_hb_font)
-            hb_font_destroy(_hb_font);
-        _hb_font = hb_ft_font_create(_face, 0);
-        if ( _hb_font ) {
+        HarfBuzzFontOwner candidate(hb_ft_font_create(_face, nullptr));
+        if (candidate) {
             // Use the same load flags as we do when using FT directly, to avoid mismatching advances & raster
             int flags = FT_LOAD_DEFAULT;
             flags |= (!_drawMonochrome ? getLoadTargetForAA(_aa_mode) : FT_LOAD_TARGET_MONO);
@@ -923,7 +916,8 @@ bool LVFreeTypeFace::loadFromBuffer(LVByteArrayRef buf, int index, int size, css
             else if (_hintingMode == HINTING_MODE_DISABLED) {
                 flags |= FT_LOAD_NO_AUTOHINT | FT_LOAD_NO_HINTING;
             }
-            hb_ft_font_set_load_flags(_hb_font, flags);
+            hb_ft_font_set_load_flags(candidate.get(), flags);
+            _hb_font = std::move(candidate);
         } else {
             error = FT_Err_Invalid_Argument;
         }
@@ -1055,10 +1049,8 @@ LVFreeTypeFace::loadFromFile(const char *fname, int index, int size, css_font_fa
     }
 #if USE_HARFBUZZ == 1
     if (FT_Err_Ok == error) {
-        if (_hb_font)
-            hb_font_destroy(_hb_font);
-        _hb_font = hb_ft_font_create(_face, 0);
-        if (!_hb_font) {
+        HarfBuzzFontOwner candidate(hb_ft_font_create(_face, nullptr));
+        if (!candidate) {
             error = FT_Err_Invalid_Argument;
         }
         else {
@@ -1074,7 +1066,8 @@ LVFreeTypeFace::loadFromFile(const char *fname, int index, int size, css_font_fa
             else if (_hintingMode == HINTING_MODE_DISABLED) {
                 flags |= FT_LOAD_NO_AUTOHINT | FT_LOAD_NO_HINTING;
             }
-            hb_ft_font_set_load_flags(_hb_font, flags);
+            hb_ft_font_set_load_flags(candidate.get(), flags);
+            _hb_font = std::move(candidate);
         }
     }
 #endif
@@ -1174,25 +1167,25 @@ bool LVFreeTypeFace::hbCalcCharWidth(LVCharPosInfo *posInfo, const LVCharTriplet
         return false;
     unsigned int segLen = 0;
     int cluster;
-    hb_buffer_clear_contents(_hb_buffer);
+    hb_buffer_clear_contents(_hb_buffer.get());
     if (0 != triplet.prevChar) {
-        hb_buffer_add(_hb_buffer, (hb_codepoint_t) triplet.prevChar, segLen);
+        hb_buffer_add(_hb_buffer.get(), (hb_codepoint_t) triplet.prevChar, segLen);
         segLen++;
     }
-    hb_buffer_add(_hb_buffer, (hb_codepoint_t) triplet.Char, segLen);
+    hb_buffer_add(_hb_buffer.get(), (hb_codepoint_t) triplet.Char, segLen);
     cluster = segLen;
     segLen++;
     if (0 != triplet.nextChar) {
-        hb_buffer_add(_hb_buffer, (hb_codepoint_t) triplet.nextChar, segLen);
+        hb_buffer_add(_hb_buffer.get(), (hb_codepoint_t) triplet.nextChar, segLen);
         segLen++;
     }
-    hb_buffer_set_content_type(_hb_buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
-    hb_buffer_guess_segment_properties(_hb_buffer);
-    hb_shape(_hb_font, _hb_buffer, _hb_features.ptr(), (unsigned int)_hb_features.length());
-    unsigned int glyph_count = hb_buffer_get_length(_hb_buffer);
+    hb_buffer_set_content_type(_hb_buffer.get(), HB_BUFFER_CONTENT_TYPE_UNICODE);
+    hb_buffer_guess_segment_properties(_hb_buffer.get());
+    hb_shape(_hb_font.get(), _hb_buffer.get(), _hb_features.ptr(), (unsigned int)_hb_features.length());
+    unsigned int glyph_count = hb_buffer_get_length(_hb_buffer.get());
     if (segLen == glyph_count) {
-        hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(_hb_buffer, &glyph_count);
-        hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(_hb_buffer, &glyph_count);
+        hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(_hb_buffer.get(), &glyph_count);
+        hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(_hb_buffer.get(), &glyph_count);
         // Ignore HB measurements when there is a single glyph not found,
         // as it may be found in a fallback font
         int codepoint_notfound_nb = 0;
@@ -1710,8 +1703,8 @@ bool LVFreeTypeFace::getGlyphExtraMetric( glyph_extra_metric_t metric, lUInt32 c
     case glyph_metric_math_italics_correction:
         {
             #if USE_HARFBUZZ==1
-            if ( hb_ot_math_has_data(hb_font_get_face(_hb_font)) ) {
-                value = hb_ot_math_get_glyph_italics_correction(_hb_font, glyph_index);
+            if ( hb_ot_math_has_data(hb_font_get_face(_hb_font.get())) ) {
+                value = hb_ot_math_get_glyph_italics_correction(_hb_font.get(), glyph_index);
                 if ( scaled_to_px )
                     value = FONT_METRIC_TO_PX(value);
                 return true;
@@ -1723,8 +1716,8 @@ bool LVFreeTypeFace::getGlyphExtraMetric( glyph_extra_metric_t metric, lUInt32 c
     case glyph_metric_math_top_accent_attachment:
         {
             #if USE_HARFBUZZ==1
-            if ( hb_ot_math_has_data(hb_font_get_face(_hb_font)) ) {
-                value = hb_ot_math_get_glyph_top_accent_attachment(_hb_font, glyph_index);
+            if ( hb_ot_math_has_data(hb_font_get_face(_hb_font.get())) ) {
+                value = hb_ot_math_get_glyph_top_accent_attachment(_hb_font.get(), glyph_index);
                 if ( scaled_to_px )
                     value = FONT_METRIC_TO_PX(value);
                 return true;
@@ -1793,7 +1786,7 @@ lUInt16 LVFreeTypeFace::measureText(const lChar32 *text,
         unsigned int glyph_count;
         hb_glyph_info_t* glyph_info = 0;
         hb_glyph_position_t* glyph_pos = 0;
-        hb_buffer_clear_contents(_hb_buffer);
+        hb_buffer_clear_contents(_hb_buffer.get());
 
         // hb_buffer_set_replacement_codepoint(_hb_buffer, def_char);
         // /\ This would just set the codepoint to use when parsing
@@ -1821,45 +1814,45 @@ lUInt16 LVFreeTypeFace::measureText(const lChar32 *text,
         // codepoint, re-shape with filterChar()...
         if ( fallbackFont != NULL ) { // It has a fallback font, add chars as-is
             for (i = 0; i < len; i++) {
-                hb_buffer_add(_hb_buffer, (hb_codepoint_t)(text[i]), i);
+                hb_buffer_add(_hb_buffer.get(), (hb_codepoint_t)(text[i]), i);
             }
         }
         else { // No fallback font, check codepoint presence or get replacement char
             for (i = 0; i < len; i++) {
-                hb_buffer_add(_hb_buffer, (hb_codepoint_t)filterChar(text[i], def_char), i);
+                hb_buffer_add(_hb_buffer.get(), (hb_codepoint_t)filterChar(text[i], def_char), i);
             }
         }
         // Note: hb_buffer_add_codepoints(_hb_buffer, (hb_codepoint_t*)text, len, 0, len)
         // would do the same kind of loop we did above, so no speedup gain using it; and we
         // get to be sure of the cluster initial value we set to each of our added chars.
-        hb_buffer_set_content_type(_hb_buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+        hb_buffer_set_content_type(_hb_buffer.get(), HB_BUFFER_CONTENT_TYPE_UNICODE);
 
         // If we are provided with direction and hints, let harfbuzz know
         if ( hints ) {
             if ( hints & LFNT_HINT_DIRECTION_KNOWN ) {
                 if ( hints & LFNT_HINT_DIRECTION_IS_RTL )
-                    hb_buffer_set_direction(_hb_buffer, HB_DIRECTION_RTL);
+                    hb_buffer_set_direction(_hb_buffer.get(), HB_DIRECTION_RTL);
                 else
-                    hb_buffer_set_direction(_hb_buffer, HB_DIRECTION_LTR);
+                    hb_buffer_set_direction(_hb_buffer.get(), HB_DIRECTION_LTR);
             }
             int hb_flags = HB_BUFFER_FLAG_DEFAULT; // (hb_buffer_flags_t won't let us do |= )
             if ( hints & LFNT_HINT_BEGINS_PARAGRAPH )
                 hb_flags |= HB_BUFFER_FLAG_BOT;
             if ( hints & LFNT_HINT_ENDS_PARAGRAPH )
                 hb_flags |= HB_BUFFER_FLAG_EOT;
-            hb_buffer_set_flags(_hb_buffer, (hb_buffer_flags_t)hb_flags);
+            hb_buffer_set_flags(_hb_buffer.get(), (hb_buffer_flags_t)hb_flags);
         }
         if ( lang_cfg ) {
-            hb_buffer_set_language(_hb_buffer, lang_cfg->getHBLanguage());
+            hb_buffer_set_language(_hb_buffer.get(), lang_cfg->getHBLanguage());
         }
         // Let HB guess what's not been set (script, direction, language)
-        hb_buffer_guess_segment_properties(_hb_buffer);
+        hb_buffer_guess_segment_properties(_hb_buffer.get());
 
         // Some additional care might need to be taken, see:
         //   https://www.w3.org/TR/css-text-3/#letter-spacing-property
         if ( letter_spacing_w != 0 ) {
             // Don't apply letter-spacing if the script is cursive
-            hb_script_t script = hb_buffer_get_script(_hb_buffer);
+            hb_script_t script = hb_buffer_get_script(_hb_buffer.get());
             if ( isHBScriptCursive(script) )
                 letter_spacing_w = 0;
         }
@@ -1869,11 +1862,11 @@ lUInt16 LVFreeTypeFace::measureText(const lChar32 *text,
         // cf in *some* minikin repositories: libs/minikin/Layout.cpp
 
         // Shape
-        hb_shape(_hb_font, _hb_buffer, _hb_features.ptr(), (unsigned int)_hb_features.length());
+        hb_shape(_hb_font.get(), _hb_buffer.get(), _hb_features.ptr(), (unsigned int)_hb_features.length());
 
         // Harfbuzz has guessed and set a direction even if we did not provide one.
         bool is_rtl = false;
-        if ( hb_buffer_get_direction(_hb_buffer) == HB_DIRECTION_RTL ) {
+        if ( hb_buffer_get_direction(_hb_buffer.get()) == HB_DIRECTION_RTL ) {
             is_rtl = true;
             // "For buffers in the right-to-left (RTL) or bottom-to-top (BTT) text
             // flow direction, the directionality of the buffer itself is reversed
@@ -1886,13 +1879,13 @@ lUInt16 LVFreeTypeFace::measureText(const lChar32 *text,
             // looks more natural (like it happens when LTR).
             // But hb_buffer_reverse_clusters() is required to have the clusters
             // ordered as our text indices, so we can map them back to our text.
-            hb_buffer_reverse_clusters(_hb_buffer);
+            hb_buffer_reverse_clusters(_hb_buffer.get());
         }
         (void)is_rtl;
 
-        glyph_count = hb_buffer_get_length(_hb_buffer);
-        glyph_info = hb_buffer_get_glyph_infos(_hb_buffer, 0);
-        glyph_pos = hb_buffer_get_glyph_positions(_hb_buffer, 0);
+        glyph_count = hb_buffer_get_length(_hb_buffer.get());
+        glyph_info = hb_buffer_get_glyph_infos(_hb_buffer.get(), 0);
+        glyph_pos = hb_buffer_get_glyph_positions(_hb_buffer.get(), 0);
 
         if (_scale_mul != 1 || _scale_div != 1) {
             for (i = 0; i < (int)glyph_count; i++) {
@@ -1907,7 +1900,7 @@ lUInt16 LVFreeTypeFace::measureText(const lChar32 *text,
             printf("MTHB >>> measureText %x len %d is_rtl=%d [%s]\n", text, len, is_rtl, _faceName.c_str());
             for (i = 0; i < (int)glyph_count; i++) {
                 char glyphname[32];
-                hb_font_get_glyph_name(_hb_font, glyph_info[i].codepoint, glyphname, sizeof(glyphname));
+                hb_font_get_glyph_name(_hb_font.get(), glyph_info[i].codepoint, glyphname, sizeof(glyphname));
                 printf("MTHB g%d c%d(=t:%x) [%x %s]\tadvance=(%d,%d)", i, glyph_info[i].cluster,
                             text[glyph_info[i].cluster], glyph_info[i].codepoint, glyphname,
                             FONT_METRIC_TO_PX(glyph_pos[i].x_advance), FONT_METRIC_TO_PX(glyph_pos[i].y_advance)
@@ -2533,9 +2526,9 @@ int LVFreeTypeFace::getExtraMetric(font_extra_metric_t metric, bool scaled_to_px
         bool has_ot_math_data = false;
 #if MATHML_SUPPORT==1
         #if USE_HARFBUZZ==1
-            has_ot_math_data = hb_ot_math_has_data(hb_font_get_face(_hb_font));
+            has_ot_math_data = hb_ot_math_has_data(hb_font_get_face(_hb_font.get()));
             #define VALUE_FROM_OT_MATH_CONSTANT(x) if ( has_ot_math_data ) { \
-                    value = hb_ot_math_get_constant(_hb_font, HB_OT_MATH_CONSTANT_##x); \
+                    value = hb_ot_math_get_constant(_hb_font.get(), HB_OT_MATH_CONSTANT_##x); \
                     value_set = true; }
         #else
             #define VALUE_FROM_OT_MATH_CONSTANT(x)
@@ -2614,7 +2607,7 @@ int LVFreeTypeFace::getExtraMetric(font_extra_metric_t metric, bool scaled_to_px
         case font_metric_underline_thickness: {
             #if USE_HARFBUZZ==1
             // This will make HB fetch the value from post->table.underlineThickness
-            if ( hb_ot_metrics_get_position(_hb_font, HB_OT_METRICS_TAG_UNDERLINE_SIZE, &value) )
+            if ( hb_ot_metrics_get_position(_hb_font.get(), HB_OT_METRICS_TAG_UNDERLINE_SIZE, &value) )
                 value_set = true;
             #endif
             if ( !value_set )
@@ -2876,7 +2869,7 @@ int LVFreeTypeFace::getExtraMetric(font_extra_metric_t metric, bool scaled_to_px
 
 bool LVFreeTypeFace::hasOTMathSupport() const {
 #if USE_HARFBUZZ==1
-    return hb_ot_math_has_data(hb_font_get_face(_hb_font));
+    return hb_ot_math_has_data(hb_font_get_face(_hb_font.get()));
 #endif
     return false;
 }
@@ -2923,21 +2916,21 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
         unsigned int glyph_count;
         hb_glyph_info_t *glyph_info = 0;
         hb_glyph_position_t *glyph_pos = 0;
-        hb_buffer_clear_contents(_hb_buffer);
+        hb_buffer_clear_contents(_hb_buffer.get());
 
 
         // Fill HarfBuzz buffer
         if ( fallbackFont ) { // It has a fallback font, add chars as-is
             for (i = 0; i < (unsigned int)len; i++) {
-                hb_buffer_add(_hb_buffer, (hb_codepoint_t)(text[i]), i);
+                hb_buffer_add(_hb_buffer.get(), (hb_codepoint_t)(text[i]), i);
             }
         }
         else { // No fallback font, check codepoint presence or get replacement char
             for (i = 0; i < (unsigned int)len; i++) {
-                hb_buffer_add(_hb_buffer, (hb_codepoint_t)filterChar(text[i], def_char), i);
+                hb_buffer_add(_hb_buffer.get(), (hb_codepoint_t)filterChar(text[i], def_char), i);
             }
         }
-        hb_buffer_set_content_type(_hb_buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+        hb_buffer_set_content_type(_hb_buffer.get(), HB_BUFFER_CONTENT_TYPE_UNICODE);
 
         // If we are provided with direction and hints, let harfbuzz know
         if ( flags ) {
@@ -2946,41 +2939,41 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
                 // harfbuzz wouldn't be able to determine its direction and would render
                 // it LTR - while it could be in some RTL text and needs to be mirrored.
                 if ( flags & LFNT_HINT_DIRECTION_IS_RTL )
-                    hb_buffer_set_direction(_hb_buffer, HB_DIRECTION_RTL);
+                    hb_buffer_set_direction(_hb_buffer.get(), HB_DIRECTION_RTL);
                 else
-                    hb_buffer_set_direction(_hb_buffer, HB_DIRECTION_LTR);
+                    hb_buffer_set_direction(_hb_buffer.get(), HB_DIRECTION_LTR);
             }
             int hb_flags = HB_BUFFER_FLAG_DEFAULT; // (hb_buffer_flags_t won't let us do |= )
             if ( flags & LFNT_HINT_BEGINS_PARAGRAPH )
                 hb_flags |= HB_BUFFER_FLAG_BOT;
             if ( flags & LFNT_HINT_ENDS_PARAGRAPH )
                 hb_flags |= HB_BUFFER_FLAG_EOT;
-            hb_buffer_set_flags(_hb_buffer, (hb_buffer_flags_t)hb_flags);
+            hb_buffer_set_flags(_hb_buffer.get(), (hb_buffer_flags_t)hb_flags);
         }
         if ( lang_cfg )
-            hb_buffer_set_language(_hb_buffer, lang_cfg->getHBLanguage());
+            hb_buffer_set_language(_hb_buffer.get(), lang_cfg->getHBLanguage());
         // Let HB guess what's not been set (script, direction, language)
-        hb_buffer_guess_segment_properties(_hb_buffer);
+        hb_buffer_guess_segment_properties(_hb_buffer.get());
 
         // See measureText() for details
         if ( letter_spacing_w != 0 ) {
             // Don't apply letter-spacing if the script is cursive
-            hb_script_t script = hb_buffer_get_script(_hb_buffer);
+            hb_script_t script = hb_buffer_get_script(_hb_buffer.get());
             if ( isHBScriptCursive(script) )
                 letter_spacing_w = 0;
         }
 
         // Shape
-        hb_shape(_hb_font, _hb_buffer, _hb_features.ptr(), (unsigned int)_hb_features.length());
+        hb_shape(_hb_font.get(), _hb_buffer.get(), _hb_features.ptr(), (unsigned int)_hb_features.length());
 
         // If direction is RTL, hb_shape() has reversed the order of the glyphs, so
         // they are in visual order and ready to be iterated and drawn. So,
         // we do not revert them, unlike in measureText().
-        bool is_rtl = hb_buffer_get_direction(_hb_buffer) == HB_DIRECTION_RTL;
+        bool is_rtl = hb_buffer_get_direction(_hb_buffer.get()) == HB_DIRECTION_RTL;
 
-        glyph_count = hb_buffer_get_length(_hb_buffer);
-        glyph_info = hb_buffer_get_glyph_infos(_hb_buffer, 0);
-        glyph_pos = hb_buffer_get_glyph_positions(_hb_buffer, 0);
+        glyph_count = hb_buffer_get_length(_hb_buffer.get());
+        glyph_info = hb_buffer_get_glyph_infos(_hb_buffer.get(), 0);
+        glyph_pos = hb_buffer_get_glyph_positions(_hb_buffer.get(), 0);
 
         if (_scale_mul != 1 || _scale_div != 1) {
             for (i = 0; i < glyph_count; i++) {
@@ -2995,7 +2988,7 @@ int LVFreeTypeFace::DrawTextString(LVDrawBuf *buf, int x, int y, const lChar32 *
             printf("DTHB >>> drawTextString %x len %d is_rtl=%d [%s]\n", text, len, is_rtl, _faceName.c_str());
             for (i = 0; i < glyph_count; i++) {
                 char glyphname[32];
-                hb_font_get_glyph_name(_hb_font, glyph_info[i].codepoint, glyphname, sizeof(glyphname));
+                hb_font_get_glyph_name(_hb_font.get(), glyph_info[i].codepoint, glyphname, sizeof(glyphname));
                 printf("DTHB g%d c%d(=t:%x) [%x %s]\tadvance=(%d,%d)", i, glyph_info[i].cluster,
                             text[glyph_info[i].cluster], glyph_info[i].codepoint, glyphname,
                             FONT_METRIC_TO_PX(glyph_pos[i].x_advance), FONT_METRIC_TO_PX(glyph_pos[i].y_advance));
@@ -3384,10 +3377,7 @@ void LVFreeTypeFace::Clear() {
     LVLock lock(_mutex);
     clearCache();
 #if USE_HARFBUZZ == 1
-    if (_hb_font) {
-        hb_font_destroy(_hb_font);
-        _hb_font = 0;
-    }
+    _hb_font.reset();
     _hb_features.clear();
 #endif
     if (_face) {

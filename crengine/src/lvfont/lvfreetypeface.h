@@ -43,6 +43,7 @@
 
 #include <array>
 #include <memory>
+#include <utility>
 
 // define to filter out all fonts except .ttf
 //#define LOAD_TTF_FONTS_ONLY
@@ -65,6 +66,25 @@
 #include <hb.h>
 #include <hb-ft.h>
 #include "lvhashtable.h"
+
+struct HarfBuzzFontDeleter {
+    void operator()(hb_font_t *font) const {
+        if (font)
+            hb_font_destroy(font);
+    }
+};
+
+struct HarfBuzzBufferDeleter {
+    void operator()(hb_buffer_t *buffer) const {
+        if (buffer)
+            hb_buffer_destroy(buffer);
+    }
+};
+
+using HarfBuzzFontOwner =
+        std::unique_ptr<hb_font_t, HarfBuzzFontDeleter>;
+using HarfBuzzBufferOwner =
+        std::unique_ptr<hb_buffer_t, HarfBuzzBufferDeleter>;
 
 #endif
 
@@ -175,8 +195,8 @@ protected:
     FT_Pos         _scale_div;                  // only for fixed-size color fonts
     int _features; // requested OpenType features bitmap
 #if USE_HARFBUZZ == 1
-    hb_font_t *_hb_font;
-    hb_buffer_t *_hb_buffer;
+    HarfBuzzFontOwner _hb_font;
+    HarfBuzzBufferOwner _hb_buffer;
     LVArray<hb_feature_t> _hb_features;
     // For use with SHAPING_MODE_HARFBUZZ:
     LVFontLocalGlyphCache _glyph_cache2;

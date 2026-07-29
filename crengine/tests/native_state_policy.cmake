@@ -10607,6 +10607,63 @@ forbid_source_text(
   "FreeType metric page lookup must not alias high codepoints"
 )
 
+# --- HarfBuzz font/buffer ownership ---
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "using HarfBuzzFontOwner ="
+  "HarfBuzz fonts must use deleter-aware exclusive ownership"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "using HarfBuzzBufferOwner ="
+  "HarfBuzz buffers must use deleter-aware exclusive ownership"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "HarfBuzzFontOwner _hb_font"
+  "FreeType faces must own their HarfBuzz font automatically"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "HarfBuzzBufferOwner _hb_buffer"
+  "FreeType faces must own their HarfBuzz scratch buffer automatically"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "HarfBuzzFontOwner candidate(hb_ft_font_create("
+  "HarfBuzz font replacement must begin as a scoped candidate"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "_hb_font = std::move(candidate)"
+  "validated HarfBuzz fonts must publish by ownership transfer"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "_hb_font.reset()"
+  "HarfBuzz fonts must release before their backing FreeType face"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "hb_font_t *_hb_font"
+  "FreeType faces must not retain a raw HarfBuzz font owner"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "hb_buffer_t *_hb_buffer"
+  "FreeType faces must not retain a raw HarfBuzz buffer owner"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "hb_font_destroy(_hb_font"
+  "HarfBuzz font replacement and teardown must remain automatic"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "hb_buffer_destroy(_hb_buffer"
+  "HarfBuzz buffer teardown must remain automatic"
+)
+
 # --- FreeType color-glyph scaling workspace ownership ---
 require_source_text(
   "${FREETYPE_FACE_SOURCE}"
