@@ -6972,6 +6972,41 @@ require_source_text(
   "PocketBook window managers must adopt their created screen"
 )
 require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString32 translateString("
+  "PocketBook translations must implement the current Unicode-width contract"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "static bool readPocketBookBatteryStatus("
+  "PocketBook battery reads must retain one validated adapter"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "static bool updatePocketBookBatteryState(LVDocView *docView)"
+  "PocketBook battery updates must retain an explicit current-API adapter"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CR_BATTERY_STATE_CHARGING"
+  "PocketBook battery updates must preserve charging state"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "return docView->setBatteryState("
+  "PocketBook battery updates must use the current state tuple"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "virtual lString16 translateString"
+  "PocketBook translations must not regress to the legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "setBatteryState(GetBatteryPower())"
+  "PocketBook battery calls must not regress to the retired one-value API"
+)
+require_source_text(
   "${NANOX_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "NanoX window managers must adopt a newly created screen"

@@ -77,6 +77,34 @@ static void translate_timer();
 static void rotate_timer();
 static void paused_rotate_timer();
 
+static bool readPocketBookBatteryStatus(
+        int & percent,
+        bool & charging)
+{
+    percent = GetBatteryPower();
+    if (percent < 0)
+        return false;
+    charging = IsCharging() > 0;
+    return true;
+}
+
+static bool updatePocketBookBatteryState(LVDocView *docView)
+{
+    int chargeLevel = 0;
+    bool charging = false;
+    if (!readPocketBookBatteryStatus(
+                chargeLevel, charging))
+        return false;
+    const int state = charging
+            ? CR_BATTERY_STATE_CHARGING
+            : chargeLevel;
+    const int connection = charging
+            ? CR_BATTERY_CHARGER_AC
+            : CR_BATTERY_CHARGER_NO;
+    return docView->setBatteryState(
+            state, connection, chargeLevel);
+}
+
 class CRPocketBookGlobals
 {
 private :
@@ -285,14 +313,18 @@ protected:
     }
 public:
     /// translate string by key, return default value if not found
-    virtual lString16 translateString( const char * key, const char * defValue )
+    lString32 translateString(
+            const char * key,
+            const char * defValue ) override
     {
         CRLog::trace("Translate(%s)", key);
-        lString16 res;
+        lString32 res;
 
         if (key && key[0] == '@') {
             const char * res8 = GetLangText((char *)key);
-            res = Utf8ToUnicode( lString8(res8) );
+            res = res8 && res8[0]
+                    ? Utf8ToUnicode(lString8(res8))
+                    : Utf8ToUnicode(lString8(defValue));
         } else {
             res = Utf8ToUnicode( lString8(defValue) );
         }
@@ -301,7 +333,7 @@ public:
 
     static CRPocketBookWindowManager * instance;
 
-    virtual ~CRPocketBookWindowManager()
+    ~CRPocketBookWindowManager() override
     {
         instance = NULL;
     }
@@ -343,7 +375,7 @@ public:
     }
 
     // runs event loop
-    virtual int runEventLoop()
+    int runEventLoop() override
     {
         return 0; // NO EVENT LOOP AVAILABLE
     }
@@ -357,10 +389,12 @@ public:
         return true;
     }
 
-    bool getBatteryStatus(int & percent, bool & charging) {
-        charging = IsCharging() > 0; // TODO: find out values returned by the IsCharging() function.
-        percent = GetBatteryPower(); // It seems that the GetBatteryPower() returns what needed here
-        return true;
+    bool getBatteryStatus(
+            int & percent,
+            bool & charging) override
+    {
+        return readPocketBookBatteryStatus(
+                percent, charging);
     }
 
     int hasKeyMapping(int key, int flags) {
@@ -378,7 +412,9 @@ public:
         }
         return -1;
     }
-    bool onKeyPressed( int key, int flags )
+    bool onKeyPressed(
+            int key,
+            int flags ) override
     {
         CRLog::trace("CRPocketBookWindowManager::onKeyPressed(%d, %d)", key, flags);
         if (pbGlobals->isTranslateTimerRunning()) {
@@ -2544,7 +2580,7 @@ int InitDoc(const char *exename, char *fileName)
                     Utf8ToUnicode(lString8(STATEPATH"/cr3/.cr3hist"))) )
             CRLog::error("Cannot read history file");
         LVDocView * _docview = main_win->getDocView();
-        _docview->setBatteryState(GetBatteryPower());
+        updatePocketBookBatteryState(_docview);
         wm->activateWindow(std::move(mainWindowOwner));
         wm->restoreOrientation(orient);
         if ( !main_win->loadDocument(
