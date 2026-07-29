@@ -495,7 +495,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         main_win->setHelpFile( exedir + "cr3-manual-ru.fb2" );
         HyphMan::initDictionaries( exedir + "hyph\\" );
         main_win->loadDefaultCover( exedir + "cr3_def_cover.png" );
-		main_win->setBookmarkDir(lString16("c:\\cr3\\bookmarks\\"));
+		main_win->setBookmarkDir(U"c:\\cr3\\bookmarks\\");
 		lString8 exedir8 = UnicodeToUtf8( exedir );
 		const char * dirs[] = {
 			exedir8.c_str(),

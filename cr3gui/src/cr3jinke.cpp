@@ -729,12 +729,12 @@ int InitDoc(char *fileName)
     InitCREngineLog("/root/abook/crengine/crlog.ini");
 #endif
 
-    lString16 bookmarkDir("/root/abook/bookmarks/");
+    lString32 bookmarkDir(U"/root/abook/bookmarks/");
     {
         lString8 fn(fileName);
         if ( fn.startsWith(lString8("/home")) ) {
             strcpy( history_file_name, "/home/.cr3hist" );
-            bookmarkDir = lString16("/home/bookmarks/");
+            bookmarkDir = U"/home/bookmarks/";
         }
         CRLog::info( "History file name: %s", history_file_name );
     }

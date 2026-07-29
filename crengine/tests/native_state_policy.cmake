@@ -7114,8 +7114,8 @@ require_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_HEADER}"
-  "setBookmarkDir(Utf16ToUnicode(dir));"
-  "legacy bookmark paths must cross an explicit compatibility boundary"
+  "void setBookmarkDir( lString32 dir )"
+  "bookmark paths must use the current string width"
 )
 require_source_text(
   "${MAIN_WINDOW_HEADER}"
@@ -7196,6 +7196,26 @@ forbid_source_text(
   "${MAIN_WINDOW_HEADER}"
   "lString16 getBookmarkDir"
   "main windows must not expose an unused legacy bookmark-path accessor"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "void setBookmarkDir( lString16"
+  "main windows must not expose a legacy bookmark-path adapter"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "lString16 bookmarkDir"
+  "GUI platform bookmark directories must use the current string width"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "setBookmarkDir( lString16"
+  "GUI platform bookmark-directory callers must use current-width paths"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "setBookmarkDir(lString16"
+  "GUI platform bookmark-directory callers must not use compact legacy adapters"
 )
 forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"

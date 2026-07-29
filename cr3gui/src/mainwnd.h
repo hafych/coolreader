@@ -125,10 +125,6 @@ protected:
     time_t _loadFileStart;
 public:
     void setBookmarkDir( lString32 dir ) { _bookmarkDir = dir; }
-    void setBookmarkDir( lString16 dir )
-    {
-        setBookmarkDir(Utf16ToUnicode(dir));
-    }
     void flush() override;
     bool loadDocument( lString32 filename );
     bool loadDocument( lString16 filename )

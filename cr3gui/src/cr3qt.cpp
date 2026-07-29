@@ -429,7 +429,8 @@ int main(int argc, char **argv)
         if ( !main_win->loadDictConfig(  lString16("/media/sd/crengine/dict/dictd.conf") ) )
             main_win->loadDictConfig( lString16("/usr/share/cr3/dict/dictd.conf") );
         if ( bmkdir!=NULL )
-            main_win->setBookmarkDir( lString16(bmkdir) );
+            main_win->setBookmarkDir(
+                    Utf8ToUnicode(lString8(bmkdir)));
 
     #define SEPARATE_INI_FILES
 

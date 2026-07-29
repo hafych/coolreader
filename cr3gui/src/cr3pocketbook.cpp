@@ -2470,7 +2470,8 @@ int InitDoc(const char *exename, char *fileName)
         if ( !main_win->loadCSS(lString16(CONFIGPATH"/cr3/")   + lString16(css_file_name) ) )
             if ( !main_win->loadCSS(  lString16(USERDATA"/share/cr3/" ) + lString16(css_file_name) ) )
                 main_win->loadCSS( lString16(USERDATA2"/share/cr3/" ) + lString16(css_file_name) );
-        main_win->setBookmarkDir(lString16(FLASHDIR"/cr3_notes/"));
+        main_win->setBookmarkDir(
+                Utf8ToUnicode(lString8(FLASHDIR"/cr3_notes/")));
         CRLog::trace("choosing init file...");
         static const lChar16 * dirs[] = {
             L""CONFIGPATH"/cr3/",
