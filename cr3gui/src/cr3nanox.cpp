@@ -1257,7 +1257,7 @@ int InitDoc(char *fileName)
 {
 
 
-    static const lChar16 * css_file_name = L"fb2.css"; // fb2
+    lString32 cssFileName(U"fb2.css");
 
     CRLog::trace("InitDoc()");
 #ifdef __i386__
@@ -1329,28 +1329,28 @@ int InitDoc(char *fileName)
 #ifdef SEPARATE_INI_FILES
     if ( strstr(fileName, ".txt")!=NULL || strstr(fileName, ".tcr")!=NULL) {
         ini_fname = L"cr3-txt.ini";
-        css_file_name = L"txt.css";
+        cssFileName = U"txt.css";
     } else if ( strstr(fileName, ".rtf")!=NULL ) {
         ini_fname = L"cr3-rtf.ini";
-        css_file_name = L"rtf.css";
+        cssFileName = U"rtf.css";
     } else if ( strstr(fileName, ".htm")!=NULL ) {
         ini_fname = L"cr3-htm.ini";
-        css_file_name = L"htm.css";
+        cssFileName = U"htm.css";
     } else if ( strstr(fileName, ".epub")!=NULL ) {
         ini_fname = L"cr3-epub.ini";
-        css_file_name = L"epub.css";
+        cssFileName = U"epub.css";
     } else if ( strstr(fileName, ".doc")!=NULL ) {
         ini_fname = L"cr3-doc.ini";
-        css_file_name = L"doc.css";
+        cssFileName = U"doc.css";
     } else if ( strstr(fileName, ".chm")!=NULL ) {
         ini_fname = L"cr3-chm.ini";
-        css_file_name = L"chm.css";
+        cssFileName = U"chm.css";
     } else if ( strstr(fileName, ".pdb")!=NULL ) {
         ini_fname = L"cr3-txt.ini";
-        css_file_name = L"txt.css";
+        cssFileName = U"txt.css";
     } else {
         ini_fname = L"cr3-fb2.ini";
-        css_file_name = L"fb2.css";
+        cssFileName = U"fb2.css";
     }
 #endif
 
@@ -1416,9 +1416,12 @@ int InitDoc(char *fileName)
                         U"/home/crengine/cr3_def_cover.png") )
                 main_win->loadDefaultCover(
                         U"/root/crengine/cr3_def_cover.png");
-        if ( !main_win->loadCSS(  lString16("/root/abook/crengine/" ) + lString16(css_file_name) ) )
-            if ( !main_win->loadCSS(  lString16("/home/crengine/" ) + lString16(css_file_name) ) )
-                main_win->loadCSS( lString16("/root/crengine/" ) + lString16(css_file_name) );
+        if ( !main_win->loadCSS(
+                    lString32(U"/root/abook/crengine/") + cssFileName) )
+            if ( !main_win->loadCSS(
+                        lString32(U"/home/crengine/") + cssFileName) )
+                main_win->loadCSS(
+                        lString32(U"/root/crengine/") + cssFileName);
         main_win->setBookmarkDir( bookmarkDir );
         CRLog::trace("choosing init file...");
         static const lChar16 * dirs[] = {

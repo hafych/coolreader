@@ -133,10 +133,6 @@ public:
     }
     bool loadDefaultCover( lString32 filename );
     bool loadCSS( lString32 filename );
-    bool loadCSS( lString16 filename )
-    {
-        return loadCSS(Utf16ToUnicode(filename));
-    }
     bool loadSettings( lString32 filename );
     bool loadSettings( lString16 filename )
     {

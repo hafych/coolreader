@@ -2360,7 +2360,7 @@ static void loadPocketBookKeyMaps(CRGUIWindowManager & winman)
 
 int InitDoc(const char *exename, char *fileName)
 {
-    static const lChar16 * css_file_name = L"fb2.css"; // fb2
+    lString32 cssFileName(U"fb2.css");
 
 #ifdef __i386__
     CRLog::setStdoutLogger();
@@ -2399,28 +2399,28 @@ int InitDoc(const char *exename, char *fileName)
 #ifdef SEPARATE_INI_FILES
     if ( strstr(fileName, ".txt")!=NULL || strstr(fileName, ".tcr")!=NULL) {
         ini_fname = L"cr3-txt.ini";
-        css_file_name = L"txt.css";
+        cssFileName = U"txt.css";
     } else if ( strstr(fileName, ".rtf")!=NULL ) {
         ini_fname = L"cr3-rtf.ini";
-        css_file_name = L"rtf.css";
+        cssFileName = U"rtf.css";
     } else if ( strstr(fileName, ".htm")!=NULL ) {
         ini_fname = L"cr3-htm.ini";
-        css_file_name = L"htm.css";
+        cssFileName = U"htm.css";
     } else if ( strstr(fileName, ".epub")!=NULL ) {
         ini_fname = L"cr3-epub.ini";
-        css_file_name = L"epub.css";
+        cssFileName = U"epub.css";
     } else if ( strstr(fileName, ".doc")!=NULL ) {
         ini_fname = L"cr3-doc.ini";
-        css_file_name = L"doc.css";
+        cssFileName = U"doc.css";
     } else if ( strstr(fileName, ".chm")!=NULL ) {
         ini_fname = L"cr3-chm.ini";
-        css_file_name = L"chm.css";
+        cssFileName = U"chm.css";
     } else if ( strstr(fileName, ".pdb")!=NULL ) {
         ini_fname = L"cr3-txt.ini";
-        css_file_name = L"txt.css";
+        cssFileName = U"txt.css";
     } else {
         ini_fname = L"cr3-fb2.ini";
-        css_file_name = L"fb2.css";
+        cssFileName = U"fb2.css";
     }
 #endif
 
@@ -2474,9 +2474,15 @@ int InitDoc(const char *exename, char *fileName)
                 main_win->loadDefaultCover(
                         Utf8ToUnicode(lString8(
                                 USERDATA"/share/cr3/cr3_def_cover.png")));
-        if ( !main_win->loadCSS(lString16(CONFIGPATH"/cr3/")   + lString16(css_file_name) ) )
-            if ( !main_win->loadCSS(  lString16(USERDATA"/share/cr3/" ) + lString16(css_file_name) ) )
-                main_win->loadCSS( lString16(USERDATA2"/share/cr3/" ) + lString16(css_file_name) );
+        if ( !main_win->loadCSS(
+                    Utf8ToUnicode(lString8(CONFIGPATH"/cr3/"))
+                            + cssFileName) )
+            if ( !main_win->loadCSS(
+                        Utf8ToUnicode(lString8(USERDATA"/share/cr3/"))
+                                + cssFileName) )
+                main_win->loadCSS(
+                        Utf8ToUnicode(lString8(USERDATA2"/share/cr3/"))
+                                + cssFileName);
         main_win->setBookmarkDir(
                 Utf8ToUnicode(lString8(FLASHDIR"/cr3_notes/")));
         CRLog::trace("choosing init file...");

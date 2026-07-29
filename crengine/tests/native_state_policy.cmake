@@ -7119,8 +7119,8 @@ require_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_HEADER}"
-  "return loadCSS(Utf16ToUnicode(filename));"
-  "legacy stylesheet paths must cross an explicit compatibility boundary"
+  "bool loadCSS( lString32 filename );"
+  "stylesheet paths must use the current string width"
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
@@ -7211,6 +7211,26 @@ forbid_source_text(
   "${MAIN_WINDOW_HEADER}"
   "bool loadDefaultCover( lString16"
   "main windows must not expose a legacy default-cover path adapter"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadCSS( lString16"
+  "main windows must not expose a legacy stylesheet path adapter"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadCSS( lString16"
+  "GUI platform stylesheet callers must use current-width paths"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadCSS(lString16"
+  "GUI platform stylesheet callers must not use compact legacy adapters"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "lChar16 * css_file_name"
+  "GUI platform stylesheet names must use the current string width"
 )
 forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"

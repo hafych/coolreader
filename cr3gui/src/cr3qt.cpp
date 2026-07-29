@@ -425,8 +425,8 @@ int main(int argc, char **argv)
                     U"/media/sd/crengine/cr3_def_cover.png") )
             main_win->loadDefaultCover(
                     U"/usr/share/cr3/cr3_def_cover.png");
-        if ( !main_win->loadCSS(  lString16("/media/sd/crengine/fb2.css") ) )
-            main_win->loadCSS( lString16("/usr/share/cr3/fb2.css") );
+        if ( !main_win->loadCSS(U"/media/sd/crengine/fb2.css") )
+            main_win->loadCSS(U"/usr/share/cr3/fb2.css");
 
         if ( !main_win->loadDictConfig(  lString16("/media/sd/crengine/dict/dictd.conf") ) )
             main_win->loadDictConfig( lString16("/usr/share/cr3/dict/dictd.conf") );
