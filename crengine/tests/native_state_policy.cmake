@@ -54,6 +54,7 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/CMakeLists.txt" LEGACY_GUI_CMAKE_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.h" MODERN_QT_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.cpp" MODERN_QT_VIEW_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3qt/CMakeLists.txt" MODERN_QT_CMAKE_SOURCE)
 file(READ "${SOURCE_ROOT}/tinydict/tinydict.h" TINYDICT_HEADER)
 file(READ "${SOURCE_ROOT}/tinydict/tinydict.cpp" TINYDICT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
@@ -511,6 +512,26 @@ forbid_source_text(
   "${MODERN_QT_VIEW_SOURCE}"
   "delete _data"
   "the modern Qt view data must not return to manual deletion"
+)
+require_source_text(
+  "${MODERN_QT_CMAKE_SOURCE}"
+  "SET (EXTRA_LIBS \${STD_LIBS} Qt5::Core Qt5::Gui Qt5::Widgets )"
+  "modern Qt5 builds must link imported targets on every host"
+)
+require_source_text(
+  "${MODERN_QT_CMAKE_SOURCE}"
+  "SET (EXTRA_LIBS \${STD_LIBS} Qt6::Core Qt6::Gui Qt6::Widgets )"
+  "modern Qt6 builds must link imported targets on every host"
+)
+forbid_source_text(
+  "${MODERN_QT_CMAKE_SOURCE}"
+  "SET (EXTRA_LIBS \${QT_LIBRARIES}"
+  "modern macOS builds must not fall back to an empty Qt4 link variable"
+)
+forbid_source_text(
+  "${MODERN_QT_CMAKE_SOURCE}"
+  "-DUSE_FONTCONFIG=0"
+  "modern Qt targets must not override the detected fontconfig contract"
 )
 
 # --- value-owned rectangle clipping ---

@@ -40,10 +40,7 @@ SET (CR3_SOURCES
 )
 
 if(MAC)
-    ADD_DEFINITIONS(-DCR3_DATA_DIR=""
-          -DUSE_FONTCONFIG=0
-    ${CARBON_CFLAGS}
-    )
+    ADD_DEFINITIONS(-DCR3_DATA_DIR="" ${CARBON_CFLAGS})
 ELSEIF (UNIX)
     ADD_DEFINITIONS(-DCR3_DATA_DIR="${CMAKE_INSTALL_PREFIX}/share/cr3/")
 ELSE()
@@ -181,21 +178,13 @@ endif(WIN32)
 
 
 
-IF(MAC)
-    message("Qt libs = ${QT_LIBRARIES}")
-#    SET(FRAMEWORKS "-framework ApplicationServices -framework Carbon -framework AppKit")
-#/Developer/Qt/lib/libQtCore.a /Developer/Qt/lib/libQtGui.a ${FRAMEWORKS} 
-    SET (EXTRA_LIBS ${QT_LIBRARIES} ${STD_LIBS} )
-#${QT_LIBRARIES} 
-ELSE()
-    SET (EXTRA_LIBS ${STD_LIBS} ${QT_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} )
-ENDIF(MAC)
-
-
 if( ${GUI} STREQUAL QT6 )
     SET (EXTRA_LIBS ${STD_LIBS} Qt6::Core Qt6::Gui Qt6::Widgets )
-endif( ${GUI} STREQUAL QT6 )
-
+elseif( ${GUI} STREQUAL QT5 )
+    SET (EXTRA_LIBS ${STD_LIBS} Qt5::Core Qt5::Gui Qt5::Widgets )
+else()
+    SET (EXTRA_LIBS ${STD_LIBS} ${QT_LIBRARIES} )
+endif()
 
 TARGET_LINK_LIBRARIES(cr3 crengine tinydict ${EXTRA_LIBS})
 
