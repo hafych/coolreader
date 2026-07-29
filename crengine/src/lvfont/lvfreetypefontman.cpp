@@ -42,6 +42,38 @@
 
 #if (USE_FONTCONFIG == 1)
 #include <fontconfig/fontconfig.h>
+
+namespace {
+
+struct FontConfigObjectSetDeleter {
+    void operator()(FcObjectSet *objectSet) const {
+        if (objectSet)
+            FcObjectSetDestroy(objectSet);
+    }
+};
+
+struct FontConfigPatternDeleter {
+    void operator()(FcPattern *pattern) const {
+        if (pattern)
+            FcPatternDestroy(pattern);
+    }
+};
+
+struct FontConfigFontSetDeleter {
+    void operator()(FcFontSet *fontSet) const {
+        if (fontSet)
+            FcFontSetDestroy(fontSet);
+    }
+};
+
+using FontConfigObjectSetOwner =
+        std::unique_ptr<FcObjectSet, FontConfigObjectSetDeleter>;
+using FontConfigPatternOwner =
+        std::unique_ptr<FcPattern, FontConfigPatternDeleter>;
+using FontConfigFontSetOwner =
+        std::unique_ptr<FcFontSet, FontConfigFontSetDeleter>;
+
+}
 #endif
 
 #include "crlocaledata.h"
@@ -512,27 +544,33 @@ bool LVFreeTypeFontManager::initSystemFonts() {
         
         int facesFound = 0;
         
-        FcFontSet *fontset;
-        
-        FcObjectSet *os = FcObjectSetBuild(FC_FILE, FC_WEIGHT, FC_FAMILY,
+        FontConfigObjectSetOwner objectSet(FcObjectSetBuild(
+                                           FC_FILE, FC_WEIGHT, FC_FAMILY,
                                            FC_SLANT, FC_SPACING, FC_INDEX,
                                            FC_STYLE, FC_SCALABLE,
 #ifdef FC_COLOR
                                            FC_COLOR,
 #endif
-                                           NULL);
-        FcPattern *pat = FcPatternCreate();
-        //FcBool b = 1;
-        FcPatternAddBool(pat, FC_SCALABLE, 1);
-        
-        fontset = FcFontList(NULL, pat, os);
-        
-        FcPatternDestroy(pat);
-        FcObjectSetDestroy(os);
+                                           NULL));
+        FontConfigPatternOwner pattern(FcPatternCreate());
+        if (!objectSet || !pattern) {
+            CRLog::error("FONTCONFIG: cannot allocate font query");
+            return false;
+        }
+        if (!FcPatternAddBool(pattern.get(), FC_SCALABLE, FcTrue)) {
+            CRLog::error("FONTCONFIG: cannot configure scalable-font query");
+            return false;
+        }
+        FontConfigFontSetOwner fontSet(
+                FcFontList(NULL, pattern.get(), objectSet.get()));
+        if (!fontSet) {
+            CRLog::error("FONTCONFIG: cannot enumerate system fonts");
+            return false;
+        }
         
         // load fonts from file
-        CRLog::debug("FONTCONFIG: %d font files found", fontset->nfont);
-        for(int i = 0; i < fontset->nfont; i++) {
+        CRLog::debug("FONTCONFIG: %d font files found", fontSet->nfont);
+        for(int i = 0; i < fontSet->nfont; i++) {
             FcChar8 *s=(FcChar8*)"";
             FcChar8 *family=(FcChar8*)"";
             FcChar8 *style=(FcChar8*)"";
@@ -540,12 +578,12 @@ bool LVFreeTypeFontManager::initSystemFonts() {
             FcResult res;
 
             //FC_SCALABLE
-            //res = FcPatternGetBool( fontset->fonts[i], FC_OUTLINE, 0, (FcBool*)&b);
+            //res = FcPatternGetBool(fontSet->fonts[i], FC_OUTLINE, 0, (FcBool*)&b);
             //if(res != FcResultMatch)
             //    continue;
             //if ( !b )
             //    continue; // skip non-scalable fonts
-            res = FcPatternGetString(fontset->fonts[i], FC_FILE, 0, (FcChar8 **)&s);
+            res = FcPatternGetString(fontSet->fonts[i], FC_FILE, 0, (FcChar8 **)&s);
             if(res != FcResultMatch) {
                 continue;
             }
@@ -556,7 +594,7 @@ bool LVFreeTypeFontManager::initSystemFonts() {
                 continue;
             }
             int weight = FC_WEIGHT_REGULAR;
-            res = FcPatternGetInteger(fontset->fonts[i], FC_WEIGHT, 0, &weight);
+            res = FcPatternGetInteger(fontSet->fonts[i], FC_WEIGHT, 0, &weight);
             if(res != FcResultMatch) {
                 CRLog::debug("no FC_WEIGHT for %s", s);
                 //continue;
@@ -610,35 +648,35 @@ bool LVFreeTypeFontManager::initSystemFonts() {
                 break;
             }
             FcBool scalable = FcFalse;
-            res = FcPatternGetBool(fontset->fonts[i], FC_SCALABLE, 0, &scalable);
+            res = FcPatternGetBool(fontSet->fonts[i], FC_SCALABLE, 0, &scalable);
             if(res != FcResultMatch) {
                 CRLog::debug("no FC_SCALABLE for %s", s);
             }
             int index = 0;
-            res = FcPatternGetInteger(fontset->fonts[i], FC_INDEX, 0, &index);
+            res = FcPatternGetInteger(fontSet->fonts[i], FC_INDEX, 0, &index);
             if(res != FcResultMatch) {
                 CRLog::debug("no FC_INDEX for %s", s);
                 //continue;
             }
-            res = FcPatternGetString(fontset->fonts[i], FC_FAMILY, 0, (FcChar8 **)&family);
+            res = FcPatternGetString(fontSet->fonts[i], FC_FAMILY, 0, (FcChar8 **)&family);
             if(res != FcResultMatch) {
                 CRLog::debug("no FC_FAMILY for %s", s);
                 continue;
             }
-            res = FcPatternGetString(fontset->fonts[i], FC_STYLE, 0, (FcChar8 **)&style);
+            res = FcPatternGetString(fontSet->fonts[i], FC_STYLE, 0, (FcChar8 **)&style);
             if(res != FcResultMatch) {
                 CRLog::debug("no FC_STYLE for %s", s);
                 style = (FcChar8*)"";
                 //continue;
             }
             int slant = FC_SLANT_ROMAN;
-            res = FcPatternGetInteger(fontset->fonts[i], FC_SLANT, 0, &slant);
+            res = FcPatternGetInteger(fontSet->fonts[i], FC_SLANT, 0, &slant);
             if(res != FcResultMatch) {
                 CRLog::debug("no FC_SLANT for %s", s);
                 //continue;
             }
             int spacing = 0;
-            res = FcPatternGetInteger(fontset->fonts[i], FC_SPACING, 0, &spacing);
+            res = FcPatternGetInteger(fontSet->fonts[i], FC_SPACING, 0, &spacing);
             if(res != FcResultMatch) {
                 //CRLog::debug("no FC_SPACING for %s", s);
                 //continue;
@@ -709,7 +747,6 @@ bool LVFreeTypeFontManager::initSystemFonts() {
             
         }
         
-        FcFontSetDestroy(fontset);
         CRLog::info("FONTCONFIG: %d fonts registered", facesFound);
         
         const char * fallback_faces = "Arial Unicode MS; AR PL ShanHeiSun Uni; Liberation Sans; Roboto; DejaVu Sans; Noto Sans; Droid Sans";

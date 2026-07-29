@@ -1494,6 +1494,63 @@ require_source_text(
   "FreeType library ownership must retain repeated manager teardown coverage"
 )
 require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "using FontConfigObjectSetOwner ="
+  "FontConfig object-set queries must use scoped ownership"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "using FontConfigPatternOwner ="
+  "FontConfig patterns must use scoped ownership"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "using FontConfigFontSetOwner ="
+  "FontConfig enumeration results must use scoped ownership"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "if (!objectSet || !pattern)"
+  "FontConfig query allocation must fail before dereference"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FcPatternAddBool(pattern.get(), FC_SCALABLE, FcTrue)"
+  "FontConfig query construction must borrow its owned pattern"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FcFontList(NULL, pattern.get(), objectSet.get())"
+  "FontConfig enumeration must borrow both owned query inputs"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FcFontSet *fontset"
+  "FontConfig font-set results must not remain raw owners"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FcObjectSet *os"
+  "FontConfig object sets must not remain raw owners"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FcPattern *pat = FcPatternCreate"
+  "FontConfig patterns must not remain raw owners"
+)
+foreach(FONTCONFIG_TEARDOWN
+    "FcObjectSetDestroy\\("
+    "FcPatternDestroy\\("
+    "FcFontSetDestroy\\(")
+  string(REGEX MATCHALL "${FONTCONFIG_TEARDOWN}"
+    FONTCONFIG_TEARDOWNS "${FREETYPE_FONT_MANAGER_SOURCE}")
+  list(LENGTH FONTCONFIG_TEARDOWNS FONTCONFIG_TEARDOWN_COUNT)
+  if(NOT FONTCONFIG_TEARDOWN_COUNT EQUAL 1)
+    message(FATAL_ERROR
+      "FontConfig teardown must remain centralized in its RAII deleter")
+  endif()
+endforeach()
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testFontCacheOwnership()"
   "font-cache ownership must retain native lifecycle regression coverage"
