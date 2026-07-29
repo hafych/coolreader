@@ -7627,6 +7627,71 @@ require_source_text(
   "std::unique_ptr<CRLinksDialog> dlg ="
   "PocketBook link-dialog callers must retain factory ownership"
 )
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::make_unique<CRPocketBookQuickMenuWindow>("
+  "PocketBook quick-menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::make_unique<CRPocketBookRotateWindow>(_wm)"
+  "PocketBook rotation-window candidates must enter scoped ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::make_unique<CRPocketBookSearchWindow>(_wm)"
+  "PocketBook search-window candidates must enter scoped ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::make_unique<CRPocketBookPageSelectorWindow>("
+  "PocketBook page-selector candidates must enter scoped ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::make_unique<CRPocketBookContentsWindow>("
+  "PocketBook contents-window candidates must enter scoped ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<CRPbDictionaryProxyWindow> dlg ="
+  "PocketBook dictionary proxy candidates must enter scoped ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<CRMenu> dictsMenu = std::make_unique<CRMenu>("
+  "PocketBook dictionary-menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "_wm->activateWindow(std::move(dictsMenu));"
+  "PocketBook dictionary menus must transfer through owner-aware activation"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRPocketBookQuickMenuWindow *wnd = new"
+  "PocketBook quick-menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRSelNavigationDialog * dlg = new"
+  "PocketBook selection-navigation candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRPbDictionaryProxyWindow *dlg = new"
+  "PocketBook dictionary proxy candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRMenu * dictsMenu = new"
+  "PocketBook dictionary-menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "dictsMenu->addItem( new CRMenuItem"
+  "PocketBook dictionary items must not be published as raw candidates"
+)
 forbid_source_text(
   "${LINKS_DIALOG_HEADER}"
   "static CRLinksDialog * create("

@@ -1062,15 +1062,16 @@ public:
             }
         case PB_QUICK_MENU:
             {
-                CRPocketBookQuickMenuWindow *wnd = new CRPocketBookQuickMenuWindow(_wm,
-                                                                                   getQuickMenuBitmap(), (const char **)_strings3x3);
-                _wm->activateWindow(wnd);
+                _wm->activateWindow(
+                        std::make_unique<CRPocketBookQuickMenuWindow>(
+                                _wm, getQuickMenuBitmap(),
+                                (const char **)_strings3x3));
             }
             return true;
         case PB_CMD_ROTATE:
             {
-                CRPocketBookRotateWindow *wnd = new CRPocketBookRotateWindow(_wm);
-                _wm->activateWindow(wnd);
+                _wm->activateWindow(
+                        std::make_unique<CRPocketBookRotateWindow>(_wm));
             }
             return true;
         case PB_QUICK_MENU_SELECT:
@@ -1087,8 +1088,8 @@ public:
         case MCMD_SEARCH:
             {
                 _searchPattern.clear();
-                CRPocketBookSearchWindow *wnd = new CRPocketBookSearchWindow(_wm);
-                _wm->activateWindow(wnd);
+                _wm->activateWindow(
+                        std::make_unique<CRPocketBookSearchWindow>(_wm));
             }
             return true;
         case MCMD_SEARCH_FINDFIRST:
@@ -1098,8 +1099,9 @@ public:
                 if (pageIndex == -1)
                     pageIndex = findPagesText( _searchPattern, -1, 1 );
                 if ( pageIndex != -1 ) {
-                    CRSelNavigationDialog * dlg = new CRSelNavigationDialog( _wm, this, _searchPattern );
-                    _wm->activateWindow( dlg );
+                    _wm->activateWindow(
+                            std::make_unique<CRSelNavigationDialog>(
+                                    _wm, this, _searchPattern));
                 } else
                     Message(ICON_INFORMATION, const_cast<char*>("@Search"), const_cast<char*>("@No_more_matches"), 2000);
             }
@@ -1107,8 +1109,9 @@ public:
             return true;
         case MCMD_GO_PAGE:
             {
-                CRPocketBookPageSelectorWindow *wnd = new CRPocketBookPageSelectorWindow(_wm);
-                _wm->activateWindow(wnd);
+                _wm->activateWindow(
+                        std::make_unique<CRPocketBookPageSelectorWindow>(
+                                _wm));
             }
             return true;
         case MCMD_GO_PAGE_APPLY:
@@ -1195,9 +1198,11 @@ public:
                 LVLoadStylesheetFile( _cssDir + filename, dictCss );
             _dictDlg = new CRPbDictionaryDialog( _wm, this, dictCss );
         }
-        CRPbDictionaryProxyWindow *dlg = new CRPbDictionaryProxyWindow(_dictDlg);
-        _wm->activateWindow( dlg );
-        dlg->startWordSelection();
+        std::unique_ptr<CRPbDictionaryProxyWindow> dlg =
+                std::make_unique<CRPbDictionaryProxyWindow>(_dictDlg);
+        CRPbDictionaryProxyWindow * activeDialog = dlg.get();
+        _wm->activateWindow(std::move(dlg));
+        activeDialog->startWordSelection();
     }
 
     void showContents() {
@@ -1236,9 +1241,10 @@ public:
                     const_cast<char*>("@No_contents"), 2000);
             return;
         }
-        CRPocketBookContentsWindow *wnd = new CRPocketBookContentsWindow(_wm, _toc,
-                                                                         _tocLength, _docview->getCurPage() + 1);
-        _wm->activateWindow( wnd );
+        _wm->activateWindow(
+                std::make_unique<CRPocketBookContentsWindow>(
+                        _wm, _toc, _tocLength,
+                        _docview->getCurPage() + 1));
     }
 
     void readingOff()
@@ -1605,9 +1611,11 @@ void CRPbDictionaryView::selectDictionary()
 {
     CRLog::trace("selectDictionary()");
     LVFontRef valueFont(fontMan->GetFont( VALUE_FONT_SIZE, 400, true, css_ff_sans_serif, lString8("Liberation Sans")));
-    CRMenu * dictsMenu = new CRMenu(_wm, NULL, PB_CMD_SELECT_DICT,
-                                    lString16(""), LVImageSourceRef(), LVFontRef(), valueFont,
-                                    CRPocketBookDocView::instance->getNewProps(), PROP_POCKETBOOK_DICT);
+    std::unique_ptr<CRMenu> dictsMenu = std::make_unique<CRMenu>(
+            _wm, nullptr, PB_CMD_SELECT_DICT, lString16(""),
+            LVImageSourceRef(), LVFontRef(), valueFont,
+            CRPocketBookDocView::instance->getNewProps(),
+            PROP_POCKETBOOK_DICT);
     dictsMenu->setAccelerators(_wm->getAccTables().get("menu"));
     dictsMenu->setSkinName(lString16("#settings"));
     if (!_dictsLoaded) {
@@ -1615,14 +1623,13 @@ void CRPbDictionaryView::selectDictionary()
     }
     for (int i = 0; i < _dictCount; i++) {
         lString16 dictName = Utf8ToUnicode(_dictNames[i]);
-        dictsMenu->addItem( new CRMenuItem(dictsMenu, i,
-                                           dictName,
-                                           LVImageSourceRef(),
-                                           LVFontRef(),
-                                           dictName.c_str()));
+        dictsMenu->addItem(std::make_unique<CRMenuItem>(
+                dictsMenu.get(), i, dictName,
+                LVImageSourceRef(), LVFontRef(),
+                dictName.c_str()));
     }
     dictsMenu->reconfigure( 0 );
-    _wm->activateWindow(dictsMenu);
+    _wm->activateWindow(std::move(dictsMenu));
 }
 
 bool CRPbDictionaryView::isArticleListActive()
