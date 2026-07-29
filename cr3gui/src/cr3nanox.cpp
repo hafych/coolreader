@@ -466,6 +466,7 @@ public:
 private:
     //class MainViewer *m_app;
     pthread_t m_idled;
+    bool m_threadCreated;
     
 };
 
@@ -483,7 +484,7 @@ private:
 
 
 static int g_iOpenLed;
-static int g_iLedOpened;
+static int g_iLedOpened = -1;
 static volatile int g_ledActive = 0;
 //static int g_iProcessingTipValue;
 
@@ -491,14 +492,23 @@ static sem_t g_semled;
 void vTellLed(void *vptr);
 
 LedThreadApp::LedThreadApp()
+    : m_idled(), m_threadCreated(false)
 {
 //    m_app=ProcApp;
-    
+    init_led_sem();
+    create_led_thread();
 }
 
 LedThreadApp::~LedThreadApp()
 {
-    
+    cancel_led_thread();
+#if LEDTHREAD==1
+    if (g_iLedOpened >= 0) {
+        close(g_iLedOpened);
+        g_iLedOpened = -1;
+    }
+#endif
+    destroy_led_sem();
 }
 
 
@@ -529,8 +539,10 @@ void LedThreadApp::post_led_sem()
 void LedThreadApp::cancel_led_thread()
 {
 #if LEDTHREAD==1
-    if(m_idled > 0){
+    if(m_threadCreated){
         pthread_cancel(m_idled);
+        pthread_join(m_idled, NULL);
+        m_threadCreated = false;
     }
 #endif
 }
@@ -545,6 +557,7 @@ void LedThreadApp::create_led_thread()
         printf("Create pthread error!\n");
         exit(1);
     }
+    m_threadCreated = true;
 #endif
 }
 
@@ -565,7 +578,7 @@ void vTellLed(void *vptr)
     //  g_iLedOpened = open("/dev/misc/s3c2410_led", O_RDONLY);
         g_iOpenLed = 0;
     }
-    if(g_iLedOpened)
+    if(g_iLedOpened >= 0)
     {
         while(1)
         {   
@@ -597,25 +610,17 @@ void vTellLed(void *vptr)
     }
 }
 
-LedThreadApp * g_ledThread = NULL;
+static std::unique_ptr<LedThreadApp> g_ledThread;
 
 void initLeds()
 {
-    if ( !g_ledThread ) {
-        g_ledThread = new LedThreadApp();
-        g_ledThread->init_led_sem();
-        g_ledThread->create_led_thread();
-    }
+    if ( !g_ledThread )
+        g_ledThread = std::make_unique<LedThreadApp>();
 }
 
 void closeLeds()
 {
-    if ( g_ledThread ) {
-        g_ledThread->cancel_led_thread();
-        g_ledThread->destroy_led_sem();
-        delete g_ledThread;
-        g_ledThread = NULL;
-    }
+    g_ledThread.reset();
 }
 
 void postLeds( bool turnOn )

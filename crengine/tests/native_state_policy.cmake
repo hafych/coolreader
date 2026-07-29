@@ -6987,6 +6987,31 @@ forbid_source_text(
   "NanoX bitmap staging teardown must remain automatic"
 )
 require_source_text(
+  "${NANOX_SOURCE}"
+  "static std::unique_ptr<LedThreadApp> g_ledThread;"
+  "NanoX LED thread lifecycle must have a single process owner"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "pthread_join(m_idled, NULL);"
+  "NanoX LED teardown must wait for thread quiescence"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "g_ledThread.reset();"
+  "NanoX LED teardown must release its process owner explicitly"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "LedThreadApp * g_ledThread"
+  "NanoX LED thread lifecycle must not use raw process ownership"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "delete g_ledThread"
+  "NanoX LED thread teardown must remain automatic"
+)
+require_source_text(
   "${POCKETBOOK_SOURCE}"
   "std::unique_ptr<lUInt8[]> _buf4bpp;"
   "PocketBook 4bpp buffers must use object-scoped array ownership"
