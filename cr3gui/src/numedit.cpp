@@ -70,7 +70,7 @@ bool CRNumberEditDialog::digitEntered( lChar32 c )
 }
 
 /// returns true if command is processed
-bool CRNumberEditDialog::onCommand( int command, int params )
+bool CRNumberEditDialog::onCommand( int command, int )
 {
     switch ( command ) {
     case MCMD_CLEAR:

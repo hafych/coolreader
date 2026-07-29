@@ -186,7 +186,7 @@ CRControlsMenuItem::CRControlsMenuItem( CRControlsMenu * menu, int id, int key, 
     _settingKey = menu->getSettingKey( key, flags );
 }
 
-void CRControlsMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
+void CRControlsMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool )
 {
     skin->draw( buf, rc );
     buf.SetTextColor( skin->getTextColor() );
@@ -360,7 +360,7 @@ std::unique_ptr<CRMenu> CRSettingsMenu::createOptionMenu(
 }
 
 
-CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int id, LVFontRef font, CRGUIAcceleratorTableRef menuAccelerators, lvRect &rc )
+CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int id, LVFontRef, CRGUIAcceleratorTableRef menuAccelerators, lvRect &rc )
 : CRFullScreenMenu(
         wm, id, Utf8ToUnicode(lString8(_("Settings"))), 8, rc),
   props( newProps ),

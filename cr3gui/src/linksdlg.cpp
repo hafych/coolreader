@@ -253,7 +253,7 @@ CRLinksDialog::CRLinksDialog( CRGUIWindowManager * wm, CRViewDialog * docwin )
 }
 
 /// returns true if command is processed
-bool CRLinksDialog::onCommand( int command, int params )
+bool CRLinksDialog::onCommand( int command, int )
 {
     switch ( command ) {
     case MCMD_CANCEL:

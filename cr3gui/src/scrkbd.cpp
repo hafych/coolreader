@@ -169,7 +169,7 @@ void CRScreenKeyboard::draw()
 }
 
 /// returns true if command is processed
-bool CRScreenKeyboard::onCommand( int command, int params )
+bool CRScreenKeyboard::onCommand( int command, int )
 {
     switch ( command ) {
     case MCMD_CLEAR:

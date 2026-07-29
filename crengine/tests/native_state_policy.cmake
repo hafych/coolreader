@@ -2,6 +2,7 @@ if(NOT DEFINED SOURCE_ROOT)
   message(FATAL_ERROR "SOURCE_ROOT is required")
 endif()
 
+file(READ "${SOURCE_ROOT}/CMakeLists.txt" ROOT_CMAKE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crsetup.h" CR_SETUP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtypes.h" LV_TYPES_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
@@ -225,6 +226,25 @@ function(forbid_source_text SOURCE_VALUE FORBIDDEN DESCRIPTION)
     message(FATAL_ERROR "${DESCRIPTION}: found '${FORBIDDEN}'")
   endif()
 endfunction()
+
+# --- warning gate coverage ---
+require_source_text(
+  "${ROOT_CMAKE_SOURCE}"
+  "$<$<COMPILE_LANGUAGE:C>:-Wall;-Wextra;-Wpedantic;"
+  "the Clang warning gate must retain its C diagnostics"
+)
+require_source_text(
+  "${ROOT_CMAKE_SOURCE}"
+  "$<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;"
+  "the Clang warning gate must retain its C++ diagnostics"
+)
+string(REGEX MATCHALL "-Werror=unused-parameter" UNUSED_PARAMETER_GATES
+  "${ROOT_CMAKE_SOURCE}")
+list(LENGTH UNUSED_PARAMETER_GATES UNUSED_PARAMETER_GATE_COUNT)
+if(UNUSED_PARAMETER_GATE_COUNT LESS 2)
+  message(FATAL_ERROR
+    "the Clang warning gate must reject unused parameters in C and C++")
+endif()
 
 # --- value-owned rectangle clipping ---
 require_source_text(

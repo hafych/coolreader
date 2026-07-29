@@ -196,7 +196,7 @@ class QtDocViewWin : public V3DocViewWin
         }
 };
 
-void MainWindow::paintEvent ( QPaintEvent * event )
+void MainWindow::paintEvent ( QPaintEvent * )
 {
     QPainter painter(this);
     QRect rc = rect();
@@ -252,7 +252,7 @@ void MainWindow::paintEvent ( QPaintEvent * event )
     }
 }
 
-void MainWindow::keyPressEvent ( QKeyEvent * event )
+void MainWindow::keyPressEvent ( QKeyEvent * )
 {
 
 }
@@ -264,29 +264,29 @@ void MainWindow::resizeEvent ( QResizeEvent * event )
     _wm->reconfigure(sz.width(), sz.height(), CR_ROTATE_ANGLE_0);
 }
 
-void MainWindow::customEvent ( QEvent * event )
+void MainWindow::customEvent ( QEvent * )
 {
     CRLog::debug("customEvent");
     //if ( event->)
     _wm->processPostedEvents();
 }
 
-void MainWindow::wheelEvent ( QWheelEvent * event )
+void MainWindow::wheelEvent ( QWheelEvent * )
 {
 
 }
 
-void MainWindow::mouseMoveEvent ( QMouseEvent * event )
+void MainWindow::mouseMoveEvent ( QMouseEvent * )
 {
 
 }
 
-void MainWindow::mousePressEvent ( QMouseEvent * event )
+void MainWindow::mousePressEvent ( QMouseEvent * )
 {
 
 }
 
-void MainWindow::mouseReleaseEvent ( QMouseEvent * event )
+void MainWindow::mouseReleaseEvent ( QMouseEvent * )
 {
 
 }

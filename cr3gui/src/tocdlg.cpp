@@ -208,7 +208,7 @@ int CRTOCDialog::getCurItemIndex()
 }
 
 /// returns true if command is processed
-bool CRTOCDialog::onCommand( int command, int params )
+bool CRTOCDialog::onCommand( int command, int )
 {
     if ( _value.empty() ) {
         if ( command == MCMD_SELECT_0 )

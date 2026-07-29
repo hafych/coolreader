@@ -172,7 +172,7 @@ public:
 #endif
 	}
 
-	bool onCommand( int command, int params ) override
+	bool onCommand( int command, int ) override
 	{
 		switch ( command ) {
 			case MCMD_SELECT_1:

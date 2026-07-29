@@ -72,7 +72,7 @@ CRSelNavigationDialog::CRSelNavigationDialog(
 
 
 /// returns true if command is processed
-bool CRSelNavigationDialog::onCommand( int command, int params )
+bool CRSelNavigationDialog::onCommand( int command, int )
 {
     switch ( command ) {
     case MCMD_OK:

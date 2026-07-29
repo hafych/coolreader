@@ -443,7 +443,7 @@ void CRT9Keyboard::draw()
     }
 }
 
-bool CRT9Keyboard::onCommand( int command, int params )
+bool CRT9Keyboard::onCommand( int command, int )
 {
     switch ( command ) {
         case MCMD_SELECT_0:
