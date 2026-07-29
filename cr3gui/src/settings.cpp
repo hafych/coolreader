@@ -146,9 +146,10 @@ public:
         _settingKey = cs32("keymap.") + _accelTableId;
         for ( int i=0; i<_overrideKeys->length(); i++ ) {
             const CRGUIAccelerator * acc = _overrideKeys->get(i);
-            CRControlsMenuItem * item = new CRControlsMenuItem(this, i, acc->keyCode, acc->keyFlags,
-                         _baseAccs->findKeyAccelerator( acc->keyCode, acc->keyFlags ) );
-            addItem(item);
+            addItem(std::make_unique<CRControlsMenuItem>(
+                    this, i, acc->keyCode, acc->keyFlags,
+                    _baseAccs->findKeyAccelerator(
+                            acc->keyCode, acc->keyFlags)));
         }
     }
 
@@ -308,11 +309,14 @@ CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * m
                 defvalue, sizeof(defvalue), "%d %s",
                 cr_font_sizes[i],
                 _("The quick brown fox jumps over lazy dog"));
-        fontSizeMenu->addItem( new OnDemandFontMenuItem( fontSizeMenu, 0,
+        fontSizeMenu->addItem(std::make_unique<OnDemandFontMenuItem>(
+                        fontSizeMenu, 0,
                         Utf8ToUnicode(lString8(defvalue)),
                         LVImageSourceRef(),
                         lString32::itoa(cr_font_sizes[i]).c_str(),
-                        cr_font_sizes[i], 400, false, css_ff_sans_serif, fontFace, UnicodeToUtf8(skin->getItemSkin()->getFontFace())) );
+                        cr_font_sizes[i], 400, false, css_ff_sans_serif,
+                        fontFace,
+                        UnicodeToUtf8(skin->getItemSkin()->getFontFace())));
     }
     fontSizeMenu->setAccelerators( _wm->getAccTables().get("menu") );
     fontSizeMenu->setSkinName(cs32("#settings"));
@@ -323,10 +327,12 @@ CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * m
 void CRSettingsMenu::addMenuItems( CRMenu * menu, item_def_t values[] )
 {
     for ( int i=0; values[i].translate_default; i++)
-        menu->addItem( new CRMenuItem( menu, i,
+        menu->addItem(std::make_unique<CRMenuItem>(
+            menu, i,
             Utf8ToUnicode(lString8(values[i].translate_default)),
             LVImageSourceRef(),
-            LVFontRef(), Utf8ToUnicode(lString8(values[i].value)).c_str() ) );
+            LVFontRef(),
+            Utf8ToUnicode(lString8(values[i].value)).c_str()));
     menu->setAccelerators( _menuAccelerators );
     menu->setSkinName(cs32("#settings"));
     menu->reconfigure( 0 );
@@ -605,10 +611,13 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         int i;
         lString8 defFont = UnicodeToUtf8(getSkin()->getItemSkin()->getFontFace());//( fontMan->GetFont( VALUE_FONT_SIZE, 400, true, css_ff_sans_serif, lString8("Arial")) );
         for ( i=0; i<(int)list.length(); i++ ) {
-            fontFaceMenu->addItem( new OnDemandFontMenuItem( fontFaceMenu, i,
+            fontFaceMenu->addItem(
+                    std::make_unique<OnDemandFontMenuItem>(
+                                    fontFaceMenu, i,
                                     list[i], LVImageSourceRef(), list[i].c_str(),
                                     MENU_FONT_FACE_SIZE, 400,
-                                    false, css_ff_sans_serif, UnicodeToUtf8(list[i]), defFont) );
+                                    false, css_ff_sans_serif,
+                                    UnicodeToUtf8(list[i]), defFont));
             fontFaceMenu->setFullscreen( true );
         }
         fontFaceMenu->setAccelerators( _menuAccelerators );
@@ -623,10 +632,13 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         fontFallbackFaceMenu->setSkinName(cs32("#settings"));
 
         for ( i=0; i<(int)list.length(); i++ ) {
-            fontFallbackFaceMenu->addItem( new OnDemandFontMenuItem( fontFallbackFaceMenu, i,
+            fontFallbackFaceMenu->addItem(
+                    std::make_unique<OnDemandFontMenuItem>(
+                                    fontFallbackFaceMenu, i,
                                     list[i], LVImageSourceRef(), list[i].c_str(),
                                     MENU_FONT_FACE_SIZE, 400,
-                                    false, css_ff_sans_serif, UnicodeToUtf8(list[i]), defFont) );
+                                    false, css_ff_sans_serif,
+                                    UnicodeToUtf8(list[i]), defFont));
             fontFallbackFaceMenu->setFullscreen( true );
         }
 
@@ -775,10 +787,11 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 					LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_HYPHENATION_DICT );
 			for ( i=0; i<HyphMan::getDictList()->length(); i++ ) {
 				HyphDictionary * item = HyphMan::getDictList()->get( i );
-				hyphMenu->addItem( new CRMenuItem( hyphMenu, i,
+				hyphMenu->addItem(std::make_unique<CRMenuItem>(
+					hyphMenu, i,
 					item->getTitle(),
 					LVImageSourceRef(),
-					LVFontRef(), item->getId().c_str() ) );
+					LVFontRef(), item->getId().c_str()));
 			}
 			hyphMenu->setAccelerators( _menuAccelerators );
             hyphMenu->setSkinName(cs32("#settings"));

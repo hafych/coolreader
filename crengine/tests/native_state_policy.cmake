@@ -7864,6 +7864,26 @@ require_source_text(
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
+  "addItem(std::make_unique<CRControlsMenuItem>"
+  "settings control items must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::make_unique<OnDemandFontMenuItem>"
+  "settings font items must enter scoped ownership"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "addItem( new"
+  "settings items must not be published as raw candidates"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "addItem(item)"
+  "settings item publication must use the owner-aware boundary"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
   "return menu.release();"
   "settings command menus must expose one explicit legacy transfer"
 )

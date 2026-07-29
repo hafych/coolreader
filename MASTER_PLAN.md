@@ -195,7 +195,8 @@ DRM или ограничений доступа, подбор/получени�
   publication candidates и lifecycle `CRDocViewWindow`, scoped page-image
   render candidates,
   bookmark mutation/highlight-range candidates и scoped nested-render mark
-  copies, value-owned rectangle clipping, scoped settings menu trees, а также
+  copies, value-owned rectangle clipping, scoped settings menu/item
+  candidates, а также
   transactional bookmark-list publication, render-flow float/shift publication
   и teardown, table-cell
   page-context ownership, draw-time bookmark-range filters и full CCRTable
