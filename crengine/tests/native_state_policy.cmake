@@ -7633,6 +7633,21 @@ forbid_source_text(
   "PocketBook link-dialog factory results must not regress to raw ownership"
 )
 require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "std::unique_ptr<CRT9Keyboard> dlg ="
+  "T9 keyboard candidates must enter scoped ownership"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "wm->activateWindow(std::move(dlg));"
+  "T9 keyboards must transfer through owner-aware activation"
+)
+forbid_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "CRT9Keyboard * dlg = new"
+  "T9 keyboard candidates must not begin as raw owners"
+)
+require_source_text(
   "${LOGO_CONVERTER_SOURCE}"
   "lString32 startPath = Utf8ToUnicode(lString8(argv[1]));"
   "logo converter input paths must use the current string width"

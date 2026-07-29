@@ -494,6 +494,8 @@ bool CRT9Keyboard::onCommand( int command, int params )
 
 void showT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, int id, lString16 & buffer)
 {
-	CRT9Keyboard * dlg = new CRT9Keyboard( wm, mainwin, id, buffer );
-    wm->activateWindow( dlg );
+    std::unique_ptr<CRT9Keyboard> dlg =
+            std::make_unique<CRT9Keyboard>(
+                    wm, mainwin, id, buffer);
+    wm->activateWindow(std::move(dlg));
 }
