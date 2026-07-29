@@ -794,7 +794,6 @@ int InitDoc(char *fileName)
     {
         CRLog::trace("creating window manager...");
         CRJinkeWindowManager * wm = new CRJinkeWindowManager(600,800);
-        //main_win = new V3DocViewWin( wm, lString16(CRSKIN) );
 
         const char * keymap_locations [] = {
             "/root/crengine/",
@@ -815,7 +814,10 @@ int InitDoc(char *fileName)
         ldomDocCache::init( lString16("/root/abook/crengine/.cache"), 0x100000 * 64 ); /*96Mb*/
 
         CRLog::trace("creating main window...");
-        main_win = new CRJinkeDocView( wm, lString16("/root/crengine") );
+        std::unique_ptr<V3DocViewWin> mainWindowOwner =
+                std::make_unique<CRJinkeDocView>(
+                        wm, lString16("/root/crengine"));
+        main_win = mainWindowOwner.get();
 
 #ifdef ALLOW_RUN_EXE
     {
@@ -864,7 +866,7 @@ int InitDoc(char *fileName)
 
         LVDocView * _docview = main_win->getDocView();
         _docview->setBatteryState( ::getBatteryState() );
-        wm->activateWindow( main_win );
+        wm->activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument( lString16(fileName) ) ) {
             printf("Cannot open book file %s\n", fileName);
             delete wm;

@@ -2455,7 +2455,10 @@ int InitDoc(const char *exename, char *fileName)
         if (!ldomDocCache::enabled())
             ldomDocCache::init(lString16(USERDATA"/share/cr3/.cache"), PB_CR3_CACHE_SIZE);
         CRLog::trace("creating main window...");
-        main_win = new CRPocketBookDocView(wm, lString16(USERDATA"/share/cr3"));
+        std::unique_ptr<V3DocViewWin> mainWindowOwner =
+                std::make_unique<CRPocketBookDocView>(
+                        wm, lString16(USERDATA"/share/cr3"));
+        main_win = mainWindowOwner.get();
         CRLog::trace("setting colors...");
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
@@ -2500,7 +2503,7 @@ int InitDoc(const char *exename, char *fileName)
             CRLog::error("Cannot read history file");
         LVDocView * _docview = main_win->getDocView();
         _docview->setBatteryState(GetBatteryPower());
-        wm->activateWindow( main_win );
+        wm->activateWindow(std::move(mainWindowOwner));
         wm->restoreOrientation(orient);
         if ( !main_win->loadDocument( lString16(fileName) ) ) {
             printf("Cannot open book file %s\n", fileName);

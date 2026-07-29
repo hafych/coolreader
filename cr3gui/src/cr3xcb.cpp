@@ -1437,7 +1437,10 @@ int main(int argc, char **argv)
         }
         HyphMan::initDictionaries( lString16("/usr/share/cr3/hyph/") );
         //LVExtractPath(LocalToUnicode(lString8(fname)))
-        main_win = new XCBDocViewWin( &winman, lString16(CRSKIN) );
+        std::unique_ptr<V3DocViewWin> mainWindowOwner =
+                std::make_unique<XCBDocViewWin>(
+                        &winman, lString16(CRSKIN));
+        main_win = mainWindowOwner.get();
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
@@ -1510,7 +1513,7 @@ int main(int argc, char **argv)
         };
         main_win->setAccelerators( CRGUIAcceleratorTableRef( new CRGUIAcceleratorTable( acc_table ) ) );
 #endif
-        winman.activateWindow( main_win );
+        winman.activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument( LocalToUnicode((lString8(fname))) ) ) {
             printf("Cannot open book file %s\n", fname);
             res = 4;

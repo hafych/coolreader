@@ -503,7 +503,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         ldomDocCache::init( exedir + "cache", 0x100000 * 96 ); /*96Mb*/
 
         winman.loadSkin( LVExtractPath(LocalToUnicode(lString8(exe_fn))) + "skin" );
-        V3DocViewWin * main_win = new V3DocViewWin( &winman, LVExtractPath(LocalToUnicode(lString8(exe_fn))) );
+        std::unique_ptr<V3DocViewWin> mainWindowOwner =
+                std::make_unique<V3DocViewWin>(
+                        &winman,
+                        LVExtractPath(LocalToUnicode(lString8(exe_fn))));
+        V3DocViewWin * main_win = mainWindowOwner.get();
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
@@ -524,7 +528,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
         main_win->loadHistory( exedir + "cr3hist.bmk" );
 
-        winman.activateWindow( main_win );
+        winman.activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument( LocalToUnicode( cmdline )) ) {
             char str[100];
             sprintf(str, "Cannot open document file %s", cmdline.c_str());

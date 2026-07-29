@@ -1381,8 +1381,6 @@ int InitDoc(char *fileName)
     }
 #endif
     {
-        //main_win = new V3DocViewWin( wm, lString16(CRSKIN) );
-
         const char * keymap_locations [] = {
             "/root/crengine/",
             "/home/crengine/",
@@ -1402,7 +1400,10 @@ int InitDoc(char *fileName)
         }
 
         CRLog::trace("creating main window...");
-        main_win = new CRJinkeDocView( wm, lString16("/root/crengine") );
+        std::unique_ptr<V3DocViewWin> mainWindowOwner =
+                std::make_unique<CRJinkeDocView>(
+                        wm, lString16("/root/crengine"));
+        main_win = mainWindowOwner.get();
         CRLog::trace("setting colors...");
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
@@ -1442,7 +1443,7 @@ int InitDoc(char *fileName)
         LVDocView * _docview = main_win->getDocView();
         _docview->setBatteryState( checkPowerState() );
         //_docview->setBatteryState( ::getBatteryState() );
-        wm->activateWindow( main_win );
+        wm->activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument( lString16(fileName) ) ) {
             printf("Cannot open book file %s\n", fileName);
             delete wm;

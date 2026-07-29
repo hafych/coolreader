@@ -7820,6 +7820,37 @@ if(NOT GUI_PLATFORM_FONT_DIR_DECLARATION_COUNT EQUAL 6)
     "all six GUI platform startup paths must declare current-width font directories"
   )
 endif()
+string(REGEX MATCHALL
+  "std::unique_ptr<V3DocViewWin> mainWindowOwner"
+  GUI_PLATFORM_MAIN_WINDOW_OWNERS
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+)
+list(LENGTH GUI_PLATFORM_MAIN_WINDOW_OWNERS
+  GUI_PLATFORM_MAIN_WINDOW_OWNER_COUNT
+)
+if(NOT GUI_PLATFORM_MAIN_WINDOW_OWNER_COUNT EQUAL 6)
+  message(FATAL_ERROR
+    "all six GUI platform startup paths must scope main-window candidates"
+  )
+endif()
+string(REGEX MATCHALL
+  "activateWindow\\(std::move\\(mainWindowOwner\\)\\)"
+  GUI_PLATFORM_MAIN_WINDOW_TRANSFERS
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+)
+list(LENGTH GUI_PLATFORM_MAIN_WINDOW_TRANSFERS
+  GUI_PLATFORM_MAIN_WINDOW_TRANSFER_COUNT
+)
+if(NOT GUI_PLATFORM_MAIN_WINDOW_TRANSFER_COUNT EQUAL 6)
+  message(FATAL_ERROR
+    "all six GUI platform startup paths must transfer main-window owners"
+  )
+endif()
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "main_win = new"
+  "GUI platform main-window candidates must not begin as raw owners"
+)
 require_source_text(
   "${FULLSCREEN_MENU_HEADER}"
   "virtual lString32 getItemNumberKeysName();"
