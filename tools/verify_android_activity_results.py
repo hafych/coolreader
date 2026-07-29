@@ -235,6 +235,9 @@ VIEWPORT_RESIZE_STATE = (
 READER_SURFACE_STATE = (
     SOURCE / "crengine" / "ReaderSurfaceState.java"
 )
+READER_NATIVE_LIFECYCLE = (
+    SOURCE / "crengine" / "ReaderNativeLifecycle.java"
+)
 KEY_DOUBLE_CLICK_STATE = (
     SOURCE / "crengine" / "KeyDoubleClickState.java"
 )
@@ -326,6 +329,18 @@ READER_SURFACE_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderSurfaceStateTest.java"
+)
+READER_NATIVE_LIFECYCLE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderNativeLifecycleTest.java"
 )
 KEY_DOUBLE_CLICK_STATE_TEST = (
     ROOT
@@ -2281,6 +2296,7 @@ def main() -> None:
         "private final CloseableTaskGate ttsInitializationLifecycle",
         "private final DocumentLoadLifecycle documentLoadLifecycle",
         "private final ReaderSurfaceState readerSurfaceState",
+        "private final ReaderNativeLifecycle readerNativeLifecycle",
         "private final DelayedExecutor einkRefreshScheduler",
         "private void closeSurfaceCallbacks()",
         "surface.setOnTouchListener(null)",
@@ -2405,6 +2421,16 @@ def main() -> None:
         "readerSurfaceState.markSurfaceDestroyed()",
         "readerSurfaceState.isDrawable()",
         "closeSurfaceCallbacks();\n\t\tstopTts();",
+        "private void initializeNativeDocument()",
+        "readerNativeLifecycle.claimCreate()",
+        "readerNativeLifecycle.markCreated()",
+        "readerNativeLifecycle.isActive()",
+        "readerNativeLifecycle.markInitialized()",
+        "readerNativeLifecycle.isInitialized()",
+        "private void closeNativeDocument()",
+        "readerNativeLifecycle.close()",
+        "readerNativeLifecycle.claimDestroy()",
+        "closeNativeDocument();",
         "keyDoubleClickState.resolvePress(",
         "keyDoubleClickState.defer(",
         "keyDoubleClickState.claimSingle(pending)",
@@ -2421,6 +2447,10 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits reader-owned delayed work "
                 f"marker: {marker}")
+    if "mInitialized" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} retains parallel native lifecycle "
+            "state: mInitialized")
     if reader_view_text.count(
             "documentLoadLifecycle.replace()") != 1:
         violations.append(
@@ -2723,6 +2753,44 @@ def main() -> None:
         if marker not in reader_surface_state_test_text:
             violations.append(
                 f"{relative(READER_SURFACE_STATE_TEST)} omits surface "
+                f"lifecycle regression: {marker}")
+
+    reader_native_lifecycle_text = READER_NATIVE_LIFECYCLE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ReaderNativeLifecycle",
+        "private boolean createClaimed",
+        "private boolean created",
+        "private boolean initialized",
+        "private boolean closed",
+        "private boolean destroyed",
+        "synchronized boolean claimCreate()",
+        "synchronized boolean markCreated()",
+        "synchronized boolean isActive()",
+        "synchronized boolean markInitialized()",
+        "synchronized boolean isInitialized()",
+        "synchronized boolean isClosed()",
+        "synchronized boolean close()",
+        "synchronized boolean claimDestroy()",
+    ):
+        if marker not in reader_native_lifecycle_text:
+            violations.append(
+                f"{relative(READER_NATIVE_LIFECYCLE)} omits exact native "
+                f"lifecycle marker: {marker}")
+
+    reader_native_lifecycle_test_text = (
+        READER_NATIVE_LIFECYCLE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "normalLifecycleInitializesAndDestroysOnce",
+        "closeBeforeCreatePermanentlyRejectsNativeWork",
+        "closeDuringCreateStillRequiresDestroy",
+        "closeAfterCreateRejectsLateInitialization",
+        "initializationRequiresCompletedCreate",
+    ):
+        if marker not in reader_native_lifecycle_test_text:
+            violations.append(
+                f"{relative(READER_NATIVE_LIFECYCLE_TEST)} omits native "
                 f"lifecycle regression: {marker}")
 
     key_double_click_state_text = KEY_DOUBLE_CLICK_STATE.read_text(

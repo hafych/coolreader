@@ -190,6 +190,14 @@ DRM или ограничений доступа, подбор/получени�
   holder change, input/focus handlers и delayed redraw проверяют closed state
   до Activity access или нового scheduling, поэтому platform callback после
   teardown не оживляет reader.
+  Создание, настройка и уничтожение native `DocView` теперь принадлежат одному
+  synchronized `ReaderNativeLifecycle`, а параллельный `mInitialized` удалён.
+  `destroy()` permanently закрывает owner и всегда ставит cleanup в ту же FIFO
+  background queue после уже поставленных create/configure задач. Close до
+  create запрещает создание; close во время create запоминает завершившийся
+  native объект, запрещает позднюю настройку/publication и освобождает его
+  ровно один раз, поэтому teardown Activity не может воскресить или потерять
+  `DocView`.
   Delayed current-position save переведён с numeric generation/global Handler
   на exact `CloseableTaskGate` token и owned GUI scheduler: replacement,
   sync/pause/reload отменяют pending callback, destroy закрывает gate, а

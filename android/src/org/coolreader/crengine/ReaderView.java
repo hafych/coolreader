@@ -83,6 +83,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private static final int EINK_FOCUS_REFRESH_DELAY_MS = 400;
 	private final ReaderSurfaceState readerSurfaceState =
 			new ReaderSurfaceState();
+	private final ReaderNativeLifecycle readerNativeLifecycle =
+			new ReaderNativeLifecycle();
 	private final DelayedExecutor einkRefreshScheduler =
 			DelayedExecutor.createGUI("eink-focus-refresh");
 	private final SurfaceView surface;
@@ -222,7 +224,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							canvas,
 							progress.getPosition(),
 							progress.getTitle());
-				} else if (mInitialized && mCurrentPageInfo != null && mCurrentPageInfo.bitmap != null) {
+				} else if (readerNativeLifecycle.isInitialized()
+						&& mCurrentPageInfo != null
+						&& mCurrentPageInfo.bitmap != null) {
 					log.d("onDraw() -- drawing page image");
 
 					AutoScrollAnimation autoScroll =
@@ -3966,7 +3970,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	volatile private boolean mInitialized = false;
 	volatile private boolean mOpened = false;
 
 	//private File historyFile;
@@ -4367,6 +4370,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		public void work() throws Exception {
 			BackgroundThread.ensureBackground();
+			if (!readerNativeLifecycle.isActive())
+				return;
 			log.d("CreateViewTask - in background thread");
 //			List<BackgroundTextureInfo> textures =
 //					mEngine.getAvailableTextures();
@@ -4389,17 +4394,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (css != null && css.length() > 0)
 				doc.setStylesheet(css);
 			applySettings(props);
-			mInitialized = true;
+			if (!readerNativeLifecycle.markInitialized())
+				return;
 			log.i("CreateViewTask - finished");
 		}
 
 		public void done() {
+			if (readerNativeLifecycle.isClosed())
+				return;
 			log.d("InitializationFinishedEvent");
 			//BackgroundThread.ensureGUI();
 			//setSettings(props, new Properties());
 		}
 
 		public void fail(Exception e) {
+			if (readerNativeLifecycle.isClosed())
+				return;
 			log.e("CoolReader engine initialization failed. Exiting.", e);
 			mEngine.fatalError("Failed to init CoolReader engine");
 		}
@@ -5610,7 +5620,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (dirty == null || dirty.isEmpty())
 			return;
 		drawCallback(canvas -> {
-			if (!mInitialized || mCurrentPageInfo == null)
+			if (!readerNativeLifecycle.isInitialized()
+					|| mCurrentPageInfo == null)
 				return;
 			log.d("onDraw() -- drawing page image");
 			Rect dst =
@@ -6874,7 +6885,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void drawPage(Runnable doneHandler, boolean isPartially) {
-		if (!mInitialized)
+		if (!readerNativeLifecycle.isInitialized())
 			return;
 		log.v("drawPage() : submitting DrawPageTask");
 		if (mOpened)
@@ -8011,19 +8022,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closeSurfaceCallbacks();
 		stopTts();
 		cancelDelayedReaderWork();
-		if (mInitialized) {
-			//close();
-			BackgroundThread.instance().postBackground(() -> {
-				BackgroundThread.ensureBackground();
-				if (mInitialized) {
-					log.i("ReaderView.destroyInternal() calling");
-					doc.destroy();
-					mInitialized = false;
-					currentBackgroundTexture = Engine.NO_TEXTURE;
-				}
-			});
-			//engine.waitTasksCompletion();
-		}
+		closeNativeDocument();
+	}
+
+	private void closeNativeDocument() {
+		if (!readerNativeLifecycle.close())
+			return;
+		BackgroundThread.instance().postBackground(() -> {
+			BackgroundThread.ensureBackground();
+			if (!readerNativeLifecycle.claimDestroy())
+				return;
+			log.i("ReaderView.destroyInternal() calling");
+			doc.destroy();
+			currentBackgroundTexture = Engine.NO_TEXTURE;
+		});
 	}
 
 	private void closeSurfaceCallbacks() {
@@ -9076,13 +9088,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		this.mEinkScreen = activity.getEinkScreen();
 		surface.setFocusable(true);
 		surface.setFocusableInTouchMode(true);
-		BackgroundThread.instance().postBackground(() -> {
-			log.d("ReaderView - in background thread: calling createInternal()");
-			doc.create();
-			mInitialized = true;
-		});
+		BackgroundThread.instance().postBackground(
+				this::initializeNativeDocument);
 
 		log.i("Posting create view task");
 		post(new CreateViewTask(props));
+	}
+
+	private void initializeNativeDocument() {
+		BackgroundThread.ensureBackground();
+		if (!readerNativeLifecycle.claimCreate())
+			return;
+		log.d("ReaderView - in background thread: calling createInternal()");
+		doc.create();
+		readerNativeLifecycle.markCreated();
 	}
 }

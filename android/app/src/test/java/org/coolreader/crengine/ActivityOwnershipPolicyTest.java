@@ -1012,6 +1012,58 @@ public class ActivityOwnershipPolicyTest {
 		assertTrue(Modifier.isPrivate(
 				closeSurfaceCallbacks.getModifiers()));
 		assertTrue(Modifier.isFinal(
+				ReaderNativeLifecycle.class.getModifiers()));
+		for (Field field :
+				ReaderNativeLifecycle.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"claimCreate");
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"markCreated");
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"isActive");
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"markInitialized");
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"isInitialized");
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"isClosed");
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"close");
+		assertSynchronizedMethod(
+				ReaderNativeLifecycle.class,
+				"claimDestroy");
+		assertPrivateFinalField(
+				ReaderView.class,
+				"readerNativeLifecycle",
+				ReaderNativeLifecycle.class);
+		Method initializeNativeDocument =
+				ReaderView.class.getDeclaredMethod(
+						"initializeNativeDocument");
+		assertTrue(Modifier.isPrivate(
+				initializeNativeDocument.getModifiers()));
+		Method closeNativeDocument =
+				ReaderView.class.getDeclaredMethod(
+						"closeNativeDocument");
+		assertTrue(Modifier.isPrivate(
+				closeNativeDocument.getModifiers()));
+		for (Field field : ReaderView.class.getDeclaredFields()) {
+			assertFalse(
+					"Native initialization must not have parallel state",
+					field.getName().equals("mInitialized"));
+		}
+		assertTrue(Modifier.isFinal(
 				KeyDoubleClickState.class.getModifiers()));
 		for (Field field :
 				KeyDoubleClickState.class.getDeclaredFields()) {

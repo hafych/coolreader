@@ -350,6 +350,14 @@ the touch, key and focus listeners, and unregisters the
 `SurfaceHolder.Callback`. Inner `SurfaceView` visibility, focus, size and draw
 callbacks, holder changes, input/focus handlers and delayed redraw all reject
 closed state before touching the Activity or scheduling more work.
+Native `DocView` creation, configuration and destruction belong to one
+synchronized `ReaderNativeLifecycle`; the parallel `mInitialized` flag is
+gone. Reader destruction permanently closes that owner and always appends one
+cleanup task to the same FIFO background queue behind any already posted
+create/configure work. Closing before create suppresses creation, while
+closing during create records the completed native object, rejects late
+configuration/publication and destroys it exactly once. Activity teardown
+therefore cannot resurrect or leak a `DocView`.
 Delayed current-position persistence is owned by a `CloseableTaskGate` and a
 dedicated GUI scheduler rather than a numeric generation left in the global
 Handler. Replacement, synchronous save, pause and book reload remove the exact
