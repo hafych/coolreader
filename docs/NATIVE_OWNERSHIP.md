@@ -689,6 +689,14 @@ same for a new screen but explicitly borrows an already existing Jinke
 singleton. The native lifecycle regression verifies borrowed teardown, owned
 replacement, owned-to-borrowed transition and final destruction.
 
+Canvas factories return `LVRef<LVDrawBuf>` on the base and platform contracts,
+so platform-specific clearing/configuration happens under reference ownership.
+Base-screen construction and every resize stage both back and optional front
+buffers and publish dimensions only after the complete generation exists. A
+null or throwing second factory result preserves the previous dimensions and
+both buffers; native coverage verifies both rollback paths and successful
+replacement.
+
 The GUI window stack and event queue are vectors of exclusive `unique_ptr`
 owners. The legacy raw `activateWindow()` and `postEvent()` arguments are
 adopted before publication; stack reordering moves an existing owner, closing

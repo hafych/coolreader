@@ -6483,6 +6483,66 @@ require_source_text(
   "GUI manager did not release ownership before borrowing"
   "GUI screen regression must retain owned-to-borrowed coverage"
 )
+require_source_text(
+  "${GUI_HEADER}"
+  "virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )"
+  "GUI canvas factories must return reference ownership"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "LVRef<LVDrawBuf> canvasCandidate ="
+  "GUI resize must stage its back buffer before publication"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "LVRef<LVDrawBuf> frontCandidate;"
+  "GUI resize must stage its front buffer before publication"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "if (frontCandidate.isNull())\n                        return false;"
+  "GUI resize must reject an incomplete buffer generation"
+)
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )"
+  "Qt canvas creation must configure a reference-owned candidate"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )"
+  "XCB canvas creation must configure a reference-owned candidate"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )"
+  "NanoX canvas creation must return reference ownership"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI resize published a partial null-buffer generation"
+  "GUI resize must retain incomplete-generation rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI resize published state before a thrown allocation"
+  "GUI resize must retain exception rollback coverage"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "virtual LVDrawBuf * createCanvas( int dx, int dy )"
+  "GUI canvas factories must not expose raw owners"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "virtual LVDrawBuf * createCanvas( int dx, int dy )"
+  "platform GUI canvas factories must not expose raw owners"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "_canvas = LVRef<LVDrawBuf>( createCanvas"
+  "GUI resize must not publish the canvas while creating a generation"
+)
 forbid_source_text(
   "${GUI_HEADER}"
   "_ownScreen"

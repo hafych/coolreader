@@ -544,9 +544,10 @@ class CRXCBScreen : public CRGUIScreenBase
         }
     public:
         /// creates compatible canvas of specified size
-        virtual LVDrawBuf * createCanvas( int dx, int dy )
+        virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )
         {
-            LVDrawBuf * buf = new LVGrayDrawBuf( dx, dy, bufDepth );
+            LVRef<LVDrawBuf> buf(
+                    new LVGrayDrawBuf(dx, dy, bufDepth));
             buf->Clear(0xFFFFFF);
             return buf;
         }
@@ -699,8 +700,8 @@ class CRXCBScreen : public CRGUIScreenBase
             bufDepth = d;
             CRLog::info( "Device depth=%d, will use rendering depth=%d", (int)im->depth, d );
 
-            _canvas = LVRef<LVDrawBuf>( createCanvas( _width, _height ) );
-            _front = LVRef<LVDrawBuf>( createCanvas( _width, _height ) );
+            _canvas = createCanvas(_width, _height);
+            _front = createCanvas(_width, _height);
 
 
             xcb_flush(connection);

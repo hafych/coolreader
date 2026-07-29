@@ -1395,8 +1395,8 @@ public:
     void setFullUpdateInterval(int) override {
     }
 
-    LVDrawBuf *createCanvas(int, int) override {
-        return NULL;
+    LVRef<LVDrawBuf> createCanvas(int, int) override {
+        return LVRef<LVDrawBuf>();
     }
 
     bool setSize(int, int) override {
@@ -1419,6 +1419,58 @@ public:
     }
 
     void flush(bool) override {
+    }
+};
+
+class TransactionalGuiResizeScreen : public CRGUIScreenBase {
+private:
+    int _factoryCall;
+    int _nullOnCall;
+    int _throwOnCall;
+
+protected:
+    void update(const lvRect &, bool) override {
+    }
+
+public:
+    TransactionalGuiResizeScreen()
+        : CRGUIScreenBase(20, 30, true),
+          _factoryCall(0),
+          _nullOnCall(0),
+          _throwOnCall(0) {
+    }
+
+    LVRef<LVDrawBuf> createCanvas(int width, int height) override {
+        ++_factoryCall;
+        if (_factoryCall == _throwOnCall)
+            throw std::runtime_error(
+                    "synthetic canvas allocation failure");
+        if (_factoryCall == _nullOnCall)
+            return LVRef<LVDrawBuf>();
+        return LVRef<LVDrawBuf>(
+                new LVColorDrawBuf(width, height));
+    }
+
+    void failWithNullOnCall(int call) {
+        _factoryCall = 0;
+        _nullOnCall = call;
+        _throwOnCall = 0;
+    }
+
+    void throwOnCall(int call) {
+        _factoryCall = 0;
+        _nullOnCall = 0;
+        _throwOnCall = call;
+    }
+
+    void allowResize() {
+        _factoryCall = 0;
+        _nullOnCall = 0;
+        _throwOnCall = 0;
+    }
+
+    LVRef<LVDrawBuf> getFrontCanvas() {
+        return _front;
     }
 };
 
@@ -1487,6 +1539,55 @@ static int testGuiScreenOwnership() {
     }
     if (destroyed.load(std::memory_order_relaxed) != 5)
         return fail("GUI manager did not destroy its final owned screen");
+
+    TransactionalGuiResizeScreen resizeScreen;
+    LVRef<LVDrawBuf> originalCanvas =
+            resizeScreen.getCanvas();
+    LVRef<LVDrawBuf> originalFront =
+            resizeScreen.getFrontCanvas();
+    if (resizeScreen.getWidth() != 20
+            || resizeScreen.getHeight() != 30
+            || originalCanvas.isNull()
+            || originalFront.isNull())
+        return fail("GUI resize fixture did not start complete");
+
+    resizeScreen.failWithNullOnCall(2);
+    if (resizeScreen.setSize(40, 50)
+            || resizeScreen.getWidth() != 20
+            || resizeScreen.getHeight() != 30
+            || resizeScreen.getCanvas().get()
+                    != originalCanvas.get()
+            || resizeScreen.getFrontCanvas().get()
+                    != originalFront.get())
+        return fail("GUI resize published a partial null-buffer generation");
+
+    resizeScreen.throwOnCall(2);
+    bool resizeThrew = false;
+    try {
+        resizeScreen.setSize(60, 70);
+    } catch (const std::runtime_error &) {
+        resizeThrew = true;
+    }
+    if (!resizeThrew
+            || resizeScreen.getWidth() != 20
+            || resizeScreen.getHeight() != 30
+            || resizeScreen.getCanvas().get()
+                    != originalCanvas.get()
+            || resizeScreen.getFrontCanvas().get()
+                    != originalFront.get())
+        return fail("GUI resize published state before a thrown allocation");
+
+    resizeScreen.allowResize();
+    if (!resizeScreen.setSize(80, 90)
+            || resizeScreen.getWidth() != 80
+            || resizeScreen.getHeight() != 90
+            || resizeScreen.getCanvas().isNull()
+            || resizeScreen.getFrontCanvas().isNull()
+            || resizeScreen.getCanvas().get()
+                    == originalCanvas.get()
+            || resizeScreen.getFrontCanvas().get()
+                    == originalFront.get())
+        return fail("GUI resize did not publish one complete generation");
     return 0;
 }
 

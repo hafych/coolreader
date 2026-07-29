@@ -685,13 +685,13 @@ class CRJinkeScreen : public CRGUIScreenBase
             GrClose();
         }
         /// creates compatible canvas of specified size
-        virtual LVDrawBuf * createCanvas( int dx, int dy )
+        virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )
         {
 #if (COLOR_BACKBUFFER==1)
-            LVDrawBuf * buf = new LVColorDrawBuf( dx, dy );
+            return LVRef<LVDrawBuf>(
+                    new LVColorDrawBuf(dx, dy));
 #else
             static int backBufferBits = 0;
-            LVDrawBuf * buf = NULL;
             if ( backBufferBits==0 ) {
                 backBufferBits = GRAY_BACKBUFFER_BITS;
                 FILE * f = fopen("/root/appdata/.dismode", "rb");
@@ -704,9 +704,10 @@ class CRJinkeScreen : public CRGUIScreenBase
                     backBufferBits = 2;
                 }
             }
-            buf = new LVGrayDrawBuf( dx, dy, backBufferBits );
+            return LVRef<LVDrawBuf>(
+                    new LVGrayDrawBuf(
+                            dx, dy, backBufferBits));
 #endif
-            return buf;
         }
         CRJinkeScreen( int width, int height )
         :  CRGUIScreenBase( width, height, true )

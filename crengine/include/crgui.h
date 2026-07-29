@@ -388,7 +388,7 @@ class CRGUIScreen
         /// fast update feature parameter setting
         virtual void setFullUpdateInterval( int pagesBeforeFullupdate=1 ) = 0;
         /// creates compatible canvas of specified size
-        virtual LVDrawBuf * createCanvas( int dx, int dy ) = 0;
+        virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy ) = 0;
         /// sets new screen size, returns true if size is changed
         virtual bool setSize( int dx, int dy ) = 0;
         /// returns screen width
@@ -824,24 +824,37 @@ class CRGUIScreenBase : public CRGUIScreen
         }
 
         /// creates compatible canvas of specified size
-        virtual LVDrawBuf * createCanvas( int dx, int dy )
+        virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )
         {
 #if (COLOR_BACKBUFFER==1)
-            LVDrawBuf * buf = new LVColorDrawBuf( dx, dy );
+            return LVRef<LVDrawBuf>(
+                    new LVColorDrawBuf(dx, dy));
 #else
-            LVDrawBuf * buf = new LVGrayDrawBuf( dx, dy, GRAY_BACKBUFFER_BITS );
+            return LVRef<LVDrawBuf>(
+                    new LVGrayDrawBuf(
+                            dx, dy, GRAY_BACKBUFFER_BITS));
 #endif
-            return buf;
         }
         /// sets new screen size
         virtual bool setSize( int dx, int dy )
         {
             if ( _width!=dx || _height != dy ) {
+                LVRef<LVDrawBuf> canvasCandidate =
+                        createCanvas(dx, dy);
+                if (canvasCandidate.isNull())
+                    return false;
+                const bool hasFront = !_front.isNull();
+                LVRef<LVDrawBuf> frontCandidate;
+                if (hasFront) {
+                    frontCandidate = createCanvas(dx, dy);
+                    if (frontCandidate.isNull())
+                        return false;
+                }
+                _canvas = canvasCandidate;
+                if (hasFront)
+                    _front = frontCandidate;
                 _width = dx;
                 _height = dy;
-                _canvas = LVRef<LVDrawBuf>( createCanvas( dx, dy ) );
-                if ( !_front.isNull() )
-                    _front = LVRef<LVDrawBuf>( createCanvas( dx, dy ) );
                 return true;
             }
             return false;
@@ -866,14 +879,25 @@ class CRGUIScreenBase : public CRGUIScreen
             _updateRect.extend( rc );
         }
         CRGUIScreenBase( int width, int height, bool doublebuffer  )
-        : _width( width ), _height( height ), _canvas(NULL), _front(NULL)
+        : _width( 0 ), _height( 0 ), _canvas(NULL), _front(NULL)
         , _fullUpdateInterval(1)
         , _fullUpdateCounter(1)
         {
             if ( width && height ) {
-                _canvas = LVRef<LVDrawBuf>( createCanvas( width, height ) );
-                if ( doublebuffer )
-                    _front = LVRef<LVDrawBuf>( createCanvas( width, height ) );
+                LVRef<LVDrawBuf> canvasCandidate =
+                        createCanvas(width, height);
+                LVRef<LVDrawBuf> frontCandidate;
+                if (doublebuffer)
+                    frontCandidate = createCanvas(width, height);
+                if (!canvasCandidate.isNull()
+                        && (!doublebuffer
+                                || !frontCandidate.isNull())) {
+                    _canvas = canvasCandidate;
+                    if (doublebuffer)
+                        _front = frontCandidate;
+                    _width = width;
+                    _height = height;
+                }
             }
         }
         virtual ~CRGUIScreenBase()

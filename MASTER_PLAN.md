@@ -170,9 +170,10 @@ DRM или ограничений доступа, подбор/получени�
   synchronized lifecycle/dispatch, persistent DOM CacheFile ownership и
   owner-backed storage/blob borrows, encoding double-character sparse-row и
   output ownership, а также GUI window-manager screen owner/borrow lifecycle,
-  GUI window/event queue ownership и lifecycle `CRDocViewWindow`, bookmark
-  mutation/highlight-range candidates и transactional bookmark-list
-  publication, render-flow float/shift publication и teardown, table-cell
+  transactional canvas-generation resize, GUI window/event queue ownership и
+  lifecycle `CRDocViewWindow`, bookmark mutation/highlight-range candidates и
+  transactional bookmark-list publication, render-flow float/shift publication
+  и teardown, table-cell
   page-context ownership, draw-time bookmark-range filters и full CCRTable
   row-group/row/column/cell graph publication, включая MathML table expansion,
   FreeType face load-candidates, color-glyph scaling workspace, transactional

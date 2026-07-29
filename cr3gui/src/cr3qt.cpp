@@ -91,14 +91,17 @@ class CRQtScreen : public CRGUIScreenBase
         }
     public:
         /// creates compatible canvas of specified size
-        virtual LVDrawBuf * createCanvas( int dx, int dy )
+        virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )
         {
             // bufDepth
-            LVDrawBuf * buf;
+            LVRef<LVDrawBuf> buf;
             if (_bufDepth==32)
-                buf = new LVColorDrawBuf( dx, dy );
+                buf = LVRef<LVDrawBuf>(
+                        new LVColorDrawBuf(dx, dy));
             else
-                buf = new LVGrayDrawBuf( dx, dy, _bufDepth );
+                buf = LVRef<LVDrawBuf>(
+                        new LVGrayDrawBuf(
+                                dx, dy, _bufDepth));
             buf->Clear(0xFFFFFF);
             return buf;
         }
@@ -112,8 +115,8 @@ class CRQtScreen : public CRGUIScreenBase
             _height = height;
             //CRLog::info( "Device depth=%d, will use rendering depth=%d", (int)im->depth, d );
 
-            _canvas = LVRef<LVDrawBuf>( createCanvas( _width, _height ) );
-            _front = LVRef<LVDrawBuf>( createCanvas( _width, _height ) );
+            _canvas = createCanvas(_width, _height);
+            _front = createCanvas(_width, _height);
             printf("Created screen %d x %d, depth = %d\n", _width, _height, _bufDepth );
         }
 };
