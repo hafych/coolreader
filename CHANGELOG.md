@@ -59,6 +59,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   and labels now share one typed immutable catalog instead of parallel arrays.
 - External dictionary definitions, including intent data keys, now live in one
   immutable catalog; legacy array callers receive independent snapshots.
+- Audio sibling selection and filename transliteration now use private
+  immutable catalogs; extension and replacement arrays no longer escape
+  process scope or depend on OPDS helper types.
 - BaseActivity preference/debug configuration is now immutable, while system
   locale resolution uses a snapshot owned by the current Activity generation.
 - The native Engine retains only application context plus a detachable weak UI

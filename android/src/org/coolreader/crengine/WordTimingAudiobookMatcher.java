@@ -244,7 +244,7 @@ public class WordTimingAudiobookMatcher {
 
 	private Double getAudioFileDuration(File file){
 		try{
-			file = Utils.getAlternativeFile(file, Utils.AUDIO_FILE_EXTS);
+			file = Utils.getAlternativeAudioFile(file);
 			MediaMetadataRetriever m = new MediaMetadataRetriever();
 			m.setDataSource(file.getAbsolutePath());
 			String durationStr = m.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);

@@ -49,13 +49,14 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.TimeZone;
 
 public class Utils {
-	public static final String[] AUDIO_FILE_EXTS = new String[]{"flac", "wav", "m4a", "ogg", "mp3"};
+	private static final AudioFileSelector AUDIO_FILE_SELECTOR =
+			AudioFileSelector.legacy();
+	private static final FileNameTranscriber FILE_NAME_TRANSCRIBER =
+			FileNameTranscriber.legacy();
 
 	public static long timeStamp() {
 		return android.os.SystemClock.uptimeMillis();
@@ -116,38 +117,13 @@ public class Utils {
 	 *         the same basename ending in one of allowedExts
 	 */
 	public static File getAlternativeFile(File origFile, String[] allowedExts) {
-		if(origFile == null) {
-			return null;
-		}
-		if(origFile.exists()) {
-			return origFile;
-		}
-		String fileNoExt = origFile.toString().replaceAll("\\.\\w+$", "");
-		File dir = origFile.getParentFile();
-		if(dir.exists() && dir.isDirectory()) {
-			Map<String, List<File>> filesByExt = new HashMap<>();
-			File firstFile = null;
-			for(File file : dir.listFiles()) {
-				if(!file.toString().startsWith(fileNoExt + ".")){
-					continue;
-				}
-				String ext = file.toString().toLowerCase().replaceAll(".*\\.", "");
-				if(filesByExt.get(ext) == null) {
-					filesByExt.put(ext, new ArrayList<>());
-				}
-				filesByExt.get(ext).add(file);
-				if(firstFile == null) {
-					firstFile = file;
-				}
-			}
-			for(String ext : allowedExts) {
-				if(filesByExt.get(ext) != null){
-					return filesByExt.get(ext).get(0);
-				}
-			}
-			return firstFile;
-		}
-		return null;
+		return new AudioFileSelector(
+				java.util.Arrays.asList(allowedExts))
+				.findAlternative(origFile);
+	}
+
+	public static File getAlternativeAudioFile(File original) {
+		return AUDIO_FILE_SELECTOR.findAlternative(original);
 	}
 
 	private static boolean moveFile(File oldPlace, File newPlace, boolean removeOld) {
@@ -757,36 +733,12 @@ public class Utils {
 		}
 	}
 
-	public static String transcribeFileName( String fileName ) {
-		StringBuilder buf = new StringBuilder(fileName.length());
-		for ( char ch : fileName.toCharArray() ) {
-			boolean found = false;
-			if ( ((ch>='a' && ch<='z') || (ch>='A' && ch<='Z') || (ch>='0' && ch<='9') || ch=='-' || ch=='_' || ch=='(' || ch==')')) {
-				buf.append(ch);
-				continue;
-			}
-			for ( OPDSUtil.SubstTable t : Utils.substTables ) {
-				if ( t.isInRange(ch) ) {
-					buf.append(t.get(ch));
-					found = true;
-				}
-			}
-			if ( found )
-				continue;
-			buf.append("_");
-		}
-		return buf.toString();
+	public static String transcribeFileName(String fileName) {
+		return FILE_NAME_TRANSCRIBER.transcribe(fileName);
 	}
 
-	final static OPDSUtil.SubstTable[] substTables = { 
-		new OPDSUtil.SubstTable(0x430, new String[]{"a", "b", "v", "g", "d", "e", "zh", "z", "i", "j", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "f", "h", "c", "ch", "sh", "sch", "'", "y", "i", "e", "yu", "ya"}),
-		new OPDSUtil.SubstTable(0x410, new String[]{"A", "B", "V", "G", "D", "E", "Zh", "Z", "I", "J", "K", "L", "M", "N", "O", "P", "R", "S", "T", "U", "F", "H", "C", "Ch", "Sh", "Sch", "'", "Y", "I", "E", "Yu", "Ya"}),
-	};
 	public static String transcribeWithLimit(String str, int maxLen) {
-		str = transcribeFileName(str);
-		if (str.length() > maxLen)
-			str = str.substring(0, maxLen);
-		return str;
+		return FILE_NAME_TRANSCRIBER.transcribeWithLimit(str, maxLen);
 	}
 
 	// to support API LEVEL 3: View.setContentDescription() has been added only since API LEVEL 4

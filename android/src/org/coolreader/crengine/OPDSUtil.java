@@ -1066,21 +1066,6 @@ xml:base="http://lib.ololo.cc/opds/">
 		return new DownloadTask(coolReader, engine, serviceLifecycle, uri, defaultFileName, expectedType, referer, callback, username, password);
 	}
 
-	static class SubstTable {
-		private final int startChar;
-		private final String[] replacements;
-		public SubstTable( int startChar, String[] replacements ) {
-			this.startChar = startChar;
-			this.replacements = replacements;
-		}
-		boolean isInRange( char ch ) {
-			return ch>=startChar && ch<startChar + replacements.length;
-		}
-		String get( char ch ) {
-			return (ch>=startChar && ch<startChar + replacements.length) ? replacements[ch - startChar] : "";
-		}
-	}
-	
 	public static final int PROGRESS_DELAY_MILLIS = 2000;
 	public static final int MAX_OPDS_ITEMS = 1000;
 	public static final int MAX_XML_DEPTH = 128;

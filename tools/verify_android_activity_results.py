@@ -293,6 +293,36 @@ ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
 COVERPAGE_MANAGER = SOURCE / "crengine" / "CoverpageManager.java"
 FILE_SYSTEM_FOLDERS = SOURCE / "crengine" / "FileSystemFolders.java"
 UTILS = SOURCE / "crengine" / "Utils.java"
+AUDIO_FILE_SELECTOR = SOURCE / "crengine" / "AudioFileSelector.java"
+FILE_NAME_TRANSCRIBER = SOURCE / "crengine" / "FileNameTranscriber.java"
+AUDIO_FILE_SELECTOR_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "AudioFileSelectorTest.java"
+)
+FILE_NAME_TRANSCRIBER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "FileNameTranscriberTest.java"
+)
+WORD_TIMING_AUDIOBOOK_MATCHER = (
+    SOURCE / "crengine" / "WordTimingAudiobookMatcher.java"
+)
+TTS_CONTROL_SERVICE = SOURCE / "tts" / "TTSControlService.java"
 ABOUT_DIALOG = SOURCE / "crengine" / "AboutDialog.java"
 OPTIONS_DIALOG = SOURCE / "crengine" / "OptionsDialog.java"
 STYLE_OPTION_CATALOG = SOURCE / "crengine" / "StyleOptionCatalog.java"
@@ -1337,13 +1367,96 @@ def main() -> None:
         "deleteFolder(FileInfo folder, Scanner scanner",
         "deleteFolderDocTree(FileInfo folder, Scanner scanner",
         "return ReadingTimeFormatter.format(timeElapsed)",
+        "private static final AudioFileSelector AUDIO_FILE_SELECTOR",
+        "private static final FileNameTranscriber FILE_NAME_TRANSCRIBER",
+        "return AUDIO_FILE_SELECTOR.findAlternative(original)",
+        "return FILE_NAME_TRANSCRIBER.transcribe(fileName)",
+        "return FILE_NAME_TRANSCRIBER.transcribeWithLimit(str, maxLen)",
     ):
         if marker not in utils_text:
             violations.append(f"{relative(UTILS)} omits marker: {marker}")
+    for legacy in (
+        "AUDIO_FILE_EXTS",
+        "substTables",
+        "OPDSUtil.SubstTable",
+    ):
+        if legacy in utils_text:
+            violations.append(
+                f"{relative(UTILS)} retains mutable/coupled lookup storage: "
+                f"{legacy}")
     if re.search(r"\(int\)\s*timeElapsed", utils_text):
         violations.append(
             f"{relative(UTILS)} narrows persisted reading time before "
             "formatting")
+
+    audio_file_selector_text = AUDIO_FILE_SELECTOR.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class AudioFileSelector",
+        "private final List<String> extensions",
+        "Collections.unmodifiableList(copy)",
+        "copy.add(extension.toLowerCase(Locale.ROOT))",
+        '"flac", "wav", "m4a", "ogg", "mp3"',
+        "File findAlternative(File original)",
+    ):
+        if marker not in audio_file_selector_text:
+            violations.append(
+                f"{relative(AUDIO_FILE_SELECTOR)} omits immutable audio "
+                f"lookup marker: {marker}")
+
+    audio_file_selector_test_text = AUDIO_FILE_SELECTOR_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "legacyPrioritySelectsPreferredExistingSibling",
+        "existingOriginalAndSingleFallbackArePreserved",
+        "extensionPriorityIsCopiedAndCannotBeMutated",
+        "invalidExtensionPriorityIsRejected",
+    ):
+        if marker not in audio_file_selector_test_text:
+            violations.append(
+                f"{relative(AUDIO_FILE_SELECTOR_TEST)} omits audio lookup "
+                f"regression: {marker}")
+
+    file_name_transcriber_text = FILE_NAME_TRANSCRIBER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class FileNameTranscriber",
+        "private final List<SubstitutionTable> tables",
+        "Collections.unmodifiableList(",
+        "private final String[] replacements",
+        "this.replacements = replacements.clone()",
+        "String transcribeWithLimit(String fileName, int maximumLength)",
+    ):
+        if marker not in file_name_transcriber_text:
+            violations.append(
+                f"{relative(FILE_NAME_TRANSCRIBER)} omits immutable "
+                f"transliteration marker: {marker}")
+
+    file_name_transcriber_test_text = FILE_NAME_TRANSCRIBER_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "legacyCyrillicAndAsciiMappingIsPreserved",
+        "limitIsAppliedAfterTransliterationExpansion",
+        "storageIsPrivateFinalAndInstanceOwned",
+        "invalidInputIsRejected",
+        '"Privet_mir_txt"',
+        '"Schuka"',
+    ):
+        if marker not in file_name_transcriber_test_text:
+            violations.append(
+                f"{relative(FILE_NAME_TRANSCRIBER_TEST)} omits filename "
+                f"transliteration regression: {marker}")
+
+    for path in (
+            WORD_TIMING_AUDIOBOOK_MATCHER,
+            TTS_CONTROL_SERVICE):
+        text = path.read_text(encoding="utf-8")
+        if "Utils.getAlternativeAudioFile(" not in text:
+            violations.append(
+                f"{relative(path)} bypasses the immutable audio lookup owner")
+        if "Utils.AUDIO_FILE_EXTS" in text:
+            violations.append(
+                f"{relative(path)} still reads a mutable extension array")
 
     reading_time_formatter_text = READING_TIME_FORMATTER.read_text(
         encoding="utf-8")
@@ -1521,6 +1634,9 @@ def main() -> None:
             opds_text):
         violations.append(
             f"{relative(OPDS_UTIL)} retains a shared date formatter")
+    if re.search(r"\bclass\s+SubstTable\b", opds_text):
+        violations.append(
+            f"{relative(OPDS_UTIL)} retains filename transliteration storage")
 
     feed_timestamp_parser_text = FEED_TIMESTAMP_PARSER.read_text(
         encoding="utf-8")

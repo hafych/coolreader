@@ -1405,7 +1405,7 @@ public class TTSControlService extends BaseService {
 		if(mMediaPlayer != null && mMediaPlayer.isPlaying()){
 			return;
 		}
-		File fileToPlay = Utils.getAlternativeFile(audioFile, Utils.AUDIO_FILE_EXTS);
+		File fileToPlay = Utils.getAlternativeAudioFile(audioFile);
 		if(fileToPlay == null || !fileToPlay.exists()){
 			return;
 		}

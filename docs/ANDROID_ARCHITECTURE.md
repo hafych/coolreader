@@ -58,6 +58,12 @@ synchronized process registry. JNI receives a frozen array snapshot exactly
 once; Java callers receive independent arrays, and definitions arriving after
 native initialization are rejected instead of appearing only on the Java side.
 
+Audio sibling selection and filename-safe transliteration are private,
+immutable policies owned by `Utils`. Audio extension priority is copied into an
+unmodifiable list, transliteration tables copy their replacement arrays, and
+callers use narrow lookup methods instead of receiving process-wide arrays.
+The filename policy is independent of OPDS download types.
+
 Scanner filesystem/resource access and cached online-store plugins also retain
 only application context. Cached process objects must never capture the
 Activity that first requested them.

@@ -310,6 +310,47 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void utilsLookupCatalogsHaveImmutablePrivateStorage()
+			throws Exception {
+		for (String name : new String[]{
+				"AUDIO_FILE_SELECTOR",
+				"FILE_NAME_TRANSCRIBER"}) {
+			Field owner = Utils.class.getDeclaredField(name);
+			assertTrue(Modifier.isStatic(owner.getModifiers()));
+			assertTrue(Modifier.isPrivate(owner.getModifiers()));
+			assertTrue(Modifier.isFinal(owner.getModifiers()));
+		}
+		for (Class<?> owner : new Class<?>[]{
+				AudioFileSelector.class,
+				FileNameTranscriber.class}) {
+			for (Field field : owner.getDeclaredFields()) {
+				assertFalse(Modifier.isStatic(field.getModifiers()));
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (Class<?> nested :
+				FileNameTranscriber.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				assertFalse(Modifier.isStatic(field.getModifiers()));
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (Field field : Utils.class.getDeclaredFields()) {
+			assertFalse(
+					"Utils exposes a legacy mutable lookup array",
+					field.getName().equals("AUDIO_FILE_EXTS")
+							|| field.getName().equals("substTables"));
+		}
+		for (Class<?> nested : OPDSUtil.class.getDeclaredClasses()) {
+			assertFalse(
+					"Filename transliteration must not belong to OPDS",
+					nested.getSimpleName().equals("SubstTable"));
+		}
+	}
+
+	@Test
 	public void readerBitmapMemoryStateBelongsToOneGeneration()
 			throws Exception {
 		for (String name : new String[]{"runtime", "factory"}) {

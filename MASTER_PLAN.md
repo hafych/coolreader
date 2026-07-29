@@ -151,6 +151,8 @@ DRM или ограничений доступа, подбор/получени�
   также ReaderView-owned saturating reading-time tracker без getter mutation и
   double-count на повторных lifecycle signals, плюс locale-aware long reading
   time formatter без int narrowing для multi-day persisted durations.
+  Также audio sibling lookup и filename transliteration вынесены в private
+  immutable owners без process-wide array escape и зависимости от OPDS types.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
