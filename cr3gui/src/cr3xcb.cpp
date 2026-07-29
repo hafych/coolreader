@@ -964,8 +964,8 @@ class XCBDocViewWin : public V3DocViewWin
             ((CRXCBWindowManager*)_wm)->updateProperties();
         }
         
-        XCBDocViewWin( CRGUIWindowManager * wm, lString16 dataDir )
-        : V3DocViewWin( wm, dataDir )
+        explicit XCBDocViewWin( CRGUIWindowManager * wm )
+        : V3DocViewWin( wm )
         {
         }
         virtual ~XCBDocViewWin()
@@ -1406,8 +1406,7 @@ int main(int argc, char **argv)
         HyphMan::initDictionaries( lString16("/usr/share/cr3/hyph/") );
         //LVExtractPath(LocalToUnicode(lString8(fname)))
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
-                std::make_unique<XCBDocViewWin>(
-                        &winman, lString16(CRSKIN));
+                std::make_unique<XCBDocViewWin>(&winman);
         main_win = mainWindowOwner.get();
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);

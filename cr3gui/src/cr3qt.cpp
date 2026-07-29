@@ -185,8 +185,8 @@ class QtDocViewWin : public V3DocViewWin
             //((CRQtWindowManager*)_wm)->updateProperties();
         }
         
-        QtDocViewWin( CRGUIWindowManager * wm, lString16 dataDir )
-        : V3DocViewWin( wm, dataDir )
+        explicit QtDocViewWin( CRGUIWindowManager * wm )
+        : V3DocViewWin( wm )
         {
         }
         virtual ~QtDocViewWin()
@@ -416,8 +416,7 @@ int main(int argc, char **argv)
         HyphMan::initDictionaries(lString16("/usr/share/cr3/hyph/"));
         //LVExtractPath(LocalToUnicode(lString8(fname)))
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
-                std::make_unique<QtDocViewWin>(
-                        &winman, lString16(CRSKIN));
+                std::make_unique<QtDocViewWin>(&winman);
         main_win = mainWindowOwner.get();
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);

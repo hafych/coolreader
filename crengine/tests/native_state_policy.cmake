@@ -7182,6 +7182,26 @@ forbid_source_text(
   "lString16 getHelpFile"
   "main windows must not expose an unused legacy help-path accessor"
 )
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "explicit V3DocViewWin( CRGUIWindowManager * wm );"
+  "main-window construction must not retain an unused path parameter"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "V3DocViewWin( CRGUIWindowManager * wm, lString16"
+  "main-window construction must not retain legacy data-directory paths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "lString16 getBookmarkDir"
+  "main windows must not expose an unused legacy bookmark-path accessor"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "lString16 dataDir"
+  "GUI platform document windows must not retain unused legacy path parameters"
+)
 forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "V3DocViewWin::getHelpFile"

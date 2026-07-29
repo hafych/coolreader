@@ -72,10 +72,9 @@
 DECL_DEF_CR_FONT_SIZES;
 
 
-V3DocViewWin::V3DocViewWin(
-        CRGUIWindowManager * wm, lString16 /* dataDir */)
+V3DocViewWin::V3DocViewWin( CRGUIWindowManager * wm )
 : CRViewDialog(
-        wm, lString16::empty_str, lString8::empty_str,
+        wm, lString32::empty_str, lString8::empty_str,
         lvRect(), false, false),
   _loadFileStart(0)
 {

@@ -124,7 +124,6 @@ protected:
     lString32 _cssDir;
     time_t _loadFileStart;
 public:
-    lString16 getBookmarkDir() { return UnicodeToUtf16(_bookmarkDir); }
     void setBookmarkDir( lString32 dir ) { _bookmarkDir = dir; }
     void setBookmarkDir( lString16 dir )
     {
@@ -209,7 +208,7 @@ public:
         _docview->propsUpdateDefaults( _props );
     }
 
-    V3DocViewWin( CRGUIWindowManager * wm, lString16 dataDir );
+    explicit V3DocViewWin( CRGUIWindowManager * wm );
 
     void applySettings();
 

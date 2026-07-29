@@ -484,8 +484,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         winman.loadSkin( LVExtractPath(LocalToUnicode(lString8(exe_fn))) + "skin" );
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
                 std::make_unique<V3DocViewWin>(
-                        &winman,
-                        LVExtractPath(LocalToUnicode(lString8(exe_fn))));
+                        &winman);
         V3DocViewWin * main_win = mainWindowOwner.get();
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);

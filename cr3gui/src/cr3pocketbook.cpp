@@ -1026,8 +1026,8 @@ protected:
 
 public:
     static CRPocketBookDocView * instance;
-    CRPocketBookDocView( CRGUIWindowManager * wm, lString16 dataDir )
-        : V3DocViewWin( wm, dataDir ), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(NULL), _rotatetimerset(false),
+    explicit CRPocketBookDocView( CRGUIWindowManager * wm )
+        : V3DocViewWin( wm ), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(NULL), _rotatetimerset(false),
         _lastturn(true), _pauseRotationTimer(false), m_goToPage(-1), _restore_globOrientation(false), m_skipEvent(false)
     {
         instance = this;
@@ -2456,8 +2456,7 @@ int InitDoc(const char *exename, char *fileName)
             ldomDocCache::init(lString16(USERDATA"/share/cr3/.cache"), PB_CR3_CACHE_SIZE);
         CRLog::trace("creating main window...");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
-                std::make_unique<CRPocketBookDocView>(
-                        wm, lString16(USERDATA"/share/cr3"));
+                std::make_unique<CRPocketBookDocView>(wm);
         main_win = mainWindowOwner.get();
         CRLog::trace("setting colors...");
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);

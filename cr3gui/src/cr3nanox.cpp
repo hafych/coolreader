@@ -1084,8 +1084,8 @@ CRJinkeWindowManager * CRJinkeWindowManager::instance = NULL;
 class CRJinkeDocView : public V3DocViewWin {
 public:
     static CRJinkeDocView * instance;
-    CRJinkeDocView( CRGUIWindowManager * wm, lString16 dataDir )
-    : V3DocViewWin( wm, dataDir )
+    explicit CRJinkeDocView( CRGUIWindowManager * wm )
+    : V3DocViewWin( wm )
     {
         instance = this;
     }
@@ -1401,8 +1401,7 @@ int InitDoc(char *fileName)
 
         CRLog::trace("creating main window...");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
-                std::make_unique<CRJinkeDocView>(
-                        wm, lString16("/root/crengine"));
+                std::make_unique<CRJinkeDocView>(wm);
         main_win = mainWindowOwner.get();
         CRLog::trace("setting colors...");
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
