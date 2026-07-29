@@ -10,7 +10,7 @@
 package org.coolreader.crengine;
 
 /**
- * Owns one exact OPEN_DOCUMENT_TREE command and argument.
+ * Owns one exact OPEN_DOCUMENT_TREE command, argument and attempt.
  */
 public final class DocumentTreeRequestState<T> {
 	public enum Command {
@@ -42,11 +42,22 @@ public final class DocumentTreeRequestState<T> {
 	public synchronized Request<T> begin(
 			Command command,
 			T argument) {
+		return begin(command, argument, 0);
+	}
+
+	public synchronized Request<T> begin(
+			Command command,
+			T argument,
+			int attempt) {
 		if (current != null
 				|| command == null
-				|| argument == null)
+				|| argument == null
+				|| attempt < 0)
 			return null;
-		current = new Request<>(command, argument);
+		current = new Request<>(
+				command,
+				argument,
+				attempt);
 		return current;
 	}
 
@@ -74,10 +85,15 @@ public final class DocumentTreeRequestState<T> {
 	public static final class Request<T> {
 		private final Command command;
 		private final T argument;
+		private final int attempt;
 
-		private Request(Command command, T argument) {
+		private Request(
+				Command command,
+				T argument,
+				int attempt) {
 			this.command = command;
 			this.argument = argument;
+			this.attempt = attempt;
 		}
 
 		public Command getCommand() {
@@ -86,6 +102,10 @@ public final class DocumentTreeRequestState<T> {
 
 		public T getArgument() {
 			return argument;
+		}
+
+		public int getAttempt() {
+			return attempt;
 		}
 	}
 }

@@ -322,6 +322,13 @@ DRM или ограничений доступа, подбор/получени�
   завершают один общий history effect: DB binder nullable-safe, callback
   принадлежит captured service generation, а delayed directory/recent refresh
   повторно проверяет lifecycle и не обновляет уничтоженную Activity.
+  Recursive folder delete продолжает тот же clone-on-boundary contract:
+  direct I/O и DocumentsContract работают с captured target, успешные child
+  books передаются одним immutable batch в lifecycle-checked DB effect, а
+  directory refresh выполняется только для captured parent. SAF retry attempt
+  атомарно хранится вместе с picker command/argument и восстанавливается через
+  Bundle; общего mutable retry counter между операциями больше нет, а cancel
+  picker обновляет captured parent после возможного partial delete.
   `LoadDocumentTask` хранит свой `BookInfo` вместо чтения mutable global book
   во время engine work; только current generation публикует UI, failure
   recovery и позднее stream-to-cache/fingerprint reconciliation. Закрытие

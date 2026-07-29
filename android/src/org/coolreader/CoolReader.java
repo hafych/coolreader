@@ -120,6 +120,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -208,6 +209,9 @@ public class CoolReader extends BaseActivity {
 			"openDocumentTreeCommand";
 	private static final String STATE_OPEN_DOCUMENT_TREE_ARG =
 			"openDocumentTreeArg";
+	private static final String STATE_OPEN_DOCUMENT_TREE_ATTEMPT =
+			"openDocumentTreeAttempt";
+	private static final int MAX_FOLDER_DELETE_PICKER_ATTEMPTS = 3;
 
 	private final BroadcastReceiver batteryChangeReceiver = new BroadcastReceiver() {
 		@Override
@@ -285,9 +289,14 @@ public class CoolReader extends BaseActivity {
 			FileInfo argument =
 					savedInstanceState.getParcelable(
 							STATE_OPEN_DOCUMENT_TREE_ARG);
+			int attempt =
+					savedInstanceState.getInt(
+							STATE_OPEN_DOCUMENT_TREE_ATTEMPT,
+							0);
 			openDocumentTreeRequests.begin(
 					command,
-					argument);
+					argument,
+					attempt);
 		}
 
 		isFirstStart = true;
@@ -1094,6 +1103,9 @@ public class CoolReader extends BaseActivity {
 			outState.putParcelable(
 					STATE_OPEN_DOCUMENT_TREE_ARG,
 					treeRequest.getArgument());
+			outState.putInt(
+					STATE_OPEN_DOCUMENT_TREE_ATTEMPT,
+					treeRequest.getAttempt());
 		}
 		super.onSaveInstanceState(outState);
 	}
@@ -2132,8 +2144,14 @@ public class CoolReader extends BaseActivity {
 			log.w("Ignoring document tree result without an owner");
 			return;
 		}
-		if (resultCode != Activity.RESULT_OK || intent == null)
+		if (resultCode != Activity.RESULT_OK || intent == null) {
+			if (request.getCommand()
+					== DocumentTreeRequestState.Command.DELETE_FOLDER) {
+				refreshFolderDeletionParent(
+						request.getArgument());
+			}
 			return;
+		}
 		switch (request.getCommand()) {
 			case DELETE_FILE:
 				handleDeleteFileTreeResult(
@@ -2143,7 +2161,8 @@ public class CoolReader extends BaseActivity {
 			case DELETE_FOLDER:
 				handleDeleteFolderTreeResult(
 						intent.getData(),
-						request.getArgument());
+						request.getArgument(),
+						request.getAttempt());
 				break;
 			case SAVE_LOGCAT:
 				handleSaveLogcatTreeResult(
@@ -2153,13 +2172,37 @@ public class CoolReader extends BaseActivity {
 		}
 	}
 
+	private void refreshFolderDeletionParent(FileInfo target) {
+		if (!mServiceLifecycle.isActive())
+			return;
+		DeletionSnapshot<FileInfo> deletion =
+				captureDeletion(target);
+		FileInfo parent =
+				deletion != null
+						? deletion.getParent()
+						: null;
+		if (parent != null && mServiceLifecycle.isActive())
+			directoryUpdated(parent, null);
+	}
+
 	private boolean launchOpenDocumentTree(
 			DocumentTreeRequestState.Command command,
 			FileInfo argument) {
+		return launchOpenDocumentTree(
+				command,
+				argument,
+				0);
+	}
+
+	private boolean launchOpenDocumentTree(
+			DocumentTreeRequestState.Command command,
+			FileInfo argument,
+			int attempt) {
 		DocumentTreeRequestState.Request<FileInfo> request =
 				openDocumentTreeRequests.begin(
 						command,
-						argument);
+						argument,
+						attempt);
 		if (request == null) {
 			log.w("Document tree request is already pending");
 			return false;
@@ -2199,20 +2242,35 @@ public class CoolReader extends BaseActivity {
 
 	private void handleDeleteFolderTreeResult(
 			Uri sdCardUri,
-			FileInfo target) {
+			FileInfo target,
+			int pickerAttempt) {
 		if (target == null || !target.isDirectory)
 			return;
+		DeletionSnapshot<FileInfo> deletion =
+				captureDeletion(target);
 		Uri documentUri = sdCardUri != null
 				? DocumentsContractWrapper.getDocumentUri(
 						target, this, sdCardUri)
 				: null;
 		if (documentUri == null) {
-			showToast(R.string.could_not_delete_on_sd);
+			postFolderDeletionFailure(
+					mServiceLifecycle,
+					deletion,
+					new ArrayList<>(),
+					pickerAttempt);
 			return;
 		}
 		if (DocumentsContractWrapper.fileExists(this, documentUri)) {
 			updateExtSDURI(target, sdCardUri);
-			deleteFolder(target);
+			deleteFolder(
+					deletion,
+					pickerAttempt);
+		} else {
+			postFolderDeletionFailure(
+					mServiceLifecycle,
+					deletion,
+					new ArrayList<>(),
+					pickerAttempt);
 		}
 	}
 
@@ -2572,63 +2630,198 @@ public class CoolReader extends BaseActivity {
 		});
 	}
 
-	int mFolderDeleteRetryCount = 0;
 	public void askDeleteFolder(final FileInfo item) {
+		DeletionSnapshot<FileInfo> requested =
+				captureDeletion(item);
+		FileInfo requestedTarget =
+				requested != null
+						? requested.getTarget()
+						: null;
+		if (!isDeletableFolder(requestedTarget))
+			return;
+		ServiceLifecycle lifecycle = mServiceLifecycle;
 		askConfirmation(R.string.win_title_confirm_folder_delete, () -> {
-			mFolderDeleteRetryCount = 0;
-			deleteFolder(item);
+			if (lifecycle.isActive())
+				deleteFolder(requested, 0);
 		});
 	}
 
-	private void deleteFolder(final FileInfo item) {
-		if (mFolderDeleteRetryCount > 3)
+	private void deleteFolder(
+			DeletionSnapshot<FileInfo> deletion,
+			int pickerAttempt) {
+		if (deletion == null
+				|| pickerAttempt < 0
+				|| !mServiceLifecycle.isActive())
 			return;
-		if (item != null && item.isDirectory && !item.isOPDSDir() && !item.isOnlineCatalogPluginDir()) {
-			FileInfoOperationListener bookDeleteCallback = (fileInfo, errorStatus) -> {
-				if (0 == errorStatus && null != fileInfo.format) {
-					BackgroundThread.instance().executeGUI(() -> {
-						waitForCRDBService(() -> mHistory.removeBookInfo(
-								getDB(), fileInfo, true, true));
-					});
-				}
-			};
-			BackgroundThread.instance().postBackground(() -> Utils.deleteFolder(item, mScanner, bookDeleteCallback, (fileInfo, errorStatus) -> {
-				if (0 == errorStatus) {
-					BackgroundThread.instance().executeGUI(() -> directoryUpdated(fileInfo.parent));
-				} else {
-					// Can't be deleted using standard Java I/O,
-					// Try DocumentContract wrapper...
-					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-						Uri sdCardUri = getExtSDURIByFileInfo(item);
-						if (null != sdCardUri) {
-							Utils.deleteFolderDocTree(item, mScanner, this, sdCardUri, bookDeleteCallback, (fileInfo2, errorStatus2) -> {
-								BackgroundThread.instance().executeGUI(() -> {
-									if (0 == errorStatus2) {
-										directoryUpdated(fileInfo2.parent);
-									} else {
-										showToast(R.string.choose_root_sd);
-										mFolderDeleteRetryCount++;
-										launchOpenDocumentTree(
-												DocumentTreeRequestState.Command
-														.DELETE_FOLDER,
-												item);
-									}
-								});
-							});
-						} else {
-							BackgroundThread.instance().executeGUI(() -> {
-								showToast(R.string.choose_root_sd);
-								mFolderDeleteRetryCount++;
-								launchOpenDocumentTree(
-										DocumentTreeRequestState.Command
-												.DELETE_FOLDER,
-										item);
-							});
-						}
-					}
-				}
-			}));
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		if (pickerAttempt > MAX_FOLDER_DELETE_PICKER_ATTEMPTS) {
+			postFolderDeletionFailure(
+					lifecycle,
+					deletion,
+					new ArrayList<>(),
+					pickerAttempt);
+			return;
 		}
+		FileInfo target = deletion.getTarget();
+		if (!isDeletableFolder(target))
+			return;
+		Scanner scanner = mScanner;
+		Context appContext = getApplicationContext();
+		Uri knownSdCardUri =
+				Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+						? getExtSDURIByFileInfo(target)
+						: null;
+		BackgroundThread.instance().postBackground(() -> {
+			if (!lifecycle.isActive())
+				return;
+			List<FileInfo> deletedBooks = new ArrayList<>();
+			FileInfoOperationListener bookDeleteCallback =
+					(fileInfo, errorStatus) -> {
+						if (errorStatus == 0
+								&& fileInfo != null
+								&& fileInfo.format != null) {
+							deletedBooks.add(
+									copyDeletionFile(fileInfo));
+						}
+					};
+			boolean deleted = Utils.deleteFolder(
+					target,
+					scanner,
+					bookDeleteCallback,
+					(fileInfo, errorStatus) -> {
+					});
+			if (deleted) {
+				postFolderDeletionSuccess(
+						lifecycle,
+						deletion,
+						deletedBooks);
+				return;
+			}
+			if (!lifecycle.isActive())
+				return;
+			if (knownSdCardUri != null) {
+				deleted = Utils.deleteFolderDocTree(
+						target,
+						scanner,
+						appContext,
+						knownSdCardUri,
+						bookDeleteCallback,
+						(fileInfo, errorStatus) -> {
+						});
+				if (deleted) {
+					postFolderDeletionSuccess(
+							lifecycle,
+							deletion,
+							deletedBooks);
+					return;
+				}
+			}
+			postFolderDeletionFailure(
+					lifecycle,
+					deletion,
+					deletedBooks,
+					pickerAttempt);
+		});
+	}
+
+	private void postFolderDeletionSuccess(
+			ServiceLifecycle lifecycle,
+			DeletionSnapshot<FileInfo> deletion,
+			List<FileInfo> deletedBooks) {
+		List<FileInfo> books =
+				copyDeletionFiles(deletedBooks);
+		FileInfo parent = deletion.getParent();
+		BackgroundThread.instance().executeGUI(() ->
+				applyFolderDeletionEffects(
+						lifecycle,
+						books,
+						parent));
+	}
+
+	private void postFolderDeletionFailure(
+			ServiceLifecycle lifecycle,
+			DeletionSnapshot<FileInfo> deletion,
+			List<FileInfo> deletedBooks,
+			int pickerAttempt) {
+		List<FileInfo> books =
+				copyDeletionFiles(deletedBooks);
+		FileInfo target = deletion.getTarget();
+		FileInfo parent = deletion.getParent();
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!lifecycle.isActive())
+				return;
+			boolean retryAllowed =
+					Build.VERSION.SDK_INT
+							>= Build.VERSION_CODES.LOLLIPOP
+					&& pickerAttempt
+							< MAX_FOLDER_DELETE_PICKER_ATTEMPTS;
+			applyFolderDeletionEffects(
+					lifecycle,
+					books,
+					retryAllowed ? null : parent);
+			if (!retryAllowed) {
+				showToast(
+						R.string.could_not_delete_file,
+						target);
+				return;
+			}
+			showToast(R.string.choose_root_sd);
+			if (!launchOpenDocumentTree(
+					DocumentTreeRequestState.Command
+							.DELETE_FOLDER,
+					target,
+					pickerAttempt + 1)) {
+				if (parent != null && lifecycle.isActive())
+					directoryUpdated(parent, null);
+				showToast(
+						R.string.could_not_delete_file,
+						target);
+			}
+		});
+	}
+
+	private void applyFolderDeletionEffects(
+			ServiceLifecycle lifecycle,
+			List<FileInfo> deletedBooks,
+			FileInfo parent) {
+		if (!lifecycle.isActive())
+			return;
+		if (!deletedBooks.isEmpty()) {
+			waitForCRDBService(() -> {
+				if (!lifecycle.isActive())
+					return;
+				CRDBService.LocalBinder db = getDB();
+				if (db == null)
+					return;
+				for (FileInfo book : deletedBooks) {
+					mHistory.removeBookInfo(
+							db,
+							book,
+							true,
+							true);
+				}
+			});
+		}
+		if (parent != null && lifecycle.isActive())
+			directoryUpdated(parent, null);
+	}
+
+	private static List<FileInfo> copyDeletionFiles(
+			List<FileInfo> files) {
+		List<FileInfo> copies =
+				new ArrayList<>(files.size());
+		for (FileInfo file : files) {
+			if (file != null)
+				copies.add(copyDeletionFile(file));
+		}
+		return Collections.unmodifiableList(copies);
+	}
+
+	private static boolean isDeletableFolder(FileInfo item) {
+		return item != null
+				&& item.isDirectory
+				&& !item.isOPDSDir()
+				&& !item.isOnlineCatalogPluginDir();
 	}
 
 	public void createLogcatFile() {

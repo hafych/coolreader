@@ -840,6 +840,12 @@ REQUIRED_COOL_READER_MARKERS = (
     "registerForActivityResult",
     "STATE_OPEN_DOCUMENT_TREE_COMMAND",
     "STATE_OPEN_DOCUMENT_TREE_ARG",
+    "STATE_OPEN_DOCUMENT_TREE_ATTEMPT",
+    "request.getAttempt()",
+    "postFolderDeletionSuccess(",
+    "postFolderDeletionFailure(",
+    "applyFolderDeletionEffects(",
+    "refreshFolderDeletionParent(",
     "private final DocumentLoadLifecycle documentLoadLifecycle",
     "documentLoadLifecycle.replace()",
     "runInReader(loadOwner,",
@@ -4178,6 +4184,9 @@ def main() -> None:
         if marker not in cool_reader_text:
             violations.append(
                 f"{relative(COOL_READER)} omits marker: {marker}")
+    if "mFolderDeleteRetryCount" in cool_reader_text:
+        violations.append(
+            f"{relative(COOL_READER)} retains shared folder-delete retry state")
     if "ServiceDependencies dependencies = getServiceDependencies()" not in (
             cool_reader_text):
         violations.append(

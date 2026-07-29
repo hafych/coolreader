@@ -1098,6 +1098,63 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void folderDeletionOwnsRetryAndCompletionEffects()
+			throws Exception {
+		for (Field field : CoolReader.class.getDeclaredFields()) {
+			assertFalse(field.getName().equals(
+					"mFolderDeleteRetryCount"));
+		}
+		Field maxAttempts =
+				CoolReader.class.getDeclaredField(
+						"MAX_FOLDER_DELETE_PICKER_ATTEMPTS");
+		assertTrue(Modifier.isPrivate(
+				maxAttempts.getModifiers()));
+		assertTrue(Modifier.isStatic(
+				maxAttempts.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				maxAttempts.getModifiers()));
+
+		Method deleteFolder =
+				CoolReader.class.getDeclaredMethod(
+						"deleteFolder",
+						DeletionSnapshot.class,
+						int.class);
+		assertTrue(Modifier.isPrivate(
+				deleteFolder.getModifiers()));
+		Method postSuccess =
+				CoolReader.class.getDeclaredMethod(
+						"postFolderDeletionSuccess",
+						ServiceLifecycle.class,
+						DeletionSnapshot.class,
+						java.util.List.class);
+		assertTrue(Modifier.isPrivate(
+				postSuccess.getModifiers()));
+		Method postFailure =
+				CoolReader.class.getDeclaredMethod(
+						"postFolderDeletionFailure",
+						ServiceLifecycle.class,
+						DeletionSnapshot.class,
+						java.util.List.class,
+						int.class);
+		assertTrue(Modifier.isPrivate(
+				postFailure.getModifiers()));
+		Method applyEffects =
+				CoolReader.class.getDeclaredMethod(
+						"applyFolderDeletionEffects",
+						ServiceLifecycle.class,
+						java.util.List.class,
+						FileInfo.class);
+		assertTrue(Modifier.isPrivate(
+				applyEffects.getModifiers()));
+		Method refreshParent =
+				CoolReader.class.getDeclaredMethod(
+						"refreshFolderDeletionParent",
+						FileInfo.class);
+		assertTrue(Modifier.isPrivate(
+				refreshParent.getModifiers()));
+	}
+
+	@Test
 	public void documentTreePickerOwnsAtomicRestorableRequest()
 			throws Exception {
 		Field requests =
@@ -1123,6 +1180,19 @@ public class ActivityOwnershipPolicyTest {
 				"begin",
 				DocumentTreeRequestState.Command.class,
 				Object.class);
+		assertSynchronizedMethod(
+				DocumentTreeRequestState.class,
+				"begin",
+				DocumentTreeRequestState.Command.class,
+				Object.class,
+				int.class);
+		Field attempt =
+				DocumentTreeRequestState.Request.class
+						.getDeclaredField("attempt");
+		assertTrue(Modifier.isPrivate(
+				attempt.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				attempt.getModifiers()));
 		assertSynchronizedMethod(
 				DocumentTreeRequestState.class,
 				"peek");

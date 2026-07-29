@@ -141,6 +141,14 @@ Direct-file and SAF success enter the same history effect. Database readiness is
 nullable-safe and tied to the captured service generation; delayed directory or
 recent-shelf refresh checks that lifecycle again and cannot update a destroyed
 Activity.
+Recursive folder deletion extends the same clone-on-boundary contract across
+direct I/O and DocumentsContract fallback. Successfully removed child books
+cross back to the UI as one copied batch for a lifecycle-checked database
+effect, and only the captured parent may be refreshed. The SAF retry attempt is
+stored atomically with the picker command and target and survives Bundle
+restore; concurrent operations share no mutable retry counter. Picker
+cancellation refreshes only the captured parent after any partial direct
+deletion.
 Each `LoadDocumentTask` retains its own `BookInfo`, settings and completion
 state rather than consulting a book pointer that another request can replace
 while native parsing is running. The old book is saved and marked closed before
