@@ -1345,9 +1345,19 @@ forbid_source_text(
   "FreeType face failure must remain scope-bound"
 )
 require_source_text(
-  "${FREETYPE_FONT_MANAGER_SOURCE}"
-  "using FreeTypeFaceOwner ="
+  "${FREETYPE_FACE_HEADER}"
+  "class FreeTypeFaceOwner"
   "FreeType enumeration faces must use deleter-aware exclusive ownership"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "std::unique_ptr<FT_FaceRec_, FreeTypeFaceDeleter> _owner"
+  "FreeType face handles must retain standard exclusive ownership"
+)
+require_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "FreeTypeFaceOwner _face"
+  "persistent FreeType faces must use the shared handle owner"
 )
 require_source_text(
   "${FREETYPE_FONT_MANAGER_SOURCE}"
@@ -1369,8 +1379,43 @@ forbid_source_text(
   "FT_Face face = NULL"
   "font enumeration loops must not retain raw FreeType face owners"
 )
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "_hb_font.reset();"
+  "persistent HarfBuzz fonts must release before FreeType face reload"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "FreeTypeFaceOwner candidate(rawFace)"
+  "persistent FreeType face creation must begin as a scoped candidate"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "_face = std::move(candidate)"
+  "persistent FreeType faces must publish by ownership transfer"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "_slot = nullptr"
+  "FreeType glyph slots must clear with their backing face"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_HEADER}"
+  "FT_Face _face"
+  "persistent FreeType faces must not retain raw handle ownership"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "FT_Done_Face(_face"
+  "persistent FreeType face teardown must remain automatic"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FT_Done_Face("
+  "enumerated FreeType face teardown must remain automatic"
+)
 string(REGEX MATCHALL "FT_Done_Face\\("
-  FREETYPE_FACE_TEARDOWNS "${FREETYPE_FONT_MANAGER_SOURCE}")
+  FREETYPE_FACE_TEARDOWNS "${FREETYPE_FACE_HEADER}")
 list(LENGTH FREETYPE_FACE_TEARDOWNS FREETYPE_FACE_TEARDOWN_COUNT)
 if(NOT FREETYPE_FACE_TEARDOWN_COUNT EQUAL 1)
   message(FATAL_ERROR
@@ -1390,6 +1435,16 @@ require_source_text(
   "${TYPOGRAPHY_REGRESSION_SOURCE}"
   "duplicate external font candidate was published"
   "FreeType face ownership must retain duplicate early-return coverage"
+)
+require_source_text(
+  "${TYPOGRAPHY_REGRESSION_SOURCE}"
+  "failed persistent FreeType reload retained stale state"
+  "persistent FreeType face ownership must retain failed-reload coverage"
+)
+require_source_text(
+  "${TYPOGRAPHY_REGRESSION_SOURCE}"
+  "persistent FreeType face did not recover after failure"
+  "persistent FreeType face ownership must retain reload recovery coverage"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"

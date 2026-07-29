@@ -642,7 +642,7 @@ LVFont *LVFreeTypeFace::getFallbackFont(lUInt32 fallbackPassMask) {
 LVFreeTypeFace::LVFreeTypeFace(LVMutex &mutex, FT_Library library,
                                LVFontGlobalGlyphCache *globalCache)
         : LVFont(),
-          _mutex(mutex), _fontFamily(css_ff_sans_serif), _library(library), _face(NULL),
+          _mutex(mutex), _fontFamily(css_ff_sans_serif), _library(library), _face(nullptr),
           _size(0), _hyphen_width(0), _baseline(0),
           _weight(400), _italic(0),
           _glyph_cache(globalCache),
@@ -840,12 +840,18 @@ bool LVFreeTypeFace::loadFromBuffer(LVByteArrayRef buf, int index, int size, css
     _aa_mode = fontMan->GetAntialiasMode();
     _drawMonochrome = monochrome;
     _fontFamily = fontFamily;
-    if (_face)
-        FT_Done_Face(_face);
-    int error = FT_New_Memory_Face(_library, buf->get(), buf->length(), index,
-                                   &_face); /* create face object */
+#if USE_HARFBUZZ == 1
+    _hb_font.reset();
+#endif
+    _face.reset();
+    _slot = nullptr;
+    FT_Face rawFace = nullptr;
+    int error = FT_New_Memory_Face(
+            _library, buf->get(), buf->length(), index, &rawFace);
+    FreeTypeFaceOwner candidate(rawFace);
     if (error)
         return false;
+    _face = std::move(candidate);
     if (_fileName.endsWith(".pfb") || _fileName.endsWith(".pfa")) {
         lString8 kernFile = _fileName.substr(0, _fileName.length() - 4);
         if (LVFileExists(Utf8ToUnicode(kernFile) + ".afm")) {
@@ -988,11 +994,18 @@ LVFreeTypeFace::loadFromFile(const char *fname, int index, int size, css_font_fa
         _fileName = fname;
     if (_fileName.empty())
         return false;
-    if (_face)
-        FT_Done_Face(_face);
-    int error = FT_New_Face(_library, _fileName.c_str(), index, &_face); /* create face object */
+#if USE_HARFBUZZ == 1
+    _hb_font.reset();
+#endif
+    _face.reset();
+    _slot = nullptr;
+    FT_Face rawFace = nullptr;
+    int error = FT_New_Face(
+            _library, _fileName.c_str(), index, &rawFace);
+    FreeTypeFaceOwner candidate(rawFace);
     if (error)
         return false;
+    _face = std::move(candidate);
     if (_fileName.endsWith(".pfb") || _fileName.endsWith(".pfa")) {
         lString8 kernFile = _fileName.substr(0, _fileName.length() - 4);
         if (LVFileExists(Utf8ToUnicode(kernFile) + ".afm")) {
@@ -3380,10 +3393,8 @@ void LVFreeTypeFace::Clear() {
     _hb_font.reset();
     _hb_features.clear();
 #endif
-    if (_face) {
-        FT_Done_Face(_face);
-        _face = NULL;
-    }
+    _face.reset();
+    _slot = nullptr;
     _extra_metrics.clear();
 }
 

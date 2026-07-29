@@ -51,16 +51,6 @@
 
 namespace {
 
-struct FreeTypeFaceDeleter {
-    void operator()(FT_Face face) const {
-        if (face)
-            FT_Done_Face(face);
-    }
-};
-
-using FreeTypeFaceOwner =
-        std::unique_ptr<FT_FaceRec_, FreeTypeFaceDeleter>;
-
 FreeTypeFaceOwner openFreeTypeFace(FT_Library library,
                                    const char *path,
                                    int index,

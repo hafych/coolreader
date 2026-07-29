@@ -1,5 +1,6 @@
 #include "lvfntman.h"
 #include "lvstreamutils.h"
+#include "../src/lvfont/lvfreetypeface.h"
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -7,6 +8,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <memory>
 
 static int fail(const char *message)
 {
@@ -117,6 +119,43 @@ static int testVariableAndScopedFonts()
     return 0;
 }
 
+static int testPersistentFaceReloadOwnership()
+{
+    const char *fontPath =
+            COOLREADER_SOURCE_DIR
+            "/thirdparty/harfbuzz-14.2.1/test/subset/data/expected/"
+            "retain-num-glyphs/Roboto-Regular.retain-num-glyphs.all.ttf";
+    FT_Library rawLibrary = nullptr;
+    if (FT_Init_FreeType(&rawLibrary) != FT_Err_Ok)
+        return fail("persistent face fixture FreeType did not initialize");
+    using FreeTypeLibraryOwner =
+            std::unique_ptr<FT_LibraryRec_, decltype(&FT_Done_FreeType)>;
+    FreeTypeLibraryOwner library(rawLibrary, &FT_Done_FreeType);
+    LVMutex mutex;
+    LVFontGlobalGlyphCache glyphCache(0x20000);
+    LVFreeTypeFace face(mutex, library.get(), &glyphCache);
+
+    if (!face.loadFromFile(
+                fontPath, 0, 24, css_ff_sans_serif, false, false)
+            || face.IsNull()
+            || face.GetHandle() == nullptr)
+        return fail("persistent FreeType face candidate did not load");
+    if (face.loadFromFile(
+                "/definitely/missing/coolreader-font.ttf",
+                0, 24, css_ff_sans_serif, false, false))
+        return fail("missing persistent FreeType face unexpectedly loaded");
+    if (!face.IsNull() || face.GetHandle() != nullptr)
+        return fail("failed persistent FreeType reload retained stale state");
+    if (!face.loadFromFile(
+                fontPath, 0, 24, css_ff_sans_serif, false, false)
+            || face.IsNull())
+        return fail("persistent FreeType face did not recover after failure");
+    face.Clear();
+    if (!face.IsNull() || face.GetHandle() != nullptr)
+        return fail("persistent FreeType face clear retained its handle");
+    return 0;
+}
+
 static int testOrderedFallback()
 {
     if (!fontMan->SetFallbackFontFaces(
@@ -168,6 +207,8 @@ int main()
     if (!InitFontManager(lString8::empty_str) || !fontMan)
         return fail("typography fixture font manager did not initialize");
     int result = testVariableAndScopedFonts();
+    if (result == 0)
+        result = testPersistentFaceReloadOwnership();
     if (result == 0)
         result = testOrderedFallback();
     if (!ShutdownFontManager() && result == 0)

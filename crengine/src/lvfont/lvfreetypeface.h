@@ -61,6 +61,49 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+struct FreeTypeFaceDeleter {
+    void operator()(FT_Face face) const {
+        if (face)
+            FT_Done_Face(face);
+    }
+};
+
+class FreeTypeFaceOwner {
+    std::unique_ptr<FT_FaceRec_, FreeTypeFaceDeleter> _owner;
+
+public:
+    explicit FreeTypeFaceOwner(FT_Face face = nullptr)
+        : _owner(face) {
+    }
+
+    FreeTypeFaceOwner(FreeTypeFaceOwner &&) = default;
+    FreeTypeFaceOwner &operator=(FreeTypeFaceOwner &&) = default;
+    FreeTypeFaceOwner(const FreeTypeFaceOwner &) = delete;
+    FreeTypeFaceOwner &operator=(const FreeTypeFaceOwner &) = delete;
+
+    FT_Face get() const {
+        return _owner.get();
+    }
+
+    FT_Face operator->() const {
+        return get();
+    }
+
+    // FreeType's C API borrows this handle; ownership stays in this wrapper.
+    operator FT_Face() const {
+        return get();
+    }
+
+    explicit operator bool() const {
+        return static_cast<bool>(_owner);
+    }
+
+    void reset(FT_Face face = nullptr) {
+        if (face != get())
+            _owner.reset(face);
+    }
+};
+
 #if USE_HARFBUZZ == 1
 
 #include <hb.h>
@@ -161,7 +204,7 @@ protected:
     lString8 _faceName;
     css_font_family_t _fontFamily;
     FT_Library _library;
-    FT_Face _face;
+    FreeTypeFaceOwner _face;
     FT_GlyphSlot _slot;
     FT_Matrix _matrix; // helper matrix for fake italic metrics
     int _size; // caracter height in pixels
@@ -393,7 +436,7 @@ public:
 
     /// retrieves font handle
     virtual void *GetHandle() {
-        return (void*)_face;
+        return static_cast<void *>(_face.get());
     }
 
     /// returns font typeface name
@@ -430,11 +473,11 @@ public:
 
     /// returns true if font is empty
     virtual bool IsNull() const {
-        return _face == NULL;
+        return !_face;
     }
 
     virtual bool operator!() const {
-        return _face == NULL;
+        return !_face;
     }
 
     virtual void Clear();
