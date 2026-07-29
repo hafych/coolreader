@@ -191,8 +191,8 @@ DRM или ограничений доступа, подбор/получени�
   owner-backed storage/blob borrows, encoding double-character sparse-row и
   output ownership, а также GUI window-manager screen owner/borrow lifecycle,
   transactional canvas-generation resize, GUI window/event queue ownership и
-  scoped accelerator/command-event publication candidates и lifecycle
-  `CRDocViewWindow`, scoped page-image render candidates,
+  scoped accelerator/command-event/main-menu item publication candidates
+  и lifecycle `CRDocViewWindow`, scoped page-image render candidates,
   bookmark mutation/highlight-range candidates и scoped nested-render mark
   copies, value-owned rectangle clipping, scoped settings menu trees, а также
   transactional bookmark-list publication, render-flow float/shift publication

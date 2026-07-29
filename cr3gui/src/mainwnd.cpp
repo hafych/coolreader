@@ -844,15 +844,12 @@ void V3DocViewWin::showMainMenu()
     lvRect fullRc = _wm->getScreen()->getRect();
     CRFullScreenMenu * menu_win = new CRFullScreenMenu(
             _wm, 0, Utf8ToUnicode(lString8(_("Main Menu"))), 8, fullRc);
-/*
-VIEWER_MENU_GOTOFIRSTPAGE=Go to first page
-VIEWER_MENU_GOTOENDPAGE=Go to last page
-VIEWER_MENU_GOTOPAGE=Go to page...
-VIEWER_MENU_GOTOINDEX=Go to index
-VIEWER_MENU_5ABOUT=About...
-VIEWER_MENU_4ABOUT=About...
-*/
     menu_win->setSkinName(cs32("#main"));
+    auto addMenuItem = [menu_win](int command, const char * label) {
+        menu_win->addItem(std::make_unique<CRMenuItem>(
+                menu_win, command, label,
+                LVImageSourceRef(), LVFontRef()));
+    };
 	CRGUIAcceleratorTableRef menuItems =
             _wm->getAccTables().get(cs32("mainMenuItems"));
 	if ( !menuItems.isNull() && menuItems->length()>1 ) {
@@ -870,70 +867,24 @@ VIEWER_MENU_4ABOUT=About...
 				if ( keyname && keyname[0] )
 					label << "\t" << keyname;
 			}
-			menu_win->addItem( new CRMenuItem( menu_win, cmd,
-				label.c_str(),
-				LVImageSourceRef(),
-				LVFontRef() ) );
+            addMenuItem(cmd, label.c_str());
 		}
 	} else {
 		// default menu
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_ABOUT,
-					_("About"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-	#if 0
-		menu_win->addItem( new CRMenuItem( menu_win, DCMD_BEGIN,
-					_wm->translateString("VIEWER_MENU_GOTOFIRSTPAGE", "Go to first page"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-	#endif
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_GO_PAGE,
-					_("Go to page"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-	#if 0
-		menu_win->addItem( new CRMenuItem( menu_win, DCMD_END,
-					_wm->translateString("VIEWER_MENU_GOTOENDPAGE", "Go to last page"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-	#endif
-
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_RECENT_BOOK_LIST,
-					_("Open recent book"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
+        addMenuItem(MCMD_ABOUT, _("About"));
+        addMenuItem(MCMD_GO_PAGE, _("Go to page"));
+        addMenuItem(MCMD_RECENT_BOOK_LIST, _("Open recent book"));
 
 	#ifdef WITH_DICT
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_DICT,
-					_("Dictionary"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
+        addMenuItem(MCMD_DICT, _("Dictionary"));
 	#endif
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_CITE,
-					_("Cite"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_BOOKMARK_LIST,
-					_("Bookmarks"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_SEARCH,
-					_("Search"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_SETTINGS,
-					_("Settings"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
+        addMenuItem(MCMD_CITE, _("Cite"));
+        addMenuItem(MCMD_BOOKMARK_LIST, _("Bookmarks"));
+        addMenuItem(MCMD_SEARCH, _("Search"));
+        addMenuItem(MCMD_SETTINGS, _("Settings"));
 		if ( !_helpFile.empty() )
-			menu_win->addItem( new CRMenuItem( menu_win, MCMD_HELP,
-					_("Help"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
-		menu_win->addItem( new CRMenuItem( menu_win, MCMD_HELP_KEYS,
-					_("Keyboard layout"),
-					LVImageSourceRef(),
-					LVFontRef() ) );
+            addMenuItem(MCMD_HELP, _("Help"));
+        addMenuItem(MCMD_HELP_KEYS, _("Keyboard layout"));
 	}
 
     menu_win->setAccelerators( getMenuAccelerators() );

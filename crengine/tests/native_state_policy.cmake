@@ -7192,6 +7192,21 @@ require_source_text(
   "menu_win->setSkinName(cs32(\"#main\"));"
   "main-menu skin identifiers must use the current string width"
 )
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "auto addMenuItem = [menu_win](int command, const char * label)"
+  "main-menu item construction must use one owner-aware publication boundary"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "menu_win->addItem(std::make_unique<CRMenuItem>"
+  "main-menu item candidates must enter scoped ownership before publication"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "menu_win->addItem( new CRMenuItem"
+  "main-menu items must not be published as raw candidates"
+)
 forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "void addPropLine( lString8 & buf, const char * description, const lString16"
