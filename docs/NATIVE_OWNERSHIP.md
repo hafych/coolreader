@@ -284,9 +284,11 @@ and remains reusable.
 synchronous borrow. The borrow is initialized and cleared around every
 `Decode()` call, including callback exceptions. A source that starts but does
 not finish decoding receives a synthesized error completion before the borrow
-is released, while null callbacks and null source factories are rejected.
-Native coverage verifies success, reuse, source failure, aborted lifecycle and
-exception recovery.
+is released, while null callbacks and null source factories are rejected. The
+public transparency input is clamped to 0–255 and converted to one bounded
+opacity factor; each source alpha is multiplied once with rounding and divided
+by 255. Native coverage verifies exact pixels, full transparency, cancellation,
+success, reuse, source failure, aborted lifecycle and exception recovery.
 
 `LVStretchImgSource` owns its transformed row in `std::vector` storage and
 keeps the downstream callback as a synchronous borrow. Construction rejects

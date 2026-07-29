@@ -220,6 +220,8 @@ LVImageSourceRef LVCreateColorTransformImageSource(LVImageSourceRef srcImage, lU
 LVImageSourceRef LVCreateAlphaTransformImageSource(LVImageSourceRef srcImage, int alpha) {
     if (srcImage.isNull() || alpha <= 0)
         return srcImage;
+    if (alpha > 0xFF)
+        alpha = 0xFF;
     return LVImageSourceRef(new LVAlphaTransformImgSource(srcImage, alpha));
 }
 

@@ -24,7 +24,8 @@
 LVAlphaTransformImgSource::LVAlphaTransformImgSource(LVImageSourceRef src, int alpha)
     : _src( src )
     , _callback(NULL)
-    , _alpha(alpha ^ 0xFF)
+    , _opacity(alpha <= 0 ? 0xFF
+            : alpha >= 0xFF ? 0 : 0xFF - alpha)
     , _decodeStarted(false)
 {
 }
@@ -46,13 +47,15 @@ bool LVAlphaTransformImgSource::OnLineDecoded(LVImageSource *obj, int y, lUInt32
     int dx = _src->GetWidth();
     
     for (int x = 0; x < dx; x++) {
-        lUInt32 cl = data[x];
-        int srcalpha = (cl >> 24) ^ 0xFF;
-        if (srcalpha > 0) {
-            srcalpha = _alpha * srcalpha;
-            cl = (cl & 0xFFFFFF) | (((_alpha * srcalpha) ^ 0xFF)<<24);
-        }
-        data[x] = cl;
+        const lUInt32 color = data[x];
+        const int sourceOpacity =
+                0xFF - static_cast<int>(color >> 24);
+        const int outputOpacity =
+                (sourceOpacity * _opacity + 0x7F) / 0xFF;
+        const lUInt32 outputTransparency =
+                static_cast<lUInt32>(0xFF - outputOpacity);
+        data[x] = (color & 0x00FFFFFF)
+                | (outputTransparency << 24);
     }
     return _callback->OnLineDecoded(obj, y, data);
 }

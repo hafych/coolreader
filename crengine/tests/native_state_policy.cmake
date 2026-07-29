@@ -3636,6 +3636,21 @@ require_source_text(
   "alpha-transform callback lifecycle must track active decodes"
 )
 require_source_text(
+  "${ALPHA_TRANSFORM_IMAGE_HEADER}"
+  "int _opacity"
+  "alpha-transform state must represent a bounded opacity factor"
+)
+require_source_text(
+  "${ALPHA_TRANSFORM_IMAGE_SOURCE}"
+  "(sourceOpacity * _opacity + 0x7F) / 0xFF"
+  "alpha-transform opacity must use one normalized multiplication"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "if (alpha > 0xFF)"
+  "alpha-transform factory must clamp excessive transparency"
+)
+require_source_text(
   "${ALPHA_TRANSFORM_IMAGE_SOURCE}"
   "if (_decodeStarted)"
   "aborted alpha transforms must close their callback lifecycle"
@@ -3654,6 +3669,16 @@ require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "alpha-transform borrow survived callback exception"
   "alpha-transform exception cleanup must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "alpha transform used non-normalized opacity"
+  "alpha-transform pixel arithmetic must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "alpha transform ignored callback cancellation"
+  "alpha-transform cancellation must retain native regression coverage"
 )
 require_source_text(
   "${STRETCH_IMAGE_HEADER}"

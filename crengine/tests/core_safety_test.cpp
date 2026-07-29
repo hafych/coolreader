@@ -6122,6 +6122,39 @@ static int testImageSourceOwnership() {
             || alphaCapture.ends != 2
             || alphaCapture.errorEnds != 0)
         return fail("alpha-transform callback borrow could not be reused");
+    std::vector<lUInt32> expectedAlphaPixels =
+            sourceCapture.pixels;
+    for (lUInt32 &pixel : expectedAlphaPixels)
+        pixel |= 0x01000000;
+    const std::vector<lUInt32> oneAlphaPass =
+            expectedAlphaPixels;
+    expectedAlphaPixels.insert(
+            expectedAlphaPixels.end(),
+            oneAlphaPass.begin(), oneAlphaPass.end());
+    if (alphaCapture.pixels != expectedAlphaPixels)
+        return fail("alpha transform used non-normalized opacity");
+    LVImageSourceRef transparentTransform =
+            LVCreateAlphaTransformImageSource(xpm, 1024);
+    CapturingImageDecodeCallback transparentCapture(
+            transparentTransform.get(), xpm.get(), 2);
+    if (transparentTransform.isNull()
+            || !transparentTransform->Decode(
+                    &transparentCapture)
+            || transparentCapture.sourceMismatch
+            || transparentCapture.starts != 1
+            || transparentCapture.lines != 2
+            || transparentCapture.ends != 1)
+        return fail("alpha-transform factory did not clamp transparency");
+    for (lUInt32 pixel : transparentCapture.pixels) {
+        if ((pixel & 0xFF000000) != 0xFF000000)
+            return fail("clamped alpha transform was not transparent");
+    }
+    RejectingImageDecodeCallback rejectingAlphaCallback;
+    if (alphaTransform->Decode(&rejectingAlphaCallback)
+            || rejectingAlphaCallback.starts != 1
+            || rejectingAlphaCallback.lines != 1
+            || rejectingAlphaCallback.errorEnds != 1)
+        return fail("alpha transform ignored callback cancellation");
     ThrowingImageDecodeCallback throwingAlphaCallback;
     bool alphaCallbackThrew = false;
     try {

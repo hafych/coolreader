@@ -31,7 +31,7 @@ protected:
     LVImageSourceRef _src;
     /// non-owning view valid only during Decode()
     LVImageDecoderCallback * _callback;
-    int _alpha;
+    int _opacity;
     bool _decodeStarted;
 public:
     LVAlphaTransformImgSource(LVImageSourceRef src, int alpha);
