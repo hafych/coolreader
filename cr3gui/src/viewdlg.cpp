@@ -116,12 +116,14 @@ static const char * def_view_css =
 ""
 ;
 
-CRViewDialog::CRViewDialog(CRGUIWindowManager * wm, lString16 title, lString8 text, lvRect rect, bool showScroll, bool showFrame )
+CRViewDialog::CRViewDialog(
+        CRGUIWindowManager * wm, lString32 title, lString8 text,
+        lvRect rect, bool showScroll, bool showFrame)
     : CRDocViewWindow(wm), _text(text), _showScroll( showScroll ), _showFrame( showFrame ), _lastNavigationDirection(0)
 {
     _passKeysToParent = _passCommandsToParent = false;
     if ( _showFrame ) {
-        setSkinName( lString16("#dialog") );
+        setSkinName(cs32("#dialog"));
         if ( !_wm->getSkin().isNull() )
             _skin = _wm->getSkin()->getWindowSkin(getSkinName().c_str());
     }
@@ -155,7 +157,7 @@ CRViewDialog::CRViewDialog(CRGUIWindowManager * wm, lString16 title, lString8 te
     getDocView()->setPageHeaderInfo( 0 ); // hide title bar
     if ( !text.empty() ) {
 		_stream = LVCreateStringStream( text );
-		getDocView()->LoadDocument(_stream);
+		getDocView()->LoadDocument(_stream, U"");
     }
     setRect( rect );
 }
@@ -164,10 +166,11 @@ bool CRViewDialog::hasDictionaries()
 {
 
     const char * dict_path = DICTD_CONF;
-    if ( !LVDirectoryExists(lString16(dict_path)) )
+    if (!LVDirectoryExists(Utf8ToUnicode(lString8(dict_path))))
         dict_path = DICTD_CONF_ALT;
     if ( _dict.isNull() )
-        _dict = LVRef<CRDictionary>( new CRTinyDict( Utf8ToUnicode(lString8(dict_path)) ) );
+        _dict = LVRef<CRDictionary>(new CRTinyDict(
+                UnicodeToUtf16(Utf8ToUnicode(lString8(dict_path)))));
     if ( !_dict->empty() ) {
     	return true;
     }
@@ -178,16 +181,18 @@ bool CRViewDialog::hasDictionaries()
 	body << "<p>" << _("Dictionaries in standard unix .dict format are supported.") << "</p>";
 	body << "<p>" << _("For each dictionary, pair of files should be provided: data file (with .dict or .dict.dz extension, and index file with .index extension") << "</p>";
 	lString8 xml = CRViewDialog::makeFb2Xml( body );
-	CRViewDialog * dlg = new CRViewDialog( _wm, lString16(_("Dictionary")), xml, lvRect(), true, true );
+	CRViewDialog * dlg = new CRViewDialog(
+            _wm, Utf8ToUnicode(lString8(_("Dictionary"))),
+            xml, lvRect(), true, true);
 	_wm->activateWindow( dlg );
 	return false;
 }
 
 void CRViewDialog::showGoToPageDialog()
 {
-    LVTocItem * toc = _docview->getToc();
     CRNumberEditDialog * dlg;
 #if USE_SEPARATE_GO_TO_PAGE_DIALOG==1
+    LVTocItem * toc = _docview->getToc();
     if ( toc && toc->getChildCount()>0 ) {
 #endif
         dlg = new CRTOCDialog( _wm,
@@ -207,7 +212,6 @@ void CRViewDialog::showGoToPageDialog()
 
 void CRViewDialog::showGoToPercentDialog()
 {
-    LVTocItem * toc = _docview->getToc();
     CRNumberEditDialog * dlg;
     dlg = new CRNumberEditDialog( _wm,
         lString16( _("Enter position percent") ),
@@ -260,7 +264,8 @@ bool CRViewDialog::findInDictionary( lString16 pattern )
 #else
     if ( _dict.isNull() ) {
         showWaitIcon();
-        _dict = LVRef<CRDictionary>( new CRTinyDict( Utf8ToUnicode(lString8(DICTD_CONF)) ) );
+        _dict = LVRef<CRDictionary>(new CRTinyDict(
+                UnicodeToUtf16(Utf8ToUnicode(lString8(DICTD_CONF)))));
     }
 	lString8 body = _dict->translate( UnicodeToUtf8( pattern ) );
     lString8 txt = CRViewDialog::makeFb2Xml( body );

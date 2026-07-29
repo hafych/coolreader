@@ -21,6 +21,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/mainwnd.h" MAIN_WINDOW_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/mainwnd.cpp" MAIN_WINDOW_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/scrkbd.h" SCREEN_KEYBOARD_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/scrkbd.cpp" SCREEN_KEYBOARD_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/viewdlg.h" VIEW_DIALOG_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/viewdlg.cpp" VIEW_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7216,6 +7218,31 @@ forbid_source_text(
   "${SCREEN_KEYBOARD_SOURCE}"
   "lString16 s = _keymap"
   "screen keyboard rows must preserve the current character width"
+)
+require_source_text(
+  "${VIEW_DIALOG_HEADER}"
+  "CRGUIWindowManager * wm, lString32 title, lString8 text,"
+  "document dialogs must accept the current title width"
+)
+require_source_text(
+  "${VIEW_DIALOG_HEADER}"
+  "wm, Utf16ToUnicode(title), text, rect, showScroll, showFrame"
+  "legacy document-dialog titles must cross an explicit boundary"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "getDocView()->LoadDocument(_stream, U\"\");"
+  "document-dialog streams must provide the current content path contract"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "setSkinName( lString16"
+  "document-dialog skin identifiers must use the current string width"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "void CRViewDialog::showGoToPercentDialog()\n{\n    LVTocItem * toc"
+  "go-to-percent dialogs must not retain unused TOC state"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

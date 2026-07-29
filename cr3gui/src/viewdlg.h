@@ -43,7 +43,7 @@ protected:
     lString16 _searchPattern;
 	static LVRef<CRDictionary> _dict;
     virtual void draw( int pageOffset );
-    virtual void draw();
+    void draw() override;
 public:
 
     int getLastNavigationDirection() { return _lastNavigationDirection; }
@@ -84,10 +84,19 @@ public:
 
     /// adds XML and FictionBook tags for utf8 fb2 document
     static lString8 makeFb2Xml( const lString8 & body );
-    virtual void setRect( const lvRect & rc );
-    CRViewDialog(CRGUIWindowManager * wm, lString16 title, lString8 text, lvRect rect, bool showScroll, bool showFrame );
+    void setRect( const lvRect & rc ) override;
+    CRViewDialog(
+            CRGUIWindowManager * wm, lString32 title, lString8 text,
+            lvRect rect, bool showScroll, bool showFrame);
+    CRViewDialog(
+            CRGUIWindowManager * wm, lString16 title, lString8 text,
+            lvRect rect, bool showScroll, bool showFrame)
+        : CRViewDialog(
+                wm, Utf16ToUnicode(title), text, rect, showScroll, showFrame)
+    {
+    }
 
-    virtual bool onCommand( int command, int params = 0 );
+    bool onCommand( int command, int params = 0 ) override;
 };
 
 const char * getCommandName( int command, int param );

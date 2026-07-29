@@ -79,7 +79,7 @@ DRM или ограничений доступа, подбор/получени�
   Все first-party предупреждения исправлены (0 при `-Wall -Wextra -Wpedantic`).
   Legacy settings GUI warning cleanup/overrides, document callbacks/battery,
   controls/property/font-menu helpers, font property keys,
-  CSS/image/document/history/settings/help paths, menu/about text,
+  CSS/image/document/history/settings/help paths, dialog/menu/about text,
   on-screen keyboard layouts и T9 layout storage приведены к текущим
   `lString32`/UTF-32 контрактам.
   Гейт расширен: `return-type`, `implicit-function-declaration`,

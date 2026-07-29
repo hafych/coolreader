@@ -814,7 +814,9 @@ void V3DocViewWin::showHelpDialog()
     }
 	//lString8 help = UnicodeToUtf8( LVReadTextFile( _helpFile ) );
 	if ( !help.empty() ) {
-		CRViewDialog * dlg = new CRViewDialog( _wm, lString16(_("Help")), help, lvRect(), true, true );
+		CRViewDialog * dlg = new CRViewDialog(
+                _wm, Utf8ToUnicode(lString8(_("Help"))),
+                help, lvRect(), true, true);
                 int fs = _props->getIntDef( PROP_FONT_SIZE, 22 );
                 dlg->getDocView()->setFontSize(fs);
 		_wm->activateWindow( dlg );
@@ -1122,7 +1124,7 @@ void V3DocViewWin::showAboutDialog()
     //=========================================================
     txt = CRViewDialog::makeFb2Xml(txt);
     CRViewDialog * dlg = new CRViewDialog(
-            _wm, UnicodeToUtf16(title), txt, lvRect(), true, true);
+            _wm, title, txt, lvRect(), true, true);
     dlg->getDocView()->setVisiblePageCount(1);
     int fs = _props->getIntDef( PROP_FILE_PROPS_FONT_SIZE, 22 );
     dlg->getDocView()->setFontSize(fs);
