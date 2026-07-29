@@ -601,6 +601,44 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isFinal(
 					field.getModifiers()));
 		}
+		assertTrue(Modifier.isFinal(
+				ReaderPageCacheClose.class.getModifiers()));
+		for (Field field :
+				ReaderPageCacheClose.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		assertTrue(Modifier.isFinal(
+				ReaderPageCacheClose.class
+						.getDeclaredField("initialCurrent")
+						.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderPageCacheClose.class
+						.getDeclaredField("initialNext")
+						.getModifiers()));
+		assertSynchronizedMethod(
+				ReaderPageCacheClose.class,
+				"publishSerialized",
+				Object.class,
+				Object.class);
+		assertSynchronizedMethod(
+				ReaderPageCacheClose.class,
+				"finish");
+		assertTrue(Modifier.isFinal(
+				ReaderPageCacheClose.Resources.class
+						.getModifiers()));
+		for (Field field :
+				ReaderPageCacheClose.Resources.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
 		Class<?> loadDocumentTask = null;
 		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
 			if (nested.getSimpleName().equals("LoadDocumentTask")) {

@@ -786,6 +786,9 @@ READER_RENDER_REQUEST = (
 READER_ENGINE_COMMAND_POLICY = (
     SOURCE / "crengine" / "ReaderEngineCommandPolicy.java"
 )
+READER_PAGE_CACHE_CLOSE = (
+    SOURCE / "crengine" / "ReaderPageCacheClose.java"
+)
 READER_DOCUMENT_OPTIONS_TEST = (
     ROOT
     / "android"
@@ -845,6 +848,18 @@ READER_ENGINE_COMMAND_POLICY_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderEngineCommandPolicyTest.java"
+)
+READER_PAGE_CACHE_CLOSE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderPageCacheCloseTest.java"
 )
 INTERFACE_THEME = SOURCE / "crengine" / "InterfaceTheme.java"
 INTERFACE_THEME_CATALOG = (
@@ -2451,6 +2466,12 @@ def main() -> None:
         "private DocumentLoadLifecycle.Request replaceDocumentLoad()",
         "stopTts();\n\t\tif (cancelDocumentLoad)",
         "stopTts();\n\t\tcancelDelayedReaderWork();",
+        "currentImageViewer.close(false)",
+        "ReaderPageCacheClose.begin(",
+        "private ReaderPageCacheClose<BitmapInfo>",
+        "beginPageCacheClose()",
+        "private void publishSerializedPageCacheClose(",
+        "private void finishPageCacheClose(",
         "documentLoadLifecycle.replace()",
         "documentLoadLifecycle.isActive(loadOwner)",
         "documentLoadLifecycle.complete(loadOwner)",
@@ -2657,6 +2678,141 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} does not rotate the document "
                 "interaction before cancelling its render")
+
+    close_document_start = reader_view_text.find(
+        "\n\tprivate void closeCurrentDocument(")
+    close_document_end = reader_view_text.find(
+        "\n\tprivate ReaderPageCacheClose<BitmapInfo>",
+        close_document_start)
+    if close_document_start < 0 or close_document_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits transactional document close")
+    else:
+        close_document_text = reader_view_text[
+            close_document_start:close_document_end
+        ]
+        initial_snapshot_index = close_document_text.find(
+            "beginPageCacheClose()")
+        post_close_index = close_document_text.find(
+            "post(new Task()")
+        native_close_index = close_document_text.find(
+            "ReaderCommand.DCMD_CLOSE_BOOK.nativeId",
+            post_close_index)
+        serialized_detach_index = close_document_text.find(
+            "publishSerializedPageCacheClose(",
+            native_close_index)
+        done_index = close_document_text.find(
+            "public void done()")
+        done_finish_index = close_document_text.find(
+            "finishPageCacheClose(pageCacheClose)",
+            done_index)
+        fail_index = close_document_text.find(
+            "public void fail(Exception e)")
+        fail_finish_index = close_document_text.find(
+            "finishPageCacheClose(pageCacheClose)",
+            fail_index)
+        if not (
+                initial_snapshot_index >= 0
+                and post_close_index > initial_snapshot_index
+                and native_close_index > post_close_index
+                and serialized_detach_index > native_close_index
+                and done_index > serialized_detach_index
+                and done_finish_index > done_index
+                and fail_index > done_finish_index
+                and fail_finish_index > fail_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not capture page caches "
+                "before queueing and detach them at the serialized "
+                "close boundary")
+        done_text = close_document_text[done_index:fail_index]
+        for legacy in (
+            "mCurrentPageInfo",
+            "mNextPageInfo",
+            "factory.compact()",
+        ):
+            if legacy in done_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} close completion mutates "
+                    f"replacement cache state: {legacy}")
+        if "if (!wasOpened" in close_document_text:
+            violations.append(
+                f"{relative(READER_VIEW)} skips the serialized close "
+                "boundary for an in-flight document load")
+        if "readerNativeLifecycle.isClosed()" not in close_document_text:
+            violations.append(
+                f"{relative(READER_VIEW)} queues document close after "
+                "native teardown")
+
+    page_cache_helpers_start = reader_view_text.find(
+        "\n\tprivate ReaderPageCacheClose<BitmapInfo>")
+    page_cache_helpers_end = reader_view_text.find(
+        "\n\tpublic void destroy()", page_cache_helpers_start)
+    if page_cache_helpers_start < 0 or page_cache_helpers_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits page-cache close helpers")
+    else:
+        page_cache_helpers_text = reader_view_text[
+            page_cache_helpers_start:page_cache_helpers_end
+        ]
+        for marker in (
+            "ReaderPageCacheClose.begin(",
+            "close.publishSerialized(current, next)",
+            "close.finish()",
+            "mCurrentPageInfo = null",
+            "mNextPageInfo = null",
+            "invalidImages = true",
+            "resources.initialCurrent()",
+            "resources.initialNext()",
+            "resources.serializedCurrent()",
+            "resources.serializedNext()",
+            "images[j] == image",
+            "image.recycle()",
+            "factory.compact()",
+        ):
+            if marker not in page_cache_helpers_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} page-cache close omits "
+                    f"resource marker: {marker}")
+
+    load_task_work_start = reader_view_text.find(
+        "\n\t\tpublic void work() throws IOException {",
+        reader_view_text.find(
+            "\n\tprivate class LoadDocumentTask extends Task"))
+    load_task_work_end = reader_view_text.find(
+        "\n\t\tprivate void updateStrongBookKey()",
+        load_task_work_start)
+    if load_task_work_start < 0 or load_task_work_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits bounded document load work")
+    elif "ReaderCommand.DCMD_CLOSE_BOOK.nativeId" in reader_view_text[
+            load_task_work_start:load_task_work_end
+    ]:
+        violations.append(
+            f"{relative(READER_VIEW)} duplicates native close outside "
+            "the queued page-cache boundary")
+
+    enqueue_load_start = reader_view_text.find(
+        "\n\tprivate boolean enqueueDocumentLoad(")
+    enqueue_load_end = reader_view_text.find(
+        "\n\tprivate static void closeDescriptorQuietly(",
+        enqueue_load_start)
+    if enqueue_load_start < 0 or enqueue_load_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits bounded load enqueue")
+    else:
+        enqueue_load_text = reader_view_text[
+            enqueue_load_start:enqueue_load_end
+        ]
+        close_before_load_index = enqueue_load_text.find(
+            "closeCurrentDocument(false)")
+        post_load_index = enqueue_load_text.find(
+            "post(new LoadDocumentTask(")
+        if not (
+                close_before_load_index >= 0
+                and post_load_index > close_before_load_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not queue native/cache "
+                "close before the replacement load")
 
     engine_command_start = reader_view_text.find(
         "\n\tpublic void doEngineCommand("
@@ -3013,6 +3169,9 @@ def main() -> None:
         '"scopeOf"',
         '"movesDocument"',
         '"isEngineCommandRequestCurrent"',
+        "ReaderPageCacheClose.class",
+        '"initialCurrent"',
+        '"publishSerialized"',
         '"isDocumentInteractionCurrent"',
         '"isOwnedDocumentLoadCurrent"',
         "SearchDlg.SearchHandler.class",
@@ -3265,6 +3424,43 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_ENGINE_COMMAND_POLICY_TEST)} omits "
                 f"engine-command regression: {marker}")
+
+    reader_page_cache_close_text = (
+        READER_PAGE_CACHE_CLOSE.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderPageCacheClose<T>",
+        "private final T initialCurrent",
+        "private final T initialNext",
+        "private T serializedCurrent",
+        "private T serializedNext",
+        "private boolean serializedPublished",
+        "private boolean finished",
+        "static <T> ReaderPageCacheClose<T> begin(",
+        "synchronized boolean publishSerialized(",
+        "synchronized Resources<T> finish()",
+        "static final class Resources<T>",
+        "private final T serializedCurrent",
+        "private final T serializedNext",
+    ):
+        if marker not in reader_page_cache_close_text:
+            violations.append(
+                f"{relative(READER_PAGE_CACHE_CLOSE)} omits exact "
+                f"page-cache close marker: {marker}")
+
+    reader_page_cache_close_test_text = (
+        READER_PAGE_CACHE_CLOSE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "initialAndSerializedSlotsPreserveIdentity",
+        "serializedPublicationAndFinishAreOneShot",
+        "finishBeforeWorkRejectsLatePublication",
+        "nullAndAliasedSlotsRemainRepresentable",
+    ):
+        if marker not in reader_page_cache_close_test_text:
+            violations.append(
+                f"{relative(READER_PAGE_CACHE_CLOSE_TEST)} omits "
+                f"page-cache close regression: {marker}")
 
     key_double_click_state_text = KEY_DOUBLE_CLICK_STATE.read_text(
         encoding="utf-8")

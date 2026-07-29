@@ -1149,12 +1149,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void close() {
+			close(true);
+		}
+
+		private void close(boolean redraw) {
 			if (currentImageViewer == null)
 				return;
 			currentImageViewer = null;
 			unlockOrientation();
 			BackgroundThread.instance().postBackground(() -> doc.closeImage());
-			drawPage();
+			if (redraw)
+				drawPage();
 		}
 
 		public BitmapInfo prepareImage(
@@ -1208,7 +1213,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void stopImageViewer() {
 		if (currentImageViewer != null)
-			currentImageViewer.close();
+			currentImageViewer.close(false);
 	}
 
 	private final CloseableTaskGate tapGestureLifecycle =
@@ -4790,6 +4795,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				errorHandler.run();
 			return false;
 		}
+		// Queue the serialized native/cache close before the new load.
+		closeCurrentDocument(false);
 		post(new LoadDocumentTask(
 				loadOwner, bookInfo, source, docBuffer,
 				parcelFileDescriptor, streamName,
@@ -7214,7 +7221,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					fileInfo.getFlag(
 							FileInfo.USE_DOCUMENT_FONTS_FLAG);
 			profileNumber = bookInfo.getFileInfo().getProfileId();
-			closeCurrentDocument(false);
 			mBookInfo = bookInfo;
 			//Properties oldSettings = new Properties(mSettings);
 			// TODO: enable storing of profile per book
@@ -7254,10 +7260,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				closeParcelFileDescriptor();
 				return;
 			}
-			// A replaced task can finish native parsing after the next request
-			// was accepted. Always close that native document at this serialized
-			// engine boundary before opening the exact current request.
-			doc.doCommand(ReaderCommand.DCMD_CLOSE_BOOK.nativeId, 0);
 			log.i("Loading document " + safeDocumentPathForLog(filename));
 			doc.doCommand(ReaderCommand.DCMD_SET_INTERNAL_STYLES.nativeId, disableInternalStyles ? 0 : 1);
 			doc.doCommand(ReaderCommand.DCMD_SET_TEXT_FORMAT.nativeId, disableTextAutoformat ? 0 : 1);
@@ -8141,40 +8143,92 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		cancelDocumentAnimation();
 		invalidateTapHighlight();
 		cancelSelectionUpdates();
-		if (!mOpened)
+		if (readerNativeLifecycle.isClosed())
 			return;
+		boolean wasOpened = mOpened;
 		cancelSwapTask();
 		stopAutoScroll();
 		stopImageViewer();
-		save();
+		if (wasOpened)
+			save();
 		mOpened = false;
+		final ReaderPageCacheClose<BitmapInfo> pageCacheClose =
+				beginPageCacheClose();
 		//scheduleSaveCurrentPositionBookmark(0);
 		//save();
 		post(new Task() {
 			public void work() {
 				BackgroundThread.ensureBackground();
-				log.i("ReaderView().close() : closing current document");
-				doc.doCommand(
-						ReaderCommand.DCMD_CLOSE_BOOK.nativeId, 0);
+				try {
+					log.i("ReaderView().close() : closing current document");
+					doc.doCommand(
+							ReaderCommand.DCMD_CLOSE_BOOK.nativeId,
+							0);
+				} finally {
+					publishSerializedPageCacheClose(
+							pageCacheClose);
+				}
 			}
 
 			public void done() {
 				BackgroundThread.ensureGUI();
-				if (currentAnimation == null) {
-					if (mCurrentPageInfo != null) {
-						mCurrentPageInfo.recycle();
-						mCurrentPageInfo = null;
-					}
-					if (mNextPageInfo != null) {
-						mNextPageInfo.recycle();
-						mNextPageInfo = null;
-					}
-				} else
-					invalidImages = true;
-				factory.compact();
-				mCurrentPageInfo = null;
+				finishPageCacheClose(pageCacheClose);
+			}
+
+			@Override
+			public void fail(Exception e) {
+				BackgroundThread.ensureGUI();
+				finishPageCacheClose(pageCacheClose);
+				super.fail(e);
 			}
 		});
+	}
+
+	private ReaderPageCacheClose<BitmapInfo>
+			beginPageCacheClose() {
+		return ReaderPageCacheClose.begin(
+				mCurrentPageInfo,
+				mNextPageInfo);
+	}
+
+	private void publishSerializedPageCacheClose(
+			ReaderPageCacheClose<BitmapInfo> close) {
+		BitmapInfo current = mCurrentPageInfo;
+		BitmapInfo next = mNextPageInfo;
+		if (!close.publishSerialized(current, next))
+			return;
+		mCurrentPageInfo = null;
+		mNextPageInfo = null;
+		invalidImages = true;
+	}
+
+	private void finishPageCacheClose(
+			ReaderPageCacheClose<BitmapInfo> close) {
+		ReaderPageCacheClose.Resources<BitmapInfo> resources =
+				close.finish();
+		if (resources == null)
+			return;
+		BitmapInfo[] images = {
+			resources.initialCurrent(),
+			resources.initialNext(),
+			resources.serializedCurrent(),
+			resources.serializedNext()
+		};
+		for (int i = 0; i < images.length; i++) {
+			BitmapInfo image = images[i];
+			if (image == null || image.isReleased())
+				continue;
+			boolean duplicate = false;
+			for (int j = 0; j < i; j++) {
+				if (images[j] == image) {
+					duplicate = true;
+					break;
+				}
+			}
+			if (!duplicate)
+				image.recycle();
+		}
+		factory.compact();
 	}
 
 	public void destroy() {

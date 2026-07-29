@@ -254,6 +254,15 @@ DRM или ограничений доступа, подбор/получени�
   lifecycle, переживает смену книги и по завершении захватывает уже текущий
   render owner. Movement/save semantics выводятся из того же exhaustive
   JVM-tested policy без параллельного switch в `ReaderView`.
+  Асинхронное закрытие документа теперь владеет exact
+  `ReaderPageCacheClose`: текущие page-cache identity захватываются до
+  queueing, а shared slots повторно захватываются и отсоединяются на
+  сериализованной Engine boundary после native close и до следующего
+  `LoadDocumentTask`. Поздние GUI
+  success/failure освобождают только четыре captured identity с one-shot
+  deduplication и больше не обнуляют cache replacement-книги. Close также
+  ставит native boundary для ещё не опубликованной загрузки, а выход из
+  image-viewer при смене документа не создаёт новый draw request.
   Autoscroll теперь принадлежит synchronized identity-owned
   `AutoScrollSessionState` и отдельному cancelable GUI scheduler: background
   init публикует render-ready только точному owner, stop/destroy не допускают

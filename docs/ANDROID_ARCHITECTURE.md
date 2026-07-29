@@ -592,6 +592,14 @@ command: it still requires the active native/service lifecycle, survives a book
 replacement, and captures the then-current render owner on completion.
 Movement and position-save behavior comes from the same exhaustive JVM-tested
 policy instead of a second switch in `ReaderView`.
+Asynchronous document close owns an exact `ReaderPageCacheClose`. Current cache
+identities are captured before queueing; the shared slots are captured again
+and detached at the serialized Engine boundary after native close and before
+the next `LoadDocumentTask`. Late GUI success or failure releases only those
+four captured identities with one-shot deduplication; it never nulls or
+recycles a replacement book's shared cache. Close also queues this native
+boundary for an unpublished in-flight load, while leaving image-viewer mode
+during replacement does not submit a new draw request.
 Autoscroll has a separate synchronized `AutoScrollSessionState` and cancelable
 GUI scheduler. A session is renderable only after its exact owner completes
 background initialization; initialization temporarily suppresses drawing and
