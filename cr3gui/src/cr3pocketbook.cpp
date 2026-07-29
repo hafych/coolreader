@@ -2511,7 +2511,8 @@ int InitDoc(const char *exename, char *fileName)
                                                      pocketbook_orientations[GetOrientation()]);
             SetOrientation(cr_oriantations[orient]);
         }
-        if ( !main_win->loadHistory(lString16(STATEPATH"/cr3/.cr3hist")) )
+        if ( !main_win->loadHistory(
+                    Utf8ToUnicode(lString8(STATEPATH"/cr3/.cr3hist"))) )
             CRLog::error("Cannot read history file");
         LVDocView * _docview = main_win->getDocView();
         _docview->setBatteryState(GetBatteryPower());

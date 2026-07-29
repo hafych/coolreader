@@ -865,7 +865,8 @@ int InitDoc(char *fileName)
         }
         CRLog::debug("settings at %s", UnicodeToUtf8(ini).c_str() );
 #if USE_JINKE_USER_DATA!=1
-    if ( !main_win->loadHistory( lString16(history_file_name) ) ) {
+    if ( !main_win->loadHistory(
+                Utf8ToUnicode(lString8(history_file_name))) ) {
         CRLog::error("Cannot read history file %s", history_file_name);
     }
 #endif

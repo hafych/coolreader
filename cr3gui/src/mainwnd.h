@@ -132,10 +132,6 @@ public:
     bool loadSettings( lString32 filename );
     bool saveSettings( lString32 filename );
     bool loadHistory( lString32 filename );
-    bool loadHistory( lString16 filename )
-    {
-        return loadHistory(Utf16ToUnicode(filename));
-    }
     bool saveHistory( lString32 filename, bool exportBookmarks = true );
     bool saveHistory( lString16 filename, bool exportBookmarks = true )
     {
