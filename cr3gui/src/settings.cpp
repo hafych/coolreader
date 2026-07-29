@@ -606,9 +606,12 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         CRMenu * mainMenu = this;
         mainMenu->setAccelerators( _menuAccelerators );
 
-        CRMenu * fontFaceMenu = new CRMenu(_wm, mainMenu, mm_FontFace,
-                                            _("Default font face"),
-                                                    LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_FACE );
+        std::unique_ptr<CRMenu> fontFaceMenu =
+                std::make_unique<CRMenu>(
+                        _wm, mainMenu, mm_FontFace,
+                        _("Default font face"),
+                        LVImageSourceRef(), LVFontRef(), valueFont,
+                        props, PROP_FONT_FACE);
         fontFaceMenu->setSkinName(cs32("#settings"));
         CRLog::trace("getting font face list");
         lString32Collection list;
@@ -619,7 +622,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         for ( i=0; i<(int)list.length(); i++ ) {
             fontFaceMenu->addItem(
                     std::make_unique<OnDemandFontMenuItem>(
-                                    fontFaceMenu, i,
+                                    fontFaceMenu.get(), i,
                                     list[i], LVImageSourceRef(), list[i].c_str(),
                                     MENU_FONT_FACE_SIZE, 400,
                                     false, css_ff_sans_serif,
@@ -630,17 +633,20 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         fontFaceMenu->reconfigure( 0 );
 
         //lString8 fontFace = UnicodeToUtf8(props->getStringDef( PROP_FONT_FACE, UnicodeToUtf8(list[0]).c_str() ));
-        mainMenu->addItem( fontFaceMenu );
+        mainMenu->addItem(std::move(fontFaceMenu));
 
-        CRMenu * fontFallbackFaceMenu = new CRMenu(_wm, mainMenu, mm_FontFallbackFace,
-                                            _("Fallback font face"),
-                                                    LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FALLBACK_FONT_FACES );
+        std::unique_ptr<CRMenu> fontFallbackFaceMenu =
+                std::make_unique<CRMenu>(
+                        _wm, mainMenu, mm_FontFallbackFace,
+                        _("Fallback font face"),
+                        LVImageSourceRef(), LVFontRef(), valueFont,
+                        props, PROP_FALLBACK_FONT_FACES);
         fontFallbackFaceMenu->setSkinName(cs32("#settings"));
 
         for ( i=0; i<(int)list.length(); i++ ) {
             fontFallbackFaceMenu->addItem(
                     std::make_unique<OnDemandFontMenuItem>(
-                                    fontFallbackFaceMenu, i,
+                                    fontFallbackFaceMenu.get(), i,
                                     list[i], LVImageSourceRef(), list[i].c_str(),
                                     MENU_FONT_FACE_SIZE, 400,
                                     false, css_ff_sans_serif,
@@ -650,7 +656,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 
         fontFallbackFaceMenu->setAccelerators( _menuAccelerators );
         fontFallbackFaceMenu->reconfigure( 0 );
-        mainMenu->addItem( fontFallbackFaceMenu );
+        mainMenu->addItem(std::move(fontFallbackFaceMenu));
 
         std::unique_ptr<CRMenu> fontSizeMenu =
                 createFontSizeMenu(_wm, mainMenu, props);

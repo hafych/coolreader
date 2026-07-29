@@ -7888,6 +7888,36 @@ require_source_text(
   "font-size menus must transfer through the owner-aware boundary"
 )
 require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> fontFaceMenu ="
+  "font-face menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(fontFaceMenu));"
+  "font-face menus must transfer through the owner-aware boundary"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> fontFallbackFaceMenu ="
+  "fallback-font menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(fontFallbackFaceMenu));"
+  "fallback-font menus must transfer through the owner-aware boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * fontFaceMenu = new"
+  "font-face menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * fontFallbackFaceMenu = new"
+  "fallback-font menu candidates must not begin as raw owners"
+)
+require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"
