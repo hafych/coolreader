@@ -236,8 +236,8 @@ CRBookmarkMenu::CRBookmarkMenu(CRGUIWindowManager * wm, LVDocView * docview, int
                     bm = NULL;
             }
         }
-        CRBookmarkMenuItem * item = new CRBookmarkMenuItem( this, i, bm, page );
-        addItem( item );
+        addItem(std::make_unique<CRBookmarkMenuItem>(
+                this, i, bm, page));
     }
     setMode( goToMode );
 #ifdef CR_POCKETBOOK
@@ -376,8 +376,8 @@ CRCitesMenu::CRCitesMenu(CRGUIWindowManager * wm, LVDocView * docview, int numIt
         /// get bookmark position text
         if ( page<0 )
             continue;
-        CRBookmarkMenuItem * item = new CRBookmarkMenuItem( this, i, bmk, page );
-        addItem( item );
+        addItem(std::make_unique<CRBookmarkMenuItem>(
+                this, i, bmk, page));
     }
 #ifdef CR_POCKETBOOK
     citesDialog = this;
@@ -420,8 +420,9 @@ bool CRCitesMenu::onCommand( int command, int params )
         CRBookmarkMenuItem *item = static_cast<CRBookmarkMenuItem *>(_items[_selectedItem]);
         CRBookmark *bm = item->getBookmark();
         if (bm && _docview->removeBookmark(bm)) {
-            item = static_cast<CRBookmarkMenuItem *>(_items.remove(_selectedItem));
-            delete item;
+            std::unique_ptr<CRBookmarkMenuItem> removedItem(
+                    static_cast<CRBookmarkMenuItem *>(
+                            _items.remove(_selectedItem)));
             if (_selectedItem >= _items.length()) {
                 _selectedItem = _items.length() -1;
                 if (_selectedItem < 0) {
@@ -463,8 +464,10 @@ int CRCitesMenu::getSelectedItemIndex()
 
 void CRCitesMenu::createDefaultItem()
 {
-    CRBookmarkMenuItem * item = new CRBookmarkMenuItem( this, 0, NULL, 0 );
+    std::unique_ptr<CRBookmarkMenuItem> item =
+            std::make_unique<CRBookmarkMenuItem>(
+                    this, 0, nullptr, 0);
     item->setLabel(
             Utf8ToUnicode(lString8(_("Cite selection dialog"))));
-    addItem( item );
+    addItem(std::move(item));
 }

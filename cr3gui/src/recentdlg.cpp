@@ -140,8 +140,8 @@ CRRecentBooksMenu::CRRecentBooksMenu(CRGUIWindowManager * wm, LVDocView * docvie
     // skip Null
     for ( int i=1; i<files.length(); i++ ) {
         CRFileHistRecord * file = files.get( i );
-        CRRecentBookMenuItem * item = new CRRecentBookMenuItem( this, i, file );
-        addItem( item );
+        addItem(std::make_unique<CRRecentBookMenuItem>(
+                this, i, file));
     }
     CRGUIAcceleratorTableRef acc = _wm->getAccTables().get(U"bookmarks");
     if ( acc.isNull() )

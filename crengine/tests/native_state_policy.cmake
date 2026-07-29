@@ -7468,6 +7468,16 @@ forbid_source_text(
   "recent-book menus must not retain unused help-text state"
 )
 require_source_text(
+  "${RECENT_DIALOG_SOURCE}"
+  "addItem(std::make_unique<CRRecentBookMenuItem>"
+  "recent-book item candidates must enter scoped ownership"
+)
+forbid_source_text(
+  "${RECENT_DIALOG_SOURCE}"
+  "new CRRecentBookMenuItem"
+  "recent-book items must not be published as raw candidates"
+)
+require_source_text(
   "${BOOKMARK_DIALOG_SOURCE}"
   "lString32 text = _bookmark->getPosText();"
   "bookmark position text must preserve the history string width"
@@ -7496,6 +7506,26 @@ forbid_source_text(
   "${BOOKMARK_DIALOG_SOURCE}"
   "int k, f;"
   "bookmark mode changes must not retain unused key state"
+)
+require_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "addItem(std::make_unique<CRBookmarkMenuItem>"
+  "bookmark item candidates must enter scoped ownership"
+)
+require_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "std::unique_ptr<CRBookmarkMenuItem> removedItem("
+  "removed citation items must return immediately to scoped ownership"
+)
+forbid_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "new CRBookmarkMenuItem"
+  "bookmark items must not be published as raw candidates"
+)
+forbid_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "delete item"
+  "removed citation item teardown must remain automatic"
 )
 require_source_text(
   "${CITE_SELECTION_HEADER}"
