@@ -156,10 +156,6 @@ public:
     bool loadHistory( LVStreamRef stream );
     bool saveHistory( LVStreamRef stream );
     bool loadDictConfig( lString32 filename );
-    bool loadDictConfig( lString16 filename )
-    {
-        return loadDictConfig(Utf16ToUnicode(filename));
-    }
 	bool setHelpFile( lString32 filename );
 	/// on starting file loading
 	void OnLoadFileStart( lString32 filename ) override;
