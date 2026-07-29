@@ -39,20 +39,24 @@ void CLZWDecoder::SetOutputStream(unsigned char *p, int sz) {
 }
 
 int CLZWDecoder::WriteOutChar(unsigned char b) {
-    if (--out_stream_size>=0) {
-        *p_out_stream++ = b;
-        return 1;
-    } else {
+    if (!p_out_stream || out_stream_size <= 0)
         return 0;
-    }
+    --out_stream_size;
+    *p_out_stream++ = b;
+    return 1;
 }
 
 int CLZWDecoder::WriteOutString(int code) {
+    if (code < 0)
+        return 0;
     int pos = 0;
-    do {
+    while (code >= 0) {
+        if (code >= lastadd || code >= LSWDECODER_MAX_TABLE_SIZE
+                || pos >= LSWDECODER_MAX_TABLE_SIZE / 2)
+            return 0;
         rev_buf[pos++] = str_table[code];
         code = str_nextchar[code];
-    } while (code>=0 && pos < LSWDECODER_MAX_TABLE_SIZE/2);
+    }
     while (--pos>=0) {
         if (!WriteOutChar(rev_buf[pos]))
             return 0;
@@ -61,6 +65,8 @@ int CLZWDecoder::WriteOutString(int code) {
 }
 
 void CLZWDecoder::FillRestOfOutStream(unsigned char b) {
+    if (!p_out_stream || out_stream_size <= 0)
+        return;
     for (; out_stream_size>0; out_stream_size--) {
         *p_out_stream++ = b;
     }
@@ -91,7 +97,8 @@ int CLZWDecoder::ReadInCode() {
 }
 
 int CLZWDecoder::AddString(int OldCode, unsigned char NewChar) {
-    if (lastadd == LSWDECODER_MAX_TABLE_SIZE)
+    if (lastadd < 0 || lastadd >= LSWDECODER_MAX_TABLE_SIZE
+            || OldCode < 0 || OldCode >= lastadd)
         return -1;
     if (lastadd == (1<<bits)-1) {
         // increase table size, except case when ClearCode is expected

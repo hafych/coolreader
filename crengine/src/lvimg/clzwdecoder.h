@@ -66,7 +66,7 @@ public:
     ~CLZWDecoder();
     void Init(int sizecode);
     int  CodeExists(int code) {
-        return (code<lastadd);
+        return code >= 0 && code < lastadd;
     }
     int  Decode( int init_code_size );
 };

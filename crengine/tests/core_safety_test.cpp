@@ -5543,7 +5543,21 @@ static int testPngDecoderOwnership() {
 #if (USE_GIF==1)
 static int testGifLzwBoundedReads() {
     unsigned char input = 0;
+    unsigned char output = 0;
     CLZWDecoder decoder;
+    decoder.SetOutputStream(&output, 1);
+    decoder.Init(2);
+    if (decoder.CodeExists(-1)
+            || decoder.WriteOutString(-1) != 0
+            || decoder.WriteOutString(6) != 0
+            || decoder.AddString(-1, 0) != -1)
+        return fail("GIF LZW decoder accepted an invalid table index");
+
+    decoder.SetOutputStream(NULL, 1);
+    if (decoder.WriteOutChar(0) != 0)
+        return fail("GIF LZW decoder wrote through a null output stream");
+    decoder.FillRestOfOutStream(0);
+
     decoder.SetInputStream(&input, 1);
     decoder.Init(2);
     if (decoder.ReadInCode() != 0 || decoder.ReadInCode() != 0)
@@ -5556,7 +5570,6 @@ static int testGifLzwBoundedReads() {
     if (decoder.ReadInCode() != -1)
         return fail("GIF LZW decoder accepted an empty input stream");
 
-    unsigned char output = 0;
     decoder.SetInputStream(&input, 1);
     decoder.SetOutputStream(&output, 1);
     if (decoder.Decode(LSWDECODER_MAX_BITS) != 0)

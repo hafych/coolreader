@@ -199,6 +199,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADE
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.cpp" GIF_FRAME_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifframe.h" GIF_FRAME_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/clzwdecoder.cpp" GIF_LZW_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/clzwdecoder.h" GIF_LZW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.cpp" PNG_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvpngimagesource.h" PNG_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvjpegimagesource.cpp" JPEG_IMAGE_SOURCE)
@@ -3297,6 +3298,31 @@ forbid_source_text(
   "${GIF_LZW_SOURCE}"
   "p_in_stream[2]"
   "GIF LZW decoder must not read a fixed three-byte window"
+)
+require_source_text(
+  "${GIF_LZW_HEADER}"
+  "code >= 0 && code < lastadd"
+  "GIF LZW table lookups must reject negative codes"
+)
+require_source_text(
+  "${GIF_LZW_SOURCE}"
+  "code >= lastadd || code >= LSWDECODER_MAX_TABLE_SIZE"
+  "GIF LZW string traversal must stay inside published table entries"
+)
+require_source_text(
+  "${GIF_LZW_SOURCE}"
+  "if (code < 0)"
+  "GIF LZW string traversal must reject a negative initial code"
+)
+require_source_text(
+  "${GIF_LZW_SOURCE}"
+  "OldCode < 0 || OldCode >= lastadd"
+  "GIF LZW dictionary growth must validate its parent code"
+)
+require_source_text(
+  "${GIF_LZW_SOURCE}"
+  "!p_out_stream || out_stream_size <= 0"
+  "GIF LZW output must validate its destination before writing"
 )
 require_source_text(
   "${GIF_IMAGE_SOURCE}"
