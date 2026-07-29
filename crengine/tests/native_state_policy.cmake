@@ -7052,6 +7052,41 @@ forbid_source_text(
   "NanoX battery comments must not preserve the retired one-value API"
 )
 require_source_text(
+  "${NANOX_SOURCE}"
+  "lString32 manualFile;"
+  "NanoX manual paths must retain current-width storage"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "pid_t pid;"
+  "NanoX child-process handling must use the portable process type"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "char manual_file["
+  "NanoX manual paths must not return through a fixed buffer"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "lString16 mofilename"
+  "NanoX translation paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "HyphMan::initDictionaries( lString16"
+  "NanoX hyphenation paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "ldomDocCache::init( lString16"
+  "NanoX cache paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "__pid_t"
+  "NanoX child-process handling must not use a libc-internal type"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testGuiScreenOwnership()"
   "GUI screen ownership must retain native lifecycle coverage"

@@ -1291,16 +1291,20 @@ int InitDoc(char *fileName)
     CRLog::trace("creating window manager...");
     CRJinkeWindowManager * wm = new CRJinkeWindowManager(600,800);
     CRLog::trace("loading skin...");
-    if ( !wm->loadSkin(  lString16("/root/abook/crengine/skin") ) )
-        if ( !wm->loadSkin(  lString16("/home/crengine/skin") ) )
-            wm->loadSkin( lString16("/root/crengine/skin") );
+    if ( !wm->loadSkin(
+                U"/root/abook/crengine/skin") )
+        if ( !wm->loadSkin(
+                    U"/home/crengine/skin") )
+            wm->loadSkin(
+                    U"/root/crengine/skin");
     CRLog::trace("drawing progressbar 0%%...");
     //wm->getScreen()->getCanvas()->Clear(0xFFFFFF);
     //wm->getScreen()->invalidateRect( lvRect(0, 0, 600, 800) );
-    //wm->showProgress(lString16("cr3_wait_icon.png"), 10);
         {
-            const lChar16 * imgname =
-                ( wm->getScreenOrientation()&1 ) ? L"cr3_logo_screen_landscape.png" : L"cr3_logo_screen.png";
+            const lChar32 * imgname =
+                ( wm->getScreenOrientation()&1 )
+                    ? U"cr3_logo_screen_landscape.png"
+                    : U"cr3_logo_screen.png";
             LVImageSourceRef img = wm->getSkin()->getImage(imgname);
             if ( !img.isNull() ) {
                 wm->getScreen()->getCanvas()->Draw(img, 0, 0, wm->getScreen()->getWidth(), wm->getScreen()->getHeight(),  false );
@@ -1317,14 +1321,20 @@ int InitDoc(char *fileName)
         CRLog::info( "History file name: %s", history_file_name );
     }
 
-    char manual_file[512] = "";
+    lString32 manualFile;
     {
         const char * lang = getLang();
         if ( lang && lang[0] ) {
             // set translator
             CRLog::info("Current language is %s, looking for translation file", lang);
-            lString16 mofilename = "/root/crengine/i18n/" + lString16(lang) + ".mo";
-            lString16 mofilename2 = "/root/abook/crengine/i18n/" + lString16(lang) + ".mo";
+            lString32 langText =
+                    Utf8ToUnicode(lString8(lang));
+            lString32 mofilename =
+                    lString32(U"/root/crengine/i18n/")
+                    + langText + U".mo";
+            lString32 mofilename2 =
+                    lString32(U"/root/abook/crengine/i18n/")
+                    + langText + U".mo";
             std::unique_ptr<CRMoFileTranslator> t(
                     new CRMoFileTranslator());
             if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
@@ -1333,9 +1343,17 @@ int InitDoc(char *fileName)
             } else {
                 CRLog::info("translation file %s.mo not found", lang);
             }
-            sprintf( manual_file, "/root/abook/crengine/manual/cr3-manual-%s.fb2", lang );
-            if ( !LVFileExists( lString16(manual_file).c_str() ) )
-                sprintf( manual_file, "/root/crengine/manual/cr3-manual-%s.fb2", lang );
+            manualFile =
+                    lString32(
+                            U"/root/abook/crengine/manual/"
+                            U"cr3-manual-")
+                    + langText + U".fb2";
+            if ( !LVFileExists(manualFile) )
+                manualFile =
+                        lString32(
+                                U"/root/crengine/manual/"
+                                U"cr3-manual-")
+                        + langText + U".fb2";
         }
     }
 
@@ -1371,7 +1389,6 @@ int InitDoc(char *fileName)
     lString32Collection fontDirs;
     fontDirs.add(U"/root/abook/fonts/");
     fontDirs.add(U"/home/fonts/");
-    //fontDirs.add( lString16(L"/root/crengine/fonts") ); // will be added
     CRLog::info("INIT...");
     if ( !InitCREngine( "/root/crengine/", fontDirs ) )
         return 0;
@@ -1380,7 +1397,7 @@ int InitDoc(char *fileName)
 
 #ifdef ALLOW_RUN_EXE
     {
-        __pid_t pid;
+        pid_t pid;
         if( strstr(fileName, ".exe.txt") || strstr(fileName, ".exe.fb2")) {
             pid = fork();
             if(!pid) {
@@ -1402,13 +1419,20 @@ int InitDoc(char *fileName)
             NULL,
         };
         loadKeymaps( *wm, keymap_locations );
-        if ( LVDirectoryExists( L"/root/abook/crengine/hyph" ) )
-            HyphMan::initDictionaries( lString16("/root/abook/crengine/hyph/") );
+        if ( LVDirectoryExists(
+                    U"/root/abook/crengine/hyph" ) )
+            HyphMan::initDictionaries(
+                    U"/root/abook/crengine/hyph/");
         else
-            HyphMan::initDictionaries( lString16("/root/crengine/hyph/") );
+            HyphMan::initDictionaries(
+                    U"/root/crengine/hyph/");
 
-        if ( !ldomDocCache::init( lString16("/root/abook/crengine/.cache"), 0x100000 * 64 ) ) {
-            if ( !ldomDocCache::init( lString16("/home/crengine/.cache"), 0x100000 * 64 ) ) {
+        if ( !ldomDocCache::init(
+                    U"/root/abook/crengine/.cache",
+                    0x100000 * 64 ) ) {
+            if ( !ldomDocCache::init(
+                        U"/home/crengine/.cache",
+                        0x100000 * 64 ) ) {
                 CRLog::error("Cannot initialize swap directory");
             }
         }
@@ -1421,9 +1445,8 @@ int InitDoc(char *fileName)
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
-        if ( manual_file[0] )
-            main_win->setHelpFile(
-                    Utf8ToUnicode(lString8(manual_file)));
+        if ( !manualFile.empty() )
+            main_win->setHelpFile(manualFile);
         if ( !main_win->loadDefaultCover(
                     U"/root/abook/crengine/cr3_def_cover.png") )
             if ( !main_win->loadDefaultCover(
