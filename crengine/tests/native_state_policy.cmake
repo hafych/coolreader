@@ -7117,6 +7117,36 @@ forbid_source_text(
   "PocketBook fallback manual path must retain the cr3 directory"
 )
 require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString32 _fileName;"
+  "PocketBook document paths must retain current-width storage"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString32 path = LVExtractPath(filename);"
+  "PocketBook associated-file paths must retain current-width storage"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString16 _fileName;"
+  "PocketBook document paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString16 path16"
+  "PocketBook associated-file paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString16 fn = file->getFilePathName();"
+  "PocketBook recent-book paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString16 filename(\"dict.css\")"
+  "PocketBook dictionary stylesheet paths must not regress to legacy Unicode width"
+)
+require_source_text(
   "${NANOX_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "NanoX window managers must adopt a newly created screen"

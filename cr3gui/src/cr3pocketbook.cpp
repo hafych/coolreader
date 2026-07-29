@@ -108,7 +108,7 @@ static bool updatePocketBookBatteryState(LVDocView *docView)
 class CRPocketBookGlobals
 {
 private :
-    lString16 _fileName;
+    lString32 _fileName;
     int _keepOrientation;
     lString8  _lang;
     lString8  _pbDictionary;
@@ -117,8 +117,11 @@ private :
     bool _translateTimer;
 public:
     CRPocketBookGlobals(char *fileName);
-    lString16 getFileName() { return _fileName ; }
-    void setFileName( lString16 fn) { _fileName = fn; }
+    void setFileName(
+            const lString32 & fileName)
+    {
+        _fileName = fileName;
+    }
     int getKeepOrientation() { return _keepOrientation; }
     const char *getLang() { return _lang.c_str(); }
     const char *getDictionary() { return _pbDictionary.c_str(); }
@@ -158,7 +161,8 @@ public:
 CRPocketBookGlobals::CRPocketBookGlobals(char *fileName)
 {
     CRLog::trace("CRPocketBookGlobals(%s)", fileName);
-    _fileName = lString16(fileName);
+    _fileName =
+            Utf8ToUnicode(lString8(fileName));
     _ready_sent = false;
     _translateTimer = false;
     iconfig *gc = OpenConfig(const_cast<char *>(GLOBALCONFIGFILE), NULL);
@@ -173,17 +177,20 @@ CRPocketBookGlobals::CRPocketBookGlobals(char *fileName)
 
 bool CRPocketBookGlobals::createFile(char *fName)
 {
-    lString16 filename(Utf8ToUnicode(fName));
+    if (!fName || !fName[0])
+        return false;
+    lString32 filename =
+            Utf8ToUnicode(lString8(fName));
     if ( !LVFileExists(filename) ) {
-        lString16 path16 = LVExtractPath( filename );
-        if (LVCreateDirectory( path16 )) {
+        lString32 path = LVExtractPath(filename);
+        if (LVCreateDirectory(path)) {
             LVStreamRef stream = LVOpenFileStream( filename.c_str(), LVOM_WRITE );
             if ( stream.isNull() ) {
                 CRLog::error("Cannot create file %s", fName);
                 return false;
             }
         } else {
-            lString8 fn = UnicodeToUtf8(path16.c_str());
+            lString8 fn = UnicodeToUtf8(path);
             CRLog::error("Cannot create directory %s", fn.c_str());
             return false;
         }
@@ -364,8 +371,10 @@ public:
     {
         if (_orientation != storedOrientation)
             reconfigure(ScreenWidth(), ScreenHeight(), (cr_rotate_angle_t)storedOrientation);
-        const lChar16 * imgname =
-                ( _orientation &1 ) ? L"cr3_logo_screen_landscape.png" : L"cr3_logo_screen.png";
+        const lChar32 * imgname =
+                ( _orientation &1 )
+                    ? U"cr3_logo_screen_landscape.png"
+                    : U"cr3_logo_screen.png";
         LVImageSourceRef img = getSkin()->getImage(imgname);
         if ( !img.isNull() ) {
             _screen->getCanvas()->Draw(img, 0, 0, _screen->getWidth(), _screen->getHeight());
@@ -992,7 +1001,7 @@ private:
         LVPtrVector<CRFileHistRecord> & files = _docview->getHistory()->getRecords();
         if ( index >= 1 && index < files.length() ) {
             CRFileHistRecord * file = files.get( index );
-            lString16 fn = file->getFilePathName();
+            lString32 fn = file->getFilePathName();
             if ( LVFileExists(fn) ) {
                 // Actually book opened in openRecentBook() we are in truble if it will fail
                 pbGlobals->saveState(getDocView()->getCurPage(), getDocView()->getPageCount());
@@ -1282,7 +1291,7 @@ public:
     void showDictDialog()
     {
         if (!_dictDlg) {
-            lString16 filename("dict.css");
+            lString32 filename(U"dict.css");
             lString8 dictCss;
             if (_cssDir.length() > 0 && LVFileExists( _cssDir + filename ))
                 LVLoadStylesheetFile( _cssDir + filename, dictCss );
