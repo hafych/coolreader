@@ -108,13 +108,13 @@ public class LogcatSaver {
 	 */
 
 	public static boolean saveLogcat(Date since, File outputFile) {
-		boolean res = false;
-		try {
-			res = saveLogcat(since, new FileOutputStream(outputFile));
+		try (OutputStream output =
+					 new FileOutputStream(outputFile)) {
+			return saveLogcat(since, output);
 		} catch (Exception e) {
 			log.e("Failed to save logcat: " + e.toString());
+			return false;
 		}
-		return res;
 	}
 
 	public static boolean saveLogcat(Date since, OutputStream outputStream) {

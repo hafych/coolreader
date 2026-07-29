@@ -329,6 +329,12 @@ DRM или ограничений доступа, подбор/получени�
   атомарно хранится вместе с picker command/argument и восстанавливается через
   Bundle; общего mutable retry counter между операциями больше нет, а cancel
   picker обновляет captured parent после возможного partial delete.
+  Logcat export теперь принадлежит Activity-owned `LogcatExportSession`:
+  immutable filename/time boundary допускает только один active request,
+  direct-file и SAF document creation, stream open и `logcat` timeout
+  выполняются вне UI thread, output всегда закрывается owner-ом, а prefs и
+  completion UI публикуются только exact request активного service generation.
+  Destroy закрывает session и отклоняет late process completion.
   `LoadDocumentTask` хранит свой `BookInfo` вместо чтения mutable global book
   во время engine work; только current generation публикует UI, failure
   recovery и позднее stream-to-cache/fingerprint reconciliation. Закрытие

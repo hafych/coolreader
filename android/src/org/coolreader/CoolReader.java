@@ -89,6 +89,7 @@ import org.coolreader.crengine.History;
 import org.coolreader.crengine.InterfaceTheme;
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.LibraryRootStore;
+import org.coolreader.crengine.LogcatExportSession;
 import org.coolreader.crengine.LogcatSaver;
 import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.OPDSCatalogEditDialog;
@@ -148,6 +149,8 @@ public class CoolReader extends BaseActivity {
 			new DocumentLoadLifecycle();
 	private final BookInfoDialogSession bookInfoDialogRequests =
 			new BookInfoDialogSession();
+	private final LogcatExportSession logcatExportRequests =
+			new LogcatExportSession();
 	private final ExternalDocumentValidator mExternalDocumentValidator =
 			new ExternalDocumentValidator();
 	//View startupView;
@@ -354,6 +357,7 @@ public class CoolReader extends BaseActivity {
 		}
 		documentLoadLifecycle.close();
 		bookInfoDialogRequests.close();
+		logcatExportRequests.close();
 
 		// Shutdown TTS service if running
 		if (null != ttsControlServiceAccessor) {
@@ -2279,27 +2283,32 @@ public class CoolReader extends BaseActivity {
 			FileInfo target) {
 		if (target == null || uri == null)
 			return;
-		Uri docFolderUri =
-				DocumentsContractWrapper.buildDocumentUriUsingTree(uri);
-		if (docFolderUri == null)
-			return;
-		Uri fileUri = DocumentsContractWrapper.createFile(
-				this, docFolderUri, "text/x-log",
-				target.filename);
-		if (fileUri == null) {
-			log.e("logcat: can't create file!");
-			return;
-		}
-		try (OutputStream ostream =
-					 getContentResolver().openOutputStream(fileUri)) {
-			if (ostream != null) {
-				saveLogcat(target.filename, ostream);
-			} else {
-				log.e("logcat: failed to open stream!");
-			}
-		} catch (Exception e) {
-			log.e("logcat: " + e);
-		}
+		Context appContext = getApplicationContext();
+		ContentResolver resolver =
+				appContext.getContentResolver();
+		String fileName = target.filename;
+		startLogcatExport(fileName, () -> {
+			Uri docFolderUri =
+					DocumentsContractWrapper
+							.buildDocumentUriUsingTree(uri);
+			if (docFolderUri == null)
+				throw new IOException(
+						"Cannot resolve selected document tree");
+			Uri fileUri = DocumentsContractWrapper.createFile(
+					appContext,
+					docFolderUri,
+					"text/x-log",
+					fileName);
+			if (fileUri == null)
+				throw new IOException(
+						"Cannot create logcat document");
+			OutputStream output =
+					resolver.openOutputStream(fileUri);
+			if (output == null)
+				throw new IOException(
+						"Cannot open logcat document");
+			return output;
+		});
 	}
 
 	public void setDict(String id) {
@@ -2824,45 +2833,128 @@ public class CoolReader extends BaseActivity {
 				&& !item.isOnlineCatalogPluginDir();
 	}
 
+	private interface LogcatOutputFactory {
+		OutputStream open() throws Exception;
+	}
+
 	public void createLogcatFile() {
-		final SimpleDateFormat format = new SimpleDateFormat("'cr3-'yyyy-MM-dd_HH_mm_ss'.log'", Locale.US);
+		String fileName =
+				new SimpleDateFormat(
+						"'cr3-'yyyy-MM-dd_HH_mm_ss'.log'",
+						Locale.US)
+						.format(new Date());
 		FileInfo dir = mScanner.getSharedDownloadDirectory();
-		if (null == dir) {
+		if (dir == null) {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 				log.d("logcat: no access to download directory, opening document tree...");
+				ServiceLifecycle lifecycle = mServiceLifecycle;
 				askConfirmation(R.string.confirmation_select_folder_for_log, () -> {
-					launchOpenDocumentTree(
-							DocumentTreeRequestState.Command
-									.SAVE_LOGCAT,
-							new FileInfo(
-									format.format(
-											new Date())));
+					if (lifecycle.isActive()) {
+						FileInfo target = new FileInfo();
+						target.filename = fileName;
+						launchOpenDocumentTree(
+								DocumentTreeRequestState.Command
+										.SAVE_LOGCAT,
+								target);
+					}
 				});
 			} else {
 				log.e("Can't create logcat file: no access to download directory!");
 			}
-		} else {
-			try {
-				File outputFile = new File(dir.pathname, format.format(new Date()));
-				FileOutputStream ostream = new FileOutputStream(outputFile);
-				saveLogcat(outputFile.getCanonicalPath(), ostream);
-			} catch (Exception e) {
-				log.e("createLogcatFile: " + e);
-			}
+			return;
 		}
+		if (dir.pathname == null) {
+			log.e("Can't create logcat file: download path is missing");
+			return;
+		}
+		File outputFile =
+				new File(dir.pathname, fileName);
+		startLogcatExport(
+				outputFile.getAbsolutePath(),
+				() -> new FileOutputStream(outputFile));
 	}
 
-	private void saveLogcat(String fileName, OutputStream ostream) {
-		Date since = getLastLogcatDate();
-		Date now = new Date();
-		if (LogcatSaver.saveLogcat(since, ostream)) {
-			setLastLogcatDate(now);
-			log.i("logcat saved to file " + fileName);
-			//showToast("Logcat saved to " + fileName);
-			showMessage(getString(R.string.win_title_log), getString(R.string.notice_log_saved_to_, fileName));
+	private void startLogcatExport(
+			String displayName,
+			LogcatOutputFactory outputFactory) {
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		if (!lifecycle.isActive())
+			return;
+		if (displayName == null
+				|| displayName.isEmpty()
+				|| outputFactory == null) {
+			log.e("Ignoring invalid logcat export target");
+			return;
+		}
+		long sinceMillis =
+				Math.max(
+						0L,
+						getLastLogcatTimestamp());
+		long completedThroughMillis =
+				Math.max(
+						sinceMillis,
+						System.currentTimeMillis());
+		LogcatExportSession.Request request =
+				logcatExportRequests.begin(
+						displayName,
+						sinceMillis,
+						completedThroughMillis);
+		if (request == null) {
+			log.w("Ignoring overlapping logcat export");
+			return;
+		}
+		BackgroundThread.instance().postBackground(() -> {
+			if (!lifecycle.isActive()
+					|| !logcatExportRequests.isActive(request))
+				return;
+			boolean saved = false;
+			try (OutputStream output = outputFactory.open()) {
+				if (output == null)
+					throw new IOException(
+							"Logcat output is unavailable");
+				if (lifecycle.isActive()
+						&& logcatExportRequests.isActive(request)) {
+					saved = LogcatSaver.saveLogcat(
+							new Date(request.getSinceMillis()),
+							output);
+				}
+			} catch (Exception e) {
+				saved = false;
+				log.e(
+						"Logcat export failed: "
+								+ e.getClass().getSimpleName());
+			}
+			boolean result = saved;
+			BackgroundThread.instance().executeGUI(() ->
+					finishLogcatExport(
+							lifecycle,
+							request,
+							result));
+		});
+	}
+
+	private void finishLogcatExport(
+			ServiceLifecycle lifecycle,
+			LogcatExportSession.Request request,
+			boolean saved) {
+		if (!lifecycle.isActive()
+				|| !logcatExportRequests.complete(request))
+			return;
+		String displayName = request.getDisplayName();
+		if (saved) {
+			setLastLogcatTimestamp(
+					request.getCompletedThroughMillis());
+			log.i("Logcat export completed");
+			showMessage(
+					getString(R.string.win_title_log),
+					getString(
+							R.string.notice_log_saved_to_,
+							displayName));
 		} else {
-			log.e("Failed to save logcat to " + fileName);
-			showToast("Failed to save logcat to " + fileName);
+			log.e("Logcat export did not complete");
+			showToast(
+					"Failed to save logcat to "
+							+ displayName);
 		}
 	}
 
@@ -3146,14 +3238,13 @@ public class CoolReader extends BaseActivity {
 		return uri;
 	}
 
-	private Date getLastLogcatDate() {
-		long dateMillis = getPrefs().getLong(PREF_LAST_LOGCAT, 0);
-		return new Date(dateMillis);
+	private long getLastLogcatTimestamp() {
+		return getPrefs().getLong(PREF_LAST_LOGCAT, 0);
 	}
 
-	private void setLastLogcatDate(Date date) {
+	private void setLastLogcatTimestamp(long timestamp) {
 		SharedPreferences.Editor editor = getPrefs().edit();
-		editor.putLong(PREF_LAST_LOGCAT, date.getTime());
+		editor.putLong(PREF_LAST_LOGCAT, timestamp);
 		editor.commit();
 	}
 

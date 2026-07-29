@@ -149,6 +149,13 @@ stored atomically with the picker command and target and survives Bundle
 restore; concurrent operations share no mutable retry counter. Picker
 cancellation refreshes only the captured parent after any partial direct
 deletion.
+Logcat export is owned by an Activity-scoped `LogcatExportSession`. Its
+immutable filename and time boundary admit only one active request; direct-file
+and SAF document creation, stream opening and the bounded `logcat` process all
+run off the UI thread. The output owner is always closed, while preferences and
+completion UI are published only by the exact request of an active service
+generation. Activity destruction closes the session and rejects late process
+completion.
 Each `LoadDocumentTask` retains its own `BookInfo`, settings and completion
 state rather than consulting a book pointer that another request can replace
 while native parsing is running. The old book is saved and marked closed before

@@ -109,6 +109,8 @@ def verify_crash_and_artifact_paths() -> None:
     ).read_text(encoding="utf-8")
     if "LogRedactor.redactArtifact(diagnostic)" not in logcat_saver:
         fail("exported logcat data is not redacted")
+    if "try (OutputStream output =" not in logcat_saver:
+        fail("file-backed logcat export does not close its output owner")
 
 
 def verify_native_boundary() -> None:

@@ -1155,6 +1155,57 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void logcatExportOwnsBackgroundCompletion()
+			throws Exception {
+		Field requests =
+				CoolReader.class.getDeclaredField(
+						"logcatExportRequests");
+		assertTrue(Modifier.isPrivate(
+				requests.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				requests.getModifiers()));
+		assertEquals(
+				LogcatExportSession.class,
+				requests.getType());
+		for (Field field :
+				LogcatExportSession.Request.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		Class<?> outputFactory = null;
+		for (Class<?> nested :
+				CoolReader.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals(
+					"LogcatOutputFactory")) {
+				outputFactory = nested;
+				break;
+			}
+		}
+		assertTrue(outputFactory != null);
+		assertTrue(outputFactory.isInterface());
+		assertTrue(Modifier.isPrivate(
+				outputFactory.getModifiers()));
+		Method startExport =
+				CoolReader.class.getDeclaredMethod(
+						"startLogcatExport",
+						String.class,
+						outputFactory);
+		assertTrue(Modifier.isPrivate(
+				startExport.getModifiers()));
+		Method finishExport =
+				CoolReader.class.getDeclaredMethod(
+						"finishLogcatExport",
+						ServiceLifecycle.class,
+						LogcatExportSession.Request.class,
+						boolean.class);
+		assertTrue(Modifier.isPrivate(
+				finishExport.getModifiers()));
+	}
+
+	@Test
 	public void documentTreePickerOwnsAtomicRestorableRequest()
 			throws Exception {
 		Field requests =
