@@ -348,12 +348,9 @@ CR3View::CR3View( QWidget *parent)
 #else
     _dpr = 1.0;
 #endif
-#if WORD_SELECTOR_ENABLED==1
-    _wordSelector = NULL;
-#endif
-    _data = new DocViewData();
+    _data = std::make_unique<DocViewData>();
     _data->_props = LVCreatePropsContainer();
-    _docview = new LVDocView();
+    _docview = std::make_unique<LVDocView>();
     _docview->setCallback( this );
     _selStart = ldomXPointer();
     _selEnd = ldomXPointer();
@@ -425,21 +422,19 @@ void CR3View::updateDefProps()
 CR3View::~CR3View()
 {
 #if WORD_SELECTOR_ENABLED==1
-    if ( _wordSelector )
-        delete _wordSelector;
+    _wordSelector.reset();
 #endif
     _docview->savePosition();
     saveHistory( QString() );
     saveSettings( QString() );
-    delete _docview;
-    delete _data;
 }
 
 #if WORD_SELECTOR_ENABLED==1
 void CR3View::startWordSelection() {
     if ( isWordSelection() )
         endWordSelection();
-    _wordSelector = new LVPageWordSelector(_docview);
+    _wordSelector =
+            std::make_unique<LVPageWordSelector>(_docview.get());
     update();
 }
 
@@ -449,8 +444,7 @@ QString CR3View::endWordSelection() {
         ldomWordEx * word = _wordSelector->getSelectedWord();
         if ( word )
             text = cr2qt(word->getText());
-        delete _wordSelector;
-        _wordSelector = NULL;
+        _wordSelector.reset();
         _docview->clearSelection();
         update();
     }

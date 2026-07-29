@@ -24,6 +24,7 @@
 
 #include <qwidget.h>
 #include <QScrollBar>
+#include <memory>
 #include "crqtutil.h"
 
 class LVDocView;
@@ -49,12 +50,10 @@ class CR3View : public QWidget, public LVDocViewCallback
         class DocViewData;
 
 #if WORD_SELECTOR_ENABLED==1
-        LVPageWordSelector * _wordSelector;
-
     protected:
         void startWordSelection();
         QString endWordSelection();
-        bool isWordSelection() { return _wordSelector!=NULL; }
+        bool isWordSelection() { return static_cast<bool>(_wordSelector); }
 #endif
 
     public:
@@ -71,7 +70,7 @@ class CR3View : public QWidget, public LVDocViewCallback
         /// get document's table of contents
         LVTocItem * getToc();
         /// return LVDocView associated with widget
-        LVDocView * getDocView() { return _docview; }
+        LVDocView * getDocView() { return _docview.get(); }
         /// go to position specified by xPointer string
         void goToXPointer(QString xPointer);
 
@@ -192,8 +191,11 @@ class CR3View : public QWidget, public LVDocViewCallback
         bool updateSelection( ldomXPointer p );
         void checkFontLanguageCompatibility();
 
-        DocViewData * _data; // to hide non-qt implementation
-        LVDocView * _docview;
+        std::unique_ptr<DocViewData> _data; // to hide non-qt implementation
+        std::unique_ptr<LVDocView> _docview;
+#if WORD_SELECTOR_ENABLED==1
+        std::unique_ptr<LVPageWordSelector> _wordSelector;
+#endif
         QScrollBar * _scroll;
         qreal _dpr;  // screen display pixel ratio (for HiDPI screens)
         PropsChangeCallback * _propsCallback;

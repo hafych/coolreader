@@ -52,6 +52,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.cpp" DICTIONARY_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/CMakeLists.txt" LEGACY_GUI_CMAKE_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.h" MODERN_QT_VIEW_HEADER)
+file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.cpp" MODERN_QT_VIEW_SOURCE)
 file(READ "${SOURCE_ROOT}/tinydict/tinydict.h" TINYDICT_HEADER)
 file(READ "${SOURCE_ROOT}/tinydict/tinydict.cpp" TINYDICT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
@@ -452,6 +454,63 @@ require_source_text(
   "${BUILD_WORKFLOW_SOURCE}"
   "cmake --build build-clang-crgui --target cr3 --parallel"
   "the Clang warning job must compile the legacy Qt frontend target"
+)
+
+# --- modern Qt view ownership ---
+require_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "std::unique_ptr<DocViewData> _data;"
+  "the modern Qt view must own its implementation data"
+)
+require_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "std::unique_ptr<LVDocView> _docview;"
+  "the modern Qt view must own its document view"
+)
+require_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "std::unique_ptr<LVPageWordSelector> _wordSelector;"
+  "the modern Qt view must own transient word selection"
+)
+require_source_text(
+  "${MODERN_QT_VIEW_SOURCE}"
+  "_wordSelector.reset();"
+  "word selection completion must release its scoped owner"
+)
+require_source_text(
+  "${MODERN_QT_VIEW_SOURCE}"
+  "std::make_unique<LVPageWordSelector>(_docview.get())"
+  "word selection must receive an explicit document-view borrow"
+)
+forbid_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "DocViewData * _data;"
+  "the modern Qt view data must not return to raw ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "LVDocView * _docview;"
+  "the modern Qt document view must not return to raw ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "LVPageWordSelector * _wordSelector;"
+  "modern Qt word selection must not return to raw ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_VIEW_SOURCE}"
+  "delete _wordSelector"
+  "modern Qt word selection must not return to manual deletion"
+)
+forbid_source_text(
+  "${MODERN_QT_VIEW_SOURCE}"
+  "delete _docview"
+  "the modern Qt document view must not return to manual deletion"
+)
+forbid_source_text(
+  "${MODERN_QT_VIEW_SOURCE}"
+  "delete _data"
+  "the modern Qt view data must not return to manual deletion"
 )
 
 # --- value-owned rectangle clipping ---
