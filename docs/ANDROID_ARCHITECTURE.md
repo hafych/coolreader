@@ -83,6 +83,10 @@ Each reader also owns an `AnimationTiming` sample window. It validates persisted
 draw averages, computes fractional scroll frames without integer truncation,
 and widens autoscroll character-duration arithmetic before clamping progress.
 These timing rules are pure JVM-tested rather than embedded in rendering code.
+Reading-session duration is similarly owned by one `ReadingTimeTracker`.
+Visibility/focus start and stop signals are idempotent, elapsed reads never
+mutate persisted data, clock regressions cannot subtract time, and accumulation
+saturates instead of overflowing.
 
 Options UI state is scoped to each `OptionsDialog` generation. Resource-backed
 motion and gesture choices, format capability flags, and icon visibility no

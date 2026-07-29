@@ -371,6 +371,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates
   restored samples.
+- Reading-time queries no longer increment persisted duration while tracking is
+  paused. Lifecycle signals are idempotent, clock regressions cannot subtract
+  time, and accumulation saturates instead of overflowing.
 - Natural page-flip table lookups now clamp widened indices through a tested
   geometry component instead of using overflow-prone inline arithmetic and an
   out-of-bounds `length` fallback.

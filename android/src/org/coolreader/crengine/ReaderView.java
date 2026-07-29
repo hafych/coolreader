@@ -438,33 +438,30 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	//private boolean backKeyDownHere = false;
 
 
-	private long statStartTime;
-	private long statTimeElapsed;
+	private final ReadingTimeTracker readingTimeTracker =
+			new ReadingTimeTracker();
 
 	public void startStats() {
-		if (statStartTime == 0) {
-			statStartTime = android.os.SystemClock.uptimeMillis();
+		if (readingTimeTracker.start(
+				android.os.SystemClock.uptimeMillis())) {
 			log.d("stats: started reading");
 		}
 	}
 
 	public void stopStats() {
-		if (statStartTime > 0) {
-			statTimeElapsed += android.os.SystemClock.uptimeMillis() - statStartTime;
-			statStartTime = 0;
+		if (readingTimeTracker.stop(
+				android.os.SystemClock.uptimeMillis())) {
 			log.d("stats: stopped reading");
 		}
 	}
 
 	public long getTimeElapsed() {
-		if (statStartTime > 0)
-			return statTimeElapsed + android.os.SystemClock.uptimeMillis() - statStartTime;
-		else
-			return statTimeElapsed++;
+		return readingTimeTracker.elapsed(
+				android.os.SystemClock.uptimeMillis());
 	}
 
 	public void setTimeElapsed(long timeElapsed) {
-		statTimeElapsed = timeElapsed;
+		readingTimeTracker.setElapsed(timeElapsed);
 	}
 
 	public void onAppPause() {

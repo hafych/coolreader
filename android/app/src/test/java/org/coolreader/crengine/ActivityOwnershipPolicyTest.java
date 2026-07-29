@@ -208,6 +208,50 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void readingTimeBelongsToReaderAndHasNoReadMutation()
+			throws Exception {
+		Field tracker =
+				ReaderView.class.getDeclaredField("readingTimeTracker");
+		assertFalse(Modifier.isStatic(tracker.getModifiers()));
+		assertTrue(Modifier.isPrivate(tracker.getModifiers()));
+		assertTrue(Modifier.isFinal(tracker.getModifiers()));
+
+		for (Field field : ReadingTimeTracker.class.getDeclaredFields()) {
+			if (Modifier.isStatic(field.getModifiers())) {
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+				assertTrue(field.getType().isPrimitive());
+			} else {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+			}
+		}
+		for (String methodName : new String[]{
+				"start",
+				"stop",
+				"elapsed",
+				"setElapsed",
+				"isRunning"}) {
+			Method method = methodName.equals("setElapsed")
+					|| methodName.equals("start")
+					|| methodName.equals("stop")
+					|| methodName.equals("elapsed")
+					? ReadingTimeTracker.class.getDeclaredMethod(
+							methodName, long.class)
+					: ReadingTimeTracker.class.getDeclaredMethod(methodName);
+			assertTrue(Modifier.isSynchronized(method.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"statStartTime",
+				"statTimeElapsed"}) {
+			for (Field field : ReaderView.class.getDeclaredFields()) {
+				assertFalse(
+						"ReaderView retains inline reading-time state "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
 	public void styleOptionsHaveOneImmutableTypedCatalog()
 			throws Exception {
 		assertFinalStaticField(

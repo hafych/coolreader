@@ -30,6 +30,7 @@ SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
 ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
+READING_TIME_TRACKER = SOURCE / "crengine" / "ReadingTimeTracker.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
@@ -238,6 +239,18 @@ ANIMATION_TIMING_TEST = (
     / "coolreader"
     / "crengine"
     / "AnimationTimingTest.java"
+)
+READING_TIME_TRACKER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReadingTimeTrackerTest.java"
 )
 DICTIONARY_CATALOG_TEST = (
     ROOT
@@ -1109,6 +1122,61 @@ def main() -> None:
         if marker not in animation_timing_test_text:
             violations.append(
                 f"{relative(ANIMATION_TIMING_TEST)} omits animation "
+                f"regression: {marker}")
+
+    for marker in (
+        "private final ReadingTimeTracker readingTimeTracker",
+        "readingTimeTracker.start(",
+        "readingTimeTracker.stop(",
+        "readingTimeTracker.elapsed(",
+        "readingTimeTracker.setElapsed(timeElapsed)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits reading-time owner marker: "
+                f"{marker}")
+    for legacy in (
+        "statStartTime",
+        "statTimeElapsed",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains inline reading-time state: "
+                f"{legacy}")
+
+    reading_time_text = READING_TIME_TRACKER.read_text(encoding="utf-8")
+    for marker in (
+        "final class ReadingTimeTracker",
+        "private static final long STOPPED = -1L",
+        "private long startedAt = STOPPED",
+        "private long accumulated",
+        "synchronized boolean start(long timestamp)",
+        "synchronized boolean stop(long timestamp)",
+        "synchronized long elapsed(long timestamp)",
+        "synchronized void setElapsed(long elapsed)",
+        "elapsedSinceStart(timestamp)",
+        "Math.max(0L, elapsed)",
+        "Long.MAX_VALUE - first < second",
+    ):
+        if marker not in reading_time_text:
+            violations.append(
+                f"{relative(READING_TIME_TRACKER)} omits scoped/safe time "
+                f"marker: {marker}")
+
+    reading_time_test_text = READING_TIME_TRACKER_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "pausedReadsAreIdempotent",
+        "repeatedLifecycleSignalsDoNotDoubleCount",
+        "persistedBaselineCanBeReplacedDuringActiveSession",
+        "clockRegressionDoesNotSubtractReadingTime",
+        "elapsedTimeSaturatesInsteadOfOverflowing",
+        "zeroTimestampIsValidAndNegativeStartIsRejected",
+        "Long.MAX_VALUE",
+    ):
+        if marker not in reading_time_test_text:
+            violations.append(
+                f"{relative(READING_TIME_TRACKER_TEST)} omits reading-time "
                 f"regression: {marker}")
 
     vm_runtime_text = VM_RUNTIME_HACK.read_text(encoding="utf-8")

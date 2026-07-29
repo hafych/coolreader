@@ -147,7 +147,9 @@ DRM или ограничений доступа, подбор/получени�
   metadata и snapshot-only array API без process-wide catalog escape, а также
   final BaseActivity preference/debug constants и generation-owned system
   locale resolution, плюс ReaderView-owned animation timing с fractional scroll
-  steps, validated rolling samples и widened autoscroll duration arithmetic.
+  steps, validated rolling samples и widened autoscroll duration arithmetic, а
+  также ReaderView-owned saturating reading-time tracker без getter mutation и
+  double-count на повторных lifecycle signals.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
