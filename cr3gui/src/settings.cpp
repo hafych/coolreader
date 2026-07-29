@@ -344,6 +344,19 @@ void CRSettingsMenu::addMenuItems( CRMenu * menu, item_def_t values[] )
     menu->reconfigure( 0 );
 }
 
+std::unique_ptr<CRMenu> CRSettingsMenu::createOptionMenu(
+        CRMenu * parent, int id, const char * label,
+        LVFontRef valueFont, CRPropRef menuProps,
+        const char * propName, item_def_t values[])
+{
+    std::unique_ptr<CRMenu> menu = std::make_unique<CRMenu>(
+            _wm, parent, id, label,
+            LVImageSourceRef(), LVFontRef(), valueFont,
+            menuProps, propName);
+    addMenuItems(menu.get(), values);
+    return menu;
+}
+
 
 CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int id, LVFontRef font, CRGUIAcceleratorTableRef menuAccelerators, lvRect &rc )
 : CRFullScreenMenu(
@@ -662,35 +675,26 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
                 createFontSizeMenu(_wm, mainMenu, props);
         mainMenu->addItem(std::move(fontSizeMenu));
 
-        CRMenu * emboldenModeMenu = new CRMenu(_wm, mainMenu, mm_Embolden,
-                _("Font weight"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_BASE_WEIGHT );
-        addMenuItems( emboldenModeMenu, embolden_mode );
-        mainMenu->addItem( emboldenModeMenu );
-
-        CRMenu * fontAntialiasingMenu = new CRMenu(_wm, mainMenu, mm_FontAntiAliasing,
-                _("Font antialiasing"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_ANTIALIASING );
-        addMenuItems( fontAntialiasingMenu, antialiasing_modes );
-        mainMenu->addItem( fontAntialiasingMenu );
-
-        CRMenu * fontHintingMenu = new CRMenu(_wm, mainMenu, mm_FontHinting,
-                _("Font hinting"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_HINTING );
-        addMenuItems( fontHintingMenu, fonthinting_modes );
-        mainMenu->addItem( fontHintingMenu );
-
-        CRMenu * fontGammaMenu = new CRMenu(_wm, mainMenu, mm_FontGamma,
-                _("Font Gamma"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_GAMMA );
-        addMenuItems( fontGammaMenu, fontgamma_list );
-        mainMenu->addItem( fontGammaMenu );
-
-        CRMenu * interlineSpaceMenu = new CRMenu(_wm, mainMenu, mm_InterlineSpace,
-                _("Interline space"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_INTERLINE_SPACE );
-        addMenuItems( interlineSpaceMenu, interline_spaces );
-        mainMenu->addItem( interlineSpaceMenu );
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_Embolden, _("Font weight"),
+                valueFont, props, PROP_FONT_BASE_WEIGHT,
+                embolden_mode));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_FontAntiAliasing, _("Font antialiasing"),
+                valueFont, props, PROP_FONT_ANTIALIASING,
+                antialiasing_modes));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_FontHinting, _("Font hinting"),
+                valueFont, props, PROP_FONT_HINTING,
+                fonthinting_modes));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_FontGamma, _("Font Gamma"),
+                valueFont, props, PROP_FONT_GAMMA,
+                fontgamma_list));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_InterlineSpace, _("Interline space"),
+                valueFont, props, PROP_INTERLINE_SPACE,
+                interline_spaces));
 
 #if CR_INTERNAL_PAGE_ORIENTATION==1 || defined(CR_POCKETBOOK)
         std::unique_ptr<CRMenu> orientationMenu =

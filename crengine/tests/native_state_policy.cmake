@@ -7919,6 +7919,36 @@ forbid_source_text(
 )
 require_source_text(
   "${SETTINGS_HEADER}"
+  "std::unique_ptr<CRMenu> createOptionMenu("
+  "standard settings submenu factories must return scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> menu = std::make_unique<CRMenu>("
+  "standard settings submenu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(createOptionMenu("
+  "standard settings submenus must transfer through the owner-aware boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * emboldenModeMenu = new"
+  "font-weight submenu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * fontAntialiasingMenu = new"
+  "antialiasing submenu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * fontGammaMenu = new"
+  "font-gamma submenu candidates must not begin as raw owners"
+)
+require_source_text(
+  "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"
 )

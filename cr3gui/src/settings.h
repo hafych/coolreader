@@ -98,6 +98,10 @@ class CRSettingsMenu : public CRFullScreenMenu
         CRPropRef props;
         CRGUIAcceleratorTableRef _menuAccelerators;
         void addMenuItems( CRMenu * menu, item_def_t values[] );
+        std::unique_ptr<CRMenu> createOptionMenu(
+                CRMenu * parent, int id, const char * label,
+                LVFontRef valueFont, CRPropRef menuProps,
+                const char * propName, item_def_t values[]);
         lString32 getStatusText() override;
     public:
         std::unique_ptr<CRMenu> createFontSizeMenu(
