@@ -7817,6 +7817,21 @@ forbid_source_text(
   "lString8 * array = new"
   "XCB startup must not retain dead raw allocation examples"
 )
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "std::unique_ptr<QEvent> event ="
+  "Qt wakeup-event candidates must enter scoped ownership"
+)
+require_source_text(
+  "${QT_GUI_SOURCE}"
+  "QApplication::postEvent(_window, event.release());"
+  "Qt wakeup events must transfer explicitly to the Qt event queue"
+)
+forbid_source_text(
+  "${QT_GUI_SOURCE}"
+  "QEvent * event = new"
+  "Qt wakeup-event candidates must not begin as raw owners"
+)
 forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "lString16Collection fontDirs"

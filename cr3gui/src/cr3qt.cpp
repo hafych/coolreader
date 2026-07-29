@@ -162,8 +162,9 @@ public:
 
     virtual void nextEvent()
     {
-        QEvent * event = new QEvent(QEvent::User);
-        QApplication::postEvent(_window, event);
+        std::unique_ptr<QEvent> event =
+                std::make_unique<QEvent>(QEvent::User);
+        QApplication::postEvent(_window, event.release());
     }
 
     virtual void postEvent( CRGUIEvent * event )
