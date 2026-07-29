@@ -623,10 +623,15 @@ void V3DocViewWin::flush()
     int charge = 0;
     bool charging = false;
     if ( _wm->getBatteryStatus( charge, charging ) ) {
-        if ( charging )
-            charge = -1;
-        if ( _docview->getBatteryState() != charge )
-            _docview->setBatteryState( charge );
+        int state = charging ? CR_BATTERY_STATE_CHARGING : charge;
+        int connection = charging
+                ? CR_BATTERY_CHARGER_AC
+                : CR_BATTERY_CHARGER_NO;
+        if (_docview->getBatteryState() != state
+                || _docview->getBatteryChargingConn() != connection
+                || _docview->getBatteryChargeLevel() != charge) {
+            _docview->setBatteryState(state, connection, charge);
+        }
     }
     CRDocViewWindow::flush();
 }

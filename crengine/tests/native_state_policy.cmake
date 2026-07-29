@@ -7103,6 +7103,16 @@ forbid_source_text(
   "document progress icons must use the current string width"
 )
 require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "_docview->setBatteryState(state, connection, charge);"
+  "document battery updates must publish the complete current state"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "_docview->setBatteryState( charge );"
+  "document battery updates must not use the removed single-value API"
+)
+require_source_text(
   "${SCREEN_KEYBOARD_HEADER}"
   "lString32Collection _keymap;"
   "screen keyboard layouts must use the current string collection"
