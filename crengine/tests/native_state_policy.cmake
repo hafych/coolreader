@@ -7253,6 +7253,16 @@ forbid_source_text(
   "main windows must not expose a compact legacy history-load path adapter"
 )
 forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool saveHistory( lString16"
+  "main windows must not expose a legacy history-save path adapter"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool saveHistory(lString16"
+  "main windows must not expose a compact legacy history-save path adapter"
+)
+forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "saveSettings(lString16"
   "GUI platform settings-save callers must use current-width paths"
@@ -7286,6 +7296,16 @@ forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "loadHistory(lString16"
   "GUI platform history-load callers must not use compact legacy adapters"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "saveHistory( lString16"
+  "GUI platform history-save callers must use current-width paths"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "saveHistory(lString16"
+  "GUI platform history-save callers must not use compact legacy adapters"
 )
 forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"

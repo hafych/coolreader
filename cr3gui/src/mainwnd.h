@@ -133,10 +133,6 @@ public:
     bool saveSettings( lString32 filename );
     bool loadHistory( lString32 filename );
     bool saveHistory( lString32 filename, bool exportBookmarks = true );
-    bool saveHistory( lString16 filename, bool exportBookmarks = true )
-    {
-        return saveHistory(Utf16ToUnicode(filename), exportBookmarks);
-    }
     bool loadHistory( LVStreamRef stream );
     bool saveHistory( LVStreamRef stream );
     bool loadDictConfig( lString32 filename );
