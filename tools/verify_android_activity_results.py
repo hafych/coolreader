@@ -185,6 +185,9 @@ TAP_HIGHLIGHT_STATE = (
 VIEWPORT_RESIZE_STATE = (
     SOURCE / "crengine" / "ViewportResizeState.java"
 )
+READER_SURFACE_STATE = (
+    SOURCE / "crengine" / "ReaderSurfaceState.java"
+)
 POSITION_PROPERTIES = SOURCE / "crengine" / "PositionProperties.java"
 DOCUMENT_POSITION_POLICY = (
     SOURCE / "crengine" / "DocumentPositionPolicy.java"
@@ -258,6 +261,18 @@ VIEWPORT_RESIZE_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "ViewportResizeStateTest.java"
+)
+READER_SURFACE_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderSurfaceStateTest.java"
 )
 POSITION_PROPERTIES_TEST = (
     ROOT
@@ -1999,6 +2014,8 @@ def main() -> None:
         "private final CloseableTaskGate selectionUpdateLifecycle",
         "private final CloseableTaskGate drawTaskLifecycle",
         "private final CloseableTaskGate ttsInitializationLifecycle",
+        "private final ReaderSurfaceState readerSurfaceState",
+        "private final DelayedExecutor einkRefreshScheduler",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -2020,6 +2037,8 @@ def main() -> None:
         "selectionUpdateLifecycle.close()",
         "drawTaskLifecycle.close()",
         "ttsInitializationLifecycle.close()",
+        "readerSurfaceState.close()",
+        "einkRefreshScheduler.cancel()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -2061,6 +2080,13 @@ def main() -> None:
         "ttsInitializationLifecycle.cancel()",
         "private void finishTtsInitialization(",
         "if (ttsToolbar == toolbar)",
+        "readerSurfaceState.changeVisibility(visible)",
+        "readerSurfaceState.changeFocus(",
+        "einkRefreshScheduler.postDelayed(",
+        "readerSurfaceState.claimFocusRefresh(refresh)",
+        "readerSurfaceState.markSurfaceCreated()",
+        "readerSurfaceState.markSurfaceDestroyed()",
+        "readerSurfaceState.isDrawable()",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -2081,14 +2107,54 @@ def main() -> None:
         "lastSavePositionTaskId",
         "nextUpdateId",
         "lastDrawTaskId",
+        "mSurfaceCreated",
         "updateSerialNumber",
+        "postGUI(() -> mEinkScreen.refreshScreen(surface)",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",
     ):
         if legacy in reader_view_text:
             violations.append(
-                f"{relative(READER_VIEW)} retains unowned autoscroll "
+                f"{relative(READER_VIEW)} retains unowned reader "
                 f"lifecycle marker: {legacy}")
+
+    reader_surface_state_text = READER_SURFACE_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ReaderSurfaceState",
+        "private boolean surfaceCreated",
+        "private boolean windowVisible",
+        "private boolean windowFocused",
+        "private boolean closed",
+        "private FocusRefresh currentFocusRefresh",
+        "synchronized boolean markSurfaceCreated()",
+        "synchronized void markSurfaceDestroyed()",
+        "synchronized boolean changeVisibility(boolean visible)",
+        "synchronized FocusRefresh changeFocus(boolean focused)",
+        "synchronized boolean claimFocusRefresh(FocusRefresh refresh)",
+        "synchronized boolean isDrawable()",
+        "synchronized boolean close()",
+        "static final class FocusRefresh",
+    ):
+        if marker not in reader_surface_state_text:
+            violations.append(
+                f"{relative(READER_SURFACE_STATE)} omits exact surface "
+                f"lifecycle marker: {marker}")
+
+    reader_surface_state_test_text = READER_SURFACE_STATE_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "visibleWindowRefreshesWhenSurfaceArrives",
+        "existingSurfaceRefreshesOnVisibleTransition",
+        "focusRefreshRequiresItsExactVisibleSurface",
+        "focusReplacementInvalidatesPreviousRequest",
+        "hiddenOrDestroyedSurfaceRejectsPendingRefresh",
+        "closePermanentlyRejectsSurfaceAndRefreshWork",
+    ):
+        if marker not in reader_surface_state_test_text:
+            violations.append(
+                f"{relative(READER_SURFACE_STATE_TEST)} omits surface "
+                f"lifecycle regression: {marker}")
 
     auto_scroll_state_text = AUTO_SCROLL_SESSION_STATE.read_text(
         encoding="utf-8")

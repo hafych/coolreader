@@ -149,6 +149,14 @@ width/height fields, while identity requests make latest-size-wins apply to
 both background resize and GUI completion. Invalid dimensions use a positive
 fallback, one reader-owned scheduler replaces pending delays, and destroy
 closes the state and removes the callback before native teardown.
+Surface creation, window visibility/focus and permanent close are combined in
+one synchronized `ReaderSurfaceState` instead of a standalone created flag.
+Either ordering of visible-window and surface-created callbacks produces one
+ready refresh. The delayed E-Ink focus refresh carries an exact state token and
+uses a reader-owned scheduler; focus loss, hiding, surface destruction,
+replacement and reader destruction invalidate it. Execution additionally
+requires the same visible surface and active service generation, while every
+draw checks the same closeable surface state before locking a canvas.
 Delayed current-position persistence is owned by a `CloseableTaskGate` and a
 dedicated GUI scheduler rather than a numeric generation left in the global
 Handler. Replacement, synchronous save, pause and book reload remove the exact

@@ -394,6 +394,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   applies only the latest identity-owned request. Pending delays are replaced
   through a reader-owned scheduler, stale GUI completion cannot redraw an old
   size, and destruction rejects resize work before native teardown.
+- Reader surface creation, visibility and focus now share one closeable state.
+  Delayed E-Ink focus refresh belongs to an exact request and is canceled by
+  focus loss, hiding, surface destruction or reader teardown; drawing cannot
+  lock a canvas from a closed surface generation.
 - Delayed reading-position saves now use exact lifecycle tokens and a dedicated
   cancelable scheduler. Synchronous save, pause, reload and replacement remove
   stale callbacks, while captured book identity prevents an old bookmark from

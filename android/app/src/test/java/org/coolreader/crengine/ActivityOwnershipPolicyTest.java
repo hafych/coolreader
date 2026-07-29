@@ -429,7 +429,9 @@ public class ActivityOwnershipPolicyTest {
 				"positionSaveScheduler",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
-				"ttsInitializationLifecycle"}) {
+				"ttsInitializationLifecycle",
+				"readerSurfaceState",
+				"einkRefreshScheduler"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -479,6 +481,9 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains numeric draw generations",
 					field.getName().equals("lastDrawTaskId"));
+			assertFalse(
+					"ReaderView retains parallel surface lifecycle state",
+					field.getName().equals("mSurfaceCreated"));
 			assertFalse(
 					"ReaderView retains dead animation serial state",
 					field.getName().equals(
@@ -619,6 +624,39 @@ public class ActivityOwnershipPolicyTest {
 						field.getModifiers()));
 			}
 		}
+		assertTrue(Modifier.isFinal(
+				ReaderSurfaceState.class.getModifiers()));
+		for (Field field :
+				ReaderSurfaceState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
+				"markSurfaceCreated");
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
+				"markSurfaceDestroyed");
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
+				"changeVisibility",
+				boolean.class);
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
+				"changeFocus",
+				boolean.class);
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
+				"claimFocusRefresh",
+				ReaderSurfaceState.FocusRefresh.class);
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
+				"isDrawable");
+		assertSynchronizedMethod(
+				ReaderSurfaceState.class,
+				"close");
 	}
 
 	@Test
@@ -1391,6 +1429,16 @@ public class ActivityOwnershipPolicyTest {
 				type.getSimpleName() + "." + name
 						+ " must be published across threads",
 				Modifier.isVolatile(field.getModifiers()));
+	}
+
+	private static void assertSynchronizedMethod(
+			Class<?> type,
+			String name,
+			Class<?>... parameterTypes) throws Exception {
+		Method method =
+				type.getDeclaredMethod(name, parameterTypes);
+		assertTrue(Modifier.isSynchronized(
+				method.getModifiers()));
 	}
 
 	private static void assertFinalStaticField(Class<?> type, String name)

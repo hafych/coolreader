@@ -80,6 +80,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public static final Logger log = L.create("rv", Log.VERBOSE);
 	public static final Logger alog = L.create("ra", Log.WARN);
 
+	private static final int EINK_FOCUS_REFRESH_DELAY_MS = 400;
+	private final ReaderSurfaceState readerSurfaceState =
+			new ReaderSurfaceState();
+	private final DelayedExecutor einkRefreshScheduler =
+			DelayedExecutor.createGUI("eink-focus-refresh");
 	private final SurfaceView surface;
 	private final BookView bookView;
 
@@ -152,9 +157,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public void onWindowVisibilityChanged(int visibility) {
-			if (visibility == VISIBLE) {
-				if (DeviceInfo.EINK_SCREEN)
-					mEinkScreen.refreshScreen(surface);
+			boolean visible = visibility == VISIBLE;
+			boolean refresh =
+					readerSurfaceState.changeVisibility(visible);
+			if (!visible || refresh)
+				einkRefreshScheduler.cancel();
+			if (refresh)
+				refreshEinkScreenIfReady();
+			if (visible) {
 				startStats();
 				checkSize();
 			} else
@@ -164,13 +174,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public void onWindowFocusChanged(boolean hasWindowFocus) {
+			ReaderSurfaceState.FocusRefresh refresh =
+					readerSurfaceState.changeFocus(
+							hasWindowFocus);
 			if (hasWindowFocus) {
-				if (DeviceInfo.EINK_SCREEN)
-					BackgroundThread.instance().postGUI(() -> mEinkScreen.refreshScreen(surface), 400);
+				if (DeviceInfo.EINK_SCREEN && refresh != null) {
+					einkRefreshScheduler.postDelayed(
+							() -> applyEinkFocusRefresh(
+									refresh),
+							EINK_FOCUS_REFRESH_DELAY_MS);
+				}
 				startStats();
 				checkSize();
-			} else
+			} else {
+				einkRefreshScheduler.cancel();
 				stopStats();
+			}
 			super.onWindowFocusChanged(hasWindowFocus);
 		}
 
@@ -4037,6 +4056,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private long hackMemorySize;
 
+	private void applyEinkFocusRefresh(
+			ReaderSurfaceState.FocusRefresh refresh) {
+		BackgroundThread.ensureGUI();
+		if (readerSurfaceState.claimFocusRefresh(refresh)
+				&& mServiceLifecycle.isActive())
+			mEinkScreen.refreshScreen(surface);
+	}
+
+	private void refreshEinkScreenIfReady() {
+		BackgroundThread.ensureGUI();
+		if (DeviceInfo.EINK_SCREEN
+				&& readerSurfaceState.isDrawable()
+				&& mServiceLifecycle.isActive())
+			mEinkScreen.refreshScreen(surface);
+	}
+
 	// SurfaceView callbacks
 	@Override
 	public void surfaceChanged(SurfaceHolder holder, int format, final int width,
@@ -4057,19 +4092,21 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		//draw();
 	}
 
-	boolean mSurfaceCreated = false;
-
 	@Override
 	public void surfaceCreated(SurfaceHolder holder) {
 		log.i("surfaceCreated()");
-		mSurfaceCreated = true;
+		if (readerSurfaceState.markSurfaceCreated()) {
+			einkRefreshScheduler.cancel();
+			refreshEinkScreenIfReady();
+		}
 		//draw();
 	}
 
 	@Override
 	public void surfaceDestroyed(SurfaceHolder holder) {
 		log.i("surfaceDestroyed()");
-		mSurfaceCreated = false;
+		readerSurfaceState.markSurfaceDestroyed();
+		einkRefreshScheduler.cancel();
 		if (hackMemorySize > 0) {
 			runtime.trackAlloc(hackMemorySize);
 			hackMemorySize = 0;
@@ -4683,7 +4720,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void drawCallback(DrawCanvasCallback callback, Rect rc, boolean isPartially) {
-		if (!mSurfaceCreated)
+		if (!readerSurfaceState.isDrawable())
 			return;
 		//synchronized(surfaceLock) { }
 		//log.v("draw() - in thread " + Thread.currentThread().getName());
@@ -6383,6 +6420,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closeSelectionUpdates();
 		drawTaskLifecycle.close();
 		ttsInitializationLifecycle.close();
+		readerSurfaceState.close();
+		einkRefreshScheduler.cancel();
 		synchronized (viewportResizeState) {
 			viewportResizeState.close();
 			resizeScheduler.cancel();

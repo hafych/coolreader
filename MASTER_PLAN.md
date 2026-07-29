@@ -179,6 +179,11 @@ DRM или ограничений доступа, подбор/получени�
   width/height, exact latest request контролирует background apply и GUI done,
   invalid dimensions получают positive fallback, owned scheduler заменяет
   pending delay, а destroy закрывает state до native teardown.
+  Surface created/visible/focused/closed объединены в synchronized
+  `ReaderSurfaceState` вместо отдельного boolean: оба порядка visible/create
+  дают один ready refresh, delayed E-Ink focus refresh принадлежит exact token
+  и reader scheduler, focus loss/hide/surface destroy/replacement инвалидируют
+  его, а draw и callback требуют тот же open surface/service generation.
   Delayed current-position save переведён с numeric generation/global Handler
   на exact `CloseableTaskGate` token и owned GUI scheduler: replacement,
   sync/pause/reload отменяют pending callback, destroy закрывает gate, а
