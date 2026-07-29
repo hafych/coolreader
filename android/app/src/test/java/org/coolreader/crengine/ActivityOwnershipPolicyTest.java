@@ -155,6 +155,39 @@ public class ActivityOwnershipPolicyTest {
 		}
 	}
 
+	@Test
+	public void optionsDialogKeepsUiConfigurationGenerationScoped()
+			throws Exception {
+		for (String name : new String[]{
+				"mBacklightLevels",
+				"mBacklightLevelsTitles",
+				"mMotionTimeouts",
+				"mMotionTimeoutsTitles",
+				"mPagesPerFullSwipe",
+				"mPagesPerFullSwipeTitles"}) {
+			Field field = OptionsDialog.class.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"showIcons",
+				"isHtmlFormat"}) {
+			for (Field field : OptionsDialog.class.getDeclaredFields()) {
+				assertFalse(
+						"OptionsDialog retains legacy process UI state "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+		for (String name : new String[]{
+				"isTextFormat",
+				"isEpubFormat",
+				"isFormatWithEmbeddedStyle"}) {
+			Field field = OptionsDialog.class.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+		}
+	}
+
 	private static void assertVolatileField(Class<?> type, String name)
 			throws Exception {
 		Field field = type.getDeclaredField(name);

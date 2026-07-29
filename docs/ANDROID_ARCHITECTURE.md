@@ -74,6 +74,12 @@ Surface or native document. The matching sine/arcsine page-curl curves are
 built once by `PageCurveTables`; its arrays are private, final, instance-owned
 storage and the legacy numeric samples are locked by a pure JVM regression.
 
+Options UI state is scoped to each `OptionsDialog` generation. Resource-backed
+motion and gesture choices, format capability flags, and icon visibility no
+longer live in process-wide fields. Shared backlight values are exposed only
+through the pure `BacklightOptions` owner; callers receive copies and localized
+titles are built per Activity instead of mutating a global array.
+
 ## Migration rule
 
 New Android components should:

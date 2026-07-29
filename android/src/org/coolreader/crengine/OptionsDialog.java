@@ -104,34 +104,12 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 	}
 	*/
 	int[] mSynthWeights;
-	public static int findBacklightSettingIndex( int value ) {
-		int bestIndex = 0;
-		int bestDiff = -1;
-		for ( int i=0; i<mBacklightLevels.length; i++ ) {
-			int diff = mBacklightLevels[i] - value;
-			if (diff<0)
-				diff = -diff;
-			if ( bestDiff==-1 || diff < bestDiff ) {
-				bestDiff = diff;
-				bestIndex = i;
-			}
-		}
-		return bestIndex;
-	}
-	public static final int[] mBacklightLevels = new int[] {
-			-1,  1,  2,  3,  4,  5,  6,  7,  8,  9,
-			10, 12, 15, 20, 25, 30, 35, 40, 45, 50,
-			55, 60, 65, 70, 75, 80, 85, 90, 95, 100
-	};
-	public static final String[] mBacklightLevelsTitles = new String[] {
-			"Default", "1%", "2%", "3%", "4%", "5%", "6%", "7%", "8%", "9%", 
-			"10%", "12%", "15%", "20%", "25%", "30%", "35%", "40%", "45%", "50%",
-			"55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%",
-	};
-	public static int[] mMotionTimeouts;
-	public static String[] mMotionTimeoutsTitles;
-	public static int[] mPagesPerFullSwipe;
-	public static String[] mPagesPerFullSwipeTitles;
+	private final int[] mBacklightLevels;
+	private final String[] mBacklightLevelsTitles;
+	private final int[] mMotionTimeouts;
+	private final String[] mMotionTimeoutsTitles;
+	private final int[] mPagesPerFullSwipe;
+	private final String[] mPagesPerFullSwipeTitles;
 	int[] mInterlineSpaces = new int[] {
 			 80,  81,  82,  83,  84,  85, 86,   87,  88,  89,
 			 90,  91,  92,  93,  94,  95, 96,   97,  98,  99,
@@ -513,7 +491,8 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			if (null == icon)
 				return;
 			int resId = 0;
-			if (showIcons) {
+			if (mProperties.getBool(
+					PROP_APP_SETTINGS_SHOW_ICONS, true)) {
 				if (drawableAttrId != 0) {
 					resId = Utils.resolveResourceIdByAttr(mActivity, drawableAttrId, fallbackIconId);
 				} else if (fallbackIconId != 0) {
@@ -622,11 +601,9 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		}
 	}
 	
-	private static boolean showIcons = true;
-	private static boolean isTextFormat = false;
-	private static boolean isEpubFormat = false;
-	private static boolean isFormatWithEmbeddedStyle = false;
-	private static boolean isHtmlFormat = false;
+	private boolean isTextFormat;
+	private boolean isEpubFormat;
+	private boolean isFormatWithEmbeddedStyle;
 	private Mode mode;
 	
 	class IconsBoolOption extends BoolOption {
@@ -637,7 +614,6 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			if (!enabled)
 				return;
 			mProperties.setProperty(property, "1".equals(mProperties.getProperty(property)) ? "0" : "1");
-			showIcons = mProperties.getBool(property, true);
 			mOptionsStyles.refresh();
 			mOptionsCSS.refresh();
 			mOptionsPage.refresh();
@@ -1961,6 +1937,19 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		mReaderView = readerView;
 		mFontFaces = fontFaces;
 		mTTSBinder = ttsbinder;
+		mBacklightLevels = BacklightOptions.values();
+		mBacklightLevelsTitles = BacklightOptions.titles(
+				activity.getString(
+						R.string.options_app_backlight_screen_default));
+		mMotionTimeoutsTitles = activity.getResources().getStringArray(
+				R.array.motion_timeout_titles);
+		mMotionTimeouts = activity.getResources().getIntArray(
+				R.array.motion_timeout_values);
+		mPagesPerFullSwipeTitles =
+				activity.getResources().getStringArray(
+						R.array.pages_per_full_swipe_titles);
+		mPagesPerFullSwipe = activity.getResources().getIntArray(
+				R.array.pages_per_full_swipe_values);
 		mProperties = new Properties(mActivity.settings()); //  readerView.getSettings();
 		mOldProperties = new Properties(mProperties);
 		if (mode == Mode.READER) {
@@ -1972,9 +1961,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			isTextFormat = readerView.isTextFormat();
 			isEpubFormat = readerView.isFormatWithEmbeddedFonts();
 			isFormatWithEmbeddedStyle = readerView.isFormatWithEmbeddedStyles();
-			isHtmlFormat = readerView.isHtmlFormat();
 		}
-		showIcons = mProperties.getBool(PROP_APP_SETTINGS_SHOW_ICONS, true);
 		mSynthWeights = Engine.getAvailableSynthFontWeight();
 		if (null == mSynthWeights)
 			mSynthWeights = new int[] {};
@@ -2458,7 +2445,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		if (isTextFormat) {
 			mOptionsCSS.add(new BoolOption(this, getString(R.string.mi_text_autoformat_enable), PROP_TXT_OPTION_PREFORMATTED).setDefaultValue("1").noIcon());
 		}
-		if (/*isHtmlFormat*/ isFormatWithEmbeddedStyle) {
+		if (isFormatWithEmbeddedStyle) {
 			Runnable renderindChangeListsner = () -> {
 				boolean legacyRender = mProperties.getInt(PROP_RENDER_BLOCK_RENDERING_FLAGS, 0) == 0 ||
 						mProperties.getInt(PROP_REQUESTED_DOM_VERSION, 0) < 20180524;
@@ -2945,7 +2932,6 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		}
 		if ( !DeviceInfo.EINK_SCREEN ) {
 			mOptionsApplication.add(new ListOption(this, getString(R.string.options_app_backlight_timeout), PROP_APP_SCREEN_BACKLIGHT_LOCK).add(mBacklightTimeout, mBacklightTimeoutTitles).setDefaultValue("3").noIcon());
-			mBacklightLevelsTitles[0] = getString(R.string.options_app_backlight_screen_default);
 			mOptionsApplication.add(new ListOption(this, getString(R.string.options_app_backlight_screen), PROP_APP_SCREEN_BACKLIGHT).add(mBacklightLevels, mBacklightLevelsTitles).setDefaultValue("-1").noIcon());
 		}
 		mOptionsApplication.add(new ListOption(this, getString(R.string.options_app_tts_stop_motion_timeout), PROP_APP_MOTION_TIMEOUT).add(mMotionTimeouts, mMotionTimeoutsTitles).setDefaultValue(Integer.toString(mMotionTimeouts[0])).noIcon());
@@ -3047,12 +3033,6 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		L.v("creating options dialog");
         setCancelable(true);
         setCanceledOnTouchOutside(true);
-
-		mMotionTimeoutsTitles = activity.getResources().getStringArray(R.array.motion_timeout_titles);
-        mMotionTimeouts = activity.getResources().getIntArray(R.array.motion_timeout_values);
-
-		mPagesPerFullSwipeTitles = activity.getResources().getStringArray(R.array.pages_per_full_swipe_titles);
-		mPagesPerFullSwipe = activity.getResources().getIntArray(R.array.pages_per_full_swipe_values);
 
         switch (mode) {
 			case READER:

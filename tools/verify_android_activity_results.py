@@ -21,6 +21,7 @@ SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 PAGE_CURVE_TABLES = SOURCE / "crengine" / "PageCurveTables.java"
+BACKLIGHT_OPTIONS = SOURCE / "crengine" / "BacklightOptions.java"
 BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
 DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
 BLOCKING_RESULT = SOURCE / "crengine" / "BlockingResult.java"
@@ -96,6 +97,18 @@ HYPH_DICT_REGISTRY_TEST = (
     / "coolreader"
     / "crengine"
     / "HyphDictRegistryTest.java"
+)
+BACKLIGHT_OPTIONS_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "BacklightOptionsTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -467,6 +480,19 @@ def main() -> None:
     ):
         if marker not in reader_view_text:
             violations.append(f"{relative(READER_VIEW)} omits marker: {marker}")
+    for marker in (
+        "BacklightOptions.nearestIndex(",
+        "BacklightOptions.size()",
+        "BacklightOptions.valueAt(",
+        "BacklightOptions.titleAt(",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits backlight owner marker: "
+                f"{marker}")
+    if "OptionsDialog.mBacklightLevels" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} mutates shared dialog backlight state")
     if "PageFlipGeometry.tableIndex(" not in reader_view_text:
         violations.append(
             f"{relative(READER_VIEW)} does not use bounded page-flip "
@@ -597,10 +623,64 @@ def main() -> None:
     for marker in (
         "private final Engine mEngine",
         "OptionsDialog(BaseActivity activity, Engine engine",
+        "private final int[] mBacklightLevels",
+        "private final String[] mBacklightLevelsTitles",
+        "private final int[] mMotionTimeouts",
+        "private final String[] mMotionTimeoutsTitles",
+        "private final int[] mPagesPerFullSwipe",
+        "private final String[] mPagesPerFullSwipeTitles",
+        "private boolean isTextFormat",
+        "private boolean isEpubFormat",
+        "private boolean isFormatWithEmbeddedStyle",
+        "PROP_APP_SETTINGS_SHOW_ICONS, true",
     ):
         if marker not in options_text:
             violations.append(
                 f"{relative(OPTIONS_DIALOG)} omits marker: {marker}")
+    for marker in (
+        "private static boolean showIcons",
+        "private static boolean isTextFormat",
+        "private static boolean isEpubFormat",
+        "private static boolean isFormatWithEmbeddedStyle",
+        "private static boolean isHtmlFormat",
+        "public static int[] mMotionTimeouts",
+        "public static String[] mMotionTimeoutsTitles",
+        "public static int[] mPagesPerFullSwipe",
+        "public static String[] mPagesPerFullSwipeTitles",
+        "public static final int[] mBacklightLevels",
+        "public static final String[] mBacklightLevelsTitles",
+    ):
+        if marker in options_text:
+            violations.append(
+                f"{relative(OPTIONS_DIALOG)} retains process UI state: "
+                f"{marker}")
+
+    backlight_options_text = BACKLIGHT_OPTIONS.read_text(encoding="utf-8")
+    for marker in (
+        "final class BacklightOptions",
+        "private static final int[] VALUES",
+        "Math.abs((long) VALUES[i] - value)",
+        "return VALUES.clone()",
+        "static String[] titles(String defaultTitle)",
+    ):
+        if marker not in backlight_options_text:
+            violations.append(
+                f"{relative(BACKLIGHT_OPTIONS)} omits immutable backlight "
+                f"marker: {marker}")
+
+    backlight_options_test_text = BACKLIGHT_OPTIONS_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "valuesAreIndependentSnapshots",
+        "nearestIndexUsesStableEdgesAndFirstTie",
+        "titlesAreLocalizedWithoutSharedMutation",
+        "Integer.MIN_VALUE",
+        "Integer.MAX_VALUE",
+    ):
+        if marker not in backlight_options_test_text:
+            violations.append(
+                f"{relative(BACKLIGHT_OPTIONS_TEST)} omits backlight "
+                f"regression: {marker}")
 
     for path in BOOK_INFO_DIALOGS:
         text = path.read_text(encoding="utf-8")

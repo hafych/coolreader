@@ -368,6 +368,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android synchronous dispatcher handoffs no longer depend on a nested
   `ReaderView` type, release every waiter, preserve interrupts, and complete
   GUI failure paths instead of leaving callers blocked.
+- Android option dialogs now keep resource and document-format state per
+  Activity generation; backlight values return copies and localized labels no
+  longer mutate process-wide arrays.
 - All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
   `sign-compare` and `unused-but-set-variable` promoted to the full
   `-Werror` gate alongside the existing high-confidence classes.

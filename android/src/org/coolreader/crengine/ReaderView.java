@@ -4085,12 +4085,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			case BRIGHTNESS_TYPE_COMMON:
 				currentBrightnessValue = mActivity.getScreenBacklightLevel();
 				if (!DeviceInfo.EINK_SCREEN) {
-					currentBrightnessValueIndex = OptionsDialog.findBacklightSettingIndex(currentBrightnessValue);
+					currentBrightnessValueIndex =
+							BacklightOptions.nearestIndex(
+									currentBrightnessValue);
 					if (0 == currentBrightnessValueIndex) {		// system backlight level
 						// A trick that allows you to reduce the brightness of the backlight
 						// if the brightness is set to the same as in the system.
 						currentBrightnessValue = 50;
-						currentBrightnessValueIndex = OptionsDialog.findBacklightSettingIndex(currentBrightnessValue);
+						currentBrightnessValueIndex =
+								BacklightOptions.nearestIndex(
+										currentBrightnessValue);
 					}
 				} else if (DeviceInfo.EINK_HAVE_FRONTLIGHT)
 					currentBrightnessValueIndex = Utils.findNearestIndex(mEinkScreen.getFrontLightLevels(mActivity), currentBrightnessValue);
@@ -4124,7 +4128,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		switch (type) {
 			case BRIGHTNESS_TYPE_COMMON:
 				if (!DeviceInfo.EINK_SCREEN)
-					count = OptionsDialog.mBacklightLevels.length;
+					count = BacklightOptions.size();
 				else if (null != mEinkScreen) {
 					levelList = mEinkScreen.getFrontLightLevels(mActivity);
 					if (null != levelList)
@@ -4191,7 +4195,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			switch (type) {
 				case BRIGHTNESS_TYPE_COMMON:
 					if (!DeviceInfo.EINK_SCREEN)
-						currentBrightnessValue = OptionsDialog.mBacklightLevels[currentBrightnessValueIndex];
+						currentBrightnessValue = BacklightOptions.valueAt(
+								currentBrightnessValueIndex);
 					else {
 						// Here levelList already != null
 						currentBrightnessValue = levelList.get(currentBrightnessValueIndex);
@@ -4243,8 +4248,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return;
 			}
 			if (showBrightnessFlickToast && currentBrightnessValueIndex >= 0) {
-				OptionsDialog.mBacklightLevelsTitles[0] = mActivity.getString(R.string.options_app_backlight_screen_default);
-				String s = OptionsDialog.mBacklightLevelsTitles[currentBrightnessValueIndex];
+				String s = BacklightOptions.titleAt(
+						currentBrightnessValueIndex,
+						mActivity.getString(
+								R.string.options_app_backlight_screen_default));
 				mActivity.showToast(s);
 			}
 			if (!DeviceInfo.EINK_SCREEN)
