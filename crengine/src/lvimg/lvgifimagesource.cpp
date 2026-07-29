@@ -28,19 +28,22 @@
 #include "lvgifframe.h"
 
 static bool skipGifExtension(unsigned char *&buf, int buf_size) {
-    unsigned char * endp = buf + buf_size;
-    if (*buf != '!')
+    if (!buf || buf_size < 2 || buf[0] != '!')
         return false;
-    buf += 2;
-    for (;;) {
-        if (buf >= endp)
-            return false;
-        unsigned blockSize = *buf;
-        buf++;
+
+    int offset = 2;
+    while (offset < buf_size) {
+        const unsigned blockSize = buf[offset++];
         if (blockSize == 0)
+        {
+            buf += offset;
             return true;
-        buf += blockSize;
+        }
+        if (blockSize > static_cast<unsigned>(buf_size - offset))
+            return false;
+        offset += static_cast<int>(blockSize);
     }
+    return false;
 }
 
 inline lUInt32 lRGB(lUInt32 r, lUInt32 g, lUInt32 b )
@@ -49,8 +52,10 @@ inline lUInt32 lRGB(lUInt32 r, lUInt32 g, lUInt32 b )
 }
 
 
-bool LVGifImageSource::CheckPattern(const lUInt8 *buf, int)
+bool LVGifImageSource::CheckPattern(const lUInt8 *buf, int buf_size)
 {
+    if (!buf || buf_size < 6)
+        return false;
     if (buf[0]!='G' || buf[1]!='I' || buf[2]!='F')
         return false;
     // version: '87a' or '89a'
@@ -88,7 +93,7 @@ int LVGifImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImage
 {
     // check GIF header (6 bytes)
     // 'GIF'
-    if ( !CheckPattern( buf, buf_size ) )
+    if (!buf || buf_size < 13 || !CheckPattern(buf, buf_size))
         return 0;
     if (buf[0]!='G' || buf[1]!='I' || buf[2]!='F')
         return 0;
@@ -123,7 +128,7 @@ int LVGifImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImage
     if (m_flg_gtc) {
         int m_color_count = 1<<m_bpp;
 
-        if (m_color_count*3 + (p-buf) >= buf_size)
+        if (m_color_count * 3 > buf_size - (p - buf))
             return 0; // error
 
         m_global_color_table.resize(m_color_count);
@@ -159,12 +164,16 @@ int LVGifImageSource::DecodeFromBuffer(unsigned char *buf, int buf_size, LVImage
             break;
         case '!': // extension record
             {
-                if ( p[1]==0xf9 && ( (p[3]&1)!=0 ) )
-                {
-                    m_transparent_color = p[6];
+                const int remaining = static_cast<int>(buf_size - (p - buf));
+                const bool hasTransparentColor = remaining >= 7
+                        && p[1] == 0xf9 && (p[3] & 1) != 0;
+                const unsigned char transparentColor =
+                        hasTransparentColor ? p[6] : 0;
+                res = skipGifExtension(p, remaining);
+                if (res && hasTransparentColor) {
+                    m_transparent_color = transparentColor;
                     defined_transparent_color = true;
                 }
-                res = skipGifExtension(p, (int)buf_size - (p - buf));
             }
             break;
         case ';': // terminate record

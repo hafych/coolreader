@@ -5565,6 +5565,11 @@ static int testGifLzwBoundedReads() {
 }
 
 static int testGifDecoderOwnership() {
+    unsigned char shortPattern[] = {'G'};
+    if (LVGifImageSource::CheckPattern(NULL, 0)
+            || LVGifImageSource::CheckPattern(shortPattern, 1))
+        return fail("GIF signature check accepted a truncated buffer");
+
     static const unsigned char validGif[] = {
         'G', 'I', 'F', '8', '9', 'a',
         0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
@@ -5599,6 +5604,48 @@ static int testGifDecoderOwnership() {
     if (invalidCallback.starts != 0 || invalidCallback.lines != 0
             || invalidCallback.ends != 0)
         return fail("invalid GIF entered the decode callback lifecycle");
+
+    unsigned char unterminatedBlocks[] = {
+        'G', 'I', 'F', '8', '9', 'a',
+        0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+        0x2c, 0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x00,
+        0x02, 0x02, 0x4c, 0x01
+    };
+    LVGifImageSource unterminatedImage(
+            NULL, LVCreateMemoryStream(
+                    unterminatedBlocks,
+                    static_cast<int>(sizeof(unterminatedBlocks)),
+                    true, LVOM_READ));
+    CountingImageDecodeCallback unterminatedCallback;
+    if (unterminatedImage.Decode(&unterminatedCallback))
+        return fail("GIF decoder accepted unterminated raster sub-blocks");
+    if (unterminatedCallback.starts != 0
+            || unterminatedCallback.lines != 0
+            || unterminatedCallback.ends != 0)
+        return fail("truncated GIF raster entered the callback lifecycle");
+
+    unsigned char truncatedExtension[] = {
+        'G', 'I', 'F', '8', '9', 'a',
+        0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+        0x21, 0xfe, 0x08,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x21
+    };
+    LVGifImageSource extensionImage(
+            NULL, LVCreateMemoryStream(
+                    truncatedExtension,
+                    static_cast<int>(sizeof(truncatedExtension)),
+                    true, LVOM_READ));
+    CountingImageDecodeCallback extensionCallback;
+    if (extensionImage.Decode(&extensionCallback))
+        return fail("GIF decoder accepted a truncated extension record");
+    if (extensionCallback.starts != 0
+            || extensionCallback.lines != 0
+            || extensionCallback.ends != 0)
+        return fail("truncated GIF extension entered the callback lifecycle");
     return 0;
 }
 #endif

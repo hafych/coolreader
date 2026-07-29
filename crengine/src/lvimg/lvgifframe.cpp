@@ -28,6 +28,8 @@
 #include "lvgifimagesource.h"
 #include "clzwdecoder.h"
 
+#include <algorithm>
+
 inline lUInt32 lRGB(lUInt32 r, lUInt32 g, lUInt32 b )
 {
     return (r<<16)|(g<<8)|b;
@@ -93,9 +95,9 @@ void LVGifFrame::Draw(LVImageDecoderCallback *callback)
 int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_read )
 {
     bytes_read = 0;
+    if (!buf || buf_size <= 10 || buf[0] != ',')
+        return 0;
     unsigned char * p = buf;
-    if (*p!=',' || buf_size<=10)
-        return 0; // error: no delimiter
     p++;
 
     // read info
@@ -126,7 +128,7 @@ int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_
         // read color table
         int m_color_count = 1<<m_bpp;
 
-        if (m_color_count*3 + (p-buf) >= buf_size)
+        if (m_color_count * 3 >= buf_size - (p - buf))
             return 0; // error
 
         m_local_color_table.resize(m_color_count);
@@ -142,34 +144,42 @@ int LVGifFrame::DecodeFromBuffer( unsigned char * buf, int buf_size, int &bytes_
     int stream_buffer_size = 0;
 
     int size_code = *p++;
+    if (size_code < 2 || size_code > 8)
+        return 0;
 
-    // test raster stream size
-    int i;
-    int rest_buf_size = (int)(buf_size - (p-buf));
-    for (i=0; i<rest_buf_size && p[i]; ) {
-        // next block
-        int block_size = p[i];
-        stream_buffer_size += block_size;
-        i+=block_size+1;
+    const int blocksSize = static_cast<int>(buf_size - (p - buf));
+    int blockOffset = 0;
+    for (;;) {
+        if (blockOffset >= blocksSize)
+            return 0;
+        const int blockSize = p[blockOffset++];
+        if (blockSize == 0)
+            break;
+        if (blockSize > blocksSize - blockOffset)
+            return 0;
+        stream_buffer_size += blockSize;
+        blockOffset += blockSize;
     }
 
-    if (!stream_buffer_size || i>rest_buf_size)
+    if (!stream_buffer_size)
         return 0; // error
 
     // set read bytes count
-    bytes_read = (int)((p-buf) + i);
+    bytes_read = static_cast<int>((p - buf) + blockOffset);
 
     // create stream buffer
-    std::vector<unsigned char> stream_buffer(stream_buffer_size + 3);
+    std::vector<unsigned char> stream_buffer(stream_buffer_size);
     // copy data to stream buffer
     int sb_index = 0;
-    for (i=0; p[i]; ) {
-        // next block
-        int block_size = p[i];
-        for (int j=1; j<=block_size; j++) {
-            stream_buffer[sb_index++] = p[i+j];
-        }
-        i+=block_size+1;
+    int sourceOffset = 0;
+    while (sourceOffset < blockOffset) {
+        const int blockSize = p[sourceOffset++];
+        if (blockSize == 0)
+            break;
+        std::copy(p + sourceOffset, p + sourceOffset + blockSize,
+                stream_buffer.begin() + sb_index);
+        sb_index += blockSize;
+        sourceOffset += blockSize;
     }
 
 

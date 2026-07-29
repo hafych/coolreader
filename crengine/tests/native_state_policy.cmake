@@ -3298,6 +3298,26 @@ forbid_source_text(
   "p_in_stream[2]"
   "GIF LZW decoder must not read a fixed three-byte window"
 )
+require_source_text(
+  "${GIF_IMAGE_SOURCE}"
+  "if (!buf || buf_size < 6)"
+  "GIF signature parsing must validate its input extent"
+)
+require_source_text(
+  "${GIF_IMAGE_SOURCE}"
+  "blockSize > static_cast<unsigned>(buf_size - offset)"
+  "GIF extension parsing must validate each sub-block"
+)
+require_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "blockSize > blocksSize - blockOffset"
+  "GIF raster parsing must validate each sub-block"
+)
+forbid_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "stream_buffer_size + 3"
+  "GIF raster buffers must not rely on unread padding"
+)
 
 # --- PNG decoder: longjmp-safe row and pixel ownership ---
 require_source_text(
