@@ -46,6 +46,11 @@ final native DOM version. Each Engine generation owns its own
 `MountPathCorrector`; no potentially mutable path graph is shared between
 Activities.
 
+Packaged and pre-init file hyphenation definitions build through one
+synchronized process registry. JNI receives a frozen array snapshot exactly
+once; Java callers receive independent arrays, and definitions arriving after
+native initialization are rejected instead of appearing only on the Java side.
+
 Scanner filesystem/resource access and cached online-store plugins also retain
 only application context. Cached process objects must never capture the
 Activity that first requested them.

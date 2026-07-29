@@ -102,6 +102,24 @@ public class ActivityOwnershipPolicyTest {
 		}
 	}
 
+	@Test
+	public void hyphenationRegistryHasOneFinalOwnerAndImmutableItems()
+			throws Exception {
+		Field registry = Engine.HyphDict.class.getDeclaredField("REGISTRY");
+		assertTrue(Modifier.isStatic(registry.getModifiers()));
+		assertTrue(Modifier.isFinal(registry.getModifiers()));
+		Field language =
+				Engine.HyphDict.class.getDeclaredField("language");
+		assertTrue(Modifier.isFinal(language.getModifiers()));
+		for (Field field : Engine.HyphDict.class.getDeclaredFields()) {
+			assertFalse(
+					"Hyphenation registry exposes mutable static array "
+							+ field.getName(),
+					Modifier.isStatic(field.getModifiers())
+							&& field.getType().isArray());
+		}
+	}
+
 	private static void assertVolatileField(Class<?> type, String name)
 			throws Exception {
 		Field field = type.getDeclaredField(name);

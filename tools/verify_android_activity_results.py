@@ -22,6 +22,7 @@ READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
 DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
+FREEZABLE_REGISTRY = SOURCE / "crengine" / "FreezableRegistry.java"
 PAGE_FLIP_GEOMETRY_TEST = (
     ROOT
     / "android"
@@ -45,6 +46,30 @@ DEFERRED_TASK_QUEUE_TEST = (
     / "coolreader"
     / "crengine"
     / "DeferredTaskQueueTest.java"
+)
+FREEZABLE_REGISTRY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "FreezableRegistryTest.java"
+)
+HYPH_DICT_REGISTRY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "HyphDictRegistryTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -172,6 +197,10 @@ def main() -> None:
         "private static final int PROGRESS_STYLE",
         "public static final int DOM_VERSION_CURRENT",
         "String[] fonts = findFonts()",
+        "private static final FreezableRegistry<HyphDict> REGISTRY",
+        "public final String language",
+        "static synchronized HyphDict[] freezeValues()",
+        "initDictionaries(HyphDict.freezeValues())",
     ):
         if marker not in engine_text:
             violations.append(f"{relative(ENGINE)} omits marker: {marker}")
@@ -180,11 +209,49 @@ def main() -> None:
         "private static Map<String, String> mountedRootsMap",
         "private static MountPathCorrector pathCorrector",
         "private static String[] mFonts",
+        "private static HyphDict[] values",
     ):
         if marker in engine_text:
             violations.append(
                 f"{relative(ENGINE)} retains mutable process snapshot "
                 f"state: {marker}")
+
+    freezable_registry_text = FREEZABLE_REGISTRY.read_text(
+        encoding="utf-8")
+    for marker in (
+        "synchronized boolean add(T item)",
+        "synchronized List<T> snapshot()",
+        "synchronized List<T> freeze()",
+        "Collections.unmodifiableList(",
+        "builder.clear()",
+    ):
+        if marker not in freezable_registry_text:
+            violations.append(
+                f"{relative(FREEZABLE_REGISTRY)} omits registry marker: "
+                f"{marker}")
+    for path, markers in (
+        (
+            FREEZABLE_REGISTRY_TEST,
+            (
+                "snapshotsDoNotExposeBuilderStorage",
+                "freezeIsIdempotentAndRejectsLatePublication",
+                "nullItemsAreRejectedBeforePublication",
+            ),
+        ),
+        (
+            HYPH_DICT_REGISTRY_TEST,
+            (
+                "valuesReturnIndependentOrderedSnapshots",
+                "frozenNativeSnapshotRejectsLateFilePublication",
+            ),
+        ),
+    ):
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in text:
+                violations.append(
+                    f"{relative(path)} omits registry regression: "
+                    f"{marker}")
 
     services_text = SERVICES.read_text(encoding="utf-8")
     if re.search(

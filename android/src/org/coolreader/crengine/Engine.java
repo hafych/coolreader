@@ -765,56 +765,61 @@ public class Engine {
 	}
 
 	public static class HyphDict {
-		private static HyphDict[] values = new HyphDict[]{};
-		public final static HyphDict NONE = new HyphDict("@none", HYPH_NONE, 0, "[None]", "");
-		public final static HyphDict ALGORITHM = new HyphDict("@algorithm", HYPH_ALGO, 0, "[Algorythmic]", "");
-		public final static HyphDict BOOK_LANGUAGE = new HyphDict("BOOK LANGUAGE", HYPH_BOOK, 0, "[From Book Language]", "");
+		private static final FreezableRegistry<HyphDict> REGISTRY =
+				new FreezableRegistry<>();
+		public final static HyphDict NONE = register(new HyphDict("@none", HYPH_NONE, 0, "[None]", ""));
+		public final static HyphDict ALGORITHM = register(new HyphDict("@algorithm", HYPH_ALGO, 0, "[Algorythmic]", ""));
+		public final static HyphDict BOOK_LANGUAGE = register(new HyphDict("BOOK LANGUAGE", HYPH_BOOK, 0, "[From Book Language]", ""));
 
-		public final static HyphDict HYPH_AR = new HyphDict("HYPH_AR", HYPH_DICT, R.raw.hyph_ar, "Arabic (no hyphenation)", "ar");
-		public final static HyphDict HYPH_BG = new HyphDict("HYPH_BG", HYPH_DICT, R.raw.hyph_bg, "Bulgarian", "bg");
-		public final static HyphDict HYPH_BN = new HyphDict("HYPH_BN", HYPH_DICT, R.raw.hyph_bn, "Bengali", "bn");
-		public final static HyphDict HYPH_CS = new HyphDict("HYPH_CS", HYPH_DICT, R.raw.hyph_cs, "Czech", "cs");
-		public final static HyphDict HYPH_DA = new HyphDict("HYPH_DA", HYPH_DICT, R.raw.hyph_da, "Danish", "da");
-		public final static HyphDict HYPH_DE_1996 = new HyphDict("HYPH_DE_1996", HYPH_DICT, R.raw.hyph_de_1996, "German", "de");
-		public final static HyphDict HYPH_EL_MONOTON = new HyphDict("HYPH_EL_MONOTON", HYPH_DICT, R.raw.hyph_el_monoton, "Modern Greek, monotonic", "el");
-		public final static HyphDict HYPH_EN_GB = new HyphDict("HYPH_EN_GB", HYPH_DICT, R.raw.hyph_en_gb, "British English", "en-GB");
-		public final static HyphDict HYPH_EN_US = new HyphDict("HYPH_EN_US", HYPH_DICT, R.raw.hyph_en_us, "US English", "en-US");
-		public final static HyphDict HYPH_ES = new HyphDict("HYPH_ES", HYPH_DICT, R.raw.hyph_es, "Spanish", "es");
-		public final static HyphDict HYPH_FA = new HyphDict("HYPH_FA", HYPH_DICT, R.raw.hyph_fa, "Persian (no hyphenation)", "fa");
-		public final static HyphDict HYPH_FI = new HyphDict("HYPH_FI", HYPH_DICT, R.raw.hyph_fi, "Finnish", "fi");
-		public final static HyphDict HYPH_GU = new HyphDict("HYPH_GU", HYPH_DICT, R.raw.hyph_gu, "Gujarati", "gu");
-		public final static HyphDict HYPH_HU = new HyphDict("HYPH_HU", HYPH_DICT, R.raw.hyph_hu, "Hungarian", "hu");
-		public final static HyphDict HYPH_IT = new HyphDict("HYPH_IT", HYPH_DICT, R.raw.hyph_it, "Italian", "it");
-		public final static HyphDict HYPH_MR = new HyphDict("HYPH_MR", HYPH_DICT, R.raw.hyph_mr, "Marathi", "mr");
-		public final static HyphDict HYPH_NL = new HyphDict("HYPH_NL", HYPH_DICT, R.raw.hyph_nl, "Dutch", "nl");
-		public final static HyphDict HYPH_PA = new HyphDict("HYPH_PA", HYPH_DICT, R.raw.hyph_pa, "Panjabi", "pa");
-		public final static HyphDict HYPH_PL = new HyphDict("HYPH_PL", HYPH_DICT, R.raw.hyph_pl, "Polish", "pl");
-		public final static HyphDict HYPH_PT = new HyphDict("HYPH_PT", HYPH_DICT, R.raw.hyph_pt, "Portuguese", "pt");
-		public final static HyphDict HYPH_RU_RU = new HyphDict("HYPH_RU_RU", HYPH_DICT, R.raw.hyph_ru_ru, "Russian", "ru-RU");
-		public final static HyphDict HYPH_RU_RU_EN_US = new HyphDict("HYPH_RU_RU_EN_US", HYPH_DICT, R.raw.hyph_ru_ru_en_us, "Russian, US English", "ru-RU,en-US");
-		public final static HyphDict HYPH_TA = new HyphDict("HYPH_TA", HYPH_DICT, R.raw.hyph_ta, "Tamil", "ta");
-		public final static HyphDict HYPH_TE = new HyphDict("HYPH_TE", HYPH_DICT, R.raw.hyph_te, "Telugu", "te");
-		public final static HyphDict HYPH_UK = new HyphDict("HYPH_UK", HYPH_DICT, R.raw.hyph_uk, "Ukrainian", "uk");
-		public final static HyphDict HYPH_ZH_LATN_PINYIN = new HyphDict("HYPH_ZH_LATN_PINYIN", HYPH_DICT, R.raw.hyph_zh_latn_pinyin, "Chinese pinyin (Mandarin)", "zh-latn");
+		public final static HyphDict HYPH_AR = register(new HyphDict("HYPH_AR", HYPH_DICT, R.raw.hyph_ar, "Arabic (no hyphenation)", "ar"));
+		public final static HyphDict HYPH_BG = register(new HyphDict("HYPH_BG", HYPH_DICT, R.raw.hyph_bg, "Bulgarian", "bg"));
+		public final static HyphDict HYPH_BN = register(new HyphDict("HYPH_BN", HYPH_DICT, R.raw.hyph_bn, "Bengali", "bn"));
+		public final static HyphDict HYPH_CS = register(new HyphDict("HYPH_CS", HYPH_DICT, R.raw.hyph_cs, "Czech", "cs"));
+		public final static HyphDict HYPH_DA = register(new HyphDict("HYPH_DA", HYPH_DICT, R.raw.hyph_da, "Danish", "da"));
+		public final static HyphDict HYPH_DE_1996 = register(new HyphDict("HYPH_DE_1996", HYPH_DICT, R.raw.hyph_de_1996, "German", "de"));
+		public final static HyphDict HYPH_EL_MONOTON = register(new HyphDict("HYPH_EL_MONOTON", HYPH_DICT, R.raw.hyph_el_monoton, "Modern Greek, monotonic", "el"));
+		public final static HyphDict HYPH_EN_GB = register(new HyphDict("HYPH_EN_GB", HYPH_DICT, R.raw.hyph_en_gb, "British English", "en-GB"));
+		public final static HyphDict HYPH_EN_US = register(new HyphDict("HYPH_EN_US", HYPH_DICT, R.raw.hyph_en_us, "US English", "en-US"));
+		public final static HyphDict HYPH_ES = register(new HyphDict("HYPH_ES", HYPH_DICT, R.raw.hyph_es, "Spanish", "es"));
+		public final static HyphDict HYPH_FA = register(new HyphDict("HYPH_FA", HYPH_DICT, R.raw.hyph_fa, "Persian (no hyphenation)", "fa"));
+		public final static HyphDict HYPH_FI = register(new HyphDict("HYPH_FI", HYPH_DICT, R.raw.hyph_fi, "Finnish", "fi"));
+		public final static HyphDict HYPH_GU = register(new HyphDict("HYPH_GU", HYPH_DICT, R.raw.hyph_gu, "Gujarati", "gu"));
+		public final static HyphDict HYPH_HU = register(new HyphDict("HYPH_HU", HYPH_DICT, R.raw.hyph_hu, "Hungarian", "hu"));
+		public final static HyphDict HYPH_IT = register(new HyphDict("HYPH_IT", HYPH_DICT, R.raw.hyph_it, "Italian", "it"));
+		public final static HyphDict HYPH_MR = register(new HyphDict("HYPH_MR", HYPH_DICT, R.raw.hyph_mr, "Marathi", "mr"));
+		public final static HyphDict HYPH_NL = register(new HyphDict("HYPH_NL", HYPH_DICT, R.raw.hyph_nl, "Dutch", "nl"));
+		public final static HyphDict HYPH_PA = register(new HyphDict("HYPH_PA", HYPH_DICT, R.raw.hyph_pa, "Panjabi", "pa"));
+		public final static HyphDict HYPH_PL = register(new HyphDict("HYPH_PL", HYPH_DICT, R.raw.hyph_pl, "Polish", "pl"));
+		public final static HyphDict HYPH_PT = register(new HyphDict("HYPH_PT", HYPH_DICT, R.raw.hyph_pt, "Portuguese", "pt"));
+		public final static HyphDict HYPH_RU_RU = register(new HyphDict("HYPH_RU_RU", HYPH_DICT, R.raw.hyph_ru_ru, "Russian", "ru-RU"));
+		public final static HyphDict HYPH_RU_RU_EN_US = register(new HyphDict("HYPH_RU_RU_EN_US", HYPH_DICT, R.raw.hyph_ru_ru_en_us, "Russian, US English", "ru-RU,en-US"));
+		public final static HyphDict HYPH_TA = register(new HyphDict("HYPH_TA", HYPH_DICT, R.raw.hyph_ta, "Tamil", "ta"));
+		public final static HyphDict HYPH_TE = register(new HyphDict("HYPH_TE", HYPH_DICT, R.raw.hyph_te, "Telugu", "te"));
+		public final static HyphDict HYPH_UK = register(new HyphDict("HYPH_UK", HYPH_DICT, R.raw.hyph_uk, "Ukrainian", "uk"));
+		public final static HyphDict HYPH_ZH_LATN_PINYIN = register(new HyphDict("HYPH_ZH_LATN_PINYIN", HYPH_DICT, R.raw.hyph_zh_latn_pinyin, "Chinese pinyin (Mandarin)", "zh-latn"));
 
 		public final String code;	// language id under which it will be registered using the HyphMan::addDictionaryItem() method
 		public final int type;
 		public final int resource;
 		public final String name;
 		public final File file;
-		public String language;
+		public final String language;
 
 		public static HyphDict[] values() {
-			return values;
+			List<HyphDict> values = REGISTRY.snapshot();
+			return values.toArray(new HyphDict[values.size()]);
 		}
 
-		private static void add(HyphDict dict) {
-			// Arrays.copyOf(values, values.length+1); -- absent until API level 9
-			HyphDict[] list = new HyphDict[values.length + 1];
-			for (int i = 0; i < values.length; i++)
-				list[i] = values[i];
-			list[list.length - 1] = dict;
-			values = list;
+		private static HyphDict register(HyphDict dict) {
+			if (!REGISTRY.add(dict))
+				throw new IllegalStateException(
+						"Hyphenation registry is already frozen");
+			return dict;
+		}
+
+		static synchronized HyphDict[] freezeValues() {
+			List<HyphDict> values = REGISTRY.freeze();
+			return values.toArray(new HyphDict[values.size()]);
 		}
 
 		private HyphDict(String code, int type, int resource, String name, String language) {
@@ -824,8 +829,6 @@ public class Engine {
 			this.file = null;
 			this.code = code;
 			this.language = language;
-			// register in list
-			add(this);
 		}
 
 		private HyphDict(File file) {
@@ -835,13 +838,11 @@ public class Engine {
 			this.file = file;
 			this.code = this.name;
 			this.language = "";
-			// register in list
-			add(this);
 		}
 
 		private static HyphDict byLanguage(String language) {
 			if (language != null && !language.trim().equals("")) {
-				for (HyphDict dict : values) {
+			for (HyphDict dict : values()) {
 					if (dict != BOOK_LANGUAGE) {
 						if (dict.language.equals(language))
 							return dict;
@@ -852,21 +853,21 @@ public class Engine {
 		}
 
 		public static HyphDict byCode(String code) {
-			for (HyphDict dict : values)
+			for (HyphDict dict : values())
 				if (dict.toString().equals(code))
 					return dict;
 			return NONE;
 		}
 
 		public static HyphDict byName(String name) {
-			for (HyphDict dict : values)
+			for (HyphDict dict : values())
 				if (dict.name.equals(name))
 					return dict;
 			return NONE;
 		}
 
 		public static HyphDict byFileName(String fileName) {
-			for (HyphDict dict : values)
+			for (HyphDict dict : values())
 				if (dict.file != null && dict.file.getName().equals(fileName))
 					return dict;
 			return NONE;
@@ -889,7 +890,9 @@ public class Engine {
 			}
 		}
 
-		public static boolean fromFile(File file) {
+		public static synchronized boolean fromFile(File file) {
+			if (REGISTRY.isFrozen())
+				return false;
 			if (file == null || !file.exists() || !file.isFile() || !file.canRead())
 				return false;
 			String fn = file.getName();
@@ -897,8 +900,7 @@ public class Engine {
 				return false; // wrong file name
 			if (byFileName(file.getName()) != NONE)
 				return false; // already registered
-			new HyphDict(file);
-			return true;
+			return REGISTRY.add(new HyphDict(file));
 		}
 	}
 
@@ -1477,7 +1479,7 @@ public class Engine {
 			log.i("Engine.initInternal failed!");
 			throw new RuntimeException("Cannot initialize CREngine JNI");
 		}
-		initDictionaries(HyphDict.values());
+		initDictionaries(HyphDict.freezeValues());
 		DOM_VERSION_CURRENT = getDomVersionCurrent();
 		log.i("Engine() : initialization done");
 	}

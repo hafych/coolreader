@@ -128,7 +128,8 @@ DRM или ограничений доступа, подбор/получени�
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic
   single-drain handoff process-dispatcher handlers с сохранением delay, а также
-  immutable Engine process snapshot и generation-owned path corrector.
+  immutable Engine process snapshot, generation-owned path corrector и
+  synchronized/frozen HyphDict registry без backing-array escape.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
