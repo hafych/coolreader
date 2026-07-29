@@ -84,6 +84,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			new ReaderSurfaceState();
 	private final ReaderNativeLifecycle readerNativeLifecycle =
 			new ReaderNativeLifecycle();
+	private final ReaderViewModeState readerViewModeState =
+			new ReaderViewModeState();
 	private final DelayedExecutor einkRefreshScheduler =
 			DelayedExecutor.createGUI("eink-focus-refresh");
 	private final SurfaceView surface;
@@ -339,8 +341,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final static int BRIGHTNESS_TYPE_COMMON = 0;
 	private final static int BRIGHTNESS_TYPE_WARM = 1;
 	private final static int BRIGHTNESS_TYPE_BOTH = 2;
-
-	private ViewMode viewMode = ViewMode.PAGES;
 
 	private void execute(Engine.EngineTask task) {
 		mEngine.execute(task);
@@ -730,21 +730,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 
 			@Override
-			public boolean enterAdjustmentMode() {
+			public ReaderViewModeState.Lease enterAdjustmentMode() {
 				if (!isActive())
-					return false;
-				if ("1".equals(getSetting(
-						PROP_PAGE_VIEW_MODE))) {
-					setViewModeNonPermanent(ViewMode.SCROLL);
-					return true;
-				}
-				return false;
+					return null;
+				return acquireTemporaryScrollMode();
 			}
 
 			@Override
-			public void restoreAdjustmentMode(boolean changed) {
-				if (changed && isActive())
-					setViewModeNonPermanent(ViewMode.PAGES);
+			public void restoreAdjustmentMode(
+					ReaderViewModeState.Lease lease) {
+				releaseTemporaryScrollMode(lease);
 			}
 
 			@Override
@@ -922,7 +917,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private boolean doubleTapSelectionEnabled = false;
 	private int mBounceTapInterval = 150;
 	private int mGesturePageFlipsPerFullSwipe;
-	private boolean mIsPageMode;
 	private int secondaryTapActionType = TAP_ACTION_TYPE_LONGPRESS;
 	private boolean selectionModeActive = false;
 
@@ -1332,7 +1326,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			int direction = swipeDistance > 0 ? 1 : -1; // Left-to-right or right-to-left swipe?
 			int value = direction * distanceForFlip;
 			while (Math.abs(swipeDistance) >= distanceForFlip) {
-				if (mIsPageMode) {
+				if (isPageMode()) {
 					start_x += value;
 				} else {
 					start_y += value;
@@ -1344,7 +1338,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private void updatePageFlipTracking(final int x, final int y) {
 			if (!mOpened)
 				return;
-			final int swipeDistance = mIsPageMode ? x - start_x : y - start_y;
+			final int swipeDistance =
+					isPageMode() ? x - start_x : y - start_y;
 			final int distanceForFlip = surface.getWidth() / mGesturePageFlipsPerFullSwipe;
 			int pagesToFlip = swipeDistance / distanceForFlip;
 			if (pagesToFlip == 0) {
@@ -1710,7 +1705,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								return true;
 							}
 						}
-						int dir = mIsPageMode ? x - start_x : y - start_y;
+						int dir = isPageMode()
+								? x - start_x : y - start_y;
 						if (mGesturePageFlipsPerFullSwipe == 1) {
 							if (pageFlipAnimationSpeedMs == 0 || DeviceInfo.EINK_SCREEN) {
 								// no animation
@@ -2350,18 +2346,47 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		setSetting(name, value, true, false, true);
 	}
 
-	public void setViewModeNonPermanent(ViewMode mode) {
-		if (mode != viewMode) {
-			if (mode == ViewMode.SCROLL) {
-				doc.doCommand(ReaderCommand.DCMD_TOGGLE_PAGE_SCROLL_VIEW.nativeId, 0);
-				viewMode = mode;
-				mIsPageMode = false;
-			} else {
-				doc.doCommand(ReaderCommand.DCMD_TOGGLE_PAGE_SCROLL_VIEW.nativeId, 0);
-				viewMode = mode;
-				mIsPageMode = true;
+	private ReaderViewModeState.Lease acquireTemporaryScrollMode() {
+		ReaderViewModeState.Acquisition acquisition =
+				readerViewModeState.acquireScrollMode();
+		if (acquisition == null)
+			return null;
+		postViewModeTransition(acquisition.transition());
+		return acquisition.lease();
+	}
+
+	private void releaseTemporaryScrollMode(
+			ReaderViewModeState.Lease lease) {
+		postViewModeTransition(readerViewModeState.release(lease));
+	}
+
+	private void resetTemporaryViewMode() {
+		postViewModeTransition(readerViewModeState.reset());
+	}
+
+	private void postViewModeTransition(
+			final ReaderViewModeState.Transition transition) {
+		if (transition == null)
+			return;
+		post(new Task() {
+			@Override
+			public void work() {
+				BackgroundThread.ensureBackground();
+				if (!readerNativeLifecycle.isInitialized())
+					return;
+				log.v("Switching temporary reader mode to "
+						+ (transition.isPageMode()
+								? "pages" : "scroll"));
+				doc.doCommand(
+						ReaderCommand
+								.DCMD_TOGGLE_PAGE_SCROLL_VIEW.nativeId,
+						0);
 			}
-		}
+		});
+	}
+
+	private boolean isPageMode() {
+		return readerViewModeState.isPageMode();
 	}
 
 	public void saveSetting(String name, String value) {
@@ -3594,7 +3619,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					if (animationEnabled && param == 1 && !DeviceInfo.EINK_SCREEN) {
 						animatePageFlip(1, onFinishHandler);
 					} else {
-						if (mIsPageMode) {
+						if (isPageMode()) {
 							doEngineCommand(ReaderCommand.DCMD_PAGEDOWN, param, onFinishHandler);
 						} else {
 							PositionProperties currPos = doc.getPositionProps(null, false);
@@ -3611,7 +3636,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					if (animationEnabled && param == 1 && !DeviceInfo.EINK_SCREEN) {
 						animatePageFlip(-1, onFinishHandler);
 					} else {
-						if (mIsPageMode) {
+						if (isPageMode()) {
 							doEngineCommand(ReaderCommand.DCMD_PAGEUP, param, onFinishHandler);
 						} else {
 							PositionProperties currPos = doc.getPositionProps(null, false);
@@ -3810,21 +3835,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 
 			@Override
-			public boolean enterReaderMode() {
+			public ReaderViewModeState.Lease enterReaderMode() {
 				if (!isActive())
-					return false;
-				if ("1".equals(getSetting(
-						PROP_PAGE_VIEW_MODE))) {
-					setViewModeNonPermanent(ViewMode.SCROLL);
-					return true;
-				}
-				return false;
+					return null;
+				return acquireTemporaryScrollMode();
 			}
 
 			@Override
-			public void restoreReaderMode(boolean changed) {
-				if (changed && isActive())
-					setViewModeNonPermanent(ViewMode.PAGES);
+			public void restoreReaderMode(
+					ReaderViewModeState.Lease lease) {
+				releaseTemporaryScrollMode(lease);
 			}
 
 			@Override
@@ -4055,7 +4075,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						mBookInfo, documentLoadLifecycle);
 	}
 
-	private void applySettings(Properties props) {
+	private void applySettings(
+			Properties props,
+			ReaderViewModeState.Snapshot viewModeSnapshot) {
 		props = new Properties(props); // make a copy
 		props.remove(PROP_TXT_OPTION_PREFORMATTED);
 		props.remove(PROP_EMBEDDED_STYLES);
@@ -4081,6 +4103,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				break;
 		}
 		props.setInt(PROP_STATUS_LINE, statusLine);
+		props.setBool(
+				PROP_PAGE_VIEW_MODE,
+				viewModeSnapshot.isPageMode());
 
 		if (!inDisabledFullRefresh()) {
 			// If this function is called when new settings loaded from the cloud are applied,
@@ -4187,6 +4212,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								mSettings, nativeSettings);
 				if (merged == null)
 					return;
+				merged.setBool(
+						PROP_PAGE_VIEW_MODE,
+						readerViewModeState
+								.isConfiguredPageMode());
 				mSettings = merged;
 				Properties published =
 						new Properties(merged);
@@ -4268,6 +4297,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private DocumentLoadLifecycle.Request replaceDocumentLoad() {
 		BackgroundThread.ensureGUI();
 		stopTts();
+		resetTemporaryViewMode();
 		bookInfoDialogLifecycle.cancel();
 		readerOptionsDialogLifecycle.cancel();
 		settingsSyncLifecycle.cancel();
@@ -4313,7 +4343,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		} else if (key.equals(PROP_APP_GESTURE_PAGE_FLIPPING)) {
 			mGesturePageFlipsPerFullSwipe = Integer.valueOf(value);
 		} else if (key.equals(PROP_PAGE_VIEW_MODE)) {
-			mIsPageMode = flg;
+			readerViewModeState.configure(flg);
 		} else if (key.equals(PROP_APP_SECONDARY_TAP_ACTION_TYPE)) {
 			secondaryTapActionType = flg ? TAP_ACTION_TYPE_DOUBLE : TAP_ACTION_TYPE_LONGPRESS;
 		} else if (key.equals(PROP_APP_FLICK_BACKLIGHT_CONTROL)) {
@@ -4358,9 +4388,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				boolean flg = mSettings.getBool(PROP_APP_FULLSCREEN, false);
 				newSettings.setBool(PROP_SHOW_BATTERY, flg);
 				newSettings.setBool(PROP_SHOW_TIME, flg);
-			} else if (PROP_PAGE_VIEW_MODE.equals(key)) {
-				boolean flg = "1".equals(value);
-				viewMode = flg ? ViewMode.PAGES : ViewMode.SCROLL;
 			} else if (PROP_APP_SCREEN_ORIENTATION.equals(key)
 					|| PROP_PAGE_ANIMATION.equals(key)
 					|| PROP_PAGE_VIEW_MODE.equals(key)
@@ -4395,7 +4422,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public ViewMode getViewMode() {
-		return viewMode;
+		return isPageMode() ? ViewMode.PAGES : ViewMode.SCROLL;
 	}
 
 	/**
@@ -4420,7 +4447,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			Properties changedSettings = newSettings.diff(currSettings);
 			currSettings.setAll(changedSettings);
 			mSettings = currSettings;
-			BackgroundThread.instance().postBackground(() -> applySettings(currSettings));
+			final ReaderViewModeState.Snapshot viewModeSnapshot =
+					readerViewModeState.snapshot();
+			BackgroundThread.instance().postBackground(
+					() -> applySettings(
+							currSettings, viewModeSnapshot));
 		}
 	}
 
@@ -4468,6 +4499,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	class CreateViewTask extends Task {
 		Properties props = new Properties();
+		private final ReaderViewModeState.Snapshot
+				viewModeSnapshot;
 
 		public CreateViewTask(Properties props) {
 			this.props = props;
@@ -4475,6 +4508,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			setAppSettings(props, oldSettings);
 			props.setAll(oldSettings);
 			mSettings = props;
+			viewModeSnapshot = readerViewModeState.snapshot();
 		}
 
 		public void work() throws Exception {
@@ -4502,7 +4536,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			String css = mEngine.loadResourceUtf8(R.raw.fb2);
 			if (css != null && css.length() > 0)
 				doc.setStylesheet(css);
-			applySettings(props);
+			applySettings(props, viewModeSnapshot);
 			if (!readerNativeLifecycle.markInitialized())
 				return;
 			log.i("CreateViewTask - finished");
@@ -7168,6 +7202,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private final boolean disableTextAutoformat;
 		private final boolean enableInternalFonts;
 		private final Properties settings;
+		private final ReaderViewModeState.Snapshot
+				viewModeSnapshot;
 		private byte[] coverPageBytes;
 		private boolean loadSucceeded;
 
@@ -7247,6 +7283,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			});
 			//init();
 			settings = new Properties(mSettings);
+			viewModeSnapshot = readerViewModeState.snapshot();
 		}
 
 		@Override
@@ -7258,7 +7295,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			coverPageBytes = null;
 			log.v("LoadDocumentTask : switching current profile");
-			applySettings(settings); // enforce settings reload
+			applySettings(
+					settings,
+					viewModeSnapshot); // enforce settings reload
 			log.i("Switching done");
 			if (!documentLoadLifecycle.isActive(loadOwner)) {
 				closeParcelFileDescriptor();
@@ -8147,6 +8186,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BackgroundThread.ensureGUI();
 		log.i("ReaderView.close() is called");
 		stopTts();
+		resetTemporaryViewMode();
 		if (cancelDocumentLoad)
 			documentLoadLifecycle.cancel();
 		bookInfoDialogLifecycle.cancel();
@@ -8249,6 +8289,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		log.i("ReaderView.destroy() is called");
 		closeSurfaceCallbacks();
 		stopTts();
+		resetTemporaryViewMode();
+		readerViewModeState.close();
 		cancelDelayedReaderWork();
 		closeNativeDocument();
 	}

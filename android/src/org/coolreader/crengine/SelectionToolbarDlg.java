@@ -63,7 +63,7 @@ public class SelectionToolbarDlg {
 	}
 
 	private boolean pageModeSet = false;
-	private boolean changedPageMode;
+	private ReaderViewModeState.Lease viewModeLease;
 
 	private boolean isActive() {
 		return selectionToolbarHandler.isActive();
@@ -80,15 +80,17 @@ public class SelectionToolbarDlg {
 	{
 		if (pageModeSet || !isActive())
 			return;
-		changedPageMode =
+		viewModeLease =
 				selectionToolbarHandler.enterAdjustmentMode();
 		pageModeSet = true;
 	}
 	
 	private void restoreReaderMode()
 	{
+		ReaderViewModeState.Lease lease = viewModeLease;
+		viewModeLease = null;
 		selectionToolbarHandler.restoreAdjustmentMode(
-				changedPageMode);
+				lease);
 	}
 	
 	private void changeSelectionBound(boolean start, int delta) {

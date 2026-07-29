@@ -93,7 +93,7 @@ public class TTSToolbarDlg implements Settings {
 	private final Handler audioBookPosHandler =
 			new Handler(Looper.getMainLooper());
 	private MotionWatchdogHandler mMotionWatchdog;
-	private boolean changedPageMode;
+	private ReaderViewModeState.Lease viewModeLease;
 	private boolean documentCleanedUp;
 	private boolean closeFinished;
 	private Runnable mOnCloseListener;
@@ -242,13 +242,15 @@ public class TTSToolbarDlg implements Settings {
 		}
 	}
 	private void setReaderMode() {
-		changedPageMode =
+		viewModeLease =
 				documentHandler.enterReaderMode();
 		moveSelection(ReaderCommand.DCMD_SELECT_FIRST_SENTENCE, null);
 	}
 
 	private void restoreReaderMode() {
-		documentHandler.restoreReaderMode(changedPageMode);
+		ReaderViewModeState.Lease lease = viewModeLease;
+		viewModeLease = null;
+		documentHandler.restoreReaderMode(lease);
 	}
 
 	private SentenceInfo fetchSelectedSentenceInfo() {

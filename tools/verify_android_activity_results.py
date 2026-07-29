@@ -238,6 +238,9 @@ READER_SURFACE_STATE = (
 READER_NATIVE_LIFECYCLE = (
     SOURCE / "crengine" / "ReaderNativeLifecycle.java"
 )
+READER_VIEW_MODE_STATE = (
+    SOURCE / "crengine" / "ReaderViewModeState.java"
+)
 KEY_DOUBLE_CLICK_STATE = (
     SOURCE / "crengine" / "KeyDoubleClickState.java"
 )
@@ -342,6 +345,18 @@ READER_NATIVE_LIFECYCLE_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderNativeLifecycleTest.java"
+)
+READER_VIEW_MODE_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderViewModeStateTest.java"
 )
 KEY_DOUBLE_CLICK_STATE_TEST = (
     ROOT
@@ -1981,7 +1996,7 @@ def main() -> None:
         "private boolean isDocumentOpen()",
         "private boolean isDocumentWorkActive(",
         "documentHandler.enterReaderMode()",
-        "documentHandler.restoreReaderMode(changedPageMode)",
+        "documentHandler.restoreReaderMode(lease)",
         "documentHandler.moveSelection(",
         "documentHandler.drawCover(",
         "documentHandler.getAllSentences()",
@@ -2009,8 +2024,8 @@ def main() -> None:
         "boolean isActive()",
         "void clearSelection()",
         "void savePosition()",
-        "boolean enterReaderMode()",
-        "void restoreReaderMode(boolean changed)",
+        "ReaderViewModeState.Lease enterReaderMode()",
+        "void restoreReaderMode(ReaderViewModeState.Lease lease)",
         "void moveSelection(",
         "void drawCover(Bitmap bitmap, CoverHandler coverHandler)",
         "List<SentenceInfo> getAllSentences()",
@@ -2477,13 +2492,23 @@ def main() -> None:
         "ttsInitializationLifecycle.cancel()",
         "private void finishTtsInitialization(",
         "private TtsDocumentHandler ttsDocumentHandler(",
+        "private final ReaderViewModeState readerViewModeState",
+        "private ReaderViewModeState.Lease acquireTemporaryScrollMode()",
+        "private void releaseTemporaryScrollMode(",
+        "private void resetTemporaryViewMode()",
+        "private void postViewModeTransition(",
+        "readerViewModeState.snapshot()",
+        ".isConfiguredPageMode()",
         "TtsDocumentSnapshot.capture(expectedBook)",
         "TtsDocumentSnapshot documentSnapshot)",
         "toolbar.stopAndCloseForDocumentChange()",
         "public void stopTtsForDocumentChange()",
         "private DocumentLoadLifecycle.Request replaceDocumentLoad()",
-        "stopTts();\n\t\tif (cancelDocumentLoad)",
-        "stopTts();\n\t\tcancelDelayedReaderWork();",
+        "stopTts();\n\t\tresetTemporaryViewMode();\n"
+        "\t\tif (cancelDocumentLoad)",
+        "stopTts();\n\t\tresetTemporaryViewMode();\n"
+        "\t\treaderViewModeState.close();\n"
+        "\t\tcancelDelayedReaderWork();",
         "currentImageViewer.close(false)",
         "ReaderPageCacheClose.begin(",
         "private ReaderPageCacheClose<BitmapInfo>",
@@ -3134,8 +3159,8 @@ def main() -> None:
         "interface SelectionToolbarHandler",
         "interface SelectionUpdateHandler",
         "boolean isActive()",
-        "boolean enterAdjustmentMode()",
-        "void restoreAdjustmentMode(boolean changed)",
+        "ReaderViewModeState.Lease enterAdjustmentMode()",
+        "void restoreAdjustmentMode(ReaderViewModeState.Lease lease)",
         "void moveSelectionBound(",
         "void clearSelection()",
         "void copyToClipboard(String text)",
@@ -3153,6 +3178,8 @@ def main() -> None:
 
     for marker in (
         "private SelectionToolbarHandler selectionToolbarHandler(",
+        "return acquireTemporaryScrollMode();",
+        "releaseTemporaryScrollMode(lease);",
         "sendQuotationInEmail(",
         "selection, expectedBook, interaction",
         "mActivity.sendBookFragment(",
@@ -3346,6 +3373,45 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_NATIVE_LIFECYCLE_TEST)} omits native "
                 f"lifecycle regression: {marker}")
+
+    reader_view_mode_state_text = READER_VIEW_MODE_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ReaderViewModeState",
+        "static final class Lease",
+        "static final class Transition",
+        "static final class Acquisition",
+        "static final class Snapshot",
+        "private final Set<Lease> scrollLeases",
+        "synchronized void configure(boolean pageMode)",
+        "synchronized Acquisition acquireScrollMode()",
+        "synchronized Transition release(Lease lease)",
+        "synchronized Transition reset()",
+        "synchronized boolean isPageMode()",
+        "synchronized boolean isConfiguredPageMode()",
+        "synchronized Snapshot snapshot()",
+        "synchronized void close()",
+    ):
+        if marker not in reader_view_mode_state_text:
+            violations.append(
+                f"{relative(READER_VIEW_MODE_STATE)} omits exact reader "
+                f"view-mode marker: {marker}")
+
+    reader_view_mode_state_test_text = (
+        READER_VIEW_MODE_STATE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "overlappingLeasesRestoreOnlyAfterLastRelease",
+        "scrollConfigurationNeedsNoTemporaryLease",
+        "configurationChangeInvalidatesOldLease",
+        "reapplyingConfigurationKeepsOutstandingLease",
+        "resetRestoresConfiguredModeExactlyOnce",
+        "closeRejectsNewAndOutstandingLeases",
+    ):
+        if marker not in reader_view_mode_state_test_text:
+            violations.append(
+                f"{relative(READER_VIEW_MODE_STATE_TEST)} omits reader "
+                f"view-mode regression: {marker}")
 
     reader_book_info_snapshot_text = (
         READER_BOOK_INFO_SNAPSHOT.read_text(encoding="utf-8")

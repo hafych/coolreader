@@ -31,9 +31,9 @@ interface TtsDocumentHandler {
 
 	void savePosition();
 
-	boolean enterReaderMode();
+	ReaderViewModeState.Lease enterReaderMode();
 
-	void restoreReaderMode(boolean changed);
+	void restoreReaderMode(ReaderViewModeState.Lease lease);
 
 	void moveSelection(
 			ReaderCommand command,

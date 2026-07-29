@@ -19,9 +19,9 @@ interface SelectionToolbarHandler {
 
 	boolean isActive();
 
-	boolean enterAdjustmentMode();
+	ReaderViewModeState.Lease enterAdjustmentMode();
 
-	void restoreAdjustmentMode(boolean changed);
+	void restoreAdjustmentMode(ReaderViewModeState.Lease lease);
 
 	void moveSelectionBound(
 			boolean start,
