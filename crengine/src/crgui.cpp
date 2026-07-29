@@ -133,12 +133,13 @@ bool CRGUIAcceleratorTable::add( int keyCode, int keyFlags, int commandId, int c
         item->commandParam = commandParam;
         return false;
     }
-    CRGUIAccelerator * item = new CRGUIAccelerator();
-    item->keyCode = keyCode;
-    item->keyFlags = keyFlags;
-    item->commandId = commandId;
-    item->commandParam = commandParam;
-    _items.add(item);
+    std::unique_ptr<CRGUIAccelerator> candidate(
+            new CRGUIAccelerator());
+    candidate->keyCode = keyCode;
+    candidate->keyFlags = keyFlags;
+    candidate->commandId = commandId;
+    candidate->commandParam = commandParam;
+    _items.add(candidate.release());
     return true;
 }
 
@@ -895,9 +896,10 @@ bool CRGUIWindowBase::onKeyPressed( int key, int flags )
 		if ( cmd == GCMD_PASS_TO_PARENT ) {
 			return false;
 		}
-        CRGUIEvent * event = new CRGUICommandEvent( cmd, param );
+        std::unique_ptr<CRGUIEvent> event(
+                new CRGUICommandEvent(cmd, param));
         event->setTargetWindow(this);
-        _wm->postEvent( event );
+        _wm->postEvent(event.release());
         return true;
         //return onCommand( cmd, param );
     } else {

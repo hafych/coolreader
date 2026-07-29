@@ -6830,6 +6830,26 @@ require_source_text(
 )
 require_source_text(
   "${GUI_HEADER}"
+  "std::unique_ptr<CRGUIAccelerator> candidate("
+  "GUI accelerator copies and quad entries must begin in scoped ownership"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "std::unique_ptr<CRGUIAccelerator> candidate("
+  "GUI accelerator additions must begin in scoped ownership"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "std::unique_ptr<CRGUIEvent> event("
+  "translated GUI command events must begin in scoped ownership"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "_wm->postEvent(event.release());"
+  "translated GUI commands must cross an explicit legacy transfer boundary"
+)
+require_source_text(
+  "${GUI_HEADER}"
   "std::unique_ptr<LVDocView> _docview"
   "GUI document windows must own their document view explicitly"
 )
@@ -6855,6 +6875,16 @@ require_source_text(
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"
+  "GUI accelerator table did not deep-copy scoped entries"
+  "GUI accelerator ownership must retain independent-copy coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI scoped command event missed its target window"
+  "GUI command candidate ownership must retain target-dispatch coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
   "GUI document window leaked its document view"
   "GUI document-view teardown regression coverage must be retained"
 )
@@ -6877,6 +6907,26 @@ forbid_source_text(
   "${GUI_SOURCE}"
   "delete event"
   "GUI event teardown must remain automatic"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "_items.add( new CRGUIAccelerator"
+  "GUI accelerator copies must not publish a raw allocation expression"
+)
+forbid_source_text(
+  "${GUI_HEADER}"
+  "CRGUIAccelerator * item = new CRGUIAccelerator"
+  "GUI accelerator quad entries must not begin as raw owners"
+)
+forbid_source_text(
+  "${GUI_SOURCE}"
+  "CRGUIAccelerator * item = new CRGUIAccelerator"
+  "GUI accelerator additions must not begin as raw owners"
+)
+forbid_source_text(
+  "${GUI_SOURCE}"
+  "CRGUIEvent * event = new CRGUICommandEvent"
+  "translated GUI command events must not begin as raw owners"
 )
 forbid_source_text(
   "${GUI_HEADER}"

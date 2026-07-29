@@ -922,3 +922,10 @@ soft-hyphen emission reads the same container, and every exit releases it
 automatically. Document coverage exercises algorithmic hyphenation repeatedly
 on two equivalent DOMs and verifies that removing emitted soft hyphens restores
 the exact ordinary serialization.
+
+GUI accelerator entries are built and copied as scoped candidates before the
+owning pointer vector accepts them. Key translation likewise keeps each command
+event in a `unique_ptr` while assigning its target and releases it only across
+the legacy `postEvent()` ownership-transfer boundary. Native coverage verifies
+independent accelerator-table copies, in-place remapping, appended publication
+and delivery of the translated command to the selected window.

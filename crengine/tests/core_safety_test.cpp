@@ -1665,6 +1665,32 @@ public:
     }
 };
 
+class AcceleratorGuiWindow : public CRGUIWindowBase {
+private:
+    int _commandCount;
+    int _lastCommand;
+    int _lastParam;
+
+public:
+    explicit AcceleratorGuiWindow(CRGUIWindowManager *manager)
+        : CRGUIWindowBase(manager),
+          _commandCount(0),
+          _lastCommand(0),
+          _lastParam(0) {
+    }
+
+    bool onCommand(int command, int params) override {
+        ++_commandCount;
+        _lastCommand = command;
+        _lastParam = params;
+        return true;
+    }
+
+    int commandCount() const { return _commandCount; }
+    int lastCommand() const { return _lastCommand; }
+    int lastParam() const { return _lastParam; }
+};
+
 class CountingGuiDocView : public LVDocView {
 private:
     std::atomic<int> &_destroyed;
@@ -1766,6 +1792,52 @@ static int testGuiRuntimeOwnership() {
     }
     if (eventDestroyed.load(std::memory_order_relaxed) != 4)
         return fail("GUI manager teardown leaked a queued event");
+
+    const int acceleratorQuads[] = {
+        41, KEY_FLAG_LONG_PRESS, 701, 11,
+        42, 0, 702, 12,
+        0
+    };
+    CRGUIAcceleratorTable acceleratorSource(acceleratorQuads);
+    CRGUIAcceleratorTable acceleratorCopy(acceleratorSource);
+    if (acceleratorSource.length() != 2
+            || acceleratorCopy.length() != 2
+            || acceleratorSource.get(0) == acceleratorCopy.get(0))
+        return fail("GUI accelerator table did not deep-copy scoped entries");
+
+    if (acceleratorSource.add(
+                41, KEY_FLAG_LONG_PRESS, 801, 21))
+        return fail("GUI accelerator update unexpectedly appended an entry");
+    int translatedCommand = 0;
+    int translatedParam = 0;
+    if (!acceleratorCopy.translate(
+                41, KEY_FLAG_LONG_PRESS,
+                translatedCommand, translatedParam)
+            || translatedCommand != 701 || translatedParam != 11)
+        return fail("GUI accelerator copy shared a mutable entry");
+    if (!acceleratorCopy.add(43, 0, 703, 13)
+            || acceleratorCopy.length() != 3)
+        return fail("GUI accelerator candidate was not published");
+
+    {
+        GuiScreenOwnershipWindowManager manager(screen.get());
+        AcceleratorGuiWindow *window =
+                new AcceleratorGuiWindow(&manager);
+        manager.activateWindow(window);
+        window->setAccelerators(CRGUIAcceleratorTableRef(
+                new CRGUIAcceleratorTable(acceleratorCopy)));
+        if (!window->onKeyPressed(41, KEY_FLAG_LONG_PRESS)
+                || !manager.peekEvent()
+                || manager.peekEvent()->getType() != CREV_COMMAND
+                || manager.peekEvent()->getParam1() != 701
+                || manager.peekEvent()->getParam2() != 11)
+            return fail("GUI accelerator did not publish its command event");
+        if (!manager.processPostedEvents()
+                || window->commandCount() != 1
+                || window->lastCommand() != 701
+                || window->lastParam() != 11)
+            return fail("GUI scoped command event missed its target window");
+    }
 
     if (!InitFontManager(lString8::empty_str) || !fontMan)
         return fail("GUI document-view fixture could not initialize fonts");

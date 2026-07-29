@@ -152,19 +152,22 @@ public:
     CRGUIAcceleratorTable( const CRGUIAcceleratorTable& v) 
 	{
 		for ( int i=0; i<v._items.length(); i++ ) {
-			_items.add( new CRGUIAccelerator(*v._items[i]) );
+            std::unique_ptr<CRGUIAccelerator> candidate(
+                    new CRGUIAccelerator(*v._items[i]));
+            _items.add(candidate.release());
 		}
 	}
     /// constructor from int array: 4 ints per entry (keyCode, keyFlags, commandId, commandParam), keyCode==0 indicates end of list 
     CRGUIAcceleratorTable( const int * tableQuadsArray )
     {
         while( *tableQuadsArray ) {
-            CRGUIAccelerator * item = new CRGUIAccelerator();
-            item->keyCode = *tableQuadsArray++;
-            item->keyFlags = *tableQuadsArray++;
-            item->commandId = *tableQuadsArray++;
-            item->commandParam = *tableQuadsArray++;
-            _items.add(item);
+            std::unique_ptr<CRGUIAccelerator> candidate(
+                    new CRGUIAccelerator());
+            candidate->keyCode = *tableQuadsArray++;
+            candidate->keyFlags = *tableQuadsArray++;
+            candidate->commandId = *tableQuadsArray++;
+            candidate->commandParam = *tableQuadsArray++;
+            _items.add(candidate.release());
         }
     }
 };
