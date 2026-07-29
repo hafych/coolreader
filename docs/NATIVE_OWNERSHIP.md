@@ -322,9 +322,13 @@ snapshot. The full RGBA snapshot is allocated only after checked byte-count
 arithmetic and the shared image-dimension budget; an oversized source or
 allocation failure disables smooth scaling and builds complete nearest-neighbor
 maps before decode. Color and grayscale draw entry points reject null or
-dimension-invalid image
-sources, invalid destination sizes and unusable backing buffers before
+dimension-invalid image sources, invalid destination sizes and unusable
+backing buffers before
 constructing that callback, entering decode or changing render statistics.
+Every decoded row is validated before drawing. Destination row and column
+offsets are widened before addition, clipped before narrowing and indexed from
+the real scanline base, so negative placement never constructs a pointer before
+the backing buffer and extreme offsets cannot overflow signed coordinates.
 Successful entry uses one shared 64-bit accounting path; both the image count
 and aggregate surface avoid signed overflow, and area multiplication widens
 each positive dimension before evaluation. Repeated accumulation saturates at

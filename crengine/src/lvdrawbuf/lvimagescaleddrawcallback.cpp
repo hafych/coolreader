@@ -234,6 +234,8 @@ void LVImageScaledDrawCallback::OnStartDecode(LVImageSource *)
 bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *data)
 {
     //fprintf( stderr, "l_%d ", y );
+    if (!dst || y < 0 || y >= src_dy || !data)
+        return false;
     if (isNinePatch) {
         if (y == 0 || y == src_dy-1) // ignore first and last lines
             return true;
@@ -241,7 +243,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
     // Defer everything to the post-process pass for smooth scaling, we just have to store the line in our decoded buffer
     if (smoothscale) {
         //fprintf( stderr, "Smoothscale l_%d pass\n", y );
-        if ( y<0 || y>=src_dy || !data || decoded.empty() )
+        if (decoded.empty())
             return false;
         const std::size_t rowBytes =
                 static_cast<std::size_t>(src_dx) * sizeof(lUInt32);
@@ -284,23 +286,36 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
     dst->GetClipRect( &clip );
     for ( ;yy<yy2; yy++ )
     {
-        if ( yy+dst_y<clip.top || yy+dst_y>=clip.bottom )
+        const lInt64 destinationRow =
+                static_cast<lInt64>(yy)
+                + static_cast<lInt64>(dst_y);
+        if (destinationRow < clip.top
+                || destinationRow >= clip.bottom)
             continue;
+        const int destinationY =
+                static_cast<int>(destinationRow);
         int bpp = dst->GetBitsPerPixel();
         if ( bpp >= 24 )
         {
-            lUInt32 * row = (lUInt32 *)dst->GetScanLine( yy + dst_y );
-            row += dst_x;
+            lUInt32 * row = reinterpret_cast<lUInt32 *>(
+                    dst->GetScanLine(destinationY));
+            if (!row)
+                return false;
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
-                int xx = x + dst_x;
+                const lInt64 destinationColumn =
+                        static_cast<lInt64>(x)
+                        + static_cast<lInt64>(dst_x);
                 lUInt32 alpha = (cl >> 24)&0xFF;
                 
-                if ( xx<clip.left || xx>=clip.right ) {
+                if (destinationColumn < clip.left
+                        || destinationColumn >= clip.right) {
                     // OOB, don't plot it!
                     continue;
                 }
+                const int xx =
+                        static_cast<int>(destinationColumn);
                 
                 // NOTE: Remember that for some mysterious reason, lvimg feeds us inverted alpha
                 //       (i.e., 0 is opaque, 0xFF is transparent)...
@@ -310,40 +325,47 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
                         // ...unless we're doing night-mode shenanigans, in which case, we need to fake an inverted background
                         // (i.e., a *black* background, so it gets inverted back to white with NightMode, since white is our expected "standard" background color)
                         // c.f., https://github.com/koreader/koreader/issues/4986
-                        row[ x ] = 0x00000000;
+                        row[xx] = 0x00000000;
                     } else {
                         continue;
                     }
                 } else if ( alpha == 0 ) {
                     // Fully opaque, plot it as-is
-                    row[ x ] = cl ^ rgba_invert;
+                    row[xx] = cl ^ rgba_invert;
                 } else {
-                    if ((row[x] & 0xFF000000) == 0xFF000000) {
+                    if ((row[xx] & 0xFF000000) == 0xFF000000) {
                         // Plot it as-is if *buffer* pixel is transparent
-                        row[ x ] = cl ^ rgba_invert;
+                        row[xx] = cl ^ rgba_invert;
                     } else {
                         // NOTE: This *also* has a "fully opaque" shortcut... :/
-                        ApplyAlphaRGB( row[x], cl, alpha );
+                        ApplyAlphaRGB(row[xx], cl, alpha);
                         // Invert post-blending to avoid potential stupidity...
-                        row[ x ] ^= rgba_invert;
+                        row[xx] ^= rgba_invert;
                     }
                 }
             }
         }
         else if ( bpp == 16 )
         {
-            lUInt16 * row = (lUInt16 *)dst->GetScanLine( yy + dst_y );
-            row += dst_x;
+            lUInt16 * row = reinterpret_cast<lUInt16 *>(
+                    dst->GetScanLine(destinationY));
+            if (!row)
+                return false;
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
-                int xx = x + dst_x;
+                const lInt64 destinationColumn =
+                        static_cast<lInt64>(x)
+                        + static_cast<lInt64>(dst_x);
                 lUInt32 alpha = (cl >> 24)&0xFF;
                 
-                if ( xx<clip.left || xx>=clip.right ) {
+                if (destinationColumn < clip.left
+                        || destinationColumn >= clip.right) {
                     // OOB, don't plot it!
                     continue;
                 }
+                const int xx =
+                        static_cast<int>(destinationColumn);
                 
                 // NOTE: See final branch of the ladder. Not quite sure why some alpha ranges are treated differently...
                 if ( alpha >= 0xF0 ) {
@@ -352,34 +374,40 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
                         // ...unless we're doing night-mode shenanigans, in which case, we need to fake an inverted background
                         // (i.e., a *black* background, so it gets inverted back to white with NightMode, since white is our expected "standard" background color)
                         // c.f., https://github.com/koreader/koreader/issues/4986
-                        row[ x ] = 0x0000;
+                        row[xx] = 0x0000;
                     } else {
                         continue;
                     }
                 } else if ( alpha < 16 ) {
-                    row[ x ] = rgb888to565( cl ^ rgba_invert );
+                    row[xx] = rgb888to565(cl ^ rgba_invert);
                 } else if ( alpha < 0xF0 ) {
-                    lUInt32 v = rgb565to888(row[x]);
+                    lUInt32 v = rgb565to888(row[xx]);
                     ApplyAlphaRGB( v, cl, alpha );
-                    row[ x ] = rgb888to565(v ^ rgba_invert);
+                    row[xx] = rgb888to565(v ^ rgba_invert);
                 }
             }
         }
         else if ( bpp > 2 ) // 3,4,8 bpp
         {
-            lUInt8 * row = (lUInt8 *)dst->GetScanLine( yy + dst_y );
-            row += dst_x;
+            lUInt8 * row = dst->GetScanLine(destinationY);
+            if (!row)
+                return false;
             for (int x=0; x<dst_dx; x++)
             {
                 int srcx = !xmap.empty() ? xmap[x] : x;
                 lUInt32 cl = data[srcx];
-                int xx = x + dst_x;
+                const lInt64 destinationColumn =
+                        static_cast<lInt64>(x)
+                        + static_cast<lInt64>(dst_x);
                 lUInt32 alpha = (cl >> 24)&0xFF;
                 
-                if ( xx<clip.left || xx>=clip.right ) {
+                if (destinationColumn < clip.left
+                        || destinationColumn >= clip.right) {
                     // OOB, don't plot it!
                     continue;
                 }
+                const int xx =
+                        static_cast<int>(destinationColumn);
                 
                 if ( alpha == 0xFF ) {
                     // Transparent, don't plot it...
@@ -390,7 +418,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
                         continue;
                     }
                 } else if ( alpha != 0 ) {
-                    lUInt8 origLuma = row[x];
+                    lUInt8 origLuma = row[xx];
                     // Expand lower bitdepths to Y8
                     if ( bpp == 3 ) {
                         origLuma = origLuma & 0xE0;
@@ -418,25 +446,31 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
                 } else {
                     dcl = rgbToGray( cl, bpp );
                 }
-                row[ x ] = dcl ^ gray_invert;
-                // ApplyAlphaGray( row[x], dcl, alpha, bpp );
+                row[xx] = dcl ^ gray_invert;
+                // ApplyAlphaGray(row[xx], dcl, alpha, bpp);
             }
         }
         else if ( bpp == 2 )
         {
             //fprintf( stderr, "." );
-            lUInt8 * row = (lUInt8 *)dst->GetScanLine( yy+dst_y );
-            //row += dst_x;
+            lUInt8 * row = dst->GetScanLine(destinationY);
+            if (!row)
+                return false;
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
-                int xx = x + dst_x;
+                const lInt64 destinationColumn =
+                        static_cast<lInt64>(x)
+                        + static_cast<lInt64>(dst_x);
                 lUInt32 alpha = (cl >> 24)&0xFF;
                 
-                if ( xx<clip.left || xx>=clip.right ) {
+                if (destinationColumn < clip.left
+                        || destinationColumn >= clip.right) {
                     // OOB, don't plot it!
                     continue;
                 }
+                const int xx =
+                        static_cast<int>(destinationColumn);
                 
                 int byteindex = (xx >> 2);
                 int bitindex = (3-(xx & 3))<<1;
@@ -476,18 +510,24 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
         else if ( bpp == 1 )
         {
             //fprintf( stderr, "." );
-            lUInt8 * row = (lUInt8 *)dst->GetScanLine( yy+dst_y );
-            //row += dst_x;
+            lUInt8 * row = dst->GetScanLine(destinationY);
+            if (!row)
+                return false;
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
-                int xx = x + dst_x;
+                const lInt64 destinationColumn =
+                        static_cast<lInt64>(x)
+                        + static_cast<lInt64>(dst_x);
                 lUInt32 alpha = (cl >> 24)&0xFF;
                 
-                if ( xx<clip.left || xx>=clip.right ) {
+                if (destinationColumn < clip.left
+                        || destinationColumn >= clip.right) {
                     // OOB, don't plot it!
                     continue;
                 }
+                const int xx =
+                        static_cast<int>(destinationColumn);
                 
                 if ( alpha & 0x80 ) {
                     // Transparent, don't plot it...

@@ -6582,6 +6582,53 @@ static int testImageSourceOwnership() {
         return fail("nine-patch frame scaling overflowed");
 
     static const lUInt32 scaledSentinel = 0x00123456;
+    LVColorDrawBuf validatedRows(2, 2, 32);
+    LVImageScaledDrawCallback rowValidator(
+            &validatedRows, xpm, 0, 0, 2, 2,
+            false, false, false);
+    lUInt32 validScaledRow[] = {
+        0x00000000, 0x00ffffff
+    };
+    if (rowValidator.OnLineDecoded(
+                xpm.get(), 0, NULL)
+            || rowValidator.OnLineDecoded(
+                    xpm.get(), -1, validScaledRow)
+            || rowValidator.OnLineDecoded(
+                    xpm.get(), 2, validScaledRow))
+        return fail("scaled-image draw accepted an invalid source row");
+
+    LVColorDrawBuf clippedColor(2, 2, 32);
+    clippedColor.Clear(scaledSentinel);
+    clippedColor.Draw(xpm, -1, 0, 2, 2, false);
+    if (clippedColor.GetPixel(0, 0) != 0x00ffffff
+            || clippedColor.GetPixel(1, 0)
+                    != scaledSentinel)
+        return fail("color image clipping used an invalid row offset");
+
+    LVGrayDrawBuf clippedGray(2, 2, 8);
+    clippedGray.Clear(0x000000);
+    clippedGray.Draw(xpm, -1, 0, 2, 2, false);
+    if (clippedGray.GetPixel(0, 0) == 0
+            || clippedGray.GetPixel(1, 0) != 0)
+        return fail("gray image clipping used an invalid row offset");
+
+    LVColorDrawBuf overflowClipped(2, 2, 32);
+    overflowClipped.Clear(scaledSentinel);
+    overflowClipped.Draw(
+            xpm, std::numeric_limits<int>::max(),
+            0, 2, 2, false);
+    overflowClipped.Draw(
+            xpm, 0, std::numeric_limits<int>::max(),
+            2, 2, false);
+    for (int y = 0; y < 2; ++y) {
+        for (int x = 0; x < 2; ++x) {
+            if (overflowClipped.GetPixel(x, y)
+                    != scaledSentinel)
+                return fail(
+                        "scaled-image clipping coordinates overflowed");
+        }
+    }
+
     for (bool smooth : {false, true}) {
         LVColorDrawBuf scaled(4, 4, 32);
         scaled.Clear(scaledSentinel);

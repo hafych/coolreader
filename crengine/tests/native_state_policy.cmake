@@ -4037,9 +4037,49 @@ require_source_text(
   "smooth-scale allocation failure must enter mapped fallback"
 )
 require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "if (!dst || y < 0 || y >= src_dy || !data)"
+  "scaled-image callbacks must reject invalid source rows"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "static_cast<lInt64>(dst_x)"
+  "scaled-image destination columns must use widened arithmetic"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "static_cast<lInt64>(dst_y)"
+  "scaled-image destination rows must use widened arithmetic"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "row += dst_x"
+  "scaled-image clipping must not create pre-buffer row pointers"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "int xx = x + dst_x"
+  "scaled-image clipping must not use signed column addition"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "yy+dst_y"
+  "scaled-image clipping must not use signed row addition"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "oversized smooth snapshot did not use mapped fallback"
   "bounded smooth-scale fallback must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "scaled-image draw accepted an invalid source row"
+  "invalid scaled-image rows must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "scaled-image clipping coordinates overflowed"
+  "scaled-image offset overflow must retain native regression coverage"
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
