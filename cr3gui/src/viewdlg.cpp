@@ -224,11 +224,12 @@ void CRViewDialog::showGoToPercentDialog()
 
 bool CRViewDialog::showLinksDialog()
 {
-    CRLinksDialog * dlg = CRLinksDialog::create( _wm, this );
+    std::unique_ptr<CRLinksDialog> dlg =
+            CRLinksDialog::create(_wm, this);
     if ( !dlg )
         return false;
     dlg->setAccelerators( getMenuAccelerators() );
-    _wm->activateWindow( dlg );
+    _wm->activateWindow(std::move(dlg));
     return true;
 }
 

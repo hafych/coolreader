@@ -7593,6 +7593,46 @@ forbid_source_text(
   "link dialogs must not retain unused window borrows"
 )
 require_source_text(
+  "${LINKS_DIALOG_HEADER}"
+  "static std::unique_ptr<CRLinksDialog> create("
+  "link-dialog factories must return scoped ownership"
+)
+require_source_text(
+  "${LINKS_DIALOG_SOURCE}"
+  "return std::make_unique<CRLinksDialog>(wm, docwin);"
+  "link-dialog candidates must enter scoped ownership"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "std::unique_ptr<CRLinksDialog> dlg ="
+  "generic link-dialog callers must retain factory ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<CRLinksDialog> dlg ="
+  "PocketBook link-dialog callers must retain factory ownership"
+)
+forbid_source_text(
+  "${LINKS_DIALOG_HEADER}"
+  "static CRLinksDialog * create("
+  "link-dialog factories must not return raw ownership"
+)
+forbid_source_text(
+  "${LINKS_DIALOG_SOURCE}"
+  "return new CRLinksDialog"
+  "link-dialog candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "CRLinksDialog * dlg = CRLinksDialog::create"
+  "generic link-dialog factory results must not regress to raw ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRLinksDialog * dlg = CRLinksDialog::create"
+  "PocketBook link-dialog factory results must not regress to raw ownership"
+)
+require_source_text(
   "${LOGO_CONVERTER_SOURCE}"
   "lString32 startPath = Utf8ToUnicode(lString8(argv[1]));"
   "logo converter input paths must use the current string width"

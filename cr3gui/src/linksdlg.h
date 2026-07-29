@@ -53,7 +53,8 @@ class CRLinksDialog : public CRGUIWindowBase
         void Update();
         void draw() override;
     public:
-        static CRLinksDialog * create( CRGUIWindowManager * wm, CRViewDialog * docwin );
+        static std::unique_ptr<CRLinksDialog> create(
+                CRGUIWindowManager * wm, CRViewDialog * docwin);
         CRLinksDialog( CRGUIWindowManager * wm, CRViewDialog * docwin );
         ~CRLinksDialog() override { }
         /// returns true if command is processed

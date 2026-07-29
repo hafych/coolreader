@@ -194,17 +194,18 @@ void CRLinksDialog::draw()
     }
 }
 
-CRLinksDialog * CRLinksDialog::create( CRGUIWindowManager * wm, CRViewDialog * docwin )
+std::unique_ptr<CRLinksDialog> CRLinksDialog::create(
+        CRGUIWindowManager * wm, CRViewDialog * docwin)
 {
     ldomXRangeList list;
     docwin->getDocView()->getCurrentPageLinks( list );
     int backSize = docwin->getDocView()->getNavigationHistory().backCount();
     int fwdSize = docwin->getDocView()->getNavigationHistory().forwardCount();
     if ( list.length()==0 && backSize==0 && fwdSize==0)
-        return NULL;
+        return {};
     docwin->getDocView()->clearImageCache();
     docwin->getDocView()->selectFirstPageLink();
-    return new CRLinksDialog( wm, docwin );
+    return std::make_unique<CRLinksDialog>(wm, docwin);
 }
 
 CRLinksDialog::CRLinksDialog( CRGUIWindowManager * wm, CRViewDialog * docwin )
