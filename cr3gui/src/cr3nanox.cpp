@@ -71,7 +71,7 @@
 static bool firstDocUpdate = true;
 
 
-status_info_t lastState = {0,0,0};
+status_info_t lastState = {};
 
 static char last_bookmark[2048]= {0};
 static int last_bookmark_page = 0;
@@ -118,6 +118,17 @@ int checkPowerState()
 #endif
     }
     return batteryState;
+}
+
+static bool updateNanoXBatteryState(LVDocView *docView)
+{
+    const int chargeLevel = checkPowerState();
+    if (chargeLevel < 0)
+        return false;
+    return docView->setBatteryState(
+            chargeLevel,
+            CR_BATTERY_CHARGER_NO,
+            chargeLevel);
 }
 
 #include <cri18n.h>
@@ -775,7 +786,9 @@ protected:
    DBusConnection *m_bus;               //bus name
 #endif
 public:
-    virtual bool getBatteryStatus( int & percent, bool & charging )
+    bool getBatteryStatus(
+            int & percent,
+            bool & charging ) override
     {
         charging = false;
         percent = checkPowerState();
@@ -789,10 +802,12 @@ public:
 
     
     /// translate string by key, return default value if not found
-    virtual lString16 translateString( const char * key, const char * defValue )
+    lString32 translateString(
+            const char * key,
+            const char * defValue ) override
     {
         CRLog::trace("Translate(%s)", key);
-        lString16 res;
+        lString32 res;
         //static char buf[2048];
         const char * res8 = NULL; //v3_callbacks->GetString( (char *)key );
         if ( res8 && res8[0] ) {
@@ -890,7 +905,7 @@ public:
 #endif
 
     /// idle actions
-    virtual void idle()
+    void idle() override
     {
         if ( !_stopFlag && getWindowCount()==1 && (main_win->getLastNavigationDirection()==1 || main_win->getLastNavigationDirection()==-1)) {
             CRLog::debug("Last command is page down: preparing next page for fast navigation");
@@ -900,7 +915,8 @@ public:
     }
 
     /// forward events from system queue to application queue
-    virtual void forwardSystemEvents( bool waitForEvent )
+    void forwardSystemEvents(
+            bool waitForEvent ) override
     {
         if ( _stopFlag )
             waitForEvent = false;
@@ -1069,22 +1085,10 @@ public:
     }
 
     // runs event loop
-    virtual int runEventLoop()
+    int runEventLoop() override
     {
         return CRGUIWindowManager::runEventLoop();
     }
-#if 0
-    bool doCommand( int cmd, int params )
-    {
-        if ( !onCommand( cmd, params ) )
-            return false;
-        if ( main_win!=NULL ) {
-            main_win->getDocView()->setBatteryState( checkPowerState() );
-        }
-        update( false );
-        return true;
-    }
-#endif
 };
 
 
@@ -1099,13 +1103,13 @@ public:
     {
         instance = this;
     }
-    virtual void closing()
+    void closing() override
     {
         strcpy( last_bookmark, GetCurrentPositionBookmark() );
         last_bookmark_page = CRJinkeDocView::instance->getDocView()->getCurPage();
         V3DocViewWin::closing();
     }
-    virtual ~CRJinkeDocView()
+    ~CRJinkeDocView() override
     {
         instance = NULL;
     }
@@ -1458,8 +1462,7 @@ int InitDoc(char *fileName)
 #endif
 
         LVDocView * _docview = main_win->getDocView();
-        _docview->setBatteryState( checkPowerState() );
-        //_docview->setBatteryState( ::getBatteryState() );
+        updateNanoXBatteryState(_docview);
         wm->activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument(
                     Utf8ToUnicode(lString8(fileName))) ) {

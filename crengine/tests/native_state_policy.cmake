@@ -6982,6 +6982,41 @@ require_source_text(
   "NanoX window managers must borrow an existing singleton screen"
 )
 require_source_text(
+  "${NANOX_SOURCE}"
+  "lString32 translateString("
+  "NanoX translations must implement the current Unicode-width contract"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "status_info_t lastState = {};"
+  "NanoX status snapshots must initialize every field"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "static bool updateNanoXBatteryState(LVDocView *docView)"
+  "NanoX battery updates must retain an explicit current-API adapter"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "return docView->setBatteryState("
+  "NanoX battery updates must use the current state tuple"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "virtual lString16 translateString"
+  "NanoX translations must not regress to the legacy Unicode width"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "setBatteryState( checkPowerState()"
+  "NanoX battery calls must not regress to the retired one-value API"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "setBatteryState( ::getBatteryState()"
+  "NanoX battery comments must not preserve the retired one-value API"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testGuiScreenOwnership()"
   "GUI screen ownership must retain native lifecycle coverage"
