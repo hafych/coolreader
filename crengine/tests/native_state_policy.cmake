@@ -6948,6 +6948,22 @@ forbid_source_text(
   "SET(EXTRA_LIBS Qt5::Core Qt5::Gui Qt5::Widgets \${STD_LIBS})"
   "the legacy Qt backend must not link standard libraries twice"
 )
+require_source_text(
+  "${LEGACY_GUI_CMAKE_SOURCE}"
+  "TARGET \${TARGET_NAME}
+            POST_BUILD"
+  "legacy GUI stripping must run after its target is built"
+)
+require_source_text(
+  "${LEGACY_GUI_CMAKE_SOURCE}"
+  "COMMAND \"\${CMAKE_STRIP}\" \"$<TARGET_FILE:\${TARGET_NAME}>\""
+  "legacy GUI stripping must resolve the built target path"
+)
+forbid_source_text(
+  "${LEGACY_GUI_CMAKE_SOURCE}"
+  "EXECUTE_PROCESS( COMMAND \${CMAKE_STRIP}"
+  "legacy GUI configuration must not strip targets before they exist"
+)
 forbid_source_text(
   "${LEGACY_GUI_CMAKE_SOURCE}"
   "FIND_PACKAGE( Qt4 REQUIRED )"
