@@ -83,6 +83,8 @@ DRM или ограничений доступа, подбор/получени�
   dialog/menu/about/search/number-input/TOC/recent-book/bookmark/citation
   selection text, on-screen keyboard layouts и T9 layout storage
   приведены к текущим `lString32`/UTF-32 контрактам.
+  Link-selection invalidation переведён с удалённого range geometry API
+  на текущую геометрию экрана без device-specific размеров.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,

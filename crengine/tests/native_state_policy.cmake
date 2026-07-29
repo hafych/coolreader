@@ -33,6 +33,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/bmkdlg.h" BOOKMARK_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/bmkdlg.cpp" BOOKMARK_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/citecore.h" CITE_SELECTION_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/citedlg.cpp" CITE_DIALOG_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.h" LINKS_DIALOG_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.cpp" LINKS_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7438,6 +7440,36 @@ forbid_source_text(
   "${CITE_DIALOG_SOURCE}"
   "lString16"
   "citation dialog implementations must not narrow text to UTF-16"
+)
+require_source_text(
+  "${LINKS_DIALOG_SOURCE}"
+  "_invalidateRect = _wm->getScreen()->getRect();"
+  "link selection invalidation must use current screen geometry"
+)
+require_source_text(
+  "${LINKS_DIALOG_HEADER}"
+  "bool onCommand( int command, int params ) override;"
+  "link dialog commands must retain an explicit override contract"
+)
+forbid_source_text(
+  "${LINKS_DIALOG_SOURCE}"
+  "link->getRect("
+  "link invalidation must not use the removed range geometry API"
+)
+forbid_source_text(
+  "${LINKS_DIALOG_SOURCE}"
+  "_invalidateRect.right = 600;"
+  "link invalidation must not retain device-specific screen widths"
+)
+forbid_source_text(
+  "${LINKS_DIALOG_HEADER}"
+  "_cursorPos"
+  "link dialogs must not retain unused cursor state"
+)
+forbid_source_text(
+  "${LINKS_DIALOG_HEADER}"
+  "_docwin"
+  "link dialogs must not retain unused window borrows"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

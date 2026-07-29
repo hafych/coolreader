@@ -208,7 +208,7 @@ CRLinksDialog * CRLinksDialog::create( CRGUIWindowManager * wm, CRViewDialog * d
 }
 
 CRLinksDialog::CRLinksDialog( CRGUIWindowManager * wm, CRViewDialog * docwin )
-: CRGUIWindowBase( wm ), _docwin(docwin), _docview(docwin->getDocView())
+: CRGUIWindowBase( wm ), _docview(docwin->getDocView())
 {
     _invalidateRect.left = 0;
     _invalidateRect.top = 0;
@@ -357,33 +357,7 @@ void CRLinksDialog::invalidateCurrentSelection()
         CRLog::debug("invalidateCurrentSelection() : no current page selection found!");
         return;
     }
-    lvRect rc;
-    if ( link->getRect( rc ) ) {
-        CRLog::debug("link docRect { %d, %d, %d, %d }", rc.left, rc.top, rc.right, rc.bottom);
-#if 1
-        _invalidateRect.left = 0;
-        _invalidateRect.top = 0;
-        _invalidateRect.right = _wm->getScreen()->getWidth();
-        _invalidateRect.bottom = _wm->getScreen()->getHeight();
-#else
-        lvPoint topLeft = rc.topLeft();
-        lvPoint bottomRight = rc.bottomRight();
-        if ( _docview->docToWindowPoint(topLeft) && _docview->docToWindowPoint(bottomRight) ) {
-            rc.left = topLeft.x;
-            rc.top = topLeft.y;
-            rc.right = bottomRight.x;
-            rc.bottom = bottomRight.y;
-            CRLog::debug("invalidating link screenRect { %d, %d, %d, %d }", rc.left, rc.top, rc.right, rc.bottom);
-            _invalidateRect = rc;
-        } else {
-            CRLog::debug("link rect conversion error: invalidating full screen");
-            _invalidateRect.left = 0;
-            _invalidateRect.top = 0;
-            _invalidateRect.right = 600;
-            _invalidateRect.bottom = 800;
-        }
-#endif
-    } else {
-        CRLog::debug("invalidateCurrentSelection() : getRect failed for link!");
-    }
+    _invalidateRect = _wm->getScreen()->getRect();
+    CRLog::debug(
+            "invalidateCurrentSelection() : invalidating selected link");
 }

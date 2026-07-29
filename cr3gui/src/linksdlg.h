@@ -36,8 +36,6 @@ class CRLinksDialog : public CRGUIWindowBase
         LINK = 2
     };
     protected:
-        int _cursorPos;
-        CRViewDialog * _docwin;
         LVDocView * _docview;
         lvRect _invalidateRect;
         int _additionalButtons[2];
@@ -52,14 +50,14 @@ class CRLinksDialog : public CRGUIWindowBase
         LVImageSourceRef _normalIcons[2];
         lvRect _iconRects[2];
     protected:
-        virtual void Update();
-        virtual void draw();
+        void Update();
+        void draw() override;
     public:
         static CRLinksDialog * create( CRGUIWindowManager * wm, CRViewDialog * docwin );
         CRLinksDialog( CRGUIWindowManager * wm, CRViewDialog * docwin );
-        virtual ~CRLinksDialog() { }
+        ~CRLinksDialog() override { }
         /// returns true if command is processed
-        virtual bool onCommand( int command, int params );
+        bool onCommand( int command, int params ) override;
         void invalidateCurrentSelection();
 };
 
