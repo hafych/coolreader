@@ -428,6 +428,15 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void fontFaceNavigationIsAStatelessPureBoundary() {
+		assertTrue(Modifier.isFinal(
+				FontFaceSwitcher.class.getModifiers()));
+		assertEquals(
+				0,
+				FontFaceSwitcher.class.getDeclaredFields().length);
+	}
+
+	@Test
 	public void gestureAccelerationIsReaderOwnedAndImmutable()
 			throws Exception {
 		Field acceleration =

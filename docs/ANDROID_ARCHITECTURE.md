@@ -175,6 +175,10 @@ active-animation reference rather than the nested class monitor shared by all
 Activities. `destroy()` always cancels both executors and clears pending
 animation state before native document teardown, including repeated or
 partially initialized teardown.
+Font-face next/previous commands delegate catalog navigation to the stateless
+`FontFaceSwitcher`. Empty native catalogs are a no-op, an unavailable current
+face starts at the directional edge, and known faces wrap safely after
+normalizing direction magnitude.
 
 Each `ReaderView` also owns its bitmap pool and `VMRuntimeHack`. The optional
 legacy VM reflection bindings are final, accounting is synchronized and uses a

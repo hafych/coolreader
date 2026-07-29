@@ -184,6 +184,9 @@ DRM или ограничений доступа, подбор/получени�
   animation handoff использует instance lock и volatile active reference вместо
   process-wide class monitor, а `destroy()` безусловно отменяет оба executor и
   очищает pending animation state до native teardown.
+  Font-face navigation вынесена в stateless `FontFaceSwitcher`: empty native
+  catalog даёт no-op, missing current начинает с directional edge, известные
+  значения корректно wrap, magnitude направления нормализуется без overflow.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

@@ -6419,21 +6419,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void switchFontFace(int direction) {
 		String currentFontFace = mSettings.getProperty(PROP_FONT_FACE, "");
-		String[] mFontFaces = Engine.getFontFaceList();
-		int index = 0;
-		int countFaces = mFontFaces.length;
-		for (int i = 0; i < countFaces; i++) {
-			if (mFontFaces[i].equals(currentFontFace)) {
-				index = i;
-				break;
-			}
-		}
-		index += direction;
-		if (index < 0)
-			index = countFaces - 1;
-		else if (index >= countFaces)
-			index = 0;
-		saveSetting(PROP_FONT_FACE, mFontFaces[index]);
+		String selected = FontFaceSwitcher.select(
+				currentFontFace,
+				Engine.getFontFaceList(),
+				direction);
+		if (selected == null)
+			return;
+		saveSetting(PROP_FONT_FACE, selected);
 		syncViewSettings(getSettings(), true, true);
 	}
 

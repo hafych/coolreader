@@ -83,6 +83,7 @@ BATTERY_STATUS = SOURCE / "crengine" / "BatteryStatus.java"
 READER_PROGRESS_STATE = (
     SOURCE / "crengine" / "ReaderProgressState.java"
 )
+FONT_FACE_SWITCHER = SOURCE / "crengine" / "FontFaceSwitcher.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
@@ -311,6 +312,18 @@ READER_PROGRESS_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderProgressStateTest.java"
+)
+FONT_FACE_SWITCHER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "FontFaceSwitcherTest.java"
 )
 ACTION_ICON_SET_TEST = (
     ROOT
@@ -1481,6 +1494,19 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} coordinates reader generations on "
             "the process-wide AnimationUpdate class monitor")
+    for marker in (
+        "FontFaceSwitcher.select(",
+        "if (selected == null)",
+        "saveSetting(PROP_FONT_FACE, selected)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits bounded font switcher "
+                f"marker: {marker}")
+    if "mFontFaces[index]" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} indexes the native font catalog "
+            "without an empty-list boundary")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(
@@ -1904,6 +1930,34 @@ def main() -> None:
         if marker not in reader_progress_test_text:
             violations.append(
                 f"{relative(READER_PROGRESS_STATE_TEST)} omits progress "
+                f"regression: {marker}")
+
+    font_switcher_text = FONT_FACE_SWITCHER.read_text(encoding="utf-8")
+    for marker in (
+        "final class FontFaceSwitcher",
+        "if (available == null || available.length == 0)",
+        "int step = Integer.compare(direction, 0)",
+        "if (currentIndex < 0)",
+        "Math.floorMod(currentIndex + step, available.length)",
+    ):
+        if marker not in font_switcher_text:
+            violations.append(
+                f"{relative(FONT_FACE_SWITCHER)} omits bounded font "
+                f"selection marker: {marker}")
+
+    font_switcher_test_text = FONT_FACE_SWITCHER_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "emptyAndMissingCatalogsAreNoOps",
+        "singletonAndZeroDirectionRemainStable",
+        "knownFaceMovesAndWrapsInBothDirections",
+        "unknownFaceStartsAtDirectionalEdge",
+        "directionMagnitudeCannotOverflowSelection",
+        "Integer.MIN_VALUE",
+    ):
+        if marker not in font_switcher_test_text:
+            violations.append(
+                f"{relative(FONT_FACE_SWITCHER_TEST)} omits font switch "
                 f"regression: {marker}")
 
     page_curve_tables_text = PAGE_CURVE_TABLES.read_text(encoding="utf-8")

@@ -398,6 +398,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Reader animation and GC schedulers are now generation-owned and canceled
   during every teardown. Animation updates no longer coordinate unrelated
   Activities through a class monitor or retain active state after destruction.
+- Reader font-face navigation now safely handles an empty native catalog and
+  an unavailable current face, while preserving next/previous wrap behavior.
 - Scroll-view animation frames now use fractional progress instead of truncated
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates
