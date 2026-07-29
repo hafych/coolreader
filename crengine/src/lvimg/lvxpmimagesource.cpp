@@ -21,76 +21,136 @@
 #include "lvxpmimagesource.h"
 #include "lvimagedecodercallback.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <sstream>
+
+namespace {
+
+const lUInt8 invalidColorIndex = 0xff;
+
+bool parseXpmColor(const char *value, lUInt32 &color)
+{
+    if (!value)
+        return false;
+    if (value[0] == '#') {
+        const std::size_t digitCount = std::strlen(value + 1);
+        if (digitCount != 6 && digitCount != 8)
+            return false;
+        errno = 0;
+        char *end = NULL;
+        const unsigned long parsed = std::strtoul(value + 1, &end, 16);
+        if (errno == ERANGE || !end || *end != '\0'
+                || parsed > std::numeric_limits<lUInt32>::max())
+            return false;
+        color = static_cast<lUInt32>(parsed);
+        return true;
+    }
+    if (!std::strcmp(value, "None"))
+        color = 0xFF000000;
+    else if (!std::strcmp(value, "Black"))
+        color = 0x000000;
+    else if (!std::strcmp(value, "White"))
+        color = 0xFFFFFF;
+    else
+        return false;
+    return true;
+}
+
+} // namespace
 
 LVXPMImageSource::LVXPMImageSource(const char **data)
     : _width(0), _height(0), _ncolors(0)
 {
-    bool err = false;
-    int charsperpixel;
-    if ( sscanf( data[0], "%d %d %d %d", &_width, &_height, &_ncolors, &charsperpixel )!=4 ) {
-        err = true;
-    } else if ( _width>0 && _width<255 && _height>0 && _height<255 && _ncolors>=2 && _ncolors<255 && charsperpixel == 1 ) {
-        _rows.resize(_height, std::vector<char>(_width));
-        for ( int i=0; i<_height; i++ ) {
-            memcpy( _rows[i].data(), data[i+1+_ncolors], _width );
-        }
-        
-        _palette.resize(_ncolors);
-        memset( _pchars, 0, 128 );
-        for ( int cl=0; cl<_ncolors; cl++ ) {
-            const char * src = data[1+cl];
-            _pchars[((unsigned)(*src++)) & 127] = cl;
-            if ( (*src++)!=' ' || (*src++)!='c' || (*src++)!=' ' ) {
-                err = true;
-                break;
-            }
-            if ( *src == '#' ) {
-                src++;
-                unsigned c;
-                if ( sscanf(src, "%x", &c) != 1 ) {
-                    err = true;
-                    break;
-                }
-                _palette[cl] = (lUInt32)c;
-            } else if ( !strcmp( src, "None" ) )
-                _palette[cl] = 0xFF000000;
-            else if ( !strcmp( src, "Black" ) )
-                _palette[cl] = 0x000000;
-            else if ( !strcmp( src, "White" ) )
-                _palette[cl] = 0xFFFFFF;
-            else
-                _palette[cl] = 0x000000;
-        }
-    } else {
-        err = true;
+    _pchars.fill(invalidColorIndex);
+    if (!data || !data[0])
+        return;
+
+    int width = 0;
+    int height = 0;
+    int colorCount = 0;
+    int charsPerPixel = 0;
+    std::istringstream header(data[0]);
+    if (!(header >> width >> height >> colorCount >> charsPerPixel))
+        return;
+    header >> std::ws;
+    if (!header.eof()
+            || width <= 0 || width >= 255
+            || height <= 0 || height >= 255
+            || colorCount < 2 || colorCount >= 255
+            || charsPerPixel != 1)
+        return;
+
+    std::vector<lUInt32> palette(colorCount);
+    std::array<lUInt8, 256> paletteIndexes;
+    paletteIndexes.fill(invalidColorIndex);
+    for (int color = 0; color < colorCount; color++) {
+        const char *line = data[1 + color];
+        if (!line || std::strlen(line) < 5
+                || line[1] != ' ' || line[2] != 'c' || line[3] != ' ')
+            return;
+        const unsigned char symbol =
+                static_cast<unsigned char>(line[0]);
+        if (paletteIndexes[symbol] != invalidColorIndex
+                || !parseXpmColor(line + 4, palette[color]))
+            return;
+        paletteIndexes[symbol] = static_cast<lUInt8>(color);
     }
-    if ( err ) {
-        _rows.clear();
-        _palette.clear();
-        _width = _height = 0;
+
+    std::vector<std::vector<char>> rows(
+            height, std::vector<char>(width));
+    for (int y = 0; y < height; y++) {
+        const char *line = data[1 + colorCount + y];
+        if (!line || std::strlen(line) < static_cast<std::size_t>(width))
+            return;
+        for (int x = 0; x < width; x++) {
+            const unsigned char symbol =
+                    static_cast<unsigned char>(line[x]);
+            if (paletteIndexes[symbol] == invalidColorIndex)
+                return;
+            rows[y][x] = line[x];
+        }
     }
+
+    _width = width;
+    _height = height;
+    _ncolors = colorCount;
+    _palette.swap(palette);
+    _rows.swap(rows);
+    _pchars = paletteIndexes;
 }
 
 LVXPMImageSource::~LVXPMImageSource() = default;
 
 bool LVXPMImageSource::Decode(LVImageDecoderCallback *callback)
 {
-    if ( callback )
-    {
-        callback->OnStartDecode(this);
-        std::vector<lUInt32> row(_width);
-        for (int i=0; i<_height; i++)
-        {
-            const char * src = _rows[i].data();
-            for ( int x=0; x<_width; x++ ) {
-                row[x] = _palette[_pchars[(unsigned)src[x]]];
+    if (_width <= 0 || _height <= 0
+            || _rows.size() != static_cast<std::size_t>(_height)
+            || _palette.size() != static_cast<std::size_t>(_ncolors))
+        return false;
+    if (!callback)
+        return true;
+
+    callback->OnStartDecode(this);
+    std::vector<lUInt32> row(_width);
+    for (int y = 0; y < _height; y++) {
+        const char *src = _rows[y].data();
+        for (int x = 0; x < _width; x++) {
+            const lUInt8 color =
+                    _pchars[static_cast<unsigned char>(src[x])];
+            if (color >= _palette.size()) {
+                callback->OnEndDecode(this, true);
+                return false;
             }
-            callback->OnLineDecoded(this, i, row.data());
+            row[x] = _palette[color];
         }
-        callback->OnEndDecode(this, false);
+        if (!callback->OnLineDecoded(this, y, row.data())) {
+            callback->OnEndDecode(this, true);
+            return false;
+        }
     }
+    callback->OnEndDecode(this, false);
     return true;
 }

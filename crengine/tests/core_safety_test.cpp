@@ -6153,6 +6153,43 @@ static int testImageSourceOwnership() {
     if (!LVCreateXPMImageSource(invalidXpm).isNull())
         return fail("XPM source accepted an invalid palette");
 
+    static const char *nullXpm[] = {NULL};
+    if (!LVCreateXPMImageSource(nullXpm).isNull())
+        return fail("XPM source accepted a null header");
+
+    static const char *shortXpm[] = {
+        "2 1 2 1",
+        "a c #000000",
+        "b c #ffffff",
+        ""
+    };
+    if (!LVCreateXPMImageSource(shortXpm).isNull())
+        return fail("XPM source accepted a truncated raster row");
+
+    static const char *unknownSymbolXpm[] = {
+        "2 1 2 1",
+        "a c #000000",
+        "b c #ffffff",
+        "ac"
+    };
+    if (!LVCreateXPMImageSource(unknownSymbolXpm).isNull())
+        return fail("XPM source accepted an undefined color symbol");
+
+    static const char *highByteXpm[] = {
+        "1 1 2 1",
+        "\x80 c #123456",
+        "a c #ffffff",
+        "\x80"
+    };
+    LVImageSourceRef highByteImage = LVCreateXPMImageSource(highByteXpm);
+    CountingImageDecodeCallback highByteCallback;
+    if (highByteImage.isNull()
+            || !highByteImage->Decode(&highByteCallback)
+            || highByteCallback.starts != 1
+            || highByteCallback.lines != 1
+            || highByteCallback.ends != 1)
+        return fail("XPM source rejected a bounded high-byte symbol");
+
     LVImageSourceRef dummy = LVCreateDummyImageSource(NULL, 3, 3);
     CountingImageDecodeCallback dummyCallback;
     if (!dummy->Decode(&dummyCallback) || !dummy->Decode(&dummyCallback))

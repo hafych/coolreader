@@ -23,6 +23,7 @@
 #define __LVXPMIMAGESOURCE_H_INCLUDED__
 
 #include "lvimagesource.h"
+#include <array>
 #include <vector>
 
 class LVXPMImageSource : public LVImageSource
@@ -30,7 +31,7 @@ class LVXPMImageSource : public LVImageSource
 protected:
     std::vector<std::vector<char>> _rows;
     std::vector<lUInt32> _palette;
-    lUInt8 _pchars[128];
+    std::array<lUInt8, 256> _pchars;
     int _width;
     int _height;
     int _ncolors;

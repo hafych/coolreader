@@ -3642,14 +3642,34 @@ require_source_text(
   "XPM palette must use RAII ownership"
 )
 require_source_text(
+  "${XPM_IMAGE_HEADER}"
+  "std::array<lUInt8, 256> _pchars"
+  "XPM color symbols must use a full-byte bounded map"
+)
+require_source_text(
   "${XPM_IMAGE_SOURCE}"
   "std::vector<lUInt32> row"
   "XPM output row must use RAII ownership"
 )
 require_source_text(
   "${XPM_IMAGE_SOURCE}"
-  "_rows.clear();"
-  "invalid XPM construction must release parsed rows"
+  "_rows.swap(rows);"
+  "XPM raster rows must publish transactionally"
+)
+require_source_text(
+  "${XPM_IMAGE_SOURCE}"
+  "std::strlen(line) < static_cast<std::size_t>(width)"
+  "XPM raster rows must be validated before copying"
+)
+require_source_text(
+  "${XPM_IMAGE_SOURCE}"
+  "paletteIndexes[symbol] == invalidColorIndex"
+  "XPM raster symbols must resolve to a declared color"
+)
+require_source_text(
+  "${XPM_IMAGE_SOURCE}"
+  "_pchars[static_cast<unsigned char>(src[x])]"
+  "XPM raster lookup must use a bounded unsigned-byte index"
 )
 forbid_source_text(
   "${XPM_IMAGE_SOURCE}"

@@ -138,7 +138,8 @@ DRM или ограничений доступа, подбор/получени�
   опасные raw pointers/ручные пары acquire-release на RAII.
   Выполнено: ownership для hyphenation registry/method и TeX pattern
   bucket/chain graphs, text-language/font-manager; временные буферы INI,
-  cache-file, SVG/GIF/XPM/image rows и bounded GIF record/sub-block/LZW
+  cache-file, SVG/GIF/XPM/image rows, bounded XPM header/palette/raster
+  parsing и bounded GIF record/sub-block/LZW
   bitstream/table/output parsing, palette validation и interlaced-frame row
   mapping,
   encoding autodetect/offline
