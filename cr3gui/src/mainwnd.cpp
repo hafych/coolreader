@@ -727,8 +727,11 @@ void V3DocViewWin::showSettingsMenu()
     _props = _docview->propsGetCurrent() | _props;
     _newProps = LVClonePropsContainer( _props );
     lvRect rc = _wm->getScreen()->getRect();
-    CRMenu * mainMenu = new CRSettingsMenu( _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont, getMenuAccelerators(), rc );
-    _wm->activateWindow( mainMenu );
+    std::unique_ptr<CRSettingsMenu> mainMenu =
+            std::make_unique<CRSettingsMenu>(
+                    _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont,
+                    getMenuAccelerators(), rc);
+    _wm->activateWindow(mainMenu.release());
 }
 
 void V3DocViewWin::showFontSizeMenu()
@@ -738,9 +741,13 @@ void V3DocViewWin::showFontSizeMenu()
     _props = _docview->propsGetCurrent() | _props;
     _newProps = LVClonePropsContainer( _props );
     lvRect rc = _wm->getScreen()->getRect();
-    CRSettingsMenu * mainMenu = new CRSettingsMenu( _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont, getMenuAccelerators(), rc );
-    CRMenu * menu = mainMenu->createFontSizeMenu( _wm, NULL, _newProps );
-    _wm->activateWindow( menu );
+    std::unique_ptr<CRSettingsMenu> menuFactory =
+            std::make_unique<CRSettingsMenu>(
+                    _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont,
+                    getMenuAccelerators(), rc);
+    std::unique_ptr<CRMenu> menu =
+            menuFactory->createFontSizeMenu(_wm, NULL, _newProps);
+    _wm->activateWindow(menu.release());
 }
 
 #if CR_INTERNAL_PAGE_ORIENTATION==1
@@ -751,9 +758,13 @@ void V3DocViewWin::showOrientationMenu()
     _props = _docview->propsGetCurrent() | _props;
     _newProps = LVClonePropsContainer( _props );
     lvRect rc = _wm->getScreen()->getRect();
-    CRSettingsMenu * mainMenu = new CRSettingsMenu( _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont, getMenuAccelerators(), rc );
-    CRMenu * menu = mainMenu->createOrientationMenu( NULL, _newProps );
-    _wm->activateWindow( menu );
+    std::unique_ptr<CRSettingsMenu> menuFactory =
+            std::make_unique<CRSettingsMenu>(
+                    _wm, _newProps, MCMD_SETTINGS_APPLY, menuFont,
+                    getMenuAccelerators(), rc);
+    std::unique_ptr<CRMenu> menu =
+            menuFactory->createOrientationMenu(NULL, _newProps);
+    _wm->activateWindow(menu.release());
 }
 #endif
 

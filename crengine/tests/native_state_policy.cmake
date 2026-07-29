@@ -8063,6 +8063,51 @@ forbid_source_text(
   "image-scaling child candidates must not begin as raw owners"
 )
 require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRSettingsMenu> mainMenu ="
+  "settings window candidates must enter scoped ownership"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "_wm->activateWindow(mainMenu.release());"
+  "settings windows must transfer explicitly to the legacy activation boundary"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRSettingsMenu> menuFactory ="
+  "quick-settings factories must remain scoped while building menus"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRMenu> menu ="
+  "quick-settings menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "_wm->activateWindow(menu.release());"
+  "quick-settings menus must transfer explicitly to the legacy activation boundary"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRMenu * mainMenu = new CRSettingsMenu"
+  "settings window candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRSettingsMenu * mainMenu = new CRSettingsMenu"
+  "quick-settings factories must not begin as raw owners"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRMenu * menu = mainMenu->createFontSizeMenu"
+  "font-size factory results must not regress to raw ownership"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRMenu * menu = mainMenu->createOrientationMenu"
+  "orientation factory results must not regress to raw ownership"
+)
+require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"
