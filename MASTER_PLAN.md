@@ -164,6 +164,10 @@ DRM или ограничений доступа, подбор/получени�
   Tap action routing и highlight bounds `ReaderView` теперь используют одну
   pure JVM-tested 3×3 geometry с совпадающими границами для некратных размеров,
   clamped coordinates, widened arithmetic и safe empty invalid-surface bounds.
+  Временное отключение E-Ink full refresh вынесено в synchronized
+  ReaderView-owned lease tracker: overlapping clients восстанавливают исходный
+  interval только после последнего matching release, а duplicate/unmatched
+  transitions и отрицательные vendor intervals обрабатываются без sentinel.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

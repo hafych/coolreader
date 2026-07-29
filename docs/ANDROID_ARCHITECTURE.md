@@ -144,6 +144,13 @@ Nook 1.2 creates its controller only from the current View host. Vendor
 methods, constructors, enum arrays and failure diagnostics are not retained in
 mutable process-wide fields.
 
+Temporary E-Ink full-refresh suppression is owned by one `ReaderView` through
+`EinkRefreshLeaseTracker`. The first unique client saves the controller
+interval, overlapping clients share the lease, and only the last matching
+release restores it. Duplicate or unmatched transitions are no-ops, and every
+integer interval—including negative vendor values—is preserved as data rather
+than overloaded as lifecycle state.
+
 Each `ReaderView` also owns its bitmap pool and `VMRuntimeHack`. The optional
 legacy VM reflection bindings are final, accounting is synchronized and uses a
 `long`, and failed vendor calls do not corrupt the local total. Bitmap memory

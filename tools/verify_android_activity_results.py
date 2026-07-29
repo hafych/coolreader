@@ -85,6 +85,9 @@ BITMAP_MEMORY_ACCOUNTING = (
 )
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 TAP_ZONE_GEOMETRY = SOURCE / "crengine" / "TapZoneGeometry.java"
+EINK_REFRESH_LEASE_TRACKER = (
+    SOURCE / "crengine" / "EinkRefreshLeaseTracker.java"
+)
 PAGE_CURVE_TABLES = SOURCE / "crengine" / "PageCurveTables.java"
 BACKLIGHT_OPTIONS = SOURCE / "crengine" / "BacklightOptions.java"
 BACKLIGHT_TIMEOUT_POLICY = (
@@ -120,6 +123,18 @@ TAP_ZONE_GEOMETRY_TEST = (
     / "coolreader"
     / "crengine"
     / "TapZoneGeometryTest.java"
+)
+EINK_REFRESH_LEASE_TRACKER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "EinkRefreshLeaseTrackerTest.java"
 )
 PAGE_CURVE_TABLES_TEST = (
     ROOT
@@ -1294,6 +1309,24 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} retains divergent tap-zone "
                 f"arithmetic: {legacy}")
+    for marker in (
+        "private final EinkRefreshLeaseTracker einkRefreshLeases",
+        "einkRefreshLeases.acquire(",
+        "einkRefreshLeases.release(",
+        "einkRefreshLeases.isActive()",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits E-Ink refresh lease owner: "
+                f"{marker}")
+    for legacy in (
+        "savedEinkUpdateInterval",
+        "einkModeClients",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains inline E-Ink refresh "
+                f"state: {legacy}")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(
@@ -1604,6 +1637,36 @@ def main() -> None:
             violations.append(
                 f"{relative(TAP_ZONE_GEOMETRY_TEST)} omits tap-zone "
                 f"regression: {marker}")
+
+    eink_lease_text = EINK_REFRESH_LEASE_TRACKER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class EinkRefreshLeaseTracker",
+        "private final Set<Integer> clients",
+        "private Integer savedInterval",
+        "synchronized boolean acquire(",
+        "synchronized Integer release(",
+        "synchronized boolean isActive()",
+        "if (!clients.remove(clientId) || !clients.isEmpty())",
+    ):
+        if marker not in eink_lease_text:
+            violations.append(
+                f"{relative(EINK_REFRESH_LEASE_TRACKER)} omits E-Ink "
+                f"lease marker: {marker}")
+
+    eink_lease_test_text = EINK_REFRESH_LEASE_TRACKER_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "firstAcquireDisablesAndLastReleaseRestores",
+        "overlappingClientsRestoreOnlyAfterLastRelease",
+        "duplicateAndUnmatchedTransitionsAreNoOps",
+        "negativeIntervalsAreValuesRatherThanSentinels",
+        "tracker.acquire(1, -1)",
+    ):
+        if marker not in eink_lease_test_text:
+            violations.append(
+                f"{relative(EINK_REFRESH_LEASE_TRACKER_TEST)} omits E-Ink "
+                f"lease regression: {marker}")
 
     page_curve_tables_text = PAGE_CURVE_TABLES.read_text(encoding="utf-8")
     for marker in (

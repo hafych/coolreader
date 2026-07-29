@@ -70,7 +70,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -5123,29 +5122,30 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private String currentProgressTitle = null;
 	private int currentCloudSyncProgressPosition = -1;
 
-	private int savedEinkUpdateInterval = -1;
-	private final HashSet<Integer> einkModeClients = new HashSet<Integer>();
+	private final EinkRefreshLeaseTracker einkRefreshLeases =
+			new EinkRefreshLeaseTracker();
 
 	private void requestDisableFullRefresh(int id) {
-		if (-1 == savedEinkUpdateInterval) {
-			savedEinkUpdateInterval = mEinkScreen.getUpdateInterval();
+		if (einkRefreshLeases.acquire(
+				id, mEinkScreen.getUpdateInterval())) {
 			// current e-ink screen update mode without full refresh
 			mEinkScreen.setupController(mEinkScreen.getUpdateMode(), 0, surface);
 		}
-		einkModeClients.add(id);
 	}
 
 	private void releaseDisableFullRefresh(int id) {
-		einkModeClients.remove(id);
-		if (einkModeClients.isEmpty()) {
+		Integer intervalToRestore = einkRefreshLeases.release(id);
+		if (intervalToRestore != null) {
 			// restore e-ink full screen refresh period
-			mEinkScreen.setupController(mEinkScreen.getUpdateMode(), savedEinkUpdateInterval, surface);
-			savedEinkUpdateInterval = -1;
+			mEinkScreen.setupController(
+					mEinkScreen.getUpdateMode(),
+					intervalToRestore,
+					surface);
 		}
 	}
 
 	private boolean inDisabledFullRefresh() {
-		return !einkModeClients.isEmpty();
+		return einkRefreshLeases.isActive();
 	}
 
 	private void showProgress(int position, int titleResource) {

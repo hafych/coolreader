@@ -228,6 +228,48 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void einkRefreshLeasesBelongToOneReader()
+			throws Exception {
+		Field owner =
+				ReaderView.class.getDeclaredField("einkRefreshLeases");
+		assertFalse(Modifier.isStatic(owner.getModifiers()));
+		assertTrue(Modifier.isPrivate(owner.getModifiers()));
+		assertTrue(Modifier.isFinal(owner.getModifiers()));
+
+		for (Field field :
+				EinkRefreshLeaseTracker.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			if (java.util.Set.class.isAssignableFrom(field.getType()))
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (String methodName : new String[]{
+				"acquire",
+				"release",
+				"isActive"}) {
+			Method method;
+			if (methodName.equals("acquire")) {
+				method = EinkRefreshLeaseTracker.class.getDeclaredMethod(
+						methodName, int.class, int.class);
+			} else if (methodName.equals("release")) {
+				method = EinkRefreshLeaseTracker.class.getDeclaredMethod(
+						methodName, int.class);
+			} else {
+				method = EinkRefreshLeaseTracker.class.getDeclaredMethod(
+						methodName);
+			}
+			assertTrue(Modifier.isSynchronized(method.getModifiers()));
+		}
+		for (Field field : ReaderView.class.getDeclaredFields()) {
+			assertFalse(
+					"ReaderView retains inline E-Ink lease state "
+							+ field.getName(),
+					field.getName().equals("savedEinkUpdateInterval")
+							|| field.getName().equals("einkModeClients"));
+		}
+	}
+
+	@Test
 	public void gestureAccelerationIsReaderOwnedAndImmutable()
 			throws Exception {
 		Field acceleration =
