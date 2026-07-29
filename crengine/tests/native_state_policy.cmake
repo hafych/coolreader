@@ -11863,6 +11863,31 @@ require_source_text(
   "FreeType color glyph scaling must borrow its scoped output"
 )
 require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "if (!slot || scale_mul <= 0 || scale_div <= 0)"
+  "FreeType color glyph scaling must validate its ratio contract"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "const lUInt64 scaledWidth"
+  "FreeType color glyph width arithmetic must use widened intermediates"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "const std::size_t copyBytes"
+  "FreeType color glyph copies must use checked byte counts"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "if (!scaled_bmp)\n                    return false"
+  "FreeType color glyph failure must precede metadata publication"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "new_bmp_pitch * new_h"
+  "FreeType color glyph copies must not use signed size arithmetic"
+)
+require_source_text(
   "${FREETYPE_FACE_HEADER}"
   "LVRunFreeTypeColorGlyphScaleOwnershipRegression()"
   "FreeType color glyph ownership must expose its native regression seam"

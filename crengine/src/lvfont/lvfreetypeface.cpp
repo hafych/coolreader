@@ -64,6 +64,7 @@
 #include FT_TRUETYPE_TABLES_H   // for FT_Get_Sfnt_Table()
 
 #include <cstdlib>
+#include <limits>
 #include <memory>
 
 #if defined(__MINGW32__)
@@ -405,48 +406,72 @@ struct SmoothScaledGlyphBufferDeleter {
 
 static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scale_div, bool onlyMetrics) {
     // Downscale glyph's bitmap & hack glyph slot to update metadata...
+    if (!slot || scale_mul <= 0 || scale_div <= 0)
+        return false;
     if (scale_mul == scale_div)
         return true;
     if (scale_mul > scale_div) {
         // Don't upscale, not enough memory in the slot...
         return false;
     }
-    bool res = true;
     if (FT_PIXEL_MODE_BGRA == slot->bitmap.pixel_mode ||
         FT_PIXEL_MODE_MONO == slot->bitmap.pixel_mode) {    // invisible glyph, only update metrics
         // Scale glyph bitmap
-        unsigned int new_h = scale_mul;     // new size
-        unsigned int new_w = scale_mul*slot->bitmap.width/scale_div;
-        int new_bmp_pitch = new_w*4;
+        const unsigned int new_h =
+                static_cast<unsigned int>(scale_mul);
+        const lUInt64 scaledWidth =
+                static_cast<lUInt64>(scale_mul)
+                * static_cast<lUInt64>(slot->bitmap.width)
+                / static_cast<lUInt64>(scale_div);
+        if (scaledWidth
+                > static_cast<lUInt64>(
+                        std::numeric_limits<int>::max() / 4))
+            return false;
+        const unsigned int new_w =
+                static_cast<unsigned int>(scaledWidth);
+        const int new_bmp_pitch =
+                static_cast<int>(new_w * 4U);
+        if ((slot->bitmap.width > 0
+                    && new_w > slot->bitmap.width)
+                || (slot->bitmap.rows > 0
+                    && new_h > slot->bitmap.rows))
+            return false;
+        const std::size_t unsignedPitch =
+                static_cast<std::size_t>(new_bmp_pitch);
+        if (new_h > 0
+                && unsignedPitch
+                        > std::numeric_limits<std::size_t>::max()
+                                / new_h)
+            return false;
+        const std::size_t copyBytes =
+                unsignedPitch * static_cast<std::size_t>(new_h);
         if (/*new_w < slot->bitmap.width &&*/ new_h < slot->bitmap.rows) {
             // need to downscale
-            if (!onlyMetrics) {
-                if (slot->bitmap.width > 0 && slot->bitmap.rows > 0 && slot->bitmap.buffer != NULL) {
-                    if (FT_PIXEL_MODE_BGRA == slot->bitmap.pixel_mode) {
-                        std::unique_ptr<
-                                lUInt8,
-                                SmoothScaledGlyphBufferDeleter> scaled_bmp(
-                                        CRe::qSmoothScaleImage(
-                                                slot->bitmap.buffer,
-                                                slot->bitmap.width,
-                                                slot->bitmap.rows,
-                                                false, new_w, new_h));
-                        // update bitmap
-                        if (scaled_bmp) {
-                            // We can safely overwrite bitmap since new bitmap is always is less than original
-                            memcpy(
-                                    slot->bitmap.buffer, scaled_bmp.get(),
-                                    new_bmp_pitch * new_h);
-                        } else {
-                            // downscale failed
-                            res = false;
-                        }
-                    }
-                }
+            if (!onlyMetrics
+                    && FT_PIXEL_MODE_BGRA
+                            == slot->bitmap.pixel_mode) {
+                if (slot->bitmap.width == 0
+                        || slot->bitmap.rows == 0
+                        || !slot->bitmap.buffer)
+                    return false;
+                std::unique_ptr<
+                        lUInt8,
+                        SmoothScaledGlyphBufferDeleter> scaled_bmp(
+                                CRe::qSmoothScaleImage(
+                                        slot->bitmap.buffer,
+                                        slot->bitmap.width,
+                                        slot->bitmap.rows,
+                                        false, new_w, new_h));
+                if (!scaled_bmp)
+                    return false;
+                // The validated downscale fits the original slot buffer.
+                memcpy(
+                        slot->bitmap.buffer, scaled_bmp.get(),
+                        copyBytes);
             }
         }
-        // update metrics regardless of the scaling result
-        // also for invisible glyphs (spaces, etc...)
+        // Publish layout and metrics only after pixel scaling succeeds.
+        // Invisible MONO glyphs and metrics-only calls need no pixel copy.
         slot->bitmap.pitch = slot->bitmap.pitch > 0 ? new_bmp_pitch : 0;
         slot->bitmap.width = slot->bitmap.width > 0 ? new_w : 0;
         slot->bitmap.rows = slot->bitmap.rows > 0 ? new_h : 0;
@@ -463,7 +488,7 @@ static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scal
         slot->advance.x = scale_mul*slot->advance.x/scale_div;
         slot->advance.y = scale_mul*slot->advance.y/scale_div;
     }
-    return res;
+    return true;
 }
 
 bool LVRunFreeTypeColorGlyphScaleOwnershipRegression()
@@ -523,6 +548,39 @@ bool LVRunFreeTypeColorGlyphScaleOwnershipRegression()
                 return false;
             }
         }
+    }
+
+    std::array<lUInt8, 4> rejectedPixels = {{1, 2, 3, 4}};
+    FT_GlyphSlotRec rejected = {};
+    rejected.bitmap.pixel_mode = FT_PIXEL_MODE_BGRA;
+    rejected.bitmap.width = 16385;
+    rejected.bitmap.rows = 2;
+    rejected.bitmap.pitch = 65540;
+    rejected.bitmap.buffer = rejectedPixels.data();
+    rejected.bitmap_left = 7;
+    rejected.bitmap_top = 9;
+    rejected.metrics.width = 640;
+    rejected.metrics.height = 768;
+    rejected.advance.x = 1024;
+    rejected.advance.y = 1280;
+    if (downScaleColorGlyphBitmap(
+                &rejected, 1, 2, false)
+            || rejected.bitmap.width != 16385
+            || rejected.bitmap.rows != 2
+            || rejected.bitmap.pitch != 65540
+            || rejected.bitmap_left != 7
+            || rejected.bitmap_top != 9
+            || rejected.metrics.width != 640
+            || rejected.metrics.height != 768
+            || rejected.advance.x != 1024
+            || rejected.advance.y != 1280
+            || rejectedPixels
+                    != std::array<lUInt8, 4>{{1, 2, 3, 4}}
+            || downScaleColorGlyphBitmap(
+                    NULL, 1, 2, false)
+            || downScaleColorGlyphBitmap(
+                    &rejected, 1, 0, false)) {
+        return false;
     }
     return true;
 }

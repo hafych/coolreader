@@ -922,8 +922,12 @@ Fixed-size FreeType color glyphs keep the temporary output from smooth scaling
 in an exclusive owner with the scaler's platform-specific deleter:
 `_aligned_free` for MinGW and `free` elsewhere. The glyph slot borrows that
 buffer only while copying the smaller BGRA image back into its existing
-storage. Native coverage repeats a synthetic 4-by-4 to 2-by-2 scale and checks
-both the copied solid-color pixels and every adjusted metric under sanitizers.
+storage. Ratio, width, pitch and copy-byte arithmetic is validated before
+scaling, and hidden upscaling is rejected. Bitmap layout and metrics publish
+only after the pixel transform succeeds, so a rejected scaler workspace leaves
+the entire slot unchanged. Native coverage repeats a synthetic 4-by-4 to 2-by-2
+scale, checks both the copied solid-color pixels and every adjusted metric, and
+verifies transactional rollback under sanitizers.
 
 The legacy bitmap-font loader treats its file and complete malloc-backed image
 as scoped candidates. It reads bytes with a byte-count contract, validates the
