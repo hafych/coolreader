@@ -660,18 +660,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private int isWarmBacklightControlFlick = 2;
 	private boolean isColdWarmBacklightControlTogether = false;
 	private boolean isTouchScreenEnabled = true;
-	//	private boolean isManualScrollActive = false;
-//	private boolean isBrightnessControlActive = false;
-//	private int manualScrollStartPosX = -1;
-//	private int manualScrollStartPosY = -1;
-//	volatile private boolean touchEventIgnoreNextUp = false;
-//	volatile private int longTouchId = 0;
-//	volatile private long currentDoubleTapActionStart = 0;
-//	private boolean selectionInProgress = false;
-//	private int selectionStartX = 0;
-//	private int selectionStartY = 0;
-//	private int selectionEndX = 0;
-//	private int selectionEndY = 0;
 	private boolean doubleTapSelectionEnabled = false;
 	private int mBounceTapInterval = 150;
 	private int mGesturePageFlipsPerFullSwipe;
