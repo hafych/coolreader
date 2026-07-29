@@ -97,6 +97,8 @@ DRM или ограничений доступа, подбор/получени�
   реальными SDK/header contracts; legacy Qt route переведён на Qt5 и добавлен
   в Linux Clang job вместе с `tinydict`. Modern Qt5/Qt6 link matrix использует
   imported targets на всех hosts без конфликтующего macOS fontconfig override.
+  Android NDK 27 build больше не конфликтует с системным `PAGE_SIZE`: локальная
+  константа размера страницы glyph-metric cache получила scoped имя.
   Границы массивов настроек modern Qt используют совместимые с Qt знаковые
   индексы; неиспользуемые параметры callback/event/slot реализаций удалены.
   Qt6 CI-сборка теперь также проходит общий Clang warning gate.
@@ -368,6 +370,13 @@ DRM или ограничений доступа, подбор/получени�
   replacement и close отменяют exact owner, destroy permanently закрывает его,
   а completion перерисовывает только исходную document/surface generation без
   recapture текущей книги через общий `redraw()`.
+  Полноэкранный image viewer теперь также принадлежит captured
+  book+interaction и synchronized `ReaderImageViewerState`: GUI-жесты и
+  Engine-render обмениваются только копиями `ImageInfo`, replacement/close
+  принимает только exact session, а stale render не публикует bitmap.
+  Закрытие native image сериализовано общей Engine queue; смена документа
+  закрывает viewer до ротации interaction, а destroy восстанавливает ориентацию,
+  permanently закрывает state и ставит native close до `DocView` teardown.
   Touch long/double timeouts используют отдельный closeable gate и reader
   scheduler; replacement/drag/`ACTION_CANCEL`/focus loss/book close/destroy
   отменяют exact owner, stale selection completion проверяет handler identity и

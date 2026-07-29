@@ -136,8 +136,8 @@ class LVFontGlyphUnsignedMetricCache
 {
 private:
     static const int COUNT = 360;
-    static const int PAGE_SIZE = 512;
-    typedef std::array<lUInt16, PAGE_SIZE> MetricPage;
+    static const int METRICS_PER_PAGE = 512;
+    typedef std::array<lUInt16, METRICS_PER_PAGE> MetricPage;
     std::array<std::unique_ptr<MetricPage>, COUNT> _pages;
 public:
     lUInt16 get( lChar32 ch )

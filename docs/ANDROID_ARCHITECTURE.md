@@ -144,6 +144,15 @@ invalidate
 the exact owner, while reader destruction closes it permanently. Completion
 revalidates the same request and draws through its captured identity instead
 of a generic redraw that could recapture a replacement book.
+The full-screen image viewer also captures its exact book and interaction.
+Mutable image geometry belongs to a synchronized `ReaderImageViewerState`;
+gesture updates and Engine renders cross the thread boundary only as copied
+`ImageInfo` snapshots, and replacement or finish can affect only the matching
+session. Native image close remains serialized on the Engine queue, while a
+stale render recycles its candidate instead of publishing it. Document
+replacement closes the viewer before rotating the interaction, and reader
+destruction restores the prior orientation, permanently closes the state, and
+queues native image cleanup before `DocView` teardown.
 Touch long-press and double-tap timeouts use a separate
 closeable gate plus reader-owned scheduler. Gesture replacement, drag-mode
 entry, `ACTION_CANCEL`, focus loss, book close and reader destruction cancel

@@ -2612,10 +2612,17 @@ def main() -> None:
         "stopTts();\n\t\tresetTemporaryViewMode();\n"
         "\t\ttimeTickLifecycle.cancel();\n"
         "\t\tif (cancelDocumentLoad)",
-        "stopTts();\n\t\tresetTemporaryViewMode();\n"
+        "stopTts();\n\t\tstopImageViewer();\n"
+        "\t\timageViewerState.close();\n"
+        "\t\tresetTemporaryViewMode();\n"
         "\t\treaderViewModeState.close();\n"
         "\t\tcancelDelayedReaderWork();",
-        "currentImageViewer.close(false)",
+        "viewer.close(false)",
+        "private final ReaderImageViewerState imageViewerState",
+        "private volatile ImageViewer currentImageViewer",
+        "imageViewerState.snapshot(session)",
+        "imageViewerState.finish(session)",
+        "imageViewerState.snapshotForBuffer(",
         "ReaderPageCacheClose.begin(",
         "private ReaderPageCacheClose<BitmapInfo>",
         "beginPageCacheClose()",
@@ -2896,12 +2903,19 @@ def main() -> None:
         image_publication_index = image_prepare_text.find(
             "mCurrentPageInfo = bi",
             image_validation_index)
+        image_session_validation_index = image_prepare_text.find(
+            "!isActive()",
+            image_render_index)
+        image_recycle_index = image_prepare_text.find(
+            "bi.recycle()",
+            image_render_index)
         if not (
-                "ImageInfo current = currentImage" in image_prepare_text
-                and "new ImageInfo(current)" in image_prepare_text
+                "imageViewerState.snapshotForBuffer(" in image_prepare_text
                 and image_render_index >= 0
+                and image_session_validation_index > image_render_index
                 and image_validation_index > image_render_index
-                and image_publication_index > image_validation_index):
+                and image_recycle_index > image_render_index
+                and image_publication_index > image_recycle_index):
             violations.append(
                 f"{relative(READER_VIEW)} does not snapshot and "
                 "revalidate an image-viewer bitmap before publication")

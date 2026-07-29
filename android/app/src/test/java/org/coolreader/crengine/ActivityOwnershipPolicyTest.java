@@ -428,6 +428,7 @@ public class ActivityOwnershipPolicyTest {
 				"resizeScheduler",
 				"positionSaveLifecycle",
 				"positionSaveScheduler",
+				"imageViewerState",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
 				"ttsInitializationLifecycle",
@@ -451,6 +452,36 @@ public class ActivityOwnershipPolicyTest {
 		assertFalse(Modifier.isStatic(animation.getModifiers()));
 		assertTrue(Modifier.isPrivate(animation.getModifiers()));
 		assertTrue(Modifier.isVolatile(animation.getModifiers()));
+		Field imageViewer =
+				ReaderView.class.getDeclaredField(
+						"currentImageViewer");
+		assertFalse(Modifier.isStatic(imageViewer.getModifiers()));
+		assertTrue(Modifier.isPrivate(imageViewer.getModifiers()));
+		assertTrue(Modifier.isVolatile(imageViewer.getModifiers()));
+		for (Field field :
+				ReaderImageViewerState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+		for (String methodName : new String[]{
+				"replace",
+				"isActive",
+				"snapshot",
+				"snapshotForBuffer",
+				"update",
+				"finish",
+				"close"}) {
+			for (Method method :
+					ReaderImageViewerState.class
+							.getDeclaredMethods()) {
+				if (method.getName().equals(methodName))
+					assertTrue(
+							methodName
+									+ " must serialize image session state",
+							Modifier.isSynchronized(
+									method.getModifiers()));
+			}
+		}
 		Class<?> viewAnimationBase = null;
 		Class<?> animationUpdate = null;
 		Class<?> autoScrollAnimation = null;

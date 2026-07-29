@@ -931,28 +931,45 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		mActivity.showToast(selectionModeActive ? R.string.action_toggle_selection_mode_on : R.string.action_toggle_selection_mode_off);
 	}
 
-	private ImageViewer currentImageViewer;
+	private final ReaderImageViewerState imageViewerState =
+			new ReaderImageViewerState();
+	private volatile ImageViewer currentImageViewer;
 
 	private class ImageViewer extends SimpleOnGestureListener {
-		private ImageInfo currentImage;
-		final GestureDetector detector;
-		int oldOrientation;
+		private final ReaderImageViewerState.Session session;
+		private final BookInfo expectedBook;
+		private final DocumentLoadLifecycle.Interaction interaction;
+		private final GestureDetector detector;
+		private final int oldOrientation;
 
-		public ImageViewer(ImageInfo image) {
-			lockOrientation();
+		ImageViewer(
+				ReaderImageViewerState.Session session,
+				BookInfo expectedBook,
+				DocumentLoadLifecycle.Interaction interaction) {
+			this.session = session;
+			this.expectedBook = expectedBook;
+			this.interaction = interaction;
+			oldOrientation = lockOrientation();
 			detector = new GestureDetector(this);
-			if (image.bufHeight / image.height >= 2 && image.bufWidth / image.width >= 2) {
+			ImageInfo image = imageViewerState.snapshot(session);
+			if (image == null)
+				return;
+			if (image.height > 0
+					&& image.width > 0
+					&& image.bufHeight / image.height >= 2
+					&& image.bufWidth / image.width >= 2) {
 				image.scaledHeight *= 2;
 				image.scaledWidth *= 2;
 			}
 			centerIfLessThanScreen(image);
-			currentImage = image;
+			imageViewerState.update(session, image);
 		}
 
-		private void lockOrientation() {
-			oldOrientation = mActivity.getScreenOrientation();
-			if (oldOrientation == 4)
+		private int lockOrientation() {
+			int orientation = mActivity.getScreenOrientation();
+			if (orientation == 4)
 				mActivity.setScreenOrientation(mActivity.getOrientationFromSensor());
+			return orientation;
 		}
 
 		private void unlockOrientation() {
@@ -983,16 +1000,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private void updateImage(ImageInfo image) {
+			if (!isActive())
+				return;
 			centerIfLessThanScreen(image);
 			fixScreenBounds(image);
-			if (!currentImage.equals(image)) {
-				currentImage = image;
-				drawPage();
-			}
+			if (imageViewerState.update(session, image))
+				drawPage(
+						null,
+						false,
+						ReaderRenderRequest.fromInteraction(
+								expectedBook, interaction));
 		}
 
 		public void zoomIn() {
-			ImageInfo image = new ImageInfo(currentImage);
+			ImageInfo image = imageViewerState.snapshot(session);
+			if (image == null || image.width <= 0 || image.height <= 0)
+				return;
 			if (image.scaledHeight >= image.height) {
 				int scale = image.scaledHeight / image.height;
 				if (scale < 4)
@@ -1010,7 +1033,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void zoomOut() {
-			ImageInfo image = new ImageInfo(currentImage);
+			ImageInfo image = imageViewerState.snapshot(session);
+			if (image == null || image.width <= 0 || image.height <= 0)
+				return;
 			if (image.scaledHeight > image.height) {
 				int scale = image.scaledHeight / image.height;
 				if (scale > 1)
@@ -1028,21 +1053,27 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public int getStep() {
-			ImageInfo image = currentImage;
+			ImageInfo image = imageViewerState.snapshot(session);
+			if (image == null)
+				return 0;
 			int max = image.bufHeight;
 			if (max < image.bufWidth)
 				max = image.bufWidth;
-			return max / 10;
+			return Math.max(1, max / 10);
 		}
 
 		public void moveBy(int dx, int dy) {
-			ImageInfo image = new ImageInfo(currentImage);
+			ImageInfo image = imageViewerState.snapshot(session);
+			if (image == null)
+				return;
 			image.x += dx;
 			image.y += dy;
 			updateImage(image);
 		}
 
 		public boolean onKeyDown(int keyCode, final KeyEvent event) {
+			if (!isActive())
+				return false;
 			if (keyCode == 0)
 				keyCode = event.getScanCode();
 			switch (keyCode) {
@@ -1074,6 +1105,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public boolean onKeyUp(int keyCode, final KeyEvent event) {
+			if (!isActive())
+				return false;
 			if (keyCode == 0)
 				keyCode = event.getScanCode();
 			switch (keyCode) {
@@ -1086,6 +1119,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public boolean onTouchEvent(MotionEvent event) {
+			if (!isActive())
+				return false;
 //			int aindex = event.getActionIndex();
 //			if (event.getAction() == MotionEvent.ACTION_POINTER_DOWN) {
 //				log.v("ACTION_POINTER_DOWN");
@@ -1114,7 +1149,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		@Override
 		public boolean onSingleTapConfirmed(MotionEvent e) {
 			log.v("onSingleTapConfirmed()");
-			ImageInfo image = new ImageInfo(currentImage);
+			ImageInfo image = imageViewerState.snapshot(session);
+			if (image == null)
+				return false;
 
 			int x = (int) e.getX();
 			int y = (int) e.getY();
@@ -1156,25 +1193,45 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private void close(boolean redraw) {
-			if (currentImageViewer == null)
+			if (!imageViewerState.finish(session))
 				return;
-			currentImageViewer = null;
+			if (currentImageViewer == this)
+				currentImageViewer = null;
 			unlockOrientation();
-			BackgroundThread.instance().postBackground(() -> doc.closeImage());
-			if (redraw)
-				drawPage();
+			post(new Task() {
+				@Override
+				public void work() {
+					BackgroundThread.ensureBackground();
+					if (readerNativeLifecycle.isInitialized())
+						doc.closeImage();
+				}
+
+				@Override
+				public void done() {
+					BackgroundThread.ensureGUI();
+					if (redraw)
+						drawPage(
+								null,
+								false,
+								ReaderRenderRequest.fromInteraction(
+										expectedBook,
+										interaction));
+				}
+			});
 		}
 
 		public BitmapInfo prepareImage(
 				ReaderRenderRequest renderRequest) {
 			// called from background thread
-			if (renderRequest != null
-					&& !isRenderRequestCurrent(renderRequest))
+			if (!isActive()
+					|| renderRequest != null
+							&& !isRenderRequestCurrent(renderRequest))
 				return null;
-			ImageInfo current = currentImage;
-			current.bufWidth = internalDX;
-			current.bufHeight = internalDY;
-			ImageInfo img = new ImageInfo(current);
+			ImageInfo img =
+					imageViewerState.snapshotForBuffer(
+							session, internalDX, internalDY);
+			if (img == null || !isActive())
+				return null;
 			if (mCurrentPageInfo != null) {
 				if (img.equals(mCurrentPageInfo.imageInfo)
 						&& (renderRequest == null
@@ -1190,9 +1247,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			bi.imageInfo = new ImageInfo(img);
 			bi.bitmap = factory.get(internalDX, internalDY);
 			bi.position = currpos;
-			doc.drawImage(bi.bitmap, bi.imageInfo);
-			if (renderRequest != null
-					&& !isRenderRequestCurrent(renderRequest)) {
+			if (!doc.drawImage(bi.bitmap, bi.imageInfo)
+					|| !isActive()
+					|| renderRequest != null
+							&& !isRenderRequestCurrent(renderRequest)) {
 				bi.recycle();
 				return null;
 			}
@@ -1203,20 +1261,49 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return mCurrentPageInfo;
 		}
 
+		private boolean isActive() {
+			return currentImageViewer == this
+					&& imageViewerState.isActive(session)
+					&& readerNativeLifecycle.isInitialized()
+					&& mOpened
+					&& isDocumentInteractionCurrent(
+							expectedBook, interaction);
+		}
 	}
 
-	private void startImageViewer(ImageInfo image) {
-		currentImageViewer = new ImageViewer(image);
-		drawPage();
+	private void startImageViewer(
+			ImageInfo image,
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (currentImageViewer != null
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return;
+		ReaderImageViewerState.Session session =
+				imageViewerState.replace(image);
+		if (session == null)
+			return;
+		ImageViewer viewer =
+				new ImageViewer(
+						session, expectedBook, interaction);
+		currentImageViewer = viewer;
+		drawPage(
+				null,
+				false,
+				ReaderRenderRequest.fromInteraction(
+						expectedBook, interaction));
 	}
 
 	private boolean isImageViewMode() {
-		return currentImageViewer != null;
+		ImageViewer viewer = currentImageViewer;
+		return viewer != null && viewer.isActive();
 	}
 
 	private void stopImageViewer() {
-		if (currentImageViewer != null)
-			currentImageViewer.close(false);
+		ImageViewer viewer = currentImageViewer;
+		if (viewer != null)
+			viewer.close(false);
 	}
 
 	private final CloseableTaskGate tapGestureLifecycle =
@@ -1434,7 +1521,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					if (link == null && image == null && bookmark == null) {
 						onAction(action);
 					} else if (image != null) {
-						startImageViewer(image);
+						startImageViewer(
+								image,
+								gestureBook,
+								gestureInteraction);
 					} else if (bookmark != null) {
 						showBookmarkEditDialog(
 								bookmark, false,
@@ -1539,7 +1629,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								bookmark);
 					if (image != null) {
 						cancel();
-						startImageViewer(image);
+						startImageViewer(
+								image,
+								gestureBook,
+								gestureInteraction);
 					} else if (bookmark != null) {
 						cancel();
 						showBookmarkEditDialog(
@@ -4364,6 +4457,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private DocumentLoadLifecycle.Request replaceDocumentLoad() {
 		BackgroundThread.ensureGUI();
 		stopTts();
+		stopImageViewer();
 		resetTemporaryViewMode();
 		timeTickLifecycle.cancel();
 		cancelPositionSave();
@@ -5317,10 +5411,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //			});
 		}
 
-		if (currentImageViewer != null) {
+		ImageViewer imageViewer = currentImageViewer;
+		if (imageViewer != null && imageViewer.isActive()) {
 			BitmapInfo image =
-					currentImageViewer.prepareImage(
-							renderRequest);
+					imageViewer.prepareImage(renderRequest);
 			return renderRequest == null
 					|| isRenderRequestCurrent(renderRequest)
 							? image
@@ -8472,6 +8566,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		log.i("ReaderView.destroy() is called");
 		closeSurfaceCallbacks();
 		stopTts();
+		stopImageViewer();
+		imageViewerState.close();
 		resetTemporaryViewMode();
 		readerViewModeState.close();
 		cancelDelayedReaderWork();
@@ -9246,8 +9342,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		mActivity.onUserActivity();
 
-		if (currentImageViewer != null)
-			return currentImageViewer.onKeyDown(keyCode, event);
+		ImageViewer imageViewer = currentImageViewer;
+		if (imageViewer != null && imageViewer.isActive())
+			return imageViewer.onKeyDown(keyCode, event);
 
 //		backKeyDownHere = false;
 		if (event.getRepeatCount() == 0) {
@@ -9359,8 +9456,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			keyCode = event.getScanCode();
 		mActivity.onUserActivity();
 		keyCode = translateKeyCode(keyCode);
-		if (currentImageViewer != null)
-			return currentImageViewer.onKeyUp(keyCode, event);
+		ImageViewer imageViewer = currentImageViewer;
+		if (imageViewer != null && imageViewer.isActive())
+			return imageViewer.onKeyUp(keyCode, event);
 		if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
 			if (isAutoScrollActive())
 				return true;
@@ -9457,8 +9555,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return true;
 		mActivity.onUserActivity();
 
-		if (currentImageViewer != null)
-			return currentImageViewer.onTouchEvent(event);
+		ImageViewer imageViewer = currentImageViewer;
+		if (imageViewer != null && imageViewer.isActive())
+			return imageViewer.onTouchEvent(event);
 
 		if (isAutoScrollActive()) {
 			//if (currentTapHandler != null && currentTapHandler.isInitialState()) {
