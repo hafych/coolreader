@@ -950,7 +950,8 @@ public class CoolReader extends BaseActivity {
 		} catch (IllegalArgumentException e) {
 			log.e("Failed to unregister receiver: " + e.toString());
 		}
-		mCoverpageManager.removeCoverpageReadyListener(mHomeFrame);
+		if (mHomeFrame != null)
+			mHomeFrame.onPause();
 		/*
 		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
@@ -1010,6 +1011,8 @@ public class CoolReader extends BaseActivity {
 
 		if (mReaderView != null)
 			mReaderView.onAppResume();
+		if (mHomeFrame != null)
+			mHomeFrame.onResume();
 		// ACTION_BATTERY_CHANGED: This is a sticky broadcast containing the charging state, level, and other information about the battery.
 		Intent intent = ContextCompat.registerReceiver(
 				this, batteryChangeReceiver,
@@ -1106,6 +1109,9 @@ public class CoolReader extends BaseActivity {
 
 		if (mHomeFrame == null) {
 			waitForCRDBService(() -> {
+				if (!mServiceLifecycle.isActive()
+						|| mDestroyed)
+					return;
 				mHistory.loadFromDB(getDB(), 200);
 
 				mHomeFrame = new CRRootView(
@@ -1114,7 +1120,8 @@ public class CoolReader extends BaseActivity {
 						mHistory,
 						mCoverpageManager,
 						mFileSystemFolders);
-				mCoverpageManager.addCoverpageReadyListener(mHomeFrame);
+				if (activityIsRunning)
+					mHomeFrame.onResume();
 				mHomeFrame.requestFocus();
 
 				showRootWindow();

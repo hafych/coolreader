@@ -36,6 +36,7 @@ import android.widget.TextView;
 import org.coolreader.CoolReader;
 import org.coolreader.R;
 import org.coolreader.crengine.CoverpageManager.CoverpageReadyListener;
+import org.coolreader.db.CRDBService;
 import org.coolreader.plugins.OnlineStorePluginManager;
 import org.coolreader.plugins.OnlineStoreWrapper;
 import org.coolreader.plugins.litres.LitresPlugin;
@@ -57,10 +58,14 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	private final History mHistory;
 	private final CoverpageManager mCoverpageManager;
 	private final FileSystemFolders mFileSystemFolders;
+	private final ServiceLifecycle mServiceLifecycle;
+	private final RootViewRefreshSession refreshSession =
+			new RootViewRefreshSession();
+	private final FileInfoChangeListener fileSystemFoldersListener;
 	private int coverWidth;
 	private int coverHeight;
 	private BookInfo currentBook;
-	private CoverpageReadyListener coverpageListener;
+	private boolean coverListenerRegistered;
 	public CRRootView(
 			CoolReader activity,
 			Scanner scanner,
@@ -73,6 +78,14 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 		this.mHistory = history;
 		this.mCoverpageManager = coverpageManager;
 		this.mFileSystemFolders = fileSystemFolders;
+		this.mServiceLifecycle =
+				activity.getServiceDependencies().getLifecycle();
+		this.fileSystemFoldersListener =
+				(object, onlyProperties) ->
+						BackgroundThread.instance().postGUI(
+								this::refreshFileSystemFolders);
+		this.mFileSystemFolders.addListener(
+				fileSystemFoldersListener);
 		this.setLayoutParams(new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT));
 
 
@@ -142,15 +155,34 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 
 	private InterfaceTheme lastTheme;
 	public void onThemeChange(InterfaceTheme theme) {
-		if (lastTheme != theme) {
+		if (!refreshSession.isClosed()
+				&& lastTheme != theme) {
 			lastTheme = theme;
 			createViews();
 		}
 	}
 	
+	public void onResume() {
+		if (refreshSession.isClosed()
+				|| coverListenerRegistered)
+			return;
+		mCoverpageManager.addCoverpageReadyListener(this);
+		coverListenerRegistered = true;
+	}
+
+	public void onPause() {
+		if (!coverListenerRegistered)
+			return;
+		mCoverpageManager.removeCoverpageReadyListener(this);
+		coverListenerRegistered = false;
+	}
+
 	public void onClose() {
-		this.mCoverpageManager.removeCoverpageReadyListener(coverpageListener);
-		coverpageListener = null;
+		if (!refreshSession.close())
+			return;
+		onPause();
+		mFileSystemFolders.removeListener(
+				fileSystemFoldersListener);
 		super.onDetachedFromWindow();
 	}
 
@@ -252,23 +284,92 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	}
 
 	public void refreshRecentBooks() {
-		BackgroundThread.instance().postGUI(() -> mActivity.waitForCRDBService(() -> {
-			if (mActivity.getDB() != null)
-				mHistory.getOrLoadRecentBooks(mActivity.getDB(), bookList -> {
-					updateCurrentBook(bookList != null && bookList.size() > 0 ? bookList.get(0) : null);
-					updateRecentBooks(bookList);
-				});
-		}));
+		RootViewRefreshSession.Request request =
+				refreshSession.replace(
+						RootViewRefreshSession.Channel.RECENT_BOOKS);
+		if (request == null)
+			return;
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !refreshSession.isActive(request))
+				return;
+			CRDBService.LocalBinder db = mActivity.getDB();
+			if (db == null) {
+				refreshSession.complete(request);
+				return;
+			}
+			mHistory.getOrLoadRecentBooks(db, bookList -> {
+				if (!mServiceLifecycle.isActive()
+						|| !refreshSession.complete(request))
+					return;
+				ArrayList<BookInfo> books =
+						bookList != null
+								? bookList
+								: new ArrayList<>();
+				updateCurrentBook(
+						books.isEmpty() ? null : books.get(0));
+				updateRecentBooks(books);
+			});
+		});
 	}
 
 	public void refreshOnlineCatalogs() {
-		mActivity.waitForCRDBService(() -> mActivity.getDB().loadOPDSCatalogs(this::updateOnlineCatalogs));
+		RootViewRefreshSession.Request request =
+				refreshSession.replace(
+						RootViewRefreshSession.Channel.ONLINE_CATALOGS);
+		if (request == null)
+			return;
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !refreshSession.isActive(request))
+				return;
+			CRDBService.LocalBinder db = mActivity.getDB();
+			if (db == null) {
+				refreshSession.complete(request);
+				return;
+			}
+			db.loadOPDSCatalogs(catalogs -> {
+				if (!mServiceLifecycle.isActive()
+						|| !refreshSession.complete(request))
+					return;
+				updateOnlineCatalogs(
+						catalogs != null
+								? new ArrayList<>(catalogs)
+								: new ArrayList<>());
+			});
+		});
 	}
 
-    public void refreshFileSystemFolders() {
-        ArrayList<FileInfo> folders = mFileSystemFolders.getFileSystemFolders();
-        updateFilesystems(folders);
-    }
+	public void refreshFileSystemFolders() {
+		RootViewRefreshSession.Request request =
+				refreshSession.replace(
+						RootViewRefreshSession.Channel.FILESYSTEM);
+		if (request == null)
+			return;
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !refreshSession.isActive(request))
+				return;
+			ArrayList<FileInfo> folders =
+					mFileSystemFolders.getFileSystemFolders();
+			if (refreshSession.complete(request))
+				updateFilesystems(folders);
+		});
+	}
+
+	private void refreshLibraryItems() {
+		RootViewRefreshSession.Request request =
+				refreshSession.replace(
+						RootViewRefreshSession.Channel.LIBRARY);
+		if (request == null)
+			return;
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !refreshSession.complete(request))
+				return;
+			updateLibraryItems(mScanner.getLibraryItems());
+		});
+	}
 
 	ArrayList<FileInfo> lastCatalogs = new ArrayList<>();
 	private void updateOnlineCatalogs(ArrayList<FileInfo> catalogs) {
@@ -509,6 +610,9 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	}
 	
 	private void createViews() {
+		if (refreshSession.isClosed())
+			return;
+		refreshSession.replaceView();
 		LayoutInflater inflater = LayoutInflater.from(mActivity);
 		View view = inflater.inflate(R.layout.root_window, null);
 		mView = (ViewGroup)view;
@@ -568,19 +672,15 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 
 		refreshRecentBooks();
 
-		// Must be initialized FileSystemFolders.favoriteFolders firstly to exclude NullPointerException.
-		mActivity.waitForCRDBService(() ->
-				mFileSystemFolders.loadFavoriteFolders(mActivity.getDB()));
+		// Render the current snapshot; first DB load notifies the stored listener.
+		refreshFileSystemFolders();
+		CRDBService.LocalBinder db = mActivity.getDB();
+		if (mServiceLifecycle.isActive() && db != null)
+			mFileSystemFolders.loadFavoriteFolders(db);
 
-        mFileSystemFolders.addListener((object, onlyProperties) ->
-				BackgroundThread.instance().postGUI(
-						this::refreshFileSystemFolders));
+		refreshOnlineCatalogs();
 
-		BackgroundThread.instance().postGUI(this::refreshOnlineCatalogs);
-
-		BackgroundThread.instance().postGUI(() -> {
-			updateLibraryItems(mScanner.getLibraryItems());
-		});
+		refreshLibraryItems();
 
 		removeAllViews();
 		addView(mView);
@@ -610,6 +710,9 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	}
 
 	public void onCoverpagesReady(ArrayList<CoverpageManager.ImageItem> files) {
+		if (!mServiceLifecycle.isActive()
+				|| refreshSession.isClosed())
+			return;
 		//invalidate();
 		log.d("CRRootView.onCoverpagesReady(" + files + ")");
 		CoverpageManager.invalidateChildImages(mView, files);

@@ -342,6 +342,19 @@ exactly once. Direct clicks and context-menu OPDS actions enter through the same
 navigation boundary, so a late feed cannot pull the browser back to an abandoned
 catalog. Browser close permanently closes the owner and unregisters the View
 from `History` and `Scanner` change sources.
+The home screen owns its refresh and listener lifecycle independently.
+`RootViewRefreshSession` gives recent books, online catalogs, filesystem
+folders and library shortcuts separate latest-only channels. Rebuilding the
+view for a theme change invalidates every request from the old `mView`, and a
+result must claim its exact channel request while the captured service
+generation is active before updating a shelf.
+`CRRootView` stores one `FileSystemFolders` listener for its whole lifetime
+instead of adding an anonymous listener on every rebuild, and removes it on
+close. The root view also owns idempotent cover-listener registration across
+resume, pause and close; `CoolReader` only forwards those lifecycle events.
+Activity destruction closes all refresh channels, while a delayed initial
+database bind checks service and Activity ownership before constructing home
+UI.
 Reader-mode options additionally capture the exact `BookInfo` and document
 interaction before fetching the native font catalog. The dialog receives an
 immutable `ReaderDocumentOptions` snapshot plus a narrow generation-aware

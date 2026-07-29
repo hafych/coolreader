@@ -388,6 +388,15 @@ DRM или ограничений доступа, подбор/получени�
   ровно один раз; direct и context-menu OPDS entry points проходят через тот же
   navigation boundary. Close также снимает browser с `History`/`Scanner`
   listeners, а last-directory сохраняется только при фактической смене owner.
+  Домашний `CRRootView` теперь владеет `RootViewRefreshSession` с независимыми
+  recent/online/filesystem/library каналами: повторный refresh и theme
+  recreation инвалидируют callbacks прежнего `mView`, а публикация требует
+  exact token и active service generation. `FileSystemFolders` listener
+  хранится в одном поле, регистрируется один раз и снимается на close вместо
+  накопления при каждой теме; cover listener симметрично и идемпотентно
+  принадлежит resume/pause/close самого root view. `CoolReader` больше не
+  управляет им напрямую и не создаёт home UI из позднего DB-bind callback после
+  destroy.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
