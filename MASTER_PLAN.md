@@ -174,6 +174,11 @@ DRM или ограничений доступа, подбор/получени�
   delayed unhighlight принадлежит cancelable reader scheduler и действует
   только на latest request, page/reload/close invalidation и destroy исключают
   stale callbacks.
+  Requested viewport и delayed native resize объединены в
+  `ViewportResizeState`: immutable volatile size snapshot заменяет parallel
+  width/height, exact latest request контролирует background apply и GUI done,
+  invalid dimensions получают positive fallback, owned scheduler заменяет
+  pending delay, а destroy закрывает state до native teardown.
   Временное отключение E-Ink full refresh вынесено в synchronized
   ReaderView-owned lease tracker: overlapping clients восстанавливают исходный
   interval только после последнего matching release, а duplicate/unmatched

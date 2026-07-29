@@ -390,6 +390,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   racing a numeric generation against a mutable rectangle. Replacements redraw
   both dirty zones, delayed unhighlight cannot hide a newer request, and reader
   reload/close cancel queued work while destruction closes it permanently.
+- Reader viewport resize now publishes one immutable width/height snapshot and
+  applies only the latest identity-owned request. Pending delays are replaced
+  through a reader-owned scheduler, stale GUI completion cannot redraw an old
+  size, and destruction rejects resize work before native teardown.
 - Temporary E-Ink full-refresh suppression now uses reader-owned client leases.
   Overlapping clients restore the saved interval exactly once, while duplicate
   or unmatched releases no longer restore an invalid sentinel interval.

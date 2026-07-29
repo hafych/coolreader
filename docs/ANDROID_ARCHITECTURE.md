@@ -133,6 +133,12 @@ so replacement redraws the complete dirty union. Delayed unhighlight uses a
 reader-owned cancelable scheduler and can hide only its latest request;
 animation/page/book invalidation clears the same owner, while `destroy()`
 closes it before native teardown.
+Requested viewport dimensions and delayed native resize ownership live in one
+`ViewportResizeState`. Its immutable volatile size snapshot replaces parallel
+width/height fields, while identity requests make latest-size-wins apply to
+both background resize and GUI completion. Invalid dimensions use a positive
+fallback, one reader-owned scheduler replaces pending delays, and destroy
+closes the state and removes the callback before native teardown.
 `PositionProperties` widens scrollable-height subtraction and percentage
 multiplication before clamping to its 0–10000 contract. Scroll movement uses the
 same widened range. The stateless `DocumentPositionPolicy` converts zero-based

@@ -182,6 +182,9 @@ TAP_ZONE_GEOMETRY = SOURCE / "crengine" / "TapZoneGeometry.java"
 TAP_HIGHLIGHT_STATE = (
     SOURCE / "crengine" / "TapHighlightState.java"
 )
+VIEWPORT_RESIZE_STATE = (
+    SOURCE / "crengine" / "ViewportResizeState.java"
+)
 POSITION_PROPERTIES = SOURCE / "crengine" / "PositionProperties.java"
 DOCUMENT_POSITION_POLICY = (
     SOURCE / "crengine" / "DocumentPositionPolicy.java"
@@ -243,6 +246,18 @@ TAP_HIGHLIGHT_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "TapHighlightStateTest.java"
+)
+VIEWPORT_RESIZE_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ViewportResizeStateTest.java"
 )
 POSITION_PROPERTIES_TEST = (
     ROOT
@@ -1974,6 +1989,8 @@ def main() -> None:
         "private final DelayedExecutor swapTaskScheduler",
         "private final TapHighlightState tapHighlightState",
         "private final DelayedExecutor tapHighlightScheduler",
+        "private final ViewportResizeState viewportResizeState",
+        "private final DelayedExecutor resizeScheduler",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -1986,6 +2003,8 @@ def main() -> None:
         "private void closeTapHighlight()",
         "tapHighlightState.close()",
         "tapHighlightScheduler.cancel()",
+        "viewportResizeState.close()",
+        "resizeScheduler.cancel()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -2003,6 +2022,11 @@ def main() -> None:
         "tapHighlightState.applyHide(hide)",
         "tapHighlightScheduler.postDelayed(",
         "drawTapHighlightTransition(transition)",
+        "viewportResizeState.request(width, height)",
+        "viewportResizeState.requestCurrent()",
+        "viewportResizeState.isCurrent(request)",
+        "viewportResizeState.complete(request)",
+        "resizeScheduler.postDelayed(task, delay)",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -2017,6 +2041,9 @@ def main() -> None:
         "currentSwapTask",
         "nextHiliteId",
         "hiliteRect",
+        "lastResizeTaskId",
+        "requestedWidth",
+        "requestedHeight",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",
     ):
@@ -2110,6 +2137,47 @@ def main() -> None:
             violations.append(
                 f"{relative(TAP_HIGHLIGHT_STATE_TEST)} omits tap "
                 f"highlight lifecycle regression: {marker}")
+
+    viewport_resize_state_text = VIEWPORT_RESIZE_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ViewportResizeState",
+        "private volatile Size size",
+        "private Request current",
+        "private boolean closed",
+        "synchronized Request request(int width, int height)",
+        "synchronized Request requestCurrent()",
+        "synchronized boolean isCurrent(Request request)",
+        "synchronized boolean complete(Request request)",
+        "synchronized boolean close()",
+        "private static Size normalizedSize(",
+        "static final class Request",
+        "private final Size size",
+        "static final class Size",
+        "private final int width",
+        "private final int height",
+    ):
+        if marker not in viewport_resize_state_text:
+            violations.append(
+                f"{relative(VIEWPORT_RESIZE_STATE)} omits immutable "
+                f"viewport resize marker: {marker}")
+
+    viewport_resize_state_test_text = (
+        VIEWPORT_RESIZE_STATE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "latestRequestWinsByIdentityWithItsOwnSize",
+        "currentSizeCanBeRescheduledWithoutParallelFields",
+        "invalidDimensionsUseStablePositiveFallbacks",
+        "completionClearsOnlyItsExactRequest",
+        "closePermanentlyRejectsQueuedAndNewRequests",
+        "Integer.MIN_VALUE",
+        "Integer.MAX_VALUE",
+    ):
+        if marker not in viewport_resize_state_test_text:
+            violations.append(
+                f"{relative(VIEWPORT_RESIZE_STATE_TEST)} omits viewport "
+                f"resize regression: {marker}")
     for marker in (
         "FontFaceSwitcher.select(",
         "if (selected == null)",

@@ -349,8 +349,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		return mActivity;
 	}
 
-	private int lastResizeTaskId = 0;
-
 	public boolean isBookLoaded() {
 		return mOpened;
 	}
@@ -3661,15 +3659,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		if (internalDX == 0 || internalDY == 0) {
-			if (requestedWidth > 0 && requestedHeight > 0) {
-				internalDX = requestedWidth;
-				internalDY = requestedHeight;
-				doc.resize(internalDX, internalDY);
-			} else {
-				internalDX = surface.getWidth();
-				internalDY = surface.getHeight();
-				doc.resize(internalDX, internalDY);
-			}
+			ViewportResizeState.Size requested =
+					viewportResizeState.size();
+			internalDX = requested.width();
+			internalDY = requested.height();
+			doc.resize(internalDX, internalDY);
 //			internalDX=200;
 //			internalDY=300;
 //			doc.resize(internalDX, internalDY);
@@ -3716,8 +3710,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			BitmapInfo bi = new BitmapInfo();
 			bi.position = currpos;
-			bi.bitmap = factory.get(internalDX > 0 ? internalDX : requestedWidth,
-					internalDY > 0 ? internalDY : requestedHeight);
+			ViewportResizeState.Size requested =
+					viewportResizeState.size();
+			bi.bitmap = factory.get(
+					internalDX > 0
+							? internalDX : requested.width(),
+					internalDY > 0
+							? internalDY : requested.height());
 			applyBatteryStatusToDocument();
 			doc.getPageImage(bi.bitmap);
 			mCurrentPageInfo = bi;
@@ -3861,8 +3860,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	//	private boolean mIsOnFront = false;
-	private int requestedWidth = 0;
-	private int requestedHeight = 0;
+	private final ViewportResizeState viewportResizeState =
+			new ViewportResizeState(100, 100);
+	private final DelayedExecutor resizeScheduler =
+			DelayedExecutor.createGUI("viewport-resize");
 //	public void setOnFront(boolean front) {
 //		if (mIsOnFront == front)
 //			return;
@@ -3877,33 +3878,39 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //	}
 
 	private void requestResize(int width, int height) {
-		requestedWidth = width;
-		requestedHeight = height;
-		if (requestedWidth <= 0)
-			requestedWidth = 80;
-		if (requestedHeight <= 0)
-			requestedHeight = 80;
-		checkSize();
+		scheduleResize(
+				viewportResizeState.request(width, height));
 	}
 
 	private void checkSize() {
-		boolean changed = (requestedWidth != internalDX) || (requestedHeight != internalDY);
-		if (!changed)
+		ViewportResizeState.Size requested =
+				viewportResizeState.size();
+		if (requested.width() == internalDX
+				&& requested.height() == internalDY)
 			return;
+		scheduleResize(viewportResizeState.requestCurrent());
+	}
+
+	private void scheduleResize(
+			ViewportResizeState.Request request) {
+		if (request == null)
+			return;
+		ViewportResizeState.Size requested = request.size();
+		if (requested.width() == internalDX
+				&& requested.height() == internalDY) {
+			viewportResizeState.complete(request);
+			return;
+		}
 		if (getActivity().isDialogActive()) {
 			log.d("checkSize() : dialog is active, skipping resize");
 			return;
 		}
-//		if (mIsOnFront || !mOpened) {
 		log.d("checkSize() : calling resize");
-		resize();
-//		} else {
-//			log.d("Skipping resize request");
-//		}
+		resize(request);
 	}
 
-	private void resize() {
-		final int thisId = ++lastResizeTaskId;
+	private void resize(
+			ViewportResizeState.Request request) {
 //	    if ( w<h && mActivity.isLandscape() ) {
 //	    	log.i("ignoring size change to portrait since landscape is set");
 //	    	return;
@@ -3915,19 +3922,21 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		// update size with delay: chance to avoid extra unnecessary resizing
 
 		Runnable task = () -> {
-			if (thisId != lastResizeTaskId) {
+			if (!viewportResizeState.isCurrent(request)) {
 				log.d("skipping duplicate resize request in GUI thread");
 				return;
 			}
 			post(new Task() {
 				public void work() {
 					BackgroundThread.ensureBackground();
-					if (thisId != lastResizeTaskId) {
+					if (!viewportResizeState.isCurrent(request)) {
 						log.d("skipping duplicate resize request");
 						return;
 					}
-					internalDX = requestedWidth;
-					internalDY = requestedHeight;
+					ViewportResizeState.Size requested =
+							request.size();
+					internalDX = requested.width();
+					internalDY = requested.height();
 					log.d("ResizeTask: resizeInternal(" + internalDX + "," + internalDY + ")");
 					doc.resize(internalDX, internalDY);
 //	    		        if ( mOpened ) {
@@ -3937,9 +3946,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 
 				public void done() {
+					if (!viewportResizeState.complete(request))
+						return;
 					clearImageCache();
 					drawPage(null, false);
 					//redraw();
+				}
+
+				@Override
+				public void fail(Exception e) {
+					viewportResizeState.complete(request);
+					super.fail(e);
 				}
 			});
 		};
@@ -3951,8 +3968,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			delay = 1000;
 
 		if (mOpened) {
-			log.d("scheduling delayed resize task id=" + thisId + " for " + delay + " ms");
-			BackgroundThread.instance().postGUI(task, delay);
+			log.d("scheduling delayed resize task for "
+					+ delay + " ms");
+			synchronized (viewportResizeState) {
+				if (viewportResizeState.isCurrent(request))
+					resizeScheduler.postDelayed(task, delay);
+			}
 		} else {
 			log.d("executing resize without delay");
 			task.run();
@@ -6242,6 +6263,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		gcTask.cancel();
 		closeSwapTasks();
 		closeTapHighlight();
+		synchronized (viewportResizeState) {
+			viewportResizeState.close();
+			resizeScheduler.cancel();
+		}
 		synchronized (autoScrollSessions) {
 			autoScrollSessions.close();
 			autoScrollScheduler.cancel();
@@ -6318,8 +6343,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		public void OnLoadFileEnd() {
 			log.d("readerCallback.OnLoadFileEnd");
 			if (internalDX == 0 && internalDY == 0) {
-				internalDX = requestedWidth;
-				internalDY = requestedHeight;
+				ViewportResizeState.Size requested =
+						viewportResizeState.size();
+				internalDX = requested.width();
+				internalDY = requested.height();
 				log.d("OnLoadFileEnd: resizeInternal(" + internalDX + "," + internalDY + ")");
 				doc.resize(internalDX, internalDY);
 			}
@@ -7094,11 +7121,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		this.mEinkScreen = activity.getEinkScreen();
 		surface.setFocusable(true);
 		surface.setFocusableInTouchMode(true);
-		// set initial size to exclude java.lang.IllegalArgumentException in Bitmap.createBitmap(0, 0)
-		// surface.getWidth() at this point return 0
-		requestedWidth = 100;
-		requestedHeight = 100;
-
 		BackgroundThread.instance().postBackground(() -> {
 			log.d("ReaderView - in background thread: calling createInternal()");
 			doc.create();

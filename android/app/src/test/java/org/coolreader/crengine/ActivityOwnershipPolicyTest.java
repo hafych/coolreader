@@ -420,7 +420,9 @@ public class ActivityOwnershipPolicyTest {
 				"swapTaskLifecycle",
 				"swapTaskScheduler",
 				"tapHighlightState",
-				"tapHighlightScheduler"}) {
+				"tapHighlightScheduler",
+				"viewportResizeState",
+				"resizeScheduler"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -451,6 +453,15 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains parallel highlight geometry",
 					field.getName().equals("hiliteRect"));
+			assertFalse(
+					"ReaderView retains numeric resize generations",
+					field.getName().equals("lastResizeTaskId"));
+			assertFalse(
+					"ReaderView retains parallel requested width",
+					field.getName().equals("requestedWidth"));
+			assertFalse(
+					"ReaderView retains parallel requested height",
+					field.getName().equals("requestedHeight"));
 		}
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
@@ -498,6 +509,30 @@ public class ActivityOwnershipPolicyTest {
 		}
 		for (Class<?> nested :
 				TapHighlightState.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				assertFalse(Modifier.isStatic(
+						field.getModifiers()));
+				assertTrue(Modifier.isPrivate(
+						field.getModifiers()));
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+			}
+		}
+		assertTrue(Modifier.isFinal(
+				ViewportResizeState.class.getModifiers()));
+		Field viewportSize =
+				ViewportResizeState.class.getDeclaredField("size");
+		assertTrue(Modifier.isPrivate(
+				viewportSize.getModifiers()));
+		assertTrue(Modifier.isVolatile(
+				viewportSize.getModifiers()));
+		for (Field field :
+				ViewportResizeState.class.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Class<?> nested :
+				ViewportResizeState.class.getDeclaredClasses()) {
 			for (Field field : nested.getDeclaredFields()) {
 				assertFalse(Modifier.isStatic(
 						field.getModifiers()));
