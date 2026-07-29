@@ -553,6 +553,21 @@ forbid_source_text(
   "the modern Qt view data must not return to manual deletion"
 )
 require_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "QPointer<QScrollBar> _scroll;"
+  "the modern Qt scrollbar borrow must remain lifetime-guarded"
+)
+require_source_text(
+  "${MODERN_QT_VIEW_SOURCE}"
+  "QObject::disconnect(_scroll, SIGNAL(valueChanged(int))"
+  "the modern Qt scrollbar replacement must detach its previous signal"
+)
+forbid_source_text(
+  "${MODERN_QT_VIEW_HEADER}"
+  "QScrollBar * _scroll;"
+  "the modern Qt scrollbar must not return to an unguarded raw borrow"
+)
+require_source_text(
   "${MODERN_QT_CMAKE_SOURCE}"
   "SET (EXTRA_LIBS \${STD_LIBS} Qt5::Core Qt5::Gui Qt5::Widgets )"
   "modern Qt5 builds must link imported targets on every host"

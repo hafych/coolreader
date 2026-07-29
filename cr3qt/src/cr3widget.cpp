@@ -333,7 +333,7 @@ static LVRefVec<LVImageSource>& getBatteryIcons( lUInt32 color )
 
 
 CR3View::CR3View( QWidget *parent)
-        : QWidget( parent, Qt::WindowFlags() ), _scroll(NULL), _propsCallback(NULL)
+        : QWidget( parent, Qt::WindowFlags() ), _scroll(nullptr), _propsCallback(NULL)
         , _normalCursor(Qt::ArrowCursor), _linkCursor(Qt::PointingHandCursor)
         , _selCursor(Qt::IBeamCursor), _waitCursor(Qt::WaitCursor)
         , _selecting(false), _selected(false), _editMode(false)
@@ -870,13 +870,19 @@ void CR3View::zoomOut()
 
 QScrollBar * CR3View::scrollBar() const
 {
-    return _scroll;
+    return _scroll.data();
 }
 
 void CR3View::setScrollBar( QScrollBar * scroll )
 {
+    if (_scroll.data() == scroll)
+        return;
+    if (_scroll) {
+        QObject::disconnect(_scroll, SIGNAL(valueChanged(int)),
+                            this, SLOT(scrollTo(int)));
+    }
     _scroll = scroll;
-    if ( _scroll!=NULL ) {
+    if (_scroll) {
         QObject::connect(_scroll, SIGNAL(valueChanged(int)),
                           this,  SLOT(scrollTo(int)));
     }

@@ -206,7 +206,8 @@ DRM или ограничений доступа, подбор/получени�
   row/control graphs, scoped export dialogs/callback restoration и transient
   context-menu/search-feedback widgets, guarded live search-dialog observer,
   close-time teardown для всех modeless dialogs, transactional bookmark-editor
-  publication, explicit history bookmark borrow и guarded document-view borrows,
+  publication, explicit history bookmark borrow, guarded document-view borrows
+  и replace-safe scrollbar observer,
   GUI window/event queue ownership и
   scoped accelerator/command-event/main-menu/recent/bookmark item
   publication candidates и lifecycle `CRDocViewWindow`, scoped page-image

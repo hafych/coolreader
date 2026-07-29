@@ -23,6 +23,7 @@
 #define CR3WIDGET_H
 
 #include <qwidget.h>
+#include <QPointer>
 #include <QScrollBar>
 #include <memory>
 #include "crqtutil.h"
@@ -196,7 +197,7 @@ class CR3View : public QWidget, public LVDocViewCallback
 #if WORD_SELECTOR_ENABLED==1
         std::unique_ptr<LVPageWordSelector> _wordSelector;
 #endif
-        QScrollBar * _scroll;
+        QPointer<QScrollBar> _scroll;
         qreal _dpr;  // screen display pixel ratio (for HiDPI screens)
         PropsChangeCallback * _propsCallback;
         QStringList _hyphDicts;
