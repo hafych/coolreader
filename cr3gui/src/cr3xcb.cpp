@@ -1379,8 +1379,8 @@ int main(int argc, char **argv)
         CRLog::error("connection has an error! exiting.");
     } else {
 
-        lString16 home = Utf8ToUnicode(lString8(( getenv("HOME") ) ));
-        lString16 homecrengine = home + "/.crengine/";
+        lString32 home = Utf8ToUnicode(lString8(( getenv("HOME") ) ));
+        lString32 homecrengine = home + U"/.crengine/";
 
         lString8 home8 = UnicodeToUtf8( homecrengine );
         const char * keymap_locations [] = {
@@ -1392,7 +1392,7 @@ int main(int argc, char **argv)
         };
         loadKeymaps( winman, keymap_locations );
 
-        if ( !winman.loadSkin(homecrengine + "skin") )
+        if ( !winman.loadSkin(homecrengine + U"skin") )
             if ( !winman.loadSkin(  lString16("/media/sd/crengine/skin") ) )
                 winman.loadSkin( lString16("/usr/share/cr3/skins/default") );
         {
@@ -1429,38 +1429,38 @@ int main(int argc, char **argv)
     #define SEPARATE_INI_FILES
 
         CRLog::trace("choosing init file...");
-        const lChar16 * ini_fname = L"cr3.ini";
+        lString32 iniFileName(U"cr3.ini");
     #ifdef SEPARATE_INI_FILES
         if ( strstr(fname, ".txt")!=NULL || strstr(fname, ".tcr")!=NULL) {
-            ini_fname = L"cr3-txt.ini";
+            iniFileName = U"cr3-txt.ini";
         } else if ( strstr(fname, ".rtf")!=NULL ) {
-            ini_fname = L"cr3-rtf.ini";
+            iniFileName = U"cr3-rtf.ini";
         } else if ( strstr(fname, ".htm")!=NULL ) {
-            ini_fname = L"cr3-htm.ini";
+            iniFileName = U"cr3-htm.ini";
         } else if ( strstr(fname, ".epub")!=NULL ) {
-            ini_fname = L"cr3-epub.ini";
+            iniFileName = U"cr3-epub.ini";
         } else {
-            ini_fname = L"cr3-fb2.ini";
+            iniFileName = U"cr3-fb2.ini";
         }
     #endif
-        const lChar16 * dirs[] = {
-            L"/media/sd/crengine/",
+        const lChar32 * dirs[] = {
+            U"/media/sd/crengine/",
             homecrengine.c_str(),
             NULL
         };
         int i;
         CRLog::debug("Loading settings...");
-        lString16 ini;
+        lString32 ini;
         for ( i=0; dirs[i]; i++ ) {
-            ini = lString16(dirs[i]) + ini_fname;
+            ini = lString32(dirs[i]) + iniFileName;
             if ( main_win->loadSettings( ini ) ) {
                 break;
             }
         }
         CRLog::debug("settings at %s", UnicodeToUtf8(ini).c_str() );
-        lString16 hist;
+        lString32 hist;
         for ( i=0; dirs[i]; i++ ) {
-            hist = lString16(dirs[i]) + "cr3hist.bmk";
+            hist = lString32(dirs[i]) + U"cr3hist.bmk";
             if ( main_win->loadHistory( hist ) ) {
                 break;
             }

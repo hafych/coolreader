@@ -2396,31 +2396,31 @@ int InitDoc(const char *exename, char *fileName)
         }
     }
 
-    const lChar16 * ini_fname = L"cr3.ini";
+    lString32 iniFileName(U"cr3.ini");
 #ifdef SEPARATE_INI_FILES
     if ( strstr(fileName, ".txt")!=NULL || strstr(fileName, ".tcr")!=NULL) {
-        ini_fname = L"cr3-txt.ini";
+        iniFileName = U"cr3-txt.ini";
         cssFileName = U"txt.css";
     } else if ( strstr(fileName, ".rtf")!=NULL ) {
-        ini_fname = L"cr3-rtf.ini";
+        iniFileName = U"cr3-rtf.ini";
         cssFileName = U"rtf.css";
     } else if ( strstr(fileName, ".htm")!=NULL ) {
-        ini_fname = L"cr3-htm.ini";
+        iniFileName = U"cr3-htm.ini";
         cssFileName = U"htm.css";
     } else if ( strstr(fileName, ".epub")!=NULL ) {
-        ini_fname = L"cr3-epub.ini";
+        iniFileName = U"cr3-epub.ini";
         cssFileName = U"epub.css";
     } else if ( strstr(fileName, ".doc")!=NULL ) {
-        ini_fname = L"cr3-doc.ini";
+        iniFileName = U"cr3-doc.ini";
         cssFileName = U"doc.css";
     } else if ( strstr(fileName, ".chm")!=NULL ) {
-        ini_fname = L"cr3-chm.ini";
+        iniFileName = U"cr3-chm.ini";
         cssFileName = U"chm.css";
     } else if ( strstr(fileName, ".pdb")!=NULL ) {
-        ini_fname = L"cr3-txt.ini";
+        iniFileName = U"cr3-txt.ini";
         cssFileName = U"txt.css";
     } else {
-        ini_fname = L"cr3-fb2.ini";
+        iniFileName = U"cr3-fb2.ini";
         cssFileName = U"fb2.css";
     }
 #endif
@@ -2487,17 +2487,15 @@ int InitDoc(const char *exename, char *fileName)
         main_win->setBookmarkDir(
                 Utf8ToUnicode(lString8(FLASHDIR"/cr3_notes/")));
         CRLog::trace("choosing init file...");
-        static const lChar16 * dirs[] = {
-            L""CONFIGPATH"/cr3/",
-            L""USERDATA2"/share/cr3/",
-            L""USERDATA"/share/cr3/",
-            L""CONFIGPATH"/cr3/",
-            NULL
-        };
+        lString32Collection dirs;
+        dirs.add(Utf8ToUnicode(lString8(CONFIGPATH"/cr3/")));
+        dirs.add(Utf8ToUnicode(lString8(USERDATA2"/share/cr3/")));
+        dirs.add(Utf8ToUnicode(lString8(USERDATA"/share/cr3/")));
+        dirs.add(Utf8ToUnicode(lString8(CONFIGPATH"/cr3/")));
         CRLog::debug("Loading settings...");
-        lString16 ini;
-        for (int i = 0; dirs[i]; i++ ) {
-            ini = lString16(dirs[i]) + ini_fname;
+        lString32 ini;
+        for (int i = 0; i < dirs.length(); i++ ) {
+            ini = dirs[i] + iniFileName;
             if ( main_win->loadSettings( ini ) ) {
                 break;
             }

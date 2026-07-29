@@ -7233,9 +7233,39 @@ forbid_source_text(
   "main windows must not expose a legacy settings-save path adapter"
 )
 forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadSettings( lString16"
+  "main windows must not expose a legacy settings-load path adapter"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadSettings(lString16"
+  "main windows must not expose a compact legacy settings-load path adapter"
+)
+forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "saveSettings(lString16"
   "GUI platform settings-save callers must use current-width paths"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadSettings( lString16"
+  "GUI platform settings-load callers must use current-width paths"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadSettings(lString16"
+  "GUI platform settings-load callers must not use compact legacy adapters"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "lString16 ini;"
+  "GUI platform settings paths must use the current string width"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "ini_fname"
+  "GUI platform settings filenames must use the current string width"
 )
 forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
