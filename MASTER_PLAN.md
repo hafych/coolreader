@@ -142,6 +142,7 @@ DRM или ограничений доступа, подбор/получени�
   parsing и bounded GIF record/sub-block/LZW
   bitstream/table/output parsing, palette validation и interlaced-frame row
   mapping, normalized/clamped alpha-transform arithmetic,
+  SVG/PNG/JPEG/GIF callback cancellation и exception-safe C-library teardown,
   alpha/stretch-transform callback borrow/lifecycle и stretch row
   storage/downscaling, dummy/draw-buffer cancellation и null-buffer factory,
   encoding autodetect/offline

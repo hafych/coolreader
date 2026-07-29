@@ -104,7 +104,11 @@ bool LVGifFrame::Draw(LVImageDecoderCallback *callback)
                     line[x + m_left] = pColorTable[color];
             }
         }
-        callback->OnLineDecoded(m_pImage, y, line.data());
+        if (!callback->OnLineDecoded(
+                    m_pImage, y, line.data())) {
+            callback->OnEndDecode(m_pImage, true);
+            return false;
+        }
     }
     callback->OnEndDecode(m_pImage, false);
     return true;

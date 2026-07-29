@@ -203,6 +203,7 @@ int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int /*buf_size*/, LVI
                 callback->OnStartDecode(this);
                 const unsigned char *src = pixels.data();
                 std::vector<lUInt32> row(_width);
+                bool accepted = true;
                 for (int y=0; y<_height; y++) {
                     size_t px_count = _width;
                     lUInt32 * dst = row.data();
@@ -214,10 +215,14 @@ int LVSvgImageSource::DecodeFromBuffer(unsigned char *buf, int /*buf_size*/, LVI
                         cl ^= 0xFF000000;
                         *dst++ = ((cl<<16)&0x00FF0000) | ((cl>>16)&0x000000FF) | (cl&0xFF00FF00);
                     }
-                    callback->OnLineDecoded( this, y, row.data() );
+                    if (!callback->OnLineDecoded(
+                                this, y, row.data())) {
+                        accepted = false;
+                        break;
+                    }
                 }
-                callback->OnEndDecode(this, false);
-                res = true;
+                callback->OnEndDecode(this, !accepted);
+                res = accepted;
             }
         }
     }

@@ -219,20 +219,26 @@ standard RAII containers. Parsed NanoSVG images and rasterizers have
 `unique_ptr` owners with library deleters, while bounded RGBA vectors cover
 decode and PNG-conversion scratch. These operation-scoped resources cannot
 outlive their call, including when a decode callback throws. The PNG byte
-result remains the public raw ownership-transfer boundary for callers.
+result remains the public raw ownership-transfer boundary for callers. SVG
+row publication stops at the first downstream cancellation and reports an
+error completion before its scoped raster workspace unwinds.
 
 The GIF decoder owns input, color-table, compressed-stream, decoded-frame and
 output-row storage through `std::vector`. A decoded frame has automatic
 operation scope; the unused raw frame array and its mismatched scalar deletion
-were removed. Repeated decode and invalid-dimension paths are covered by the
-native ownership regression.
+were removed. Row cancellation closes the callback with an error and returns
+failure from the frame and outer decoder; callback exceptions unwind all frame
+owners automatically. Repeated decode and invalid-dimension paths are covered
+by the native ownership regression.
 
 The PNG decoder keeps pixel storage and row-pointer views in member
 `std::vector` containers because libpng reports fatal decode errors with
 `longjmp`. The members survive that C error boundary and are released on both
 success and failure. A separate started flag ensures `OnEndDecode(errors=true)`
 is emitted only after `OnStartDecode()`, including repeated truncated-IDAT
-failures.
+failures. Cancellation and C++ callback exceptions destroy the libpng structs
+and clear both member buffers before control reaches downstream code; a later
+decode can reuse the source.
 
 The JPEG decoder installs its `setjmp` boundary before decompressor creation.
 Its source manager and input bytes use libjpeg's permanent pool, while the
@@ -240,6 +246,8 @@ scanline and converted output row use the image pool; all are released by
 `jpeg_destroy_decompress()` on success or fatal `longjmp`. Member lifecycle
 flags make partial decompressor teardown and `OnEndDecode(errors=true)`
 explicit, and successful decoding completes with `jpeg_finish_decompress()`.
+Cancellation or a C++ callback exception destroys the active pool before
+returning or rethrowing, and completion callbacks run only after that teardown.
 
 The stream image factory keeps its selected PNG, JPEG, GIF, SVG or dummy
 decoder in a `unique_ptr` through header decode and dimension-budget

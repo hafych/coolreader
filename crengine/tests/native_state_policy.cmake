@@ -3216,6 +3216,16 @@ require_source_text(
   "SVG callback unwind did not release its workspace"
   "SVG regression must retain exceptional callback-unwind coverage"
 )
+require_source_text(
+  "${SVG_IMAGE_SOURCE}"
+  "callback->OnEndDecode(this, !accepted)"
+  "SVG cancellation must close its callback lifecycle"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "SVG decoder ignored callback cancellation"
+  "SVG cancellation must retain native regression coverage"
+)
 forbid_source_text(
   "${SVG_IMAGE_SOURCE}"
   "malloc("
@@ -3267,6 +3277,21 @@ require_source_text(
   "${GIF_FRAME_SOURCE}"
   "std::vector<lUInt32> line"
   "GIF output row must use RAII ownership"
+)
+require_source_text(
+  "${GIF_FRAME_SOURCE}"
+  "callback->OnEndDecode(m_pImage, true)"
+  "GIF cancellation must close its callback lifecycle"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GIF decoder ignored callback cancellation"
+  "GIF cancellation must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GIF callback exception escaped frame cleanup"
+  "GIF callback exceptions must retain native regression coverage"
 )
 forbid_source_text(
   "${GIF_IMAGE_HEADER}"
@@ -3392,8 +3417,13 @@ require_source_text(
 )
 require_source_text(
   "${PNG_IMAGE_SOURCE}"
-  "if (callback && _decodeStarted)"
+  "const bool notifyCallback"
   "PNG error teardown must follow a started callback lifecycle"
+)
+require_source_text(
+  "${PNG_IMAGE_SOURCE}"
+  "if (!accepted)"
+  "PNG row publication must honor downstream cancellation"
 )
 require_source_text(
   "${PNG_IMAGE_SOURCE}"
@@ -3414,6 +3444,16 @@ forbid_source_text(
   "${PNG_IMAGE_SOURCE}"
   "free(image)"
   "PNG error cleanup must remain automatic"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "PNG decoder ignored callback cancellation"
+  "PNG cancellation must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "PNG callback exception escaped decoder cleanup"
+  "PNG callback exceptions must retain native regression coverage"
 )
 
 # --- JPEG decoder: libjpeg-pool ownership across longjmp ---
@@ -3449,8 +3489,13 @@ require_source_text(
 )
 require_source_text(
   "${JPEG_IMAGE_SOURCE}"
-  "if (callback && _decodeStarted)"
+  "const bool notifyCallback"
   "JPEG error teardown must follow a started callback lifecycle"
+)
+require_source_text(
+  "${JPEG_IMAGE_SOURCE}"
+  "if (!accepted)"
+  "JPEG row publication must honor downstream cancellation"
 )
 string(FIND "${JPEG_IMAGE_SOURCE}"
   "if (setjmp(jerr.setjmp_buffer))" JPEG_SETJMP_POSITION)
@@ -3480,6 +3525,16 @@ forbid_source_text(
   "${JPEG_IMAGE_SOURCE}"
   "new lUInt32"
   "JPEG converted rows must remain pool-managed"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "JPEG decoder ignored callback cancellation"
+  "JPEG cancellation must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "JPEG callback exception escaped pool cleanup"
+  "JPEG callback exceptions must retain native regression coverage"
 )
 forbid_source_text(
   "${JPEG_IMAGE_SOURCE}"

@@ -94,10 +94,12 @@ bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
         _width = 0;
         _height = 0;
         clearDecodeBuffers();
-        if (callback && _decodeStarted)
-            callback->OnEndDecode(this, true); // error!
+        const bool notifyCallback =
+                callback && _decodeStarted;
         _decodeStarted = false;
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        if (notifyCallback)
+            callback->OnEndDecode(this, true);
         return false;
     }
 
@@ -119,7 +121,14 @@ bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
     if ( callback )
     {
         _decodeStarted = true;
-        callback->OnStartDecode(this);
+        try {
+            callback->OnStartDecode(this);
+        } catch (...) {
+            _decodeStarted = false;
+            png_destroy_read_struct(
+                    &png_ptr, &info_ptr, NULL);
+            throw;
+        }
 
         //int png_transforms = PNG_TRANSFORM_STRIP_16 | PNG_TRANSFORM_INVERT_ALPHA;
             //PNG_TRANSFORM_PACKING|
@@ -180,15 +189,40 @@ bool LVPngImageSource::Decode( LVImageDecoderCallback * callback )
         for (size_t y = 0; y < height; y++)
             _decodeRows[y] = _decodePixels.data() + y * rowbytes;
         png_read_image(png_ptr, _decodeRows.data());
-        for (lUInt32 y = 0; y < height; y++)
-            callback->OnLineDecoded(
-                    this, y, reinterpret_cast<lUInt32 *>(_decodeRows[y]));
+        bool accepted = true;
+        try {
+            for (lUInt32 y = 0; y < height; y++) {
+                if (!callback->OnLineDecoded(
+                            this, y,
+                            reinterpret_cast<lUInt32 *>(
+                                    _decodeRows[y]))) {
+                    accepted = false;
+                    break;
+                }
+            }
+        } catch (...) {
+            clearDecodeBuffers();
+            _decodeStarted = false;
+            png_destroy_read_struct(
+                    &png_ptr, &info_ptr, NULL);
+            throw;
+        }
+        if (!accepted) {
+            clearDecodeBuffers();
+            _decodeStarted = false;
+            png_destroy_read_struct(
+                    &png_ptr, &info_ptr, NULL);
+            callback->OnEndDecode(this, true);
+            return false;
+        }
         png_read_end(png_ptr, info_ptr);
 
-        res = true;
-        callback->OnEndDecode(this, false);
         _decodeStarted = false;
         clearDecodeBuffers();
+        png_destroy_read_struct(
+                &png_ptr, &info_ptr, NULL);
+        callback->OnEndDecode(this, false);
+        return true;
     } else {
         res = true;
     }

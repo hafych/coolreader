@@ -310,13 +310,15 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
          */
         _width = 0;
         _height = 0;
-        if (callback && _decodeStarted)
-            callback->OnEndDecode(this, true);
+        const bool notifyCallback =
+                callback && _decodeStarted;
         _decodeStarted = false;
         CRLog::debug("JPEG decoder cleanup");
         if (_decompressCreated)
             jpeg_destroy_decompress(&cinfo);
         _decompressCreated = false;
+        if (notifyCallback)
+            callback->OnEndDecode(this, true);
         return false;
     }
 
@@ -344,7 +346,14 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
     if ( callback )
     {
         _decodeStarted = true;
-        callback->OnStartDecode(this);
+        try {
+            callback->OnStartDecode(this);
+        } catch (...) {
+            _decodeStarted = false;
+            jpeg_destroy_decompress(&cinfo);
+            _decompressCreated = false;
+            throw;
+        }
         /* Step 4: set parameters for decompression */
         
         /* In this example, we don't need to change any of the defaults set by
@@ -388,11 +397,30 @@ bool LVJpegImageSource::Decode(LVImageDecoderCallback *callback)
                 row[x] = (((lUInt32)p[0])<<16) | (((lUInt32)p[1])<<8) | (((lUInt32)p[2])<<0);
                 p += 3;
             }
-            callback->OnLineDecoded( this, y, row );
+            bool accepted = false;
+            try {
+                accepted = callback->OnLineDecoded(
+                        this, y, row);
+            } catch (...) {
+                _decodeStarted = false;
+                jpeg_destroy_decompress(&cinfo);
+                _decompressCreated = false;
+                throw;
+            }
+            if (!accepted) {
+                _decodeStarted = false;
+                jpeg_destroy_decompress(&cinfo);
+                _decompressCreated = false;
+                callback->OnEndDecode(this, true);
+                return false;
+            }
         }
         (void) jpeg_finish_decompress(&cinfo);
-        callback->OnEndDecode(this, false);
         _decodeStarted = false;
+        jpeg_destroy_decompress(&cinfo);
+        _decompressCreated = false;
+        callback->OnEndDecode(this, false);
+        return true;
     }
 
     jpeg_destroy_decompress(&cinfo);

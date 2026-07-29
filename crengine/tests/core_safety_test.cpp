@@ -5389,6 +5389,25 @@ public:
     }
 };
 
+class ThrowingLineImageDecodeCallback
+        : public LVImageDecoderCallback {
+public:
+    void OnStartDecode(LVImageSource *) override
+    {
+    }
+
+    bool OnLineDecoded(
+            LVImageSource *, int, lUInt32 *) override
+    {
+        throw std::runtime_error(
+                "blocked image output row");
+    }
+
+    void OnEndDecode(LVImageSource *, bool) override
+    {
+    }
+};
+
 #if (USE_LIBJPEG==1)
 static std::vector<unsigned char> buildJpegFixture() {
     static const int width = 128;
@@ -5524,6 +5543,26 @@ static int testJpegDecoderOwnership() {
     if (callback.starts != 2 || callback.lines != 256
             || callback.ends != 2 || callback.errorEnds != 0)
         return fail("JPEG decoder callback lifecycle is incomplete");
+    RejectingImageDecodeCallback rejectingCallback;
+    if (image->Decode(&rejectingCallback)
+            || rejectingCallback.starts != 1
+            || rejectingCallback.lines != 1
+            || rejectingCallback.errorEnds != 1)
+        return fail("JPEG decoder ignored callback cancellation");
+    bool callbackThrew = false;
+    try {
+        ThrowingLineImageDecodeCallback throwingCallback;
+        image->Decode(&throwingCallback);
+    } catch (const std::runtime_error &) {
+        callbackThrew = true;
+    }
+    CountingImageDecodeCallback recoveredCallback;
+    if (!callbackThrew
+            || !image->Decode(&recoveredCallback)
+            || recoveredCallback.starts != 1
+            || recoveredCallback.lines != 128
+            || recoveredCallback.ends != 1)
+        return fail("JPEG callback exception escaped pool cleanup");
 
     LVJpegImageSource failing(
             NULL, LVStreamRef(new FailingJpegStream(jpeg)));
@@ -5565,6 +5604,26 @@ static int testPngDecoderOwnership() {
     if (callback.starts != 2 || callback.lines != 2
             || callback.ends != 2 || callback.errorEnds != 0)
         return fail("PNG decoder callback lifecycle is incomplete");
+    RejectingImageDecodeCallback rejectingCallback;
+    if (image->Decode(&rejectingCallback)
+            || rejectingCallback.starts != 1
+            || rejectingCallback.lines != 1
+            || rejectingCallback.errorEnds != 1)
+        return fail("PNG decoder ignored callback cancellation");
+    bool callbackThrew = false;
+    try {
+        ThrowingLineImageDecodeCallback throwingCallback;
+        image->Decode(&throwingCallback);
+    } catch (const std::runtime_error &) {
+        callbackThrew = true;
+    }
+    CountingImageDecodeCallback recoveredCallback;
+    if (!callbackThrew
+            || !image->Decode(&recoveredCallback)
+            || recoveredCallback.starts != 1
+            || recoveredCallback.lines != 1
+            || recoveredCallback.ends != 1)
+        return fail("PNG callback exception escaped decoder cleanup");
 
     static const std::size_t factoryRejectedSize = 4;
     if (!LVCreateStreamImageSource(
@@ -5654,6 +5713,26 @@ static int testGifDecoderOwnership() {
         return fail("GIF decoder could not reuse its owned buffers");
     if (callback.starts != 2 || callback.lines != 2 || callback.ends != 2)
         return fail("GIF decoder callback lifecycle is incomplete");
+    RejectingImageDecodeCallback rejectingCallback;
+    if (image->Decode(&rejectingCallback)
+            || rejectingCallback.starts != 1
+            || rejectingCallback.lines != 1
+            || rejectingCallback.errorEnds != 1)
+        return fail("GIF decoder ignored callback cancellation");
+    bool callbackThrew = false;
+    try {
+        ThrowingLineImageDecodeCallback throwingCallback;
+        image->Decode(&throwingCallback);
+    } catch (const std::runtime_error &) {
+        callbackThrew = true;
+    }
+    CountingImageDecodeCallback recoveredCallback;
+    if (!callbackThrew
+            || !image->Decode(&recoveredCallback)
+            || recoveredCallback.starts != 1
+            || recoveredCallback.lines != 1
+            || recoveredCallback.ends != 1)
+        return fail("GIF callback exception escaped frame cleanup");
 
     unsigned char invalidGif[32] = {
         'G', 'I', 'F', '8', '9', 'a'
@@ -5794,9 +5873,15 @@ static int testSvgDecoderOwnership() {
     CountingImageDecodeCallback callback;
     if (!image->Decode(&callback))
         return fail("SVG decoder did not rasterize its owned workspace");
+    RejectingImageDecodeCallback rejectingCallback;
+    if (image->Decode(&rejectingCallback)
+            || rejectingCallback.starts != 1
+            || rejectingCallback.lines != 1
+            || rejectingCallback.errorEnds != 1)
+        return fail("SVG decoder ignored callback cancellation");
     bool callbackThrew = false;
     try {
-        ThrowingImageDecodeCallback throwingCallback;
+        ThrowingLineImageDecodeCallback throwingCallback;
         image->Decode(&throwingCallback);
     } catch (const std::runtime_error &) {
         callbackThrew = true;
