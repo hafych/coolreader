@@ -18,13 +18,22 @@ class TemporaryFile
     std::string path;
 
 public:
-    TemporaryFile()
+    explicit TemporaryFile(const char *suffix = nullptr)
     {
         char candidate[] = "/tmp/coolreader-tinydict-XXXXXX";
         int descriptor = mkstemp(candidate);
         if (descriptor >= 0) {
             close(descriptor);
             path = candidate;
+            if (suffix && *suffix) {
+                std::string renamed = path + suffix;
+                if (std::rename(path.c_str(), renamed.c_str()) != 0) {
+                    unlink(path.c_str());
+                    path.clear();
+                } else {
+                    path = renamed;
+                }
+            }
         }
     }
 
@@ -181,7 +190,7 @@ static int testCompressedChunkOwnership()
     if (!makeDictZip(article, chunkLength, compressed))
         return fail("could not build the dictzip regression fixture");
 
-    TemporaryFile indexFile;
+    TemporaryFile indexFile(".index");
     TemporaryFile dataFile;
     TemporaryFile truncatedFile;
     if (!indexFile.valid() || !dataFile.valid()
@@ -214,6 +223,12 @@ static int testCompressedChunkOwnership()
     TinyDictionary dictionary;
     if (!dictionary.open(indexFile.c_str(), dataFile.c_str()))
         return fail("could not open a valid chunked dictionary");
+    std::string expectedName(indexFile.c_str());
+    expectedName.erase(0, expectedName.find_last_of("/\\") + 1);
+    expectedName.resize(expectedName.find_last_of('.'));
+    if (!dictionary.getDictionaryName()
+            || expectedName != dictionary.getDictionaryName())
+        return fail("dictionary name did not retain value ownership");
     std::unique_ptr<TinyDictWordList> words(dictionary.find("hello"));
     if (!words || words->length() != 1)
         return fail("chunked dictionary index lookup failed");
@@ -235,9 +250,39 @@ static int testCompressedChunkOwnership()
     if (!writeFile(truncatedFile.c_str(),
                 compressed.data(), compressed.size()))
         return fail("could not write the truncated dictzip fixture");
-    TinyDictionary truncated;
-    if (truncated.open(indexFile.c_str(), truncatedFile.c_str()))
+    if (dictionary.open(indexFile.c_str(), truncatedFile.c_str()))
         return fail("truncated chunked dictionary was accepted");
+
+    std::unique_ptr<TinyDictWordList> retainedWords(
+            dictionary.find("hello"));
+    const char *retainedArticle = retainedWords
+            ? retainedWords->getArticle(0) : nullptr;
+    if (!retainedArticle
+            || std::strcmp(retainedArticle, article.c_str()) != 0)
+        return fail("failed reopen replaced the working dictionary graph");
+    if (!dictionary.getDictionaryName()
+            || expectedName != dictionary.getDictionaryName())
+        return fail("failed reopen replaced the dictionary name");
+
+    TinyDictionaryList dictionaries;
+    if (dictionaries.add(indexFile.c_str(), truncatedFile.c_str())
+            || dictionaries.length() != 0)
+        return fail("dictionary list adopted a failed candidate");
+    if (!dictionaries.add(indexFile.c_str(), dataFile.c_str())
+            || dictionaries.length() != 1)
+        return fail("dictionary list did not adopt a valid candidate");
+    TinyDictResultList results;
+    if (!dictionaries.find(results, "hello")
+            || results.length() != 1 || !results.get(0))
+        return fail("dictionary result graph lookup failed");
+    const char *listedArticle = results.get(0)->getArticle(0);
+    if (!listedArticle
+            || std::strcmp(listedArticle, article.c_str()) != 0)
+        return fail("dictionary result graph lost its article owner");
+    results.clear();
+    dictionaries.clear();
+    if (results.length() != 0 || dictionaries.length() != 0)
+        return fail("dictionary owner graphs did not clear");
     return 0;
 }
 

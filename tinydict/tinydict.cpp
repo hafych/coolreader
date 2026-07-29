@@ -19,71 +19,64 @@
  *   MA 02110-1301, USA.                                                   *
  ***************************************************************************/
 
-#include <stdlib.h>
 #include "tinydict.h"
 
+#include <cstring>
 #include <limits>
+#include <utility>
 #include <vector>
 
 /// add word to list
 void TinyDictWordList::add( TinyDictWord * word )
 {
-    if ( count>=size ) {
-        size = size ? size * 2 : 32;
-        list = (TinyDictWord **)realloc( list, sizeof(TinyDictWord *) * size );
-    }
-    list[ count++ ] = word;
+    if ( word )
+        list.emplace_back(word);
 }
 
 /// clear list
 void TinyDictWordList::clear()
 {
-    if ( list ) {
-        for ( int i=0; i<count; i++ )
-            delete list[i];
-        free( list );
-        list = NULL;
-        count = size = 0;
-    }
+    list.clear();
 }
 
 /// empty list constructor
-TinyDictWordList::TinyDictWordList() : dict(NULL), list(NULL), size(0), count(0) { }
+TinyDictWordList::TinyDictWordList() : dict(NULL) { }
 
 /// destructor
-TinyDictWordList::~TinyDictWordList() { clear(); }
+TinyDictWordList::~TinyDictWordList() = default;
 
 
 ///
+struct TinyDictFileCloser
+{
+    void operator()( FILE * file ) const
+    {
+        if ( file )
+            fclose(file);
+    }
+};
+
 class TinyDictFileBase
 {
 protected:
-    char * fname;
-    FILE * f;
+    std::string fname;
+    std::unique_ptr<FILE, TinyDictFileCloser> f;
     size_t size;
     void setFilename( const char * filename )
     {
-        if ( fname )
-            free( fname );
         if ( filename && *filename )
-            fname = strdup( filename );
+            fname = filename;
         else
-            fname = NULL;
+            fname.clear();
     }
 public:
-    TinyDictFileBase() : fname(NULL), f(NULL), size(0)
+    TinyDictFileBase() : f(nullptr), size(0)
     {
     }
-    virtual ~TinyDictFileBase()
-    {
-        close();
-        setFilename( NULL );
-    }
+    virtual ~TinyDictFileBase() = default;
     virtual void close()
     {
-        if (f)
-            fclose(f);
-        f = NULL;
+        f.reset();
         size = 0;
     }
 };
@@ -256,7 +249,7 @@ static unsigned parseBase64( const char * str )
 
 int TinyDictWord::compare( const char * str ) const
 {
-    return strcmp( word, str );
+    return strcmp( word.c_str(), str );
 }
 
 static int my_fgets( char * buf, int size, FILE * f )
@@ -307,10 +300,10 @@ TinyDictWord * TinyDictWord::read( FILE * f, unsigned index )
 
 int TinyDictWordList::find( const char * prefix )
 {
-    if ( !count )
+    if ( list.empty() )
         return -1;
     int a = 0;
-    int b = count;
+    int b = length();
     for ( ;a < b-1; ) {
         int c = (a + b) / 2;
         int res = list[c]->compare( prefix );
@@ -330,7 +323,7 @@ int TinyDictWordList::find( const char * prefix )
 bool TinyDictWord::match( const char * str, bool exact ) const
 {
     if ( exact )
-        return !strcmp( word, str );
+        return !strcmp( word.c_str(), str );
     int i=0;
     for ( ; str[i]; i++  ) {
         if ( str[i] != word[i] )
@@ -346,20 +339,20 @@ bool TinyDictIndexFile::find( const char * prefix, bool exactMatch, TinyDictWord
     if ( n<0 )
         return false;
     TinyDictWord * p = list.get( n );
-    if ( fseek( f, p->getIndexPos(), SEEK_SET ) )
+    if ( !p || fseek( f.get(), p->getIndexPos(), SEEK_SET ) )
         return false;
     int index = p->getIndex();
     for ( ;; ) {
-        p = TinyDictWord::read( f, index++ );
-        if ( !p )
+        std::unique_ptr<TinyDictWord> candidate(
+                TinyDictWord::read(f.get(), index++));
+        if ( !candidate )
             break;
-        int res = p->compare( prefix );
-        if ( p->match( prefix, exactMatch ) )
-            words.add( p );
-		else {
-            delete p;
-			if ( res > 0 )
-	            break;
+        int res = candidate->compare( prefix );
+        if ( candidate->match( prefix, exactMatch ) )
+            words.add(candidate.release());
+        else {
+            if ( res > 0 )
+                break;
         }
     }
     return true;
@@ -370,32 +363,30 @@ bool TinyDictIndexFile::open( const char * filename )
     close();
     if ( filename )
         setFilename( filename );
-    if ( !fname )
+    if ( fname.empty() )
         return false;
-    f = fopen( fname, "rb" );
+    f.reset(fopen(fname.c_str(), "rb"));
     if ( !f )
         return false;
-    if ( fseek( f, 0, SEEK_END ) ) {
+    if ( fseek( f.get(), 0, SEEK_END ) ) {
         close();
         return false;
     }
-    size = ftell( f );
-    if ( fseek( f, 0, SEEK_SET ) ) {
+    size = ftell( f.get() );
+    if ( fseek( f.get(), 0, SEEK_SET ) ) {
         close();
         return false;
     }
     // test
-    TinyDictWord * p;
+    list.clear();
     count = 0;
     for ( ;; count++ ) {
-        p = TinyDictWord::read( f, count );
-        if ( !p )
+        std::unique_ptr<TinyDictWord> candidate(
+                TinyDictWord::read(f.get(), count));
+        if ( !candidate )
             break;
-        if ( (count % factor) == 0 ) {
-            list.add( p );
-        } else {
-            delete p;
-        }
+        if ( (count % factor) == 0 )
+            list.add(candidate.release());
     }
     printf("%d words read from index\n", count);
     return true;
@@ -662,9 +653,9 @@ const char * TinyDictDataFile::read( const TinyDictWord * w )
     if ( !compressed ) {
         // uncompressed
         printf("reading uncompressed article\n");
-        if ( fseek( f, articleStart, SEEK_SET ) )
+        if ( fseek( f.get(), articleStart, SEEK_SET ) )
             return NULL;
-        if ( fread( buf.data(), 1, articleSize, f ) != articleSize )
+        if ( fread( buf.data(), 1, articleSize, f.get() ) != articleSize )
             return NULL;
     } else {
         // compressed
@@ -683,24 +674,24 @@ bool TinyDictDataFile::open( const char * filename )
     close();
     if ( filename )
         setFilename( filename );
-    if ( !fname )
+    if ( fname.empty() )
         return false;
-    f = fopen( fname, "rb" );
+    f.reset(fopen(fname.c_str(), "rb"));
     if ( !f )
         return false;
-    if ( fseek( f, 0, SEEK_END ) ) {
+    if ( fseek( f.get(), 0, SEEK_END ) ) {
         close();
         return false;
     }
-    size = ftell( f );
-    if ( fseek( f, 0, SEEK_SET ) ) {
+    size = ftell( f.get() );
+    if ( fseek( f.get(), 0, SEEK_SET ) ) {
         close();
         return false;
     }
 
 
     unsigned char header[10];
-    if ( fread( header, 1, sizeof(header), f )!=sizeof(header) ) {
+    if ( fread( header, 1, sizeof(header), f.get() )!=sizeof(header) ) {
         close();
         return false;
     }
@@ -713,7 +704,7 @@ bool TinyDictDataFile::open( const char * filename )
 
     printf("data file %s is compressed\n", filename);
     compressed = true;
-    if ( !zstream.open( f ) ) {
+    if ( !zstream.open( f.get() ) ) {
         printf("data file %s opening error\n", filename);
         close();
         return false;
@@ -723,19 +714,12 @@ bool TinyDictDataFile::open( const char * filename )
 }
 
 TinyDictionary::TinyDictionary()
+    : data(std::make_unique<TinyDictDataFile>())
+    , index(std::make_unique<TinyDictIndexFile>())
 {
-	name = NULL;
-	data = new TinyDictDataFile();
-	index = new TinyDictIndexFile();
 }
 
-TinyDictionary::~TinyDictionary()
-{
-	delete data;
-	delete index;
-	if ( name )
-		free( name );
-}
+TinyDictionary::~TinyDictionary() = default;
 
 void TinyDictionary::compact()
 {
@@ -745,25 +729,36 @@ void TinyDictionary::compact()
 
 const char * TinyDictionary::getDictionaryName()
 {
-	return name;
+    return name ? name->c_str() : NULL;
 }
 
 bool TinyDictionary::open( const char * indexfile, const char * datafile )
 {
-	// use index file name w/o path and extension as dictionary name
-	int lastSlash = -1;
-	int lastPoint = -1;
-	for ( int i=0; indexfile[i]; i++ ) {
-		if ( indexfile[i]=='/' || indexfile[i]=='\\' )
-			lastSlash = i;
-		else if ( indexfile[i]=='.' )
-			lastPoint = i;
-	}
-	if ( lastPoint>=0 && lastPoint>lastSlash ) {
-		name = strdup( indexfile + lastSlash + 1 );
-		name[ lastPoint - lastSlash - 1 ] = 0;
-	}
-	return index->open( indexfile ) && data->open( datafile );
+    if ( !indexfile || !datafile )
+        return false;
+
+    std::unique_ptr<TinyDictIndexFile> nextIndex =
+            std::make_unique<TinyDictIndexFile>();
+    std::unique_ptr<TinyDictDataFile> nextData =
+            std::make_unique<TinyDictDataFile>();
+    if ( !nextIndex->open(indexfile) || !nextData->open(datafile) )
+        return false;
+
+    std::optional<std::string> nextName;
+    std::string indexPath(indexfile);
+    std::size_t lastSlash = indexPath.find_last_of("/\\");
+    std::size_t lastPoint = indexPath.find_last_of('.');
+    if ( lastPoint != std::string::npos
+            && (lastSlash == std::string::npos || lastPoint > lastSlash) ) {
+        std::size_t nameStart = lastSlash == std::string::npos
+                ? 0 : lastSlash + 1;
+        nextName = indexPath.substr(nameStart, lastPoint - nameStart);
+    }
+
+    name = std::move(nextName);
+    index = std::move(nextIndex);
+    data = std::move(nextData);
+    return true;
 }
 
 /// returns word list's dictionary name
@@ -779,101 +774,81 @@ const char * TinyDictWordList::getArticle( int index )
 {
 	if ( !dict )
 		return NULL;
-	if ( index<0 || index>=count )
+    TinyDictWord * word = get(index);
+    if ( !word )
 		return NULL;
-	return dict->getData()->read( list[index] );
+    return dict->getData()->read(word);
 }
 
 /// searches dictionary for specified word, caller is responsible for deleting of returned object
 TinyDictWordList * TinyDictionary::find( const char * prefix, int options )
 {
-	TinyDictWordList * list = new TinyDictWordList();
-	list->setDict( this );
-	if ( index->find( prefix, (TINY_DICT_OPTION_STARTS_WITH & options) == 0, *list ) && list->length()>0 )
-		return list;
-	delete list;
-	return NULL;
+    if ( !prefix )
+        return NULL;
+    std::unique_ptr<TinyDictWordList> result =
+            std::make_unique<TinyDictWordList>();
+    result->setDict( this );
+    if ( index->find( prefix,
+                (TINY_DICT_OPTION_STARTS_WITH & options) == 0, *result )
+            && result->length()>0 )
+        return result.release();
+    return NULL;
 }
 
 bool TinyDictionaryList::add( const char * indexfile, const char * datafile )
 {
-	TinyDictionary * p = new TinyDictionary();
-	if ( !p->open( indexfile, datafile ) ) {
-		delete p;
-		return false;
-	}
-    if ( count>=size ) {
-        size = size ? size * 2 : 32;
-        list = (TinyDictionary**)realloc( list, sizeof(TinyDictionary *) * size );
-    }
-    list[ count++ ] = p;
+    std::unique_ptr<TinyDictionary> dictionary =
+            std::make_unique<TinyDictionary>();
+    if ( !dictionary->open(indexfile, datafile) )
+        return false;
+    list.push_back(std::move(dictionary));
     return true;
 }
 
 /// create empty list
-TinyDictionaryList::TinyDictionaryList() : list(NULL), size(0), count(0) { }
+TinyDictionaryList::TinyDictionaryList() = default;
 
 /// remove all dictionaries from list
 void TinyDictionaryList::clear()
 {
-	if ( list ) {
-		for ( int i=0; i<count; i++ )
-			delete list[i];
-		free( list );
-		list = NULL;
-		size = 0;
-		count = 0;
-	}
+    list.clear();
 }
 
-TinyDictionaryList::~TinyDictionaryList()
-{
-	clear();
-}
+TinyDictionaryList::~TinyDictionaryList() = default;
 
 /// search all dictionaries in list for specified pattern
 bool TinyDictionaryList::find( TinyDictResultList & result, const char * prefix, int options )
 {
-	result.clear();
-	for ( int i=0; i<count; i++ ) {
-		TinyDictWordList * p = list[i]->find( prefix, options );
-		if ( p )
-			result.add( p );
-	}
-	return result.length() > 0;
+    result.clear();
+    if ( !prefix )
+        return false;
+    for ( const std::unique_ptr<TinyDictionary> &dictionary : list ) {
+        std::unique_ptr<TinyDictWordList> words(
+                dictionary->find(prefix, options));
+        if ( words )
+            result.add(words.release());
+    }
+    return result.length() > 0;
 }
 
 
 /// remove all dictionaries from list
 void TinyDictResultList::clear()
 {
-	if ( list ) {
-		for ( int i=0; i<count; i++ )
-			delete list[i];
-		free( list );
-		list = NULL;
-		size = 0;
-		count = 0;
-	}
+    list.clear();
 }
 
 /// create empty list
-TinyDictResultList::TinyDictResultList() : list(NULL), size(0), count(0) { }
+TinyDictResultList::TinyDictResultList() = default;
 
 /// destructor
-TinyDictResultList::~TinyDictResultList()
-{
-	clear();
-}
+TinyDictResultList::~TinyDictResultList() = default;
 
 /// add item to list
 void TinyDictResultList::add( TinyDictWordList * p )
 {
-    if ( count>=size ) {
-        size = size ? size * 2 : 32;
-        list = (TinyDictWordList**)realloc( list, sizeof(TinyDictWordList *) * size );
-    }
-    list[ count++ ] = p;
+    if ( p )
+        list.emplace_back(p);
 }
 
 #ifdef TEST_APP

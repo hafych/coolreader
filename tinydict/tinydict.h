@@ -55,10 +55,13 @@
 #ifndef TINYDICT_H_INCLUDED
 #define TINYDICT_H_INCLUDED
 
-#include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <zlib.h>
+
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 /// dictinary data file forward declaration
 class TinyDictDataFile;
@@ -74,13 +77,13 @@ class TinyDictWord
     unsigned indexpos;
     unsigned start;
     unsigned size;
-    char * word;
+    std::string word;
     TinyDictWord( unsigned _index, unsigned _indexpos, unsigned _start, unsigned _size, const char * _word )
     : index(_index)
     , indexpos(_indexpos)
     , start(_start)
     , size(_size)
-    , word( strdup(_word) )
+    , word(_word ? _word : "")
     {
     }
 public:
@@ -92,21 +95,19 @@ public:
     unsigned getIndex() const { return index; }
     unsigned getStart() const { return start; }
     unsigned getSize() const { return size; }
-    const char * getWord() const { return word; }
+    const char * getWord() const { return word.c_str(); }
 
     int compare( const char * str ) const;
     bool match( const char * str, bool exact ) const;
 
-    ~TinyDictWord() { if ( word ) free( word ); }
+    ~TinyDictWord() = default;
 };
 
 /// word entry list
 class TinyDictWordList
 {
 	TinyDictionary * dict;
-    TinyDictWord ** list;
-    int size;
-    int count;
+    std::vector<std::unique_ptr<TinyDictWord> > list;
 public:
 
 	// article access functions
@@ -123,9 +124,13 @@ public:
 
 	// word list functions
 	/// returns number of words in list
-    int length() { return count; }
+    int length() { return static_cast<int>(list.size()); }
 	/// get item by index
-    TinyDictWord * get( int index ) { return list[index]; }
+    TinyDictWord * get( int index )
+    {
+        return index >= 0 && index < length()
+                ? list[static_cast<std::size_t>(index)].get() : nullptr;
+    }
 	/// add word to list
     void add( TinyDictWord * word );
 	/// clear list
@@ -144,16 +149,16 @@ public:
 
 class TinyDictionary
 {
-	char * name;
-	TinyDictDataFile * data;
-	TinyDictIndexFile * index;
+    std::optional<std::string> name;
+    std::unique_ptr<TinyDictDataFile> data;
+    std::unique_ptr<TinyDictIndexFile> index;
 public:
 	/// searches dictionary for specified word, caller is responsible for deleting of returned object
     TinyDictWordList * find( const char * prefix, int options = 0 );
 	/// returns short dictionary name
 	const char * getDictionaryName();
 	/// get dictionary data pointer
-	TinyDictDataFile * getData() { return data; }
+    TinyDictDataFile * getData() { return data.get(); }
 	/// get dictionary index pointer
 	//TinyDictIndexFile * getIndex() { return index; }
 	/// minimize memory usage
@@ -169,16 +174,18 @@ public:
 /// dictionary search result list
 class TinyDictResultList
 {
-    TinyDictWordList ** list;
-    int size;
-    int count;
+    std::vector<std::unique_ptr<TinyDictWordList> > list;
 public:
 
 	// word list functions
 	/// returns number of words in list
-    int length() { return count; }
+    int length() { return static_cast<int>(list.size()); }
 	/// get item by index
-    TinyDictWordList * get( int index ) { return list[index]; }
+    TinyDictWordList * get( int index )
+    {
+        return index >= 0 && index < length()
+                ? list[static_cast<std::size_t>(index)].get() : nullptr;
+    }
 	/// remove all dictionaries from list
 	void clear();
 	/// create empty list
@@ -193,18 +200,20 @@ public:
 /// dictionary list
 class TinyDictionaryList
 {
-    TinyDictionary ** list;
-    int size;
-    int count;
+    std::vector<std::unique_ptr<TinyDictionary> > list;
 public:
 	/// search all dictionaries in list for specified pattern
 	bool find( TinyDictResultList & result, const char * prefix, int options = 0 );
 
 	// word list functions
 	/// returns number of words in list
-    int length() { return count; }
+    int length() { return static_cast<int>(list.size()); }
 	/// get item by index
-    TinyDictionary * get( int index ) { return list[index]; }
+    TinyDictionary * get( int index )
+    {
+        return index >= 0 && index < length()
+                ? list[static_cast<std::size_t>(index)].get() : nullptr;
+    }
 	/// remove all dictionaries from list
 	void clear();
 	/// create empty list

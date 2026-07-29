@@ -52,6 +52,7 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.cpp" DICTIONARY_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/CMakeLists.txt" LEGACY_GUI_CMAKE_SOURCE)
+file(READ "${SOURCE_ROOT}/tinydict/tinydict.h" TINYDICT_HEADER)
 file(READ "${SOURCE_ROOT}/tinydict/tinydict.cpp" TINYDICT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom_internal.h" DOM_INTERNAL_HEADER)
@@ -297,6 +298,56 @@ require_source_text(
   "dictionary article output must retain value ownership"
 )
 require_source_text(
+  "${TINYDICT_HEADER}"
+  "std::string word;"
+  "dictionary words must retain value-owned text"
+)
+require_source_text(
+  "${TINYDICT_HEADER}"
+  "std::optional<std::string> name;"
+  "dictionary names must retain optional value ownership"
+)
+require_source_text(
+  "${TINYDICT_HEADER}"
+  "std::vector<std::unique_ptr<TinyDictWord> > list;"
+  "dictionary word lists must retain explicit element ownership"
+)
+require_source_text(
+  "${TINYDICT_HEADER}"
+  "std::vector<std::unique_ptr<TinyDictWordList> > list;"
+  "dictionary result lists must retain explicit element ownership"
+)
+require_source_text(
+  "${TINYDICT_HEADER}"
+  "std::vector<std::unique_ptr<TinyDictionary> > list;"
+  "dictionary collections must retain explicit element ownership"
+)
+require_source_text(
+  "${TINYDICT_HEADER}"
+  "std::unique_ptr<TinyDictDataFile> data;"
+  "dictionary data files must retain explicit object ownership"
+)
+require_source_text(
+  "${TINYDICT_HEADER}"
+  "std::unique_ptr<TinyDictIndexFile> index;"
+  "dictionary index files must retain explicit object ownership"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::unique_ptr<FILE, TinyDictFileCloser> f;"
+  "dictionary files must retain scoped handle ownership"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::unique_ptr<TinyDictIndexFile> nextIndex ="
+  "dictionary reopen must stage its index candidate"
+)
+require_source_text(
+  "${TINYDICT_SOURCE}"
+  "std::unique_ptr<TinyDictDataFile> nextData ="
+  "dictionary reopen must stage its data candidate"
+)
+require_source_text(
   "${TINYDICT_SOURCE}"
   "std::vector<unsigned char> packedChunk(packsz);"
   "dictzip scratch input must be scoped to one chunk read"
@@ -328,6 +379,41 @@ forbid_source_text(
   "dictionary article output must not return to realloc ownership"
 )
 forbid_source_text(
+  "${TINYDICT_HEADER}"
+  "char * word;"
+  "dictionary words must not return to strdup ownership"
+)
+forbid_source_text(
+  "${TINYDICT_HEADER}"
+  "char * name;"
+  "dictionary names must not return to strdup ownership"
+)
+forbid_source_text(
+  "${TINYDICT_HEADER}"
+  "TinyDictWord ** list;"
+  "dictionary word lists must not return to raw array ownership"
+)
+forbid_source_text(
+  "${TINYDICT_HEADER}"
+  "TinyDictWordList ** list;"
+  "dictionary result lists must not return to raw array ownership"
+)
+forbid_source_text(
+  "${TINYDICT_HEADER}"
+  "TinyDictionary ** list;"
+  "dictionary collections must not return to raw array ownership"
+)
+forbid_source_text(
+  "${TINYDICT_HEADER}"
+  "TinyDictDataFile * data;"
+  "dictionary data files must not return to raw object ownership"
+)
+forbid_source_text(
+  "${TINYDICT_SOURCE}"
+  "char * fname;"
+  "dictionary file names must not return to strdup ownership"
+)
+forbid_source_text(
   "${TINYDICT_SOURCE}"
   "unsigned char * tmp ="
   "dictzip scratch input must not return to raw allocation"
@@ -336,6 +422,16 @@ require_source_text(
   "${TINYDICT_REGRESSION_SOURCE}"
   "static int testCompressedChunkOwnership()"
   "dictzip buffer ownership must retain native regression coverage"
+)
+require_source_text(
+  "${TINYDICT_REGRESSION_SOURCE}"
+  "failed reopen replaced the working dictionary graph"
+  "dictionary reopen must retain transactional regression coverage"
+)
+require_source_text(
+  "${TINYDICT_REGRESSION_SOURCE}"
+  "dictionary name did not retain value ownership"
+  "dictionary names must retain value-ownership regression coverage"
 )
 require_source_text(
   "${ROOT_CMAKE_SOURCE}"

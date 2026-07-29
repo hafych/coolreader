@@ -144,7 +144,9 @@ DRM или ограничений доступа, подбор/получени�
   text/destination
   ownership, TCR dictionary/index/decoded buffers, dictzip chunk-size/offset
   catalogs и scoped compressed/reusable unpacked/article buffers с корректным
-  multi-chunk read, unpacked 8/16/32-bit pixel storage,
+  multi-chunk read, scoped dictionary FILE handles, value-owned names/words и
+  explicit word/result/dictionary owner graphs с transactional reopen,
+  unpacked 8/16/32-bit pixel storage,
   scoped stream-image decoder factory candidates, scaled-image
   maps/RGBA snapshots, nine-patch metadata cache and color-transform
   workspaces, WOL TOC/image/LZSS buffers and
