@@ -77,6 +77,9 @@ jobs:
   build-desktop-qt6:
     name: Build Qt 6 desktop app (Linux)
     runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -84,12 +87,12 @@ jobs:
       - name: Install Qt 6 and native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config qt6-base-dev qt6-tools-dev qt6-tools-dev-tools zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libzstd-dev libutf8proc-dev
+          sudo apt-get install -y build-essential clang cmake pkg-config qt6-base-dev qt6-tools-dev qt6-tools-dev-tools zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libzstd-dev libutf8proc-dev
 
       - name: Configure Qt 6 desktop build
-        run: cmake -S . -B build-qt6 -DGUI=QT6 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+        run: cmake -S . -B build-qt6 -DGUI=QT6 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DUSE_CLANG_WARNING_GATE=ON
 
-      - name: Build Qt 6 desktop app and smoke tests
+      - name: Build Qt 6 desktop app under the warning gate
         run: cmake --build build-qt6 --config Release --parallel
 
       - name: Run native smoke tests

@@ -60,7 +60,7 @@ FilePropsDialog::FilePropsDialog(QWidget *parent, CR3View * docView ) :
     _cr3v->restoreWindowPos( this, "fileprops." );
 }
 
-void FilePropsDialog::closeEvent ( QCloseEvent * event )
+void FilePropsDialog::closeEvent ( QCloseEvent * )
 {
     _cr3v->saveWindowPos( this, "fileprops." );
 }

@@ -607,7 +607,7 @@ static bool getBatteryState(int& state, int& chargingConn, int& level)
 #endif
 }
 
-void CR3View::paintEvent ( QPaintEvent * event )
+void CR3View::paintEvent ( QPaintEvent * )
 {
     QPainter painter(this);
     qreal dpr = painter.device()->devicePixelRatioF();
@@ -1052,7 +1052,7 @@ bool CR3View::saveHistory( QString fn )
     return _docview->getHistory()->saveToStream( stream.get() );
 }
 
-void CR3View::contextMenu( QPoint pos )
+void CR3View::contextMenu( QPoint )
 {
 }
 
@@ -1288,7 +1288,7 @@ void CR3View::mouseReleaseEvent ( QMouseEvent * event )
 }
 
 /// Override to handle external links
-void CR3View::OnExternalLink( lString32 url, ldomNode * node )
+void CR3View::OnExternalLink( lString32 url, ldomNode * )
 {
     // TODO: add support of file links
     // only URL supported for now
@@ -1386,13 +1386,13 @@ void CR3View::OnLoadFileFormatDetected( doc_format_t fileFormat )
 }
 
 /// on starting file loading
-void CR3View::OnLoadFileStart( lString32 filename )
+void CR3View::OnLoadFileStart( lString32 )
 {
     setCursor( _waitCursor );
 }
 
 /// file load finiished with error
-void CR3View::OnLoadFileError( lString32 message )
+void CR3View::OnLoadFileError( lString32 )
 {
     setCursor( _normalCursor );
 }

@@ -98,7 +98,8 @@ DRM или ограничений доступа, подбор/получени�
   в Linux Clang job вместе с `tinydict`. Modern Qt5/Qt6 link matrix использует
   imported targets на всех hosts без конфликтующего macOS fontconfig override.
   Границы массивов настроек modern Qt используют совместимые с Qt знаковые
-  индексы и проходят строгую проверку `-Wsign-compare`.
+  индексы; неиспользуемые параметры callback/event/slot реализаций удалены.
+  Qt6 CI-сборка теперь также проходит общий Clang warning gate.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,

@@ -91,7 +91,7 @@ RecentBooksDlg::RecentBooksDlg(QWidget *parent, CR3View * docView ) :
     m_docview->restoreWindowPos( this, "recentlist." );
 }
 
-void RecentBooksDlg::closeEvent ( QCloseEvent * event )
+void RecentBooksDlg::closeEvent ( QCloseEvent * )
 {
     m_docview->saveWindowPos( this, "recentlist." );
 }

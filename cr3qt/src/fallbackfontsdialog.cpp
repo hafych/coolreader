@@ -116,7 +116,7 @@ void FallbackFontsDialog::slot_delete_clicked()
     }
 }
 
-void FallbackFontsDialog::slot_currectIndexChanged(int index)
+void FallbackFontsDialog::slot_currectIndexChanged(int)
 {
     int item_idx = -1;
     QVariant itemIdxProp;

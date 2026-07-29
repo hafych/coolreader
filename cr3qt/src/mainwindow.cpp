@@ -163,7 +163,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->view->restoreWindowPos( this, "main.", true );
 }
 
-void MainWindow::closeEvent ( QCloseEvent * event )
+void MainWindow::closeEvent ( QCloseEvent * )
 {
     ui->view->saveWindowPos( this, "main." );
 }
@@ -194,9 +194,8 @@ public:
         _dlg->setPercent(100);
     }
     /// format progress, called with values 0..100
-    virtual void OnFormatProgress( int percent )
+    virtual void OnFormatProgress( int )
     {
-        //_dlg->setPercent(percent);
     }
     /// export progress, called with values 0..100
     virtual void OnExportProgress( int percent )
@@ -469,7 +468,7 @@ void MainWindow::on_actionCopy2_triggered()
 
 static bool firstShow = true;
 
-void MainWindow::showEvent ( QShowEvent * event )
+void MainWindow::showEvent ( QShowEvent * )
 {
     if ( !firstShow )
         return;
@@ -522,7 +521,7 @@ void MainWindow::exportSentenceInfo(QString inputFileName, QString outputFileNam
 
 static bool firstFocus = true;
 
-void MainWindow::focusInEvent ( QFocusEvent * event )
+void MainWindow::focusInEvent ( QFocusEvent * )
 {
     if ( !firstFocus )
         return;

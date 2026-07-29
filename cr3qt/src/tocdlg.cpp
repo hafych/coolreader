@@ -95,7 +95,7 @@ TocDlg::TocDlg(QWidget *parent, CR3View * docView) :
     m_docview->restoreWindowPos( this, "toc." );
 }
 
-void TocDlg::closeEvent ( QCloseEvent * event )
+void TocDlg::closeEvent ( QCloseEvent * )
 {
     m_docview->saveWindowPos( this, "toc." );
 }

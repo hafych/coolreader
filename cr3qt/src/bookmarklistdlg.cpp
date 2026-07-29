@@ -116,7 +116,7 @@ BookmarkListDialog::BookmarkListDialog(QWidget *parent, CR3View * docView ) :
     _docview->restoreWindowPos( this, "bookmarklist." );
 }
 
-void BookmarkListDialog::closeEvent ( QCloseEvent * event )
+void BookmarkListDialog::closeEvent ( QCloseEvent * )
 {
     _docview->saveWindowPos( this, "bookmarklist." );
 }
@@ -220,7 +220,7 @@ void BookmarkListDialog::on_actionClose_triggered()
     close();
 }
 
-void BookmarkListDialog::on_tableWidget_doubleClicked(QModelIndex index)
+void BookmarkListDialog::on_tableWidget_doubleClicked(QModelIndex)
 {
     on_actionGoToBookmark_triggered();
 }

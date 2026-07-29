@@ -70,7 +70,7 @@ AddBookmarkDialog::AddBookmarkDialog(QWidget *parent, CR3View * docView, CRBookm
     initialized = true;
 }
 
-void AddBookmarkDialog::closeEvent ( QCloseEvent * event )
+void AddBookmarkDialog::closeEvent ( QCloseEvent * )
 {
     _docview->saveWindowPos( this, "bookmarkedit." );
 }

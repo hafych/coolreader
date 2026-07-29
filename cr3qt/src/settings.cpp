@@ -1123,7 +1123,7 @@ void SettingsDlg::on_cbStartupAction_currentIndexChanged(int index)
     m_props->setInt( PROP_APP_START_ACTION, index );
 }
 
-void SettingsDlg::on_cbTxtPreFormatted_toggled(bool checked)
+void SettingsDlg::on_cbTxtPreFormatted_toggled(bool)
 {
 
 }
@@ -1383,7 +1383,7 @@ void SettingsDlg::on_btnFallbackMan_clicked()
     }
 }
 
-void SettingsDlg::on_cbFontWeightChange_currentIndexChanged(int index)
+void SettingsDlg::on_cbFontWeightChange_currentIndexChanged(int)
 {
     if (suppressOnChange)
         return;

@@ -480,6 +480,21 @@ require_source_text(
   "cmake --build build-clang-crgui --target cr3 --parallel"
   "the Clang warning job must compile the legacy Qt frontend target"
 )
+require_source_text(
+  "${BUILD_WORKFLOW_SOURCE}"
+  "build-desktop-qt6:
+    name: Build Qt 6 desktop app (Linux)
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++"
+  "the modern Qt job must use Clang for its warning gate"
+)
+require_source_text(
+  "${BUILD_WORKFLOW_SOURCE}"
+  "-DGUI=QT6 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DUSE_CLANG_WARNING_GATE=ON"
+  "the modern Qt job must retain selected diagnostics as errors"
+)
 
 # --- modern Qt view ownership ---
 require_source_text(
