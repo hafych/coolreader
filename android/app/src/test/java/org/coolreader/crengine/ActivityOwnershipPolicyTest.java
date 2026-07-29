@@ -422,7 +422,9 @@ public class ActivityOwnershipPolicyTest {
 				"tapHighlightState",
 				"tapHighlightScheduler",
 				"viewportResizeState",
-				"resizeScheduler"}) {
+				"resizeScheduler",
+				"positionSaveLifecycle",
+				"positionSaveScheduler"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -462,6 +464,10 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains parallel requested height",
 					field.getName().equals("requestedHeight"));
+			assertFalse(
+					"ReaderView retains numeric position-save generations",
+					field.getName().equals(
+							"lastSavePositionTaskId"));
 		}
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
@@ -492,6 +498,11 @@ public class ActivityOwnershipPolicyTest {
 						"closeTapHighlight");
 		assertTrue(Modifier.isPrivate(
 				closeTapHighlight.getModifiers()));
+		Method closePositionSave =
+				ReaderView.class.getDeclaredMethod(
+						"closePositionSave");
+		assertTrue(Modifier.isPrivate(
+				closePositionSave.getModifiers()));
 		Method complete =
 				CloseableTaskGate.class.getDeclaredMethod(
 						"complete",

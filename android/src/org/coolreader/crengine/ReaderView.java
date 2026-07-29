@@ -430,6 +430,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		stopTracking();
 		if (isAutoScrollActive())
 			stopAutoScroll();
+		cancelPositionSave();
 		Bookmark bmk = getCurrentPositionBookmark();
 		if (bmk != null)
 			savePositionBookmark(bmk);
@@ -6011,39 +6012,48 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	private int lastSavePositionTaskId = 0;
+	private final CloseableTaskGate positionSaveLifecycle =
+			new CloseableTaskGate();
+	private final DelayedExecutor positionSaveScheduler =
+			DelayedExecutor.createGUI("position-save");
 
 	private final static int DEF_SAVE_POSITION_INTERVAL = 180000; // 3 minutes
 
 	private void scheduleSaveCurrentPositionBookmark(final int delayMillis) {
-		// GUI thread required
 		BackgroundThread.instance().executeGUI(() -> {
-			final int mylastSavePositionTaskId = ++lastSavePositionTaskId;
-			if (isBookLoaded() && mBookInfo != null) {
-				final Bookmark bmk = getCurrentPositionBookmark();
-				if (bmk == null)
-					return;
-				final BookInfo bookInfo = mBookInfo;
-				if (delayMillis <= 1) {
-					if (bookInfo != null && mActivity.getDB() != null) {
-						log.v("saving last position immediately");
-						savePositionBookmark(bmk);
-						mHistory.updateBookAccess(bookInfo, getTimeElapsed());
-					}
-				} else {
-					BackgroundThread.instance().postGUI(() -> {
-						if (mylastSavePositionTaskId == lastSavePositionTaskId) {
-							if (bookInfo != null) {
-								log.v("saving last position");
-								if (mServiceLifecycle.isActive()) {
-									// this delayed task can be completed after calling CoolReader.onDestroy(),
-									// which closes this service-generation token.
-									savePositionBookmark(bmk);
-									mHistory.updateBookAccess(bookInfo, getTimeElapsed());
-								}
-							}
-						}
-					}, delayMillis);
+			CloseableTaskGate.Token owner =
+					replacePositionSave();
+			if (owner == null)
+				return;
+			if (!isBookLoaded() || mBookInfo == null) {
+				positionSaveLifecycle.complete(owner);
+				return;
+			}
+			final Bookmark bookmark =
+					getCurrentPositionBookmark();
+			if (bookmark == null) {
+				positionSaveLifecycle.complete(owner);
+				return;
+			}
+			final BookInfo bookInfo = mBookInfo;
+			if (delayMillis <= 1) {
+				if (mActivity.getDB() != null
+						&& positionSaveLifecycle.complete(owner)) {
+					log.v("saving last position immediately");
+					savePositionBookmark(bookInfo, bookmark);
+					mHistory.updateBookAccess(
+							bookInfo, getTimeElapsed());
+				}
+				return;
+			}
+			synchronized (positionSaveLifecycle) {
+				if (positionSaveLifecycle.isActive(owner)) {
+					positionSaveScheduler.postDelayed(
+							() -> applyPositionSave(
+									owner,
+									bookInfo,
+									bookmark),
+							delayMillis);
 				}
 			}
 		});
@@ -6062,6 +6072,46 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //				}
 //    		});
 //    	}
+	}
+
+	private CloseableTaskGate.Token replacePositionSave() {
+		synchronized (positionSaveLifecycle) {
+			CloseableTaskGate.Token owner =
+					positionSaveLifecycle.replace();
+			positionSaveScheduler.cancel();
+			return owner;
+		}
+	}
+
+	private void applyPositionSave(
+			CloseableTaskGate.Token owner,
+			BookInfo bookInfo,
+			Bookmark bookmark) {
+		if (!positionSaveLifecycle.complete(owner))
+			return;
+		if (!mServiceLifecycle.isActive()
+				|| !isBookLoaded()
+				|| mBookInfo != bookInfo
+				|| mActivity.getDB() == null)
+			return;
+		log.v("saving last position");
+		savePositionBookmark(bookInfo, bookmark);
+		mHistory.updateBookAccess(
+				bookInfo, getTimeElapsed());
+	}
+
+	private void cancelPositionSave() {
+		synchronized (positionSaveLifecycle) {
+			positionSaveLifecycle.cancel();
+			positionSaveScheduler.cancel();
+		}
+	}
+
+	private void closePositionSave() {
+		synchronized (positionSaveLifecycle) {
+			positionSaveLifecycle.close();
+			positionSaveScheduler.cancel();
+		}
 	}
 
 	// Sony T2 update position method - by Jotas
@@ -6142,21 +6192,34 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	Bookmark lastSavedBookmark = null;
 
 	public void savePositionBookmark(Bookmark bmk) {
-		if (bmk != null && mBookInfo != null && isBookLoaded()) {
+		cancelPositionSave();
+		savePositionBookmark(mBookInfo, bmk);
+	}
+
+	private void savePositionBookmark(
+			BookInfo bookInfo,
+			Bookmark bookmark) {
+		if (bookmark != null
+				&& bookInfo != null
+				&& mBookInfo == bookInfo
+				&& isBookLoaded()
+				&& mActivity.getDB() != null) {
 			//setBookPosition();
-			if (lastSavedBookmark == null || !lastSavedBookmark.getStartPos().equals(bmk.getStartPos())) {
+			if (lastSavedBookmark == null
+					|| !lastSavedBookmark.getStartPos().equals(
+							bookmark.getStartPos())) {
 				if (mServiceLifecycle.isActive()) {
 					mHistory.updateRecentDir();
-					mActivity.getDB().saveBookInfo(mBookInfo);
+					mActivity.getDB().saveBookInfo(bookInfo);
 					mActivity.getDB().flush();
-					lastSavedBookmark = bmk;
+					lastSavedBookmark = bookmark;
 				}
 			}
 		}
 	}
 
 	public Bookmark saveCurrentPositionBookmarkSync(final boolean saveToDB) {
-		++lastSavePositionTaskId;
+		cancelPositionSave();
 		Bookmark bmk = BackgroundThread.instance().callBackground(new Callable<Bookmark>() {
 			@Override
 			public Bookmark call() throws Exception {
@@ -6182,6 +6245,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void save() {
 		BackgroundThread.ensureGUI();
+		cancelPositionSave();
 		if (isBookLoaded() && mBookInfo != null) {
 			if (mServiceLifecycle.isActive()) {
 				log.v("saving last immediately");
@@ -6263,6 +6327,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		gcTask.cancel();
 		closeSwapTasks();
 		closeTapHighlight();
+		closePositionSave();
 		synchronized (viewportResizeState) {
 			viewportResizeState.close();
 			resizeScheduler.cancel();
@@ -6406,6 +6471,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		public void OnLoadFileStart(String filename) {
 			cancelSwapTask();
 			invalidateTapHighlight();
+			cancelPositionSave();
+			lastSavedBookmark = null;
 			BackgroundThread.ensureBackground();
 			log.d("readerCallback.OnLoadFileStart " + filename);
 			if (enable_progress_callback) {

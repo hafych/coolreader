@@ -139,6 +139,12 @@ width/height fields, while identity requests make latest-size-wins apply to
 both background resize and GUI completion. Invalid dimensions use a positive
 fallback, one reader-owned scheduler replaces pending delays, and destroy
 closes the state and removes the callback before native teardown.
+Delayed current-position persistence is owned by a `CloseableTaskGate` and a
+dedicated GUI scheduler rather than a numeric generation left in the global
+Handler. Replacement, synchronous save, pause and book reload remove the exact
+pending callback; destroy closes the gate. The callback claims its token once
+and verifies the captured `BookInfo` is still the current book before saving,
+so a bookmark from an older document cannot be written into its replacement.
 `PositionProperties` widens scrollable-height subtraction and percentage
 multiplication before clamping to its 0–10000 contract. Scroll movement uses the
 same widened range. The stateless `DocumentPositionPolicy` converts zero-based

@@ -1991,6 +1991,8 @@ def main() -> None:
         "private final DelayedExecutor tapHighlightScheduler",
         "private final ViewportResizeState viewportResizeState",
         "private final DelayedExecutor resizeScheduler",
+        "private final CloseableTaskGate positionSaveLifecycle",
+        "private final DelayedExecutor positionSaveScheduler",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -2005,6 +2007,9 @@ def main() -> None:
         "tapHighlightScheduler.cancel()",
         "viewportResizeState.close()",
         "resizeScheduler.cancel()",
+        "private void closePositionSave()",
+        "positionSaveLifecycle.close()",
+        "positionSaveScheduler.cancel()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -2027,6 +2032,12 @@ def main() -> None:
         "viewportResizeState.isCurrent(request)",
         "viewportResizeState.complete(request)",
         "resizeScheduler.postDelayed(task, delay)",
+        "positionSaveLifecycle.replace()",
+        "positionSaveLifecycle.complete(owner)",
+        "positionSaveScheduler.postDelayed(",
+        "private void applyPositionSave(",
+        "mBookInfo != bookInfo",
+        "savePositionBookmark(bookInfo, bookmark)",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -2044,6 +2055,7 @@ def main() -> None:
         "lastResizeTaskId",
         "requestedWidth",
         "requestedHeight",
+        "lastSavePositionTaskId",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",
     ):

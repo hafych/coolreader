@@ -179,6 +179,11 @@ DRM или ограничений доступа, подбор/получени�
   width/height, exact latest request контролирует background apply и GUI done,
   invalid dimensions получают positive fallback, owned scheduler заменяет
   pending delay, а destroy закрывает state до native teardown.
+  Delayed current-position save переведён с numeric generation/global Handler
+  на exact `CloseableTaskGate` token и owned GUI scheduler: replacement,
+  sync/pause/reload отменяют pending callback, destroy закрывает gate, а
+  one-shot apply проверяет captured `BookInfo` identity и не может записать
+  bookmark старой книги в текущую.
   Временное отключение E-Ink full refresh вынесено в synchronized
   ReaderView-owned lease tracker: overlapping clients восстанавливают исходный
   interval только после последнего matching release, а duplicate/unmatched

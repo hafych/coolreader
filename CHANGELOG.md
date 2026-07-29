@@ -394,6 +394,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   applies only the latest identity-owned request. Pending delays are replaced
   through a reader-owned scheduler, stale GUI completion cannot redraw an old
   size, and destruction rejects resize work before native teardown.
+- Delayed reading-position saves now use exact lifecycle tokens and a dedicated
+  cancelable scheduler. Synchronous save, pause, reload and replacement remove
+  stale callbacks, while captured book identity prevents an old bookmark from
+  being persisted into the newly opened book.
 - Temporary E-Ink full-refresh suppression now uses reader-owned client leases.
   Overlapping clients restore the saved interval exactly once, while duplicate
   or unmatched releases no longer restore an invalid sentinel interval.
