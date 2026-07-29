@@ -475,18 +475,40 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	
 	public void showFindBookDialog()
 	{
-		BookSearchDialog dlg = new BookSearchDialog( mActivity, results -> {
-			if (results != null) {
-				if (results.length == 0) {
-					mActivity.showToast(R.string.dlg_book_search_not_found);
-				} else {
-					showSearchResult(results);
-				}
-			} else {
-				if (currDirectory == null || currDirectory.isRootDir())
-					mActivity.showRootWindow();
-			}
-		});
+		final CRDBService.LocalBinder db = mActivity.getDB();
+		final ServiceLifecycle serviceLifecycle = mServiceLifecycle;
+		BookSearchBackend backend = (query, resultCallback) -> {
+			if (db == null || !serviceLifecycle.isActive())
+				return;
+			db.findByPatterns(
+					query.maxResults,
+					query.authors,
+					query.title,
+					query.series,
+					query.filename,
+					fileList -> {
+						if (serviceLifecycle.isActive())
+							resultCallback.onResults(
+									fileList.toArray(
+											new FileInfo[fileList.size()]));
+					});
+		};
+		BookSearchDialog dlg = new BookSearchDialog(
+				mActivity,
+				backend,
+				results -> {
+					if (results != null) {
+						if (results.length == 0) {
+							mActivity.showToast(
+									R.string.dlg_book_search_not_found);
+						} else {
+							showSearchResult(results);
+						}
+					} else if (currDirectory == null
+							|| currDirectory.isRootDir()) {
+						mActivity.showRootWindow();
+					}
+				});
 		dlg.show();
 	}
 

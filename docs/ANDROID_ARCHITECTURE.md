@@ -166,6 +166,16 @@ Position-save scheduling captures the pair before its GUI handoff and preserves
 it through delayed apply, so an older dialog or timer cannot mutate or persist
 the replacement book.
 
+Library book search has a separate dialog-owned boundary. `BookSearchDialog`
+captures each field set in an immutable query and submits it through a narrow
+database backend instead of retaining `CoolReader` as its search provider. A
+replaceable GUI scheduler removes the previous debounce callback, while an
+exact `BookSearchSession` preview token rejects a database result after another
+query or dialog close. Submit and cancel share a single terminal transition, so
+`BaseDialog.onClose()` cannot turn a confirmed search into a second
+cancellation. The backend also checks the captured service generation before
+delivering results to the dialog or browser.
+
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.

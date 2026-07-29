@@ -26,32 +26,35 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
 
-import org.coolreader.CoolReader;
 import org.coolreader.R;
 
 public class BookSearchDialog extends BaseDialog {
-	
-	private final CoolReader mCoolReader;
-	private final LayoutInflater mInflater;
-	final EditText authorEdit;
-	final EditText titleEdit;
-	final EditText seriesEdit;
-	final EditText filenameEdit;
-	final TextView statusText;
-	final SearchCallback callback;
-	
-	private int searchTaskId = 0;
-	private boolean searchActive = false;
-	private boolean closing = false;
-	
-	public BookSearchDialog(CoolReader activity, SearchCallback callback)
+
+	private static final int MAX_RESULTS = 50;
+	private static final long PREVIEW_DELAY_MS = 3000L;
+
+	private final EditText authorEdit;
+	private final EditText titleEdit;
+	private final EditText seriesEdit;
+	private final EditText filenameEdit;
+	private final TextView statusText;
+	private final BookSearchBackend backend;
+	private final SearchCallback callback;
+	private final BookSearchSession session = new BookSearchSession();
+	private final DelayedExecutor previewScheduler =
+			DelayedExecutor.createGUI("book-search-preview");
+
+	public BookSearchDialog(
+			BaseActivity activity,
+			BookSearchBackend backend,
+			SearchCallback callback)
 	{
 		super(activity, activity.getString( R.string.dlg_book_search), true, false);
-		mCoolReader = activity;
+		this.backend = backend;
 		this.callback = callback;
-		setTitle(mCoolReader.getString( R.string.dlg_book_search));
-		mInflater = LayoutInflater.from(getContext());
-		View view = mInflater.inflate(R.layout.book_search_dialog, null);
+		setTitle(activity.getString(R.string.dlg_book_search));
+		LayoutInflater inflater = LayoutInflater.from(getContext());
+		View view = inflater.inflate(R.layout.book_search_dialog, null);
 		authorEdit = view.findViewById(R.id.search_text_author);
 		titleEdit = view.findViewById(R.id.search_text_title);
 		seriesEdit = view.findViewById(R.id.search_text_series);
@@ -83,62 +86,56 @@ public class BookSearchDialog extends BaseDialog {
 	}
 
 	private void postSearchTask() {
-		if ( closing )
+		final BookSearchSession.Preview preview =
+				session.replacePreview();
+		if (preview == null)
 			return;
-		final int mySearchTaskId = ++searchTaskId;
-		BackgroundThread.instance().postGUI(() -> {
-			if ( searchTaskId == mySearchTaskId ) {
-				if ( searchActive )
-					return;
-				searchActive = true;
-				find(results -> {
-					searchActive = false;
-					statusText.setText(mCoolReader.getString(R.string.dlg_book_search_found) + " " + results.length);
-					if ( searchTaskId != mySearchTaskId ) {
-						postSearchTask();
-					}
-				});
-			}
-		}, 3000);
+		previewScheduler.postDelayed(
+				() -> startPreview(preview),
+				PREVIEW_DELAY_MS);
+	}
+
+	private void startPreview(BookSearchSession.Preview preview) {
+		if (!session.isPreviewActive(preview))
+			return;
+		backend.find(query(), results -> {
+			if (!session.completePreview(preview))
+				return;
+			statusText.setText(
+					getContext().getString(
+							R.string.dlg_book_search_found)
+							+ " " + results.length);
+		});
 	}
 	
 	public interface SearchCallback {
-		public void done( FileInfo[] results );
+		void done(FileInfo[] results);
 	}
 
-//	private static String addWildcard( String s, boolean before, boolean after ) {
-//		if ( s==null || s.length()==0 )
-//			return s;
-//		if ( before )
-//			s = "%" + s;
-//		if ( after )
-//			s = s + "%";
-//		return s;
-//	}
-	
-	private final static int MAX_RESULTS = 50; 
-	protected void find( final SearchCallback cb ) {
-		final String author = authorEdit.getText().toString().trim();
-		final String series = seriesEdit.getText().toString().trim();
-		final String title = titleEdit.getText().toString().trim();
-		final String filename = filenameEdit.getText().toString().trim();
-		if (mCoolReader == null || mCoolReader.getDB() == null)
-			return;
-		mCoolReader.getDB().findByPatterns(MAX_RESULTS, author, title, series, filename, fileList -> cb.done(fileList.toArray(new FileInfo[fileList.size()])));
+	private BookSearchBackend.Query query() {
+		return new BookSearchBackend.Query(
+				MAX_RESULTS,
+				authorEdit.getText().toString().trim(),
+				titleEdit.getText().toString().trim(),
+				seriesEdit.getText().toString().trim(),
+				filenameEdit.getText().toString().trim());
 	}
 	
 	@Override
 	protected void onPositiveButtonClick() {
-		searchTaskId++;
-		closing = true;
+		if (!session.submit())
+			return;
+		BookSearchBackend.Query query = query();
+		previewScheduler.cancel();
 		super.onPositiveButtonClick();
-		find( callback );
+		backend.find(query, callback::done);
 	}
 
 	@Override
 	protected void onNegativeButtonClick() {
-		searchTaskId++;
-		closing = true;
+		if (!session.cancel())
+			return;
+		previewScheduler.cancel();
 		super.onNegativeButtonClick();
 		callback.done(null);
 	}

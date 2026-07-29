@@ -345,6 +345,13 @@ DRM или ограничений доступа, подбор/получени�
   Activity settings меняются только для всё ещё current документа. Поэтому
   оставшийся открытым profile dialog старой книги не может назначить её выбор
   replacement-книге.
+  Библиотечный `BookSearchDialog` теперь получает immutable query через узкий
+  DB backend и владеет preview/terminal lifecycle: replaceable scheduler
+  физически снимает старый debounce callback, exact token отклоняет late DB
+  result заменённого или закрытого preview, а submit/cancel принимаются ровно
+  один раз. Поэтому dismiss после submit больше не вызывает вторую отмену через
+  `BaseDialog.onClose()`, а service-generation gate не публикует результат
+  уничтоженной Activity.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
