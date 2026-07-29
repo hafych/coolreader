@@ -430,6 +430,7 @@ public class ActivityOwnershipPolicyTest {
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
 				"ttsInitializationLifecycle",
+				"documentLoadLifecycle",
 				"readerSurfaceState",
 				"einkRefreshScheduler",
 				"keyDoubleClickState",
@@ -517,6 +518,25 @@ public class ActivityOwnershipPolicyTest {
 				drawOwner.getType());
 		assertTrue(Modifier.isPrivate(drawOwner.getModifiers()));
 		assertTrue(Modifier.isFinal(drawOwner.getModifiers()));
+		Class<?> loadDocumentTask = null;
+		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("LoadDocumentTask")) {
+				loadDocumentTask = nested;
+				break;
+			}
+		}
+		assertTrue(loadDocumentTask != null);
+		Field loadOwner =
+				loadDocumentTask.getDeclaredField("loadOwner");
+		assertEquals(
+				CloseableTaskGate.Token.class,
+				loadOwner.getType());
+		assertTrue(Modifier.isPrivate(loadOwner.getModifiers()));
+		assertTrue(Modifier.isFinal(loadOwner.getModifiers()));
+		Field taskBook =
+				loadDocumentTask.getDeclaredField("bookInfo");
+		assertEquals(BookInfo.class, taskBook.getType());
+		assertTrue(Modifier.isPrivate(taskBook.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
 		for (Field field :

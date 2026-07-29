@@ -352,6 +352,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final DocumentFileCache mDocumentCache;
 	private final ServiceLifecycle mServiceLifecycle;
 	private final EinkScreen mEinkScreen;
+	private final CloseableTaskGate documentLoadLifecycle =
+			new CloseableTaskGate();
 
 	private BookInfo mBookInfo;
 
@@ -2860,18 +2862,28 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	// update book and position info in status bar
 	private void updateCurrentPositionStatus() {
-		if (mBookInfo == null)
+		updateCurrentPositionStatus(mBookInfo, null);
+	}
+
+	private void updateCurrentPositionStatus(
+			final BookInfo expectedBook,
+			final CloseableTaskGate.Token loadOwner) {
+		if (expectedBook == null)
 			return;
 		// in background thread
-		final FileInfo fileInfo = mBookInfo.getFileInfo();
+		final FileInfo fileInfo = expectedBook.getFileInfo();
 		if (fileInfo == null)
 			return;
 		final Bookmark bmk = doc != null ? doc.getCurrentPageBookmark() : null;
 		final PositionProperties props = bmk != null ? doc.getPositionProps(bmk.getStartPos(), false) : null;
 		if (props != null) BackgroundThread.instance().postGUI(() -> {
+			if (mBookInfo != expectedBook
+					|| (loadOwner != null
+							&& !documentLoadLifecycle.isActive(loadOwner)))
+				return;
 			mActivity.updateCurrentPositionStatus(fileInfo, bmk, props);
 
-			String fname = mBookInfo.getFileInfo().getBasePath();
+			String fname = fileInfo.getBasePath();
 			if (fname != null && fname.length() > 0)
 				setBookPositionForExternalShell(fname, props.pageNumber, props.pageCount);
 		});
@@ -2891,14 +2903,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	//private File historyFile;
 
-	private void updateLoadedBookInfo(boolean updatePath) {
+	private void updateLoadedBookInfo(
+			BookInfo bookInfo, boolean updatePath,
+			CloseableTaskGate.Token loadOwner) {
 		BackgroundThread.ensureBackground();
 		// get title, authors, genres, etc.
-		doc.updateBookInfo(mBookInfo, updatePath);
-		updateCurrentPositionStatus();
+		doc.updateBookInfo(bookInfo, updatePath);
+		updateCurrentPositionStatus(bookInfo, loadOwner);
 		// check whether current book properties updated on another devices
 		// TODO: fix and reenable
-		//syncUpdater.syncExternalChanges(mBookInfo);
+		//syncUpdater.syncExternalChanges(bookInfo);
 	}
 
 	private void applySettings(Properties props) {
@@ -3312,9 +3326,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						this.mBookInfo.getFileInfo(), null, null, true);
 				return true;
 			}
-			post(new LoadDocumentTask(
-					this.mBookInfo, source, null, null, null));
-			return true;
+			CloseableTaskGate.Token loadOwner =
+					documentLoadLifecycle.replace();
+			return enqueueDocumentLoad(
+					loadOwner, this.mBookInfo, source, null,
+					null, null, null, null);
 		}
 		return false;
 	}
@@ -3340,15 +3356,25 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			drawPage();
 			return false;
 		}
+		final CloseableTaskGate.Token loadOwner =
+				documentLoadLifecycle.replace();
+		if (loadOwner == null)
+			return false;
 		mHistory.getOrCreateBookInfo(mActivity.getDB(), fileInfo, bookInfo -> {
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
 			log.v("posting LoadDocument task to background thread");
 			BackgroundThread.instance().postBackground(() -> {
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
 				log.v("posting LoadDocument task to GUI thread");
 				BackgroundThread.instance().postGUI(() -> {
+					if (!documentLoadLifecycle.isActive(loadOwner))
+						return;
 					log.v("synced posting LoadDocument task to GUI thread");
-					post(new LoadDocumentTask(
-							bookInfo, source, null,
-							doneHandler, errorHandler));
+					enqueueDocumentLoad(
+							loadOwner, bookInfo, source, null,
+							null, null, doneHandler, errorHandler);
 				});
 			});
 		});
@@ -3363,6 +3389,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (inputStream == null || source == null) {
 			if (errorHandler != null)
 				errorHandler.run();
+			return false;
+		}
+		final CloseableTaskGate.Token loadOwner =
+				documentLoadLifecycle.replace();
+		if (loadOwner == null) {
+			try {
+				inputStream.close();
+			} catch (IOException ignored) {
+			}
 			return false;
 		}
 		String identity = source.getIdentity();
@@ -3421,17 +3456,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BookInfo bookInfo = new BookInfo(fileInfo);
 			log.v("posting LoadDocument task to background thread");
 			BackgroundThread.instance().postBackground(() -> {
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
 				log.v("posting LoadDocument task to GUI thread");
 				BackgroundThread.instance().postGUI(() -> {
+					if (!documentLoadLifecycle.isActive(loadOwner))
+						return;
 					log.v("synced posting LoadDocument task to GUI thread");
-					post(new LoadDocumentTask(
-							bookInfo, source,
-							docBuffer, doneHandler, errorHandler));
+					enqueueDocumentLoad(
+							loadOwner, bookInfo, source, docBuffer,
+							null, null, doneHandler, errorHandler);
 				});
 			});
 			return true;
 		}
-		if (errorHandler != null)
+		if (documentLoadLifecycle.complete(loadOwner)
+				&& errorHandler != null)
 			errorHandler.run();
 		return false;
 	}
@@ -3457,6 +3497,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				errorHandler.run();
 			return false;
 		}
+		final CloseableTaskGate.Token loadOwner =
+				documentLoadLifecycle.replace();
+		if (loadOwner == null) {
+			closeDescriptorQuietly(pfd);
+			return false;
+		}
 
 		FileInfo sourceFileInfo = new FileInfo();
 		sourceFileInfo.pathname = contentPath;
@@ -3470,27 +3516,65 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		mHistory.getOrCreateBookInfo(
 				mActivity.getDB(), sourceFileInfo, bookInfo -> {
+					if (!documentLoadLifecycle.isActive(loadOwner)) {
+						closeDescriptorQuietly(pfd);
+						return;
+					}
 					if (bookInfo == null || bookInfo.getFileInfo() == null) {
 						closeDescriptorQuietly(pfd);
-						if (errorHandler != null)
+						if (documentLoadLifecycle.complete(loadOwner)
+								&& errorHandler != null)
 							errorHandler.run();
 						return;
 					}
 					enqueueFileDescriptorLoad(
-							pfd, source, bookInfo, doneHandler, errorHandler);
+							loadOwner, pfd, source, bookInfo,
+							doneHandler, errorHandler);
 				});
 		return true;
 	}
 
 	private void enqueueFileDescriptorLoad(
+			CloseableTaskGate.Token loadOwner,
 			ParcelFileDescriptor pfd, DocumentSource source, BookInfo bookInfo,
 			Runnable doneHandler, Runnable errorHandler) {
 		final String streamName = streamNameFor(source);
-		BackgroundThread.instance().postBackground(() ->
-				BackgroundThread.instance().postGUI(() ->
-						post(new LoadDocumentTask(
-								bookInfo, source, null, pfd, streamName,
-								doneHandler, errorHandler))));
+		BackgroundThread.instance().postBackground(() -> {
+			if (!documentLoadLifecycle.isActive(loadOwner)) {
+				closeDescriptorQuietly(pfd);
+				return;
+			}
+			BackgroundThread.instance().postGUI(() -> {
+				if (!documentLoadLifecycle.isActive(loadOwner)) {
+					closeDescriptorQuietly(pfd);
+					return;
+				}
+				enqueueDocumentLoad(
+						loadOwner, bookInfo, source, null, pfd,
+						streamName, doneHandler, errorHandler);
+			});
+		});
+	}
+
+	private boolean enqueueDocumentLoad(
+			CloseableTaskGate.Token loadOwner,
+			BookInfo bookInfo, DocumentSource source, byte[] docBuffer,
+			ParcelFileDescriptor parcelFileDescriptor, String streamName,
+			Runnable doneHandler, Runnable errorHandler) {
+		BackgroundThread.ensureGUI();
+		if (!documentLoadLifecycle.isActive(loadOwner)
+				|| bookInfo == null || bookInfo.getFileInfo() == null) {
+			closeDescriptorQuietly(parcelFileDescriptor);
+			if (documentLoadLifecycle.complete(loadOwner)
+					&& errorHandler != null)
+				errorHandler.run();
+			return false;
+		}
+		post(new LoadDocumentTask(
+				loadOwner, bookInfo, source, docBuffer,
+				parcelFileDescriptor, streamName,
+				doneHandler, errorHandler));
+		return true;
 	}
 
 	private static void closeDescriptorQuietly(ParcelFileDescriptor descriptor) {
@@ -5522,15 +5606,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private int internalDX = 0;
 	private int internalDY = 0;
 
-	private byte[] coverPageBytes = null;
-
-	private void findCoverPage() {
+	private byte[] findCoverPage() {
 		log.d("document is loaded succesfull, checking coverpage data");
 		byte[] coverpageBytes = doc.getCoverPageData();
 		if (coverpageBytes != null) {
 			log.d("Found cover page data: " + coverpageBytes.length + " bytes");
-			coverPageBytes = coverpageBytes;
 		}
+		return coverpageBytes;
 	}
 
 	private final ReaderProgressState progressState =
@@ -5611,35 +5693,43 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private class LoadDocumentTask extends Task {
-		DocumentSource documentSource;
-		String filename;
-		String path;
-		byte[] docBuffer;
-		ParcelFileDescriptor parcelFileDescriptor;
-		String streamName;
-		Runnable doneHandler;
-		Runnable errorHandler;
-		String pos;
-		int profileNumber;
-		boolean disableInternalStyles;
-		boolean disableTextAutoformat;
+		private final CloseableTaskGate.Token loadOwner;
+		private BookInfo bookInfo;
+		private final DocumentSource documentSource;
+		private String filename;
+		private String path;
+		private final byte[] docBuffer;
+		private ParcelFileDescriptor parcelFileDescriptor;
+		private final String streamName;
+		private final Runnable doneHandler;
+		private final Runnable errorHandler;
+		private String pos;
+		private final int profileNumber;
+		private final boolean disableInternalStyles;
+		private final boolean disableTextAutoformat;
+		private final Properties settings;
+		private byte[] coverPageBytes;
+		private boolean loadSucceeded;
 
 		LoadDocumentTask(
+				CloseableTaskGate.Token loadOwner,
 				BookInfo bookInfo, DocumentSource documentSource,
 				byte[] docBuffer, Runnable doneHandler,
 				Runnable errorHandler) {
-			this(bookInfo, documentSource, docBuffer, null, null,
-					doneHandler, errorHandler);
+			this(loadOwner, bookInfo, documentSource, docBuffer,
+					null, null, doneHandler, errorHandler);
 		}
 
 		LoadDocumentTask(
+				CloseableTaskGate.Token loadOwner,
 				BookInfo bookInfo, DocumentSource documentSource,
 				byte[] docBuffer,
 				ParcelFileDescriptor parcelFileDescriptor,
 				String streamName, Runnable doneHandler,
 				Runnable errorHandler) {
 			BackgroundThread.ensureGUI();
-			mBookInfo = bookInfo;
+			this.loadOwner = loadOwner;
+			this.bookInfo = bookInfo;
 			this.documentSource = documentSource;
 			this.parcelFileDescriptor = parcelFileDescriptor;
 			this.streamName = streamName;
@@ -5663,15 +5753,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			this.doneHandler = doneHandler;
 			this.errorHandler = errorHandler;
 			//FileInfo fileInfo = new FileInfo(filename);
-			disableInternalStyles = mBookInfo.getFileInfo().getFlag(FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG);
-			disableTextAutoformat = mBookInfo.getFileInfo().getFlag(FileInfo.DONT_REFLOW_TXT_FILES_FLAG);
-			profileNumber = mBookInfo.getFileInfo().getProfileId();
+			disableInternalStyles = bookInfo.getFileInfo().getFlag(FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG);
+			disableTextAutoformat = bookInfo.getFileInfo().getFlag(FileInfo.DONT_REFLOW_TXT_FILES_FLAG);
+			profileNumber = bookInfo.getFileInfo().getProfileId();
+			closeCurrentDocument(false);
+			mBookInfo = bookInfo;
 			//Properties oldSettings = new Properties(mSettings);
 			// TODO: enable storing of profile per book
 			mActivity.setCurrentProfile(profileNumber);
 			Bookmark lastPos = null;
-			if (mBookInfo != null)
-				lastPos = mBookInfo.getLastPosition();
+			if (bookInfo != null)
+				lastPos = bookInfo.getLastPosition();
 			if (lastPos != null)
 				pos = lastPos.getStartPos();
 			log.v("LoadDocumentTask : book " + safeDocumentPathForLog(filename));
@@ -5681,33 +5773,41 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			//mBitmap = null;
 			//showProgress(1000, R.string.progress_loading);
 			//draw();
-			BackgroundThread.instance().postGUI(() -> bookView.draw(false));
-			//init();
-			// close existing document
-			log.v("LoadDocumentTask : closing current book");
-			close();
-			final Properties currSettings = new Properties(mSettings);
-			//setAppSettings(props, oldSettings);
-			BackgroundThread.instance().postBackground(() -> {
-				log.v("LoadDocumentTask : switching current profile");
-				applySettings(currSettings); //enforce settings reload
-				log.i("Switching done");
+			BackgroundThread.instance().postGUI(() -> {
+				if (documentLoadLifecycle.isActive(loadOwner))
+					bookView.draw(false);
 			});
-
+			//init();
+			settings = new Properties(mSettings);
 		}
 
 		@Override
 		public void work() throws IOException {
 			BackgroundThread.ensureBackground();
+			if (!documentLoadLifecycle.isActive(loadOwner)) {
+				closeParcelFileDescriptor();
+				return;
+			}
 			coverPageBytes = null;
+			log.v("LoadDocumentTask : switching current profile");
+			applySettings(settings); // enforce settings reload
+			log.i("Switching done");
+			if (!documentLoadLifecycle.isActive(loadOwner)) {
+				closeParcelFileDescriptor();
+				return;
+			}
+			// A replaced task can finish native parsing after the next request
+			// was accepted. Always close that native document at this serialized
+			// engine boundary before opening the exact current request.
+			doc.doCommand(ReaderCommand.DCMD_CLOSE_BOOK.nativeId, 0);
 			log.i("Loading document " + safeDocumentPathForLog(filename));
 			doc.doCommand(ReaderCommand.DCMD_SET_INTERNAL_STYLES.nativeId, disableInternalStyles ? 0 : 1);
 			doc.doCommand(ReaderCommand.DCMD_SET_TEXT_FORMAT.nativeId, disableTextAutoformat ? 0 : 1);
-			doc.doCommand(ReaderCommand.DCMD_SET_REQUESTED_DOM_VERSION.nativeId, mBookInfo.getFileInfo().domVersion);
-			if (0 == mBookInfo.getFileInfo().domVersion) {
+			doc.doCommand(ReaderCommand.DCMD_SET_REQUESTED_DOM_VERSION.nativeId, bookInfo.getFileInfo().domVersion);
+			if (0 == bookInfo.getFileInfo().domVersion) {
 				doc.doCommand(ReaderCommand.DCMD_SET_RENDER_BLOCK_RENDERING_FLAGS.nativeId, 0);
 			} else {
-				doc.doCommand(ReaderCommand.DCMD_SET_RENDER_BLOCK_RENDERING_FLAGS.nativeId, mBookInfo.getFileInfo().blockRenderingFlags);
+				doc.doCommand(ReaderCommand.DCMD_SET_RENDER_BLOCK_RENDERING_FLAGS.nativeId, bookInfo.getFileInfo().blockRenderingFlags);
 			}
 			boolean success;
 			try {
@@ -5727,11 +5827,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			if (success) {
 				log.v("loadDocumentInternal completed successfully");
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
 				updateStrongBookKey();
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
 
 				doc.requestRender();
 
-				findCoverPage();
+				coverPageBytes = findCoverPage();
 				log.v("requesting page image, to render");
 				if (internalDX == 0 || internalDY == 0) {
 					internalDX = surface.getWidth();
@@ -5741,13 +5845,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 				preparePageImage(0);
 				log.v("updating loaded book info");
-				updateLoadedBookInfo(null != docBuffer);
+				updateLoadedBookInfo(
+						bookInfo, null != docBuffer, loadOwner);
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
 				if (null == docBuffer) {
 					// Opened existing file
 					log.i("Document " + safeDocumentPathForLog(filename) + " is loaded successfully");
 					if (pos != null) {
 						log.i("Restoring position : " + pos);
-						restorePositionBackground(pos);
+						restorePositionBackground(
+								pos, bookInfo, loadOwner);
 					}
 				} else {
 					// Opened from memory buffer
@@ -5757,6 +5865,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					// receive data from the database through callbacks
 					// and cannot control the completion of the operation.
 				}
+				loadSucceeded =
+						documentLoadLifecycle.isActive(loadOwner);
 				CoolReader.dumpHeapAllocation();
 			} else {
 				log.e("Error occurred while trying to load document " + safeDocumentPathForLog(filename));
@@ -5765,8 +5875,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private void updateStrongBookKey() {
-			FileInfo fileInfo = mBookInfo != null
-					? mBookInfo.getFileInfo() : null;
+			FileInfo fileInfo = bookInfo != null
+					? bookInfo.getFileInfo() : null;
 			if (fileInfo == null)
 				return;
 			try {
@@ -5807,153 +5917,210 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BackgroundThread.ensureGUI();
 			closeParcelFileDescriptor();
 			log.d("LoadDocumentTask, GUI thread is finished successfully");
-			if (mServiceLifecycle.isActive()) {
-				if (null == docBuffer) {
-					// Opened from existing file
-					mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
-					final BookInfo finalBookInfo = new BookInfo(mBookInfo);
-					mActivity.waitForCRDBService(() -> mActivity.getDB().saveBookInfo(finalBookInfo));
-					if (coverPageBytes != null && mBookInfo.getFileInfo() != null) {
-						// TODO: fix it
-						/*
-						DocumentFormat format = mBookInfo.getFileInfo().format;
-						if (null != format) {
-							if (format.needCoverPageCaching()) {
-//			        			if (mActivity.getBrowser() != null)
-//			        				mActivity.getBrowser().setCoverpageData(new FileInfo(mBookInfo.getFileInfo()), coverPageBytes);
-							}
-						}
-						*/
-						if (DeviceInfo.EINK_NOOK)
-							updateNookTouchCoverpage(mBookInfo.getFileInfo().getPathName(), coverPageBytes);
-						//mEngine.setProgressDrawable(coverPageDrawable);
-					}
-					if (DeviceInfo.EINK_SONY) {
-						SonyBookSelector selector = new SonyBookSelector(mActivity);
-						long l = selector.getContentId(path);
-						if (l != 0) {
-							selector.setReadingTime(l);
-							selector.requestBookSelection(l);
-						}
-					}
-					mActivity.setLastBook(filename);
-				} else {
-					// Opened from memory buffer
-					// After stream successfully opened, find corresponding file it in DB
-					// Now mBookInfo already contains updated data
-					if (0 != mBookInfo.getFileInfo().crc32) {
-						ArrayList<String> fingerprints = new ArrayList<String>(1);
-						String fingerprint = Long.toString(mBookInfo.getFileInfo().crc32);
-						fingerprints.add(fingerprint);
-						mActivity.waitForCRDBService(() -> mActivity.getDB().findByFingerprints(10, fingerprints, fileList -> {
-							FileInfo result = null;
-							// TODO: select more recent file
-							//  or may be file with maximum read pos
-							for (FileInfo f : fileList) {
-								if (f.exists()) {
-									result = f;
-									break;
-								}
-							}
-							if (null == result) {
-								// Tier 1, not found or not exist: save stream as file in app private directory,
-								// At this point, the inputStream has already been fully read to the end
-								// and cannot be reset to its original position.
-								// So, we create a new input stream from docBuffer.
-								ByteArrayInputStream inputStream = new ByteArrayInputStream(docBuffer);
-								BookInfo bi = mDocumentCache.saveStream(
-										mBookInfo.getFileInfo(), inputStream);
-								if (null != bi) {
-									mBookInfo = new BookInfo(bi);
-									mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
-									final BookInfo finalBookInfo = new BookInfo(mBookInfo);
-									mActivity.waitForCRDBService(() -> mActivity.getDB().saveBookInfo(finalBookInfo));
-									mActivity.setLastBook(finalBookInfo.getFileInfo().getPathName());
-								} else {
-									log.e("Failed to save document memory buffer to file!");
-									// Show error? Or something other action?
-									// We cannot throw an exception here so that the fail() function
-									// is called later, since we are in the done() function, not work().
-									// And we cannot move this block of code to the work() function,
-									// since we use callback functions to get information from the database,
-									// i.e. this block of code is not continuously executing.
-									// Therefore, we leave this exception unhandled.
-									mActivity.showToast(R.string.failed_to_save_memory_stream);
-								}
-							} else {
-								// Tier 2, found: update mBookInfo, fileInfo, filename, pos
-								mActivity.getDB().loadBookInfo(result, bookInfo -> {
-									if (null != bookInfo) {
-										// ok, bookmarks is loaded
-										mBookInfo = new BookInfo(bookInfo);
-										FileInfo fileInfo = mBookInfo.getFileInfo();
-										filename = fileInfo.getPathName();
-										path = fileInfo.arcname != null ? fileInfo.arcname : fileInfo.pathname;
-										if (mBookInfo.getLastPosition() != null)
-											pos = mBookInfo.getLastPosition().getStartPos();
-										if (pos != null) {
-											final String finalPos = pos;
-											BackgroundThread.instance().executeBackground(() -> {
-												log.i("Restoring position : " + finalPos);
-												restorePositionBackground(finalPos);
-											});
-										}
-										mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
-										final BookInfo finalBookInfo = new BookInfo(mBookInfo);
-										mActivity.waitForCRDBService(() -> mActivity.getDB().saveBookInfo(finalBookInfo));
-										mActivity.setLastBook(filename);
-										if (null != doneHandler)
-											doneHandler.run();
-									} else {
-										// Logic error: not found by pathname, but found by fingerprint
-										log.e("Failed to load bookmarks for book with fingerprint: " + fingerprint);
-										if (null != errorHandler)
-											errorHandler.run();
-									}
-								});
-							}
-						}));
-					} else {
-						log.e("Invalid CRC32 (0)");
-						// See comment above...
+			if (!loadSucceeded
+					|| !mServiceLifecycle.isActive()
+					|| !documentLoadLifecycle.isActive(loadOwner))
+				return;
+
+			mBookInfo = bookInfo;
+			mOpened = true;
+			highlightBookmarks();
+			hideProgress();
+			drawPage();
+			mActivity.showReader();
+			if (doneHandler != null)
+				doneHandler.run();
+
+			if (docBuffer == null) {
+				finishFileLoad();
+			} else {
+				resolveStreamBook();
+			}
+		}
+
+		private void finishFileLoad() {
+			mHistory.updateBookAccess(bookInfo, getTimeElapsed());
+			final BookInfo finalBookInfo = new BookInfo(bookInfo);
+			mActivity.waitForCRDBService(() -> {
+				if (mServiceLifecycle.isActive())
+					mActivity.getDB().saveBookInfo(finalBookInfo);
+			});
+			if (coverPageBytes != null
+					&& bookInfo.getFileInfo() != null
+					&& DeviceInfo.EINK_NOOK) {
+				updateNookTouchCoverpage(
+						bookInfo.getFileInfo().getPathName(),
+						coverPageBytes);
+			}
+			if (DeviceInfo.EINK_SONY) {
+				SonyBookSelector selector =
+						new SonyBookSelector(mActivity);
+				long contentId = selector.getContentId(path);
+				if (contentId != 0) {
+					selector.setReadingTime(contentId);
+					selector.requestBookSelection(contentId);
+				}
+			}
+			mActivity.setLastBook(filename);
+		}
+
+		private void resolveStreamBook() {
+			FileInfo fileInfo = bookInfo.getFileInfo();
+			if (fileInfo == null || fileInfo.crc32 == 0) {
+				log.e("Invalid CRC32 (0)");
+				return;
+			}
+			ArrayList<String> fingerprints =
+					new ArrayList<String>(1);
+			String fingerprint = Long.toString(fileInfo.crc32);
+			fingerprints.add(fingerprint);
+			mActivity.waitForCRDBService(() -> {
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
+				mActivity.getDB().findByFingerprints(
+						10, fingerprints,
+						fileList -> onStreamFingerprints(
+								fingerprint, fileList));
+			});
+		}
+
+		private void onStreamFingerprints(
+				String fingerprint, ArrayList<FileInfo> fileList) {
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
+			FileInfo result = null;
+			if (fileList != null) {
+				for (FileInfo file : fileList) {
+					if (file.exists()) {
+						result = file;
+						break;
 					}
 				}
-				highlightBookmarks();
-				hideProgress();
-				drawPage();
-				mActivity.showReader();
-				if (null != doneHandler)
-					doneHandler.run();
-				mOpened = true;
 			}
+			if (result == null) {
+				saveStreamToCache();
+				return;
+			}
+			mActivity.getDB().loadBookInfo(
+					result,
+					resolvedBook -> onStreamBookLoaded(
+							fingerprint, resolvedBook));
+		}
+
+		private void saveStreamToCache() {
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
+			ByteArrayInputStream inputStream =
+					new ByteArrayInputStream(docBuffer);
+			BookInfo cachedBook = mDocumentCache.saveStream(
+					bookInfo.getFileInfo(), inputStream);
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
+			if (cachedBook != null) {
+				bookInfo = new BookInfo(cachedBook);
+				mBookInfo = bookInfo;
+				mHistory.updateBookAccess(bookInfo, getTimeElapsed());
+				final BookInfo finalBookInfo =
+						new BookInfo(bookInfo);
+				mActivity.waitForCRDBService(() -> {
+					if (mServiceLifecycle.isActive())
+						mActivity.getDB().saveBookInfo(finalBookInfo);
+				});
+				mActivity.setLastBook(
+						finalBookInfo.getFileInfo().getPathName());
+			} else {
+				log.e("Failed to save document memory buffer to file!");
+				mActivity.showToast(
+						R.string.failed_to_save_memory_stream);
+			}
+		}
+
+		private void onStreamBookLoaded(
+				String fingerprint, BookInfo resolvedBook) {
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
+			if (resolvedBook == null) {
+				log.e("Failed to load bookmarks for book with fingerprint: "
+						+ fingerprint);
+				if (errorHandler != null)
+					errorHandler.run();
+				return;
+			}
+			bookInfo = new BookInfo(resolvedBook);
+			mBookInfo = bookInfo;
+			FileInfo fileInfo = bookInfo.getFileInfo();
+			filename = fileInfo.getPathName();
+			path = fileInfo.arcname != null
+					? fileInfo.arcname : fileInfo.pathname;
+			Bookmark lastPosition = bookInfo.getLastPosition();
+			pos = lastPosition != null
+					? lastPosition.getStartPos() : null;
+			if (pos != null) {
+				final String finalPos = pos;
+				BackgroundThread.instance().executeBackground(() -> {
+					if (!documentLoadLifecycle.isActive(loadOwner))
+						return;
+					log.i("Restoring position : " + finalPos);
+					restorePositionBackground(
+							finalPos, bookInfo, loadOwner);
+				});
+			}
+			mHistory.updateBookAccess(bookInfo, getTimeElapsed());
+			final BookInfo finalBookInfo = new BookInfo(bookInfo);
+			mActivity.waitForCRDBService(() -> {
+				if (mServiceLifecycle.isActive())
+					mActivity.getDB().saveBookInfo(finalBookInfo);
+			});
+			mActivity.setLastBook(filename);
 		}
 
 		public void fail(Exception e) {
 			BackgroundThread.ensureGUI();
 			closeParcelFileDescriptor();
-			close();
-			log.v("LoadDocumentTask failed for " + mBookInfo, e);
-			final FileInfo finalFileInfo = new FileInfo(mBookInfo.getFileInfo());
+			if (!documentLoadLifecycle.isActive(loadOwner))
+				return;
+			log.v("LoadDocumentTask failed for " + bookInfo, e);
+			final FileInfo finalFileInfo =
+					new FileInfo(bookInfo.getFileInfo());
 			mActivity.waitForCRDBService(() -> {
-				if (mServiceLifecycle.isActive())
+				if (mServiceLifecycle.isActive()
+						&& documentLoadLifecycle.isActive(loadOwner))
 					mHistory.removeBookInfo(
 							mActivity.getDB(), finalFileInfo, true, false);
 			});
-			mBookInfo = null;
 			log.d("LoadDocumentTask is finished with exception " + e.getMessage());
 			mOpened = false;
 			BackgroundThread.instance().executeBackground(() -> {
-				doc.createDefaultDocument(mActivity.getString(R.string.error), mActivity.getString(R.string.error_while_opening, filename));
+				if (!documentLoadLifecycle.isActive(loadOwner))
+					return;
+				doc.doCommand(
+						ReaderCommand.DCMD_CLOSE_BOOK.nativeId, 0);
+				doc.createDefaultDocument(
+						mActivity.getString(R.string.error),
+						mActivity.getString(
+								R.string.error_while_opening,
+								filename));
 				doc.requestRender();
 				preparePageImage(0);
 				drawPage();
+				BackgroundThread.instance().postGUI(
+						this::finishFailure);
 			});
+		}
+
+		private void finishFailure() {
+			BackgroundThread.ensureGUI();
+			if (!documentLoadLifecycle.complete(loadOwner))
+				return;
+			if (mBookInfo == bookInfo)
+				mBookInfo = null;
+			mOpened = false;
 			hideProgress();
 			mActivity.showToast("Error while loading document");
-			if (errorHandler != null) {
-				log.e("LoadDocumentTask: Calling error handler");
-				errorHandler.run();
-			}
+			if (errorHandler == null)
+				return;
+			log.e("LoadDocumentTask: Calling error handler");
+			errorHandler.run();
 		}
 
 		private void closeParcelFileDescriptor() {
@@ -6168,13 +6335,27 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void restorePositionBackground(String pos) {
+		restorePositionBackground(pos, mBookInfo, null);
+	}
+
+	private void restorePositionBackground(
+			String pos, BookInfo expectedBook,
+			CloseableTaskGate.Token loadOwner) {
 		BackgroundThread.ensureBackground();
 		if (pos != null) {
-			BackgroundThread.ensureBackground();
+			if (loadOwner != null
+					&& !documentLoadLifecycle.isActive(loadOwner))
+				return;
 			doc.goToPosition(pos, false);
+			if (loadOwner != null
+					&& !documentLoadLifecycle.isActive(loadOwner))
+				return;
 			preparePageImage(0);
+			if (loadOwner != null
+					&& !documentLoadLifecycle.isActive(loadOwner))
+				return;
 			drawPage();
-			updateCurrentPositionStatus();
+			updateCurrentPositionStatus(expectedBook, loadOwner);
 		}
 	}
 
@@ -6428,8 +6609,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void close() {
+		closeCurrentDocument(true);
+	}
+
+	private void closeCurrentDocument(boolean cancelDocumentLoad) {
 		BackgroundThread.ensureGUI();
 		log.i("ReaderView.close() is called");
+		if (cancelDocumentLoad)
+			documentLoadLifecycle.cancel();
 		stopTracking();
 		invalidateTapHighlight();
 		cancelSelectionUpdates();
@@ -6439,16 +6626,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		stopAutoScroll();
 		stopImageViewer();
 		save();
+		mOpened = false;
 		//scheduleSaveCurrentPositionBookmark(0);
 		//save();
 		post(new Task() {
 			public void work() {
 				BackgroundThread.ensureBackground();
-				if (mOpened) {
-					mOpened = false;
-					log.i("ReaderView().close() : closing current document");
-					doc.doCommand(ReaderCommand.DCMD_CLOSE_BOOK.nativeId, 0);
-				}
+				log.i("ReaderView().close() : closing current document");
+				doc.doCommand(
+						ReaderCommand.DCMD_CLOSE_BOOK.nativeId, 0);
 			}
 
 			public void done() {
@@ -6498,6 +6684,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closeSelectionUpdates();
 		drawTaskLifecycle.close();
 		ttsInitializationLifecycle.close();
+		documentLoadLifecycle.close();
 		readerSurfaceState.close();
 		einkRefreshScheduler.cancel();
 		closeGestureTimeouts();

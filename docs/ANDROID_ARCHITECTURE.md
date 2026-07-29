@@ -96,6 +96,20 @@ identity and active service generation before publishing UI. Link/image/
 bookmark inspection also captures book identity, so its delayed GUI result
 cannot act on a replacement document.
 
+Document opening inside `ReaderView` is one closeable, identity-owned
+generation from the first history lookup through engine work and any
+memory-stream fingerprint/cache reconciliation. File, buffer and file
+descriptor handoffs all carry the same token across background and GUI queues.
+Replacement, reader close and destruction reject stale callbacks; an
+unaccepted or replaced descriptor is closed by the layer that still owns it.
+Each `LoadDocumentTask` retains its own `BookInfo`, settings and completion
+state rather than consulting a book pointer that another request can replace
+while native parsing is running. The old book is saved and marked closed before
+the new metadata is published, and the serialized native boundary closes any
+document left by a parse that became stale mid-flight. Only the current token
+may publish reader UI, run failure recovery, or replace the stream book with a
+late database/cache result.
+
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.
