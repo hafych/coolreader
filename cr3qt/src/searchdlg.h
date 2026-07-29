@@ -25,6 +25,7 @@
 
 #include <lvstring.h>
 #include <QDialog>
+#include <QPointer>
 #include <memory>
 
 namespace Ui {
@@ -42,13 +43,12 @@ protected:
     SearchDialog(QWidget *parent, CR3View * docView);
     ~SearchDialog();
     void changeEvent(QEvent *e);
-    void closeEvent(QCloseEvent* e);
 
 private:
     std::unique_ptr<Ui::SearchDialog> ui;
     CR3View * _docview;
     lString32 _lastPattern;
-    static SearchDialog* _instance;
+    static QPointer<SearchDialog> _instance;
 private slots:
     void on_btnFindNext_clicked();
     void on_btnClose_clicked();

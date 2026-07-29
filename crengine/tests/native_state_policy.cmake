@@ -726,6 +726,26 @@ forbid_source_text(
   "QMessageBox * mb = new QMessageBox"
   "modern Qt search feedback must not return to raw ownership"
 )
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "static QPointer<SearchDialog> _instance;"
+  "modern Qt search-dialog observation must remain lifetime-guarded"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "setAttribute(Qt::WA_DeleteOnClose, true);"
+  "modern Qt modeless search dialogs must retain Qt-owned teardown"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "static SearchDialog* _instance;"
+  "modern Qt search-dialog observation must not return to a dangling raw pointer"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "SearchDialog::_instance = NULL;"
+  "modern Qt search-dialog observation must not return to manual invalidation"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(

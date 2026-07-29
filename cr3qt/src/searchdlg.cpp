@@ -33,11 +33,11 @@
 #include "searchdlg.h"
 #include "ui_searchdlg.h"
 
-SearchDialog* SearchDialog::_instance = NULL;
+QPointer<SearchDialog> SearchDialog::_instance;
 
 bool SearchDialog::showDlg( QWidget * parent, CR3View * docView )
 {
-    if (NULL == _instance) {
+    if (_instance.isNull()) {
         _instance = new SearchDialog( parent, docView );
     }
     _instance->show();
@@ -69,13 +69,6 @@ void SearchDialog::changeEvent(QEvent *e)
     default:
         break;
     }
-}
-
-void SearchDialog::closeEvent(QCloseEvent* e) {
-    QDialog::closeEvent(e);
-    // this dialog instance will be deleted by Qt because
-    // we set the WA_DeleteOnClose attribute for this window to true.
-    SearchDialog::_instance = NULL;
 }
 
 bool SearchDialog::findText( lString32 pattern, int origin, bool reverse, bool caseInsensitive )
