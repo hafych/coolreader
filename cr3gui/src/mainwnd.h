@@ -132,10 +132,6 @@ public:
         return loadDocument(Utf16ToUnicode(filename));
     }
     bool loadDefaultCover( lString32 filename );
-    bool loadDefaultCover( lString16 filename )
-    {
-        return loadDefaultCover(Utf16ToUnicode(filename));
-    }
     bool loadCSS( lString32 filename );
     bool loadCSS( lString16 filename )
     {

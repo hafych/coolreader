@@ -7208,6 +7208,21 @@ forbid_source_text(
   "main windows must not expose a legacy help-path adapter"
 )
 forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadDefaultCover( lString16"
+  "main windows must not expose a legacy default-cover path adapter"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadDefaultCover( lString16"
+  "GUI platform default-cover callers must use current-width paths"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadDefaultCover(lString16"
+  "GUI platform default-cover callers must not use compact legacy adapters"
+)
+forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "setHelpFile( lString16"
   "GUI platform help-file callers must use current-width paths"

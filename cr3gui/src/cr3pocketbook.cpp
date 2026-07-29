@@ -2465,9 +2465,15 @@ int InitDoc(const char *exename, char *fileName)
         if (manual_file[0])
             main_win->setHelpFile(
                     Utf8ToUnicode(lString8(manual_file)));
-        if (!main_win->loadDefaultCover(lString16(CONFIGPATH"/cr3/cr3_def_cover.png")))
-            if (!main_win->loadDefaultCover(lString16(USERDATA2"/share/cr3/cr3_def_cover.png")))
-                main_win->loadDefaultCover(lString16(USERDATA"/share/cr3/cr3_def_cover.png"));
+        if (!main_win->loadDefaultCover(
+                    Utf8ToUnicode(lString8(
+                            CONFIGPATH"/cr3/cr3_def_cover.png"))))
+            if (!main_win->loadDefaultCover(
+                        Utf8ToUnicode(lString8(
+                                USERDATA2"/share/cr3/cr3_def_cover.png"))))
+                main_win->loadDefaultCover(
+                        Utf8ToUnicode(lString8(
+                                USERDATA"/share/cr3/cr3_def_cover.png")));
         if ( !main_win->loadCSS(lString16(CONFIGPATH"/cr3/")   + lString16(css_file_name) ) )
             if ( !main_win->loadCSS(  lString16(USERDATA"/share/cr3/" ) + lString16(css_file_name) ) )
                 main_win->loadCSS( lString16(USERDATA2"/share/cr3/" ) + lString16(css_file_name) );

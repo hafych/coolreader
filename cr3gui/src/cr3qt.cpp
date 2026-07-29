@@ -421,8 +421,10 @@ int main(int argc, char **argv)
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
-        if ( !main_win->loadDefaultCover( lString16("/media/sd/crengine/cr3_def_cover.png") ) )
-            main_win->loadDefaultCover( lString16("/usr/share/cr3/cr3_def_cover.png") );
+        if ( !main_win->loadDefaultCover(
+                    U"/media/sd/crengine/cr3_def_cover.png") )
+            main_win->loadDefaultCover(
+                    U"/usr/share/cr3/cr3_def_cover.png");
         if ( !main_win->loadCSS(  lString16("/media/sd/crengine/fb2.css") ) )
             main_win->loadCSS( lString16("/usr/share/cr3/fb2.css") );
 

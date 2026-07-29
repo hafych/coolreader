@@ -834,9 +834,12 @@ int InitDoc(char *fileName)
         if ( manual_file[0] )
             main_win->setHelpFile(
                     Utf8ToUnicode(lString8(manual_file)));
-        if ( !main_win->loadDefaultCover( lString16( L"/root/abook/crengine/cr3_def_cover.png" ) ) )
-            if ( !main_win->loadDefaultCover( lString16( L"/home/crengine/cr3_def_cover.png" ) ) )
-                main_win->loadDefaultCover( lString16( L"/root/crengine/cr3_def_cover.png" ) );
+        if ( !main_win->loadDefaultCover(
+                    U"/root/abook/crengine/cr3_def_cover.png") )
+            if ( !main_win->loadDefaultCover(
+                        U"/home/crengine/cr3_def_cover.png") )
+                main_win->loadDefaultCover(
+                        U"/root/crengine/cr3_def_cover.png");
         if ( !main_win->loadCSS(  lString16( L"/root/abook/crengine/" ) + lString16(css_file_name) ) )
             if ( !main_win->loadCSS(  lString16( L"/home/crengine/" ) + lString16(css_file_name) ) )
                 main_win->loadCSS( lString16( L"/root/crengine/" ) + lString16(css_file_name) );
