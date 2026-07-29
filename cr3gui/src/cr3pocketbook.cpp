@@ -1970,12 +1970,14 @@ bool CRPbDictionaryMenu::newPage(const char *firstWord, const char *firstTransla
 {
     char *word = NULL, *translation = NULL;
     _items.clear();
-    addItem(new CRPbDictionaryMenuItem(this, 0, firstWord, firstTranslation));
+    addItem(std::make_unique<CRPbDictionaryMenuItem>(
+            this, 0, firstWord, firstTranslation));
     for (int i = 1; i < _pageItems; i++) {
         int result = LookupNext(&word, &translation);
         if (result == 0)
             break;
-        addItem(new CRPbDictionaryMenuItem(this, i, word, translation));
+        addItem(std::make_unique<CRPbDictionaryMenuItem>(
+                this, i, word, translation));
     }
     _topItem = _selectedItem = 0;
     invalidateMenu();
@@ -2011,7 +2013,10 @@ bool CRPbDictionaryMenu::prevPage()
             int result = LookupPrevious(&word, &translation);
             if (result == 0)
                 break;
-            _items.insert(0, new CRPbDictionaryMenuItem(this, i, word, translation));
+            std::unique_ptr<CRPbDictionaryMenuItem> candidate =
+                    std::make_unique<CRPbDictionaryMenuItem>(
+                            this, i, word, translation);
+            _items.insert(0, candidate.release());
         }
         int l = _items.length();
         if (l > _pageItems)

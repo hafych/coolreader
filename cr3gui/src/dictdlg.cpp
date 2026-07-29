@@ -199,8 +199,12 @@ public:
                     }
                 if ( index>=0 )
                     _words[index]->add( words[i] );  // add range to existing word
-                else
-                    _words.add( new WordWithRanges( w, encoded, words[i] ) ); // add new word
+                else {
+                    std::unique_ptr<WordWithRanges> candidate =
+                            std::make_unique<WordWithRanges>(
+                                    w, encoded, words[i]);
+                    _words.add(candidate.release());
+                }
             }
         }
 	}

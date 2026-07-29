@@ -344,6 +344,21 @@ forbid_source_text(
   "dictionary T9 publication must not retain unused scratch strings"
 )
 require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "std::unique_ptr<WordWithRanges> candidate ="
+  "dictionary word candidates must enter scoped ownership"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "_words.add(candidate.release());"
+  "dictionary words must transfer only at the owning-vector boundary"
+)
+forbid_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "_words.add( new WordWithRanges"
+  "dictionary words must not be published as raw allocation expressions"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "T9 Unicode lowercase mapping was not preserved"
   "T9 width compatibility must retain Unicode lowercase coverage"
@@ -7964,6 +7979,16 @@ require_source_text(
 )
 require_source_text(
   "${POCKETBOOK_SOURCE}"
+  "addItem(std::make_unique<CRPbDictionaryMenuItem>("
+  "PocketBook dictionary menu items must enter owner-aware publication"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "_items.insert(0, candidate.release());"
+  "PocketBook dictionary menu items must transfer at the owning-vector boundary"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
   "std::unique_ptr<CRMenu> dictsMenu = std::make_unique<CRMenu>("
   "PocketBook dictionary-menu candidates must enter scoped ownership"
 )
@@ -8026,6 +8051,16 @@ forbid_source_text(
   "${POCKETBOOK_SOURCE}"
   "delete _dictMenu"
   "PocketBook dictionary-menu teardown must remain automatic"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "addItem(new CRPbDictionaryMenuItem"
+  "PocketBook dictionary menu items must not be published as raw candidates"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "_items.insert(0, new CRPbDictionaryMenuItem"
+  "PocketBook dictionary inserts must not begin as raw candidates"
 )
 forbid_source_text(
   "${POCKETBOOK_SOURCE}"
