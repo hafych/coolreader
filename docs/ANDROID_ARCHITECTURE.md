@@ -203,6 +203,16 @@ that same animation instance, and document teardown clears queued updates
 before native close. A callback or page flip from an older book therefore
 cannot move, draw, report, or persist a position for its replacement.
 
+The reader book-info popup follows the same captured book/interaction boundary
+and adds a latest-only `CloseableTaskGate`. Replacement or close cancels a
+pending native lookup, destruction permanently closes the owner, and GUI
+completion must claim the exact request. File, system and book metadata are
+copied before the background handoff into an immutable
+`ReaderBookInfoSnapshot`; bookmark and position data are read only from the
+same document generation. Repeated requests, book replacement and teardown
+therefore cannot open a stale dialog or combine one book's metadata with
+another book's position.
+
 Selection and search preserve the same captured book/interaction pair from a
 native gesture update through selection-toolbar actions, asynchronous search
 history, both forward/backward native search passes, the find-next popup,

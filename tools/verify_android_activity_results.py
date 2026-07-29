@@ -774,6 +774,9 @@ PROFILE_SWITCH_HANDLER = (
 READER_DOCUMENT_OPTIONS = (
     SOURCE / "crengine" / "ReaderDocumentOptions.java"
 )
+READER_BOOK_INFO_SNAPSHOT = (
+    SOURCE / "crengine" / "ReaderBookInfoSnapshot.java"
+)
 READER_DOCUMENT_OPTIONS_TEST = (
     ROOT
     / "android"
@@ -785,6 +788,18 @@ READER_DOCUMENT_OPTIONS_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderDocumentOptionsTest.java"
+)
+READER_BOOK_INFO_SNAPSHOT_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderBookInfoSnapshotTest.java"
 )
 INTERFACE_THEME = SOURCE / "crengine" / "InterfaceTheme.java"
 INTERFACE_THEME_CATALOG = (
@@ -2297,6 +2312,7 @@ def main() -> None:
         "private final DocumentLoadLifecycle documentLoadLifecycle",
         "private final ReaderSurfaceState readerSurfaceState",
         "private final ReaderNativeLifecycle readerNativeLifecycle",
+        "private final CloseableTaskGate bookInfoDialogLifecycle",
         "private final DelayedExecutor einkRefreshScheduler",
         "private void closeSurfaceCallbacks()",
         "surface.setOnTouchListener(null)",
@@ -2431,6 +2447,12 @@ def main() -> None:
         "readerNativeLifecycle.close()",
         "readerNativeLifecycle.claimDestroy()",
         "closeNativeDocument();",
+        "ReaderBookInfoSnapshot.capture(",
+        "bookInfoDialogLifecycle.replace()",
+        "bookInfoDialogLifecycle.isActive(owner)",
+        "bookInfoDialogLifecycle.complete(owner)",
+        "bookInfoDialogLifecycle.cancel()",
+        "bookInfoDialogLifecycle.close()",
         "keyDoubleClickState.resolvePress(",
         "keyDoubleClickState.defer(",
         "keyDoubleClickState.claimSingle(pending)",
@@ -2451,6 +2473,9 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} retains parallel native lifecycle "
             "state: mInitialized")
+    if "final BookInfo bi = mBookInfo" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} retains unowned book-info task state")
     if reader_view_text.count(
             "documentLoadLifecycle.replace()") != 1:
         violations.append(
@@ -2706,6 +2731,8 @@ def main() -> None:
         '"selectionToolbarHandler"',
         "TtsDocumentHandler.class.isInterface()",
         "TtsDocumentSnapshot.class.getModifiers()",
+        "ReaderBookInfoSnapshot.class.getModifiers()",
+        '"bookInfoDialogLifecycle"',
         '"ttsDocumentHandler"',
         '"stopTtsForDocumentChange"',
         "TOCDlg.PageSelectionHandler.class",
@@ -2792,6 +2819,40 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_NATIVE_LIFECYCLE_TEST)} omits native "
                 f"lifecycle regression: {marker}")
+
+    reader_book_info_snapshot_text = (
+        READER_BOOK_INFO_SNAPSHOT.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderBookInfoSnapshot",
+        "private final List<String> systemAndFileItems",
+        "private final List<String> bookItems",
+        "static ReaderBookInfoSnapshot capture(",
+        "static ReaderBookInfoSnapshot fromValues(",
+        "List<String> buildItems(",
+        "Collections.unmodifiableList(",
+        "DocumentPositionPolicy.displayPageNumber(",
+        "DocumentPositionPolicy.formatPercent(",
+    ):
+        if marker not in reader_book_info_snapshot_text:
+            violations.append(
+                f"{relative(READER_BOOK_INFO_SNAPSHOT)} omits immutable "
+                f"reader book-info marker: {marker}")
+
+    reader_book_info_snapshot_test_text = (
+        READER_BOOK_INFO_SNAPSHOT_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "missingBookOrFileCannotProduceSnapshot",
+        "valueSnapshotBuildsStableReaderInformation",
+        "positionRequiresBothBookmarkAndProperties",
+        "chapterTextIsBoundedAndOptionalValuesAreSkipped",
+        "UnsupportedOperationException.class",
+    ):
+        if marker not in reader_book_info_snapshot_test_text:
+            violations.append(
+                f"{relative(READER_BOOK_INFO_SNAPSHOT_TEST)} omits reader "
+                f"book-info regression: {marker}")
 
     key_double_click_state_text = KEY_DOUBLE_CLICK_STATE.read_text(
         encoding="utf-8")

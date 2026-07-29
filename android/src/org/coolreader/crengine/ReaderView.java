@@ -2803,86 +2803,72 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		return true;
 	}
 
+	private final CloseableTaskGate bookInfoDialogLifecycle =
+			new CloseableTaskGate();
+
 	public void showBookInfo() {
-		final ArrayList<String> items = new ArrayList<String>();
-		items.add("section=section.system");
-		items.add("system.version=Cool Reader " + mActivity.getVersion());
-		items.add(
-				"system.battery="
-						+ batteryStatus.getChargeLevel()
-						+ "%");
-		items.add("system.time=" + Utils.formatTime(mActivity, System.currentTimeMillis()));
-		final BookInfo bi = mBookInfo;
-		if (bi != null) {
-			FileInfo fi = bi.getFileInfo();
-			items.add("section=section.file");
-			String fname = new File(fi.pathname).getName();
-			items.add("file.name=" + fname);
-			if (new File(fi.pathname).getParent() != null)
-				items.add("file.path=" + new File(fi.pathname).getParent());
-			items.add("file.size=" + fi.size);
-			if (fi.arcname != null) {
-				items.add("file.arcname=" + new File(fi.arcname).getName());
-				if (new File(fi.arcname).getParent() != null)
-					items.add("file.arcpath=" + new File(fi.arcname).getParent());
-				items.add("file.arcsize=" + fi.arcsize);
-			}
-			items.add("file.format=" + fi.format.name());
-		}
+		BackgroundThread.ensureGUI();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
+		final ReaderBookInfoSnapshot snapshot =
+				ReaderBookInfoSnapshot.capture(
+						mActivity.getVersion(),
+						batteryStatus.getChargeLevel(),
+						Utils.formatTime(
+								mActivity,
+								System.currentTimeMillis()),
+						expectedBook);
+		if (snapshot == null)
+			return;
+		final CloseableTaskGate.Token owner =
+				bookInfoDialogLifecycle.replace();
+		if (owner == null)
+			return;
 		execute(new Task() {
-			Bookmark bm;
+			List<String> items;
 
 			@Override
 			public void work() {
-				bm = doc.getCurrentPageBookmark();
-				if (bm != null) {
-					PositionProperties prop = doc.getPositionProps(bm.getStartPos(), true);
-					items.add("section=section.position");
-					if (prop.pageMode != 0) {
-						items.add(
-								"position.page="
-										+ DocumentPositionPolicy
-												.displayPageNumber(
-														prop.pageNumber,
-														prop.pageCount)
-										+ " / "
-										+ prop.pageCount);
-					}
-					items.add(
-							"position.percent="
-									+ DocumentPositionPolicy.formatPercent(
-											prop.getPercent()));
-					String chapter = bm.getTitleText();
-					if (chapter != null && chapter.length() > 100)
-						chapter = chapter.substring(0, 100) + "...";
-					items.add("position.chapter=" + chapter);
-				}
+				BackgroundThread.ensureBackground();
+				if (!bookInfoDialogLifecycle.isActive(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
+				Bookmark bookmark =
+						doc.getCurrentPageBookmark();
+				PositionProperties position =
+						bookmark != null
+								? doc.getPositionProps(
+										bookmark.getStartPos(),
+										true)
+								: null;
+				items = snapshot.buildItems(
+						bookmark, position);
 			}
 
 			public void done() {
-				FileInfo fi = bi.getFileInfo();
-				items.add("section=section.book");
-				if (fi.authors != null || fi.title != null || fi.series != null) {
-					items.add("book.authors=" + fi.authors);
-					items.add("book.title=" + fi.title);
-					if (fi.series != null) {
-						String s = fi.series;
-						if (fi.seriesNumber > 0)
-							s = s + " #" + fi.seriesNumber;
-						items.add("book.series=" + s);
-					}
-				}
-				if (fi.language != null) {
-					items.add("book.language=" + fi.language);
-				}
-				if (fi.format == DocumentFormat.FB2) {
-					if (fi.genres != null && fi.genres.length() > 0) {
-						items.add("book.genres=" + fi.genres);
-					}
-				}
+				BackgroundThread.ensureGUI();
+				if (!bookInfoDialogLifecycle.complete(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction)
+						|| items == null)
+					return;
 				BookInfoDialog dlg = new BookInfoDialog(
 						mActivity, mGenresCollection, items);
 				dlg.show();
+			}
+
+			@Override
+			public void fail(Exception e) {
+				if (!bookInfoDialogLifecycle.complete(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
+				super.fail(e);
 			}
 		});
 	}
@@ -4166,6 +4152,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private DocumentLoadLifecycle.Request replaceDocumentLoad() {
 		BackgroundThread.ensureGUI();
 		stopTts();
+		bookInfoDialogLifecycle.cancel();
 		return documentLoadLifecycle.replace();
 	}
 
@@ -7977,6 +7964,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		stopTts();
 		if (cancelDocumentLoad)
 			documentLoadLifecycle.cancel();
+		bookInfoDialogLifecycle.cancel();
 		stopTracking();
 		cancelDocumentAnimation();
 		invalidateTapHighlight();
@@ -8057,6 +8045,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closeSelectionUpdates();
 		drawTaskLifecycle.close();
 		ttsInitializationLifecycle.close();
+		bookInfoDialogLifecycle.close();
 		documentLoadLifecycle.close();
 		closeGestureTimeouts();
 		synchronized (viewportResizeState) {

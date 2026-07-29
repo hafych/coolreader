@@ -1064,6 +1064,39 @@ public class ActivityOwnershipPolicyTest {
 					field.getName().equals("mInitialized"));
 		}
 		assertTrue(Modifier.isFinal(
+				ReaderBookInfoSnapshot.class.getModifiers()));
+		for (Field field :
+				ReaderBookInfoSnapshot.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		Method captureReaderBookInfo =
+				ReaderBookInfoSnapshot.class.getDeclaredMethod(
+						"capture",
+						String.class,
+						int.class,
+						String.class,
+						BookInfo.class);
+		assertTrue(Modifier.isStatic(
+				captureReaderBookInfo.getModifiers()));
+		assertFalse(Modifier.isPublic(
+				captureReaderBookInfo.getModifiers()));
+		Method buildReaderBookInfo =
+				ReaderBookInfoSnapshot.class.getDeclaredMethod(
+						"buildItems",
+						Bookmark.class,
+						PositionProperties.class);
+		assertFalse(Modifier.isPublic(
+				buildReaderBookInfo.getModifiers()));
+		assertPrivateFinalField(
+				ReaderView.class,
+				"bookInfoDialogLifecycle",
+				CloseableTaskGate.class);
+		assertTrue(Modifier.isFinal(
 				KeyDoubleClickState.class.getModifiers()));
 		for (Field field :
 				KeyDoubleClickState.class.getDeclaredFields()) {

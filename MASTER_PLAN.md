@@ -388,6 +388,13 @@ DRM или ограничений доступа, подбор/получени�
   очищает pending update до закрытия native document. Поэтому старый callback,
   dialog или page-flip не может переместить, отрисовать или сохранить позицию
   книги, которая его заменила.
+  Reader book-info popup теперь также принадлежит captured book+interaction и
+  latest-only `CloseableTaskGate`: replacement/close отменяют pending native
+  lookup, destroy закрывает owner, а GUI completion требует exact request.
+  File/system/book metadata копируются до background handoff в immutable
+  `ReaderBookInfoSnapshot`; bookmark и position читаются только у той же
+  document generation. Поэтому быстрый повтор, смена книги или teardown не
+  открывают stale dialog и не смешивают metadata одной книги с позицией другой.
   Selection/search chain также сохраняет captured book+interaction от native
   gesture update до toolbar, search-history callback, двухпроходного
   forward/backward find, find-next popup, clear и bookmark highlight. Native
