@@ -249,7 +249,7 @@ void CRViewDialog::showSearchDialog()
 
 #define EXTERNAL_DICTIONARY_EXECUTABLE_NAME "edict_launcher"
 
-bool CRViewDialog::findInDictionary( lString16 pattern )
+bool CRViewDialog::findInDictionary( lString32 pattern )
 {
 #if USE_EXTERNAL_EDICT_DICTIONARY==1
     // external dictionary
@@ -275,7 +275,7 @@ bool CRViewDialog::findInDictionary( lString16 pattern )
 #endif
 }
 
-bool CRViewDialog::findText( lString16 pattern, int origin, int direction )
+bool CRViewDialog::findText( lString32 pattern, int origin, int direction )
 {
     if ( pattern.empty() )
         return false;
@@ -324,12 +324,16 @@ bool CRViewDialog::findText( lString16 pattern, int origin, int direction )
     return false;
 }
 
-int CRViewDialog::findPagesText( lString16 pattern, int origin, int direction )
+int CRViewDialog::findPagesText(
+        lString32 pattern, int origin, int direction)
 {
-    if ( pattern.empty() )
+    if ( pattern.empty() ) {
         return -1;
-	if (!(origin == 0 || origin == -1 || origin == 1 || direction == 1 || direction == -1))
+    }
+	if (!(origin == 0 || origin == -1 || origin == 1)
+            || !(direction == 1 || direction == -1)) {
 		return -1;
+    }
     showWaitIcon();
 	int start, end;
 	if (direction < 0) {

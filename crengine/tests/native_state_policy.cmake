@@ -7234,6 +7234,36 @@ require_source_text(
   "getDocView()->LoadDocument(_stream, U\"\");"
   "document-dialog streams must provide the current content path contract"
 )
+require_source_text(
+  "${VIEW_DIALOG_HEADER}"
+  "bool findText( lString32 pattern, int origin, int direction );"
+  "document search must accept the current string width"
+)
+require_source_text(
+  "${VIEW_DIALOG_HEADER}"
+  "int findPagesText( lString32 pattern, int origin, int direction );"
+  "paged document search must accept the current string width"
+)
+require_source_text(
+  "${VIEW_DIALOG_HEADER}"
+  "bool findInDictionary( lString32 pattern );"
+  "dictionary search must accept the current string width"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "|| !(direction == 1 || direction == -1)"
+  "paged search must validate origin and direction independently"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "CRViewDialog::findText( lString16"
+  "document search implementations must not narrow to UTF-16"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "CRViewDialog::findPagesText( lString16"
+  "paged document search implementations must not narrow to UTF-16"
+)
 forbid_source_text(
   "${VIEW_DIALOG_SOURCE}"
   "setSkinName( lString16"

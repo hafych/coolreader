@@ -73,11 +73,23 @@ public:
 
 	void showDictWithVKeyboard();
 
-    bool findText( lString16 pattern, int origin, int direction );
+    bool findText( lString32 pattern, int origin, int direction );
+    bool findText( lString16 pattern, int origin, int direction )
+    {
+        return findText(Utf16ToUnicode(pattern), origin, direction);
+    }
 
-    int findPagesText( lString16 pattern, int origin, int direction );
+    int findPagesText( lString32 pattern, int origin, int direction );
+    int findPagesText( lString16 pattern, int origin, int direction )
+    {
+        return findPagesText(Utf16ToUnicode(pattern), origin, direction);
+    }
 
-	bool findInDictionary( lString16 pattern );
+	bool findInDictionary( lString32 pattern );
+    bool findInDictionary( lString16 pattern )
+    {
+        return findInDictionary(Utf16ToUnicode(pattern));
+    }
 
     void showKeymapDialog();
 
