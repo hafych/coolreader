@@ -311,6 +311,11 @@ DRM или ограничений доступа, подбор/получени�
   сразу инвалидируют всю старую цепочку; переход в browser/root отменяет
   pending open, но не обрывает reconciliation уже опубликованной книги. Stale
   SAF result не открывает Reader и закрывает ещё не переданный descriptor.
+  Add/reselect library root теперь принадлежит атомарному
+  `LibraryRootRequestState`: pending identity хранится отдельно от nullable
+  previous URI, поэтому add-request корректно переживает Bundle restore,
+  overlapping launch не заменяет reselect target, result без owner игнорируется,
+  а launch failure и destroy очищают только exact request.
   Общий `OPEN_DOCUMENT_TREE` picker больше не хранит command/argument в двух
   parallel полях: `DocumentTreeRequestState` атомарно захватывает delete-file,
   delete-folder или save-logcat request, не допускает overlapping launch,

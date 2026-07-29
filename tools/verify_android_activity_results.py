@@ -838,6 +838,11 @@ REQUIRED_COOL_READER_MARKERS = (
     "mOpenLibraryDocumentLauncher",
     "mOpenDocumentTreeLauncher",
     "registerForActivityResult",
+    "STATE_LIBRARY_ROOT_REQUEST_PENDING",
+    "STATE_LIBRARY_ROOT_REQUEST_PREVIOUS",
+    "private final LibraryRootRequestState<String> libraryRootRequests",
+    "libraryRootRequests.take()",
+    "libraryRootRequests.close()",
     "STATE_OPEN_DOCUMENT_TREE_COMMAND",
     "STATE_OPEN_DOCUMENT_TREE_ARG",
     "STATE_OPEN_DOCUMENT_TREE_ATTEMPT",
@@ -4191,6 +4196,9 @@ def main() -> None:
     if "mFolderDeleteRetryCount" in cool_reader_text:
         violations.append(
             f"{relative(COOL_READER)} retains shared folder-delete retry state")
+    if "mPendingLibraryRootUri" in cool_reader_text:
+        violations.append(
+            f"{relative(COOL_READER)} retains split library-root request state")
     if "ServiceDependencies dependencies = getServiceDependencies()" not in (
             cool_reader_text):
         violations.append(

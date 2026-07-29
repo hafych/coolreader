@@ -128,6 +128,12 @@ stream reconciliation can finish off-screen. Reader close and Activity
 destruction reject every phase. An unaccepted or replaced descriptor is closed
 by the layer that still owns it, including cached descriptors produced after
 teardown.
+Adding or reselecting a library root is owned by an atomic
+`LibraryRootRequestState`. Pending identity is stored separately from the
+nullable previous URI, so an add request survives Bundle restore, an
+overlapping launch cannot replace a reselect target, an ownerless result is
+ignored, and launch failure or Activity destruction clears only the exact
+request.
 The shared `OPEN_DOCUMENT_TREE` launcher owns one typed
 `DocumentTreeRequestState` instead of parallel command and argument fields.
 Delete-file, delete-folder and save-logcat launches atomically capture their

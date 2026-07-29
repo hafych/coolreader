@@ -88,6 +88,7 @@ import org.coolreader.crengine.FileSystemFolders;
 import org.coolreader.crengine.History;
 import org.coolreader.crengine.InterfaceTheme;
 import org.coolreader.crengine.L;
+import org.coolreader.crengine.LibraryRootRequestState;
 import org.coolreader.crengine.LibraryRootStore;
 import org.coolreader.crengine.LogcatExportSession;
 import org.coolreader.crengine.LogcatSaver;
@@ -175,7 +176,8 @@ public class CoolReader extends BaseActivity {
 
 	private DocumentSource mExternalDocumentSource = null;
 	private LibraryRootStore mLibraryRootStore;
-	private Uri mPendingLibraryRootUri;
+	private final LibraryRootRequestState<String> libraryRootRequests =
+			new LibraryRootRequestState<>();
 	private final DocumentTreeRequestState<FileInfo>
 			openDocumentTreeRequests =
 					new DocumentTreeRequestState<>();
@@ -206,7 +208,9 @@ public class CoolReader extends BaseActivity {
 	private String ttsEnginePackage = "";
 	private TTSControlServiceAccessor ttsControlServiceAccessor = null;
 
-	private static final String STATE_PENDING_LIBRARY_ROOT =
+	private static final String STATE_LIBRARY_ROOT_REQUEST_PENDING =
+			"libraryRootRequestPending";
+	private static final String STATE_LIBRARY_ROOT_REQUEST_PREVIOUS =
 			"pendingLibraryRoot";
 	private static final String STATE_OPEN_DOCUMENT_TREE_COMMAND =
 			"openDocumentTreeCommand";
@@ -280,10 +284,13 @@ public class CoolReader extends BaseActivity {
 		super.onCreate(savedInstanceState);
 		mLibraryRootStore = new LibraryRootStore(this);
 		if (savedInstanceState != null) {
-			String pendingRoot = savedInstanceState.getString(
-					STATE_PENDING_LIBRARY_ROOT);
-			if (pendingRoot != null)
-				mPendingLibraryRootUri = Uri.parse(pendingRoot);
+			if (savedInstanceState.getBoolean(
+					STATE_LIBRARY_ROOT_REQUEST_PENDING,
+					false)) {
+				libraryRootRequests.begin(
+						savedInstanceState.getString(
+								STATE_LIBRARY_ROOT_REQUEST_PREVIOUS));
+			}
 			DocumentTreeRequestState.Command command =
 					DocumentTreeRequestState.Command.fromCode(
 							savedInstanceState.getInt(
@@ -358,6 +365,7 @@ public class CoolReader extends BaseActivity {
 		documentLoadLifecycle.close();
 		bookInfoDialogRequests.close();
 		logcatExportRequests.close();
+		libraryRootRequests.close();
 
 		// Shutdown TTS service if running
 		if (null != ttsControlServiceAccessor) {
@@ -1093,10 +1101,19 @@ public class CoolReader extends BaseActivity {
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
 		log.i("CoolReader.onSaveInstanceState()");
-		if (mPendingLibraryRootUri != null) {
-			outState.putString(
-					STATE_PENDING_LIBRARY_ROOT,
-					mPendingLibraryRootUri.toString());
+		LibraryRootRequestState.Request<String> rootRequest =
+				libraryRootRequests.peek();
+		if (rootRequest != null) {
+			outState.putBoolean(
+					STATE_LIBRARY_ROOT_REQUEST_PENDING,
+					true);
+			String previousRoot =
+					rootRequest.getPreviousRoot();
+			if (previousRoot != null) {
+				outState.putString(
+						STATE_LIBRARY_ROOT_REQUEST_PREVIOUS,
+						previousRoot);
+			}
 		}
 		DocumentTreeRequestState.Request<FileInfo> treeRequest =
 				openDocumentTreeRequests.peek();
@@ -1999,7 +2016,18 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void selectLibraryRoot(Uri previousUri) {
-		mPendingLibraryRootUri = previousUri;
+		if (!mServiceLifecycle.isActive())
+			return;
+		String previousRoot =
+				previousUri != null
+						? previousUri.toString()
+						: null;
+		LibraryRootRequestState.Request<String> request =
+				libraryRootRequests.begin(previousRoot);
+		if (request == null) {
+			log.w("Library root picker request is already pending");
+			return;
+		}
 		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
 		intent.addFlags(
 				Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -2009,7 +2037,13 @@ public class CoolReader extends BaseActivity {
 				&& previousUri != null) {
 			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, previousUri);
 		}
-		mSelectLibraryRootLauncher.launch(intent);
+		try {
+			mSelectLibraryRootLauncher.launch(intent);
+		} catch (RuntimeException e) {
+			libraryRootRequests.cancel(request);
+			log.e("Cannot launch library root picker", e);
+			showToast(R.string.library_root_grant_failed);
+		}
 	}
 
 	public void openLibraryRoot(LibraryRootStore.Entry root) {
@@ -2115,18 +2149,31 @@ public class CoolReader extends BaseActivity {
 
 	private void handleSelectLibraryRootResult(
 			int resultCode, Intent intent) {
+		LibraryRootRequestState.Request<String> request =
+				libraryRootRequests.take();
+		if (request == null) {
+			log.w("Ignoring library root result without an owner");
+			return;
+		}
+		if (!mServiceLifecycle.isActive())
+			return;
 		if (resultCode == Activity.RESULT_OK && intent != null) {
 			Uri selectedUri = intent.getData();
+			String previousRoot =
+					request.getPreviousRoot();
+			Uri previousUri =
+					previousRoot != null
+							? Uri.parse(previousRoot)
+							: null;
 			boolean persisted = persistReadPermission(
 					selectedUri, intent.getFlags());
 			if (persisted && mLibraryRootStore.addOrReplace(
-					mPendingLibraryRootUri, selectedUri)) {
+					previousUri, selectedUri)) {
 				showToast(R.string.library_root_selected);
 			} else {
 				showToast(R.string.library_root_grant_failed);
 			}
 		}
-		mPendingLibraryRootUri = null;
 		refreshLibraryRoots();
 	}
 
