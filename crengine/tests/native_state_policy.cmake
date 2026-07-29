@@ -6988,6 +6988,36 @@ require_source_text(
   "main-window command hooks must state their override contract"
 )
 require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadDefaultCover( lString32 filename );"
+  "document cover paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadCSS( lString32 filename );"
+  "document stylesheet paths must use the current string width"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "return loadCSS(Utf16ToUnicode(filename));"
+  "legacy stylesheet paths must cross an explicit compatibility boundary"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "lString32 filename = cs32(\"fb2.css\");"
+  "format-specific stylesheet selection must use the current string width"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::loadDefaultCover( lString16"
+  "document cover implementations must not retain legacy path widths"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::loadCSS( lString16"
+  "document stylesheet implementations must not retain legacy path widths"
+)
+require_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "V3DocViewWin::OnLoadFileStart( lString32 filename )"
   "document load-start callback definitions must keep the current width"

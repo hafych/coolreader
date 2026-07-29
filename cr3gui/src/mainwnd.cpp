@@ -374,7 +374,7 @@ void V3DocViewWin::OnLoadFileStart( lString32 filename )
 void V3DocViewWin::OnLoadFileFormatDetected( doc_format_t fileFormat )
 {
     CRLog::trace("OnLoadFileFormatDetected(%d)", (int)fileFormat);
-    lString16 filename("fb2.css");
+    lString32 filename = cs32("fb2.css");
     if ( _cssDir.length() > 0 ) {
         switch ( fileFormat ) {
         case doc_format_txt:
@@ -475,9 +475,9 @@ void V3DocViewWin::OnExternalLink( lString32 url, ldomNode * node )
     CR_UNUSED(node);
 }
 
-bool V3DocViewWin::loadDefaultCover( lString16 filename )
+bool V3DocViewWin::loadDefaultCover( lString32 filename )
 {
-    LVImageSourceRef cover = LVCreateFileCopyImageSource( filename.c_str() );
+    LVImageSourceRef cover = LVCreateFileCopyImageSource(filename);
     if ( !cover.isNull() ) {
         _docview->setDefaultCover( cover );
         return true;
@@ -488,7 +488,7 @@ bool V3DocViewWin::loadDefaultCover( lString16 filename )
     }
 }
 
-bool V3DocViewWin::loadCSS( lString16 filename )
+bool V3DocViewWin::loadCSS( lString32 filename )
 {
     lString8 css;
     if ( LVLoadStylesheetFile( filename, css ) ) {

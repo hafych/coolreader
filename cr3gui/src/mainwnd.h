@@ -122,15 +122,23 @@ protected:
     lString16 _dictConfig;
     lString16 _bookmarkDir;
 	lString16 _helpFile;
-    lString16 _cssDir;
+    lString32 _cssDir;
     time_t _loadFileStart;
 public:
     lString16 getBookmarkDir() { return _bookmarkDir; }
     void setBookmarkDir( lString16 dir ) { _bookmarkDir = dir; }
     void flush() override;
     bool loadDocument( lString16 filename );
-    bool loadDefaultCover( lString16 filename );
-    bool loadCSS( lString16 filename );
+    bool loadDefaultCover( lString32 filename );
+    bool loadDefaultCover( lString16 filename )
+    {
+        return loadDefaultCover(Utf16ToUnicode(filename));
+    }
+    bool loadCSS( lString32 filename );
+    bool loadCSS( lString16 filename )
+    {
+        return loadCSS(Utf16ToUnicode(filename));
+    }
     bool loadSettings( lString16 filename );
     bool saveSettings( lString16 filename );
     bool loadHistory( lString16 filename );
