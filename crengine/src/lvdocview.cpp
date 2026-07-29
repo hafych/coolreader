@@ -6790,8 +6790,10 @@ CRPropRef LVDocView::propsApply(CRPropRef props) {
             font_antialiasing_t aaMode = (font_antialiasing_t)props->getIntDef(PROP_FONT_ANTIALIASING, (int)font_aa_all);
 #ifdef ANDROID
             font_antialiasing_t rotatedAAMode = rotateFontAntialiasMode(aaMode, m_rotateAngleInfo);
-#else
+#elif CR_INTERNAL_PAGE_ORIENTATION==1
             font_antialiasing_t rotatedAAMode = rotateFontAntialiasMode(aaMode, m_rotateAngle);
+#else
+            font_antialiasing_t rotatedAAMode = aaMode;
 #endif
             fontMan->SetAntialiasMode(rotatedAAMode);
             REQUEST_RENDER("propsApply - font antialiasing")

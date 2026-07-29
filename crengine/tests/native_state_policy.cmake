@@ -1261,6 +1261,14 @@ require_source_text(
   "page image buffers must cross an explicit reference transfer boundary"
 )
 require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "#elif CR_INTERNAL_PAGE_ORIENTATION==1
+            font_antialiasing_t rotatedAAMode = rotateFontAntialiasMode(aaMode, m_rotateAngle);
+#else
+            font_antialiasing_t rotatedAAMode = aaMode;"
+  "disabled page orientation must not reference excluded rotation state"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "page image cache published a rejected buffer candidate"
   "page image cache must retain failed-adoption rollback coverage"
