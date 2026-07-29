@@ -96,7 +96,12 @@ public enum DocumentFormat {
 	
 	public String[] getExtensions()
 	{
-		return extensions;
+		return extensions.clone();
+	}
+
+	public String getPrimaryExtension()
+	{
+		return extensions.length > 0 ? extensions[0] : null;
 	}
 	
 	public int getCSSResourceId()
@@ -111,7 +116,7 @@ public enum DocumentFormat {
 	
 	public String[] getMimeFormats()
 	{
-		return mimeFormats;
+		return mimeFormats.clone();
 	}
 	
 	public String getMimeFormat()
@@ -213,18 +218,18 @@ public enum DocumentFormat {
 		this.cssFileName = cssFileName;
 		this.cssResourceId = cssResourceId;
 		this.iconResourceId = iconResourceId;
-		this.extensions = extensions;
+		this.extensions = extensions.clone();
 		this.canParseProperties = canParseProperties;
 		this.canParseCoverpages = canParseCoverpages;
-		this.mimeFormats = mimeFormats;
+		this.mimeFormats = mimeFormats.clone();
 		this.priority = priority;
 	}
-	final private String cssFileName;
-	final private int cssResourceId;
-	final private int iconResourceId;
-	final private String[] extensions;
-	final boolean canParseProperties;
-	final boolean canParseCoverpages;
-	final private String[] mimeFormats;
-	final private int priority;
+	private final String cssFileName;
+	private final int cssResourceId;
+	private final int iconResourceId;
+	private final String[] extensions;
+	private final boolean canParseProperties;
+	private final boolean canParseCoverpages;
+	private final String[] mimeFormats;
+	private final int priority;
 }

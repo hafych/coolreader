@@ -154,6 +154,16 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void documentFormatMetadataIsPrivateAndImmutable() {
+		for (Field field : DocumentFormat.class.getDeclaredFields()) {
+			if (Modifier.isStatic(field.getModifiers()))
+				continue;
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+	}
+
+	@Test
 	public void hyphenationRegistryHasOneFinalOwnerAndImmutableItems()
 			throws Exception {
 		Field registry = Engine.HyphDict.class.getDeclaredField("REGISTRY");

@@ -608,8 +608,8 @@ xml:base="http://lib.ololo.cc/opds/">
 			if ( fmt!=null ) {
 				if ( fmt==DocumentFormat.FB2 && isZip )
 					ext = ".fb2.zip";
-				else
-					ext = fmt.getExtensions()[0].substring(1);
+				else if (fmt.getPrimaryExtension() != null)
+					ext = fmt.getPrimaryExtension().substring(1);
 			}
 			for (int i=0; i<1000; i++ ) {
 				String fn = fileName + (i==0 ? "" : "(" + i + ")") + "." + ext; 

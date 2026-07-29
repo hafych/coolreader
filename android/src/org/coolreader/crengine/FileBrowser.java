@@ -775,8 +775,10 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 				};
 				String fileMimeType = fileOrDir.format!=null ? fileOrDir.format.getMimeFormat() : null;
 				String defFileName = Utils.transcribeFileName( fileOrDir.title!=null ? fileOrDir.title : fileOrDir.filename );
-				if ( fileOrDir.format!=null )
-					defFileName = defFileName + fileOrDir.format.getExtensions()[0];
+				if (fileOrDir.format != null
+						&& fileOrDir.format.getPrimaryExtension() != null)
+					defFileName = defFileName
+							+ fileOrDir.format.getPrimaryExtension();
 				if (mDownloadTask != null)
 					mDownloadTask.cancel();
 				mDownloadTask = OPDSUtil.create(mActivity, mEngine, mServiceLifecycle, uri, defFileName, fileOrDir.isDirectory?"application/atom+xml":fileMimeType,

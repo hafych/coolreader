@@ -70,6 +70,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Built-in background textures now use immutable metadata and a test-covered
   catalog; reader and options UI receive an unmodifiable snapshot with external
   textures inserted in the legacy order.
+- Document format extension and MIME metadata now uses independent array
+  snapshots; internal callers use a narrow primary-extension accessor.
 - BaseActivity preference/debug configuration is now immutable, while system
   locale resolution uses a snapshot owned by the current Activity generation.
 - The native Engine retains only application context plus a detachable weak UI

@@ -77,6 +77,10 @@ External document validation is isolated from `CoolReader`: local inputs are
 probed by `ExternalDocumentValidator`, while resolver-owned content URIs remain
 in the Activity's ContentResolver flow. Storage helpers such as
 `DocumentFileCache` depend on `Context`, not on an Activity subtype.
+`DocumentFormat` metadata is immutable as well: constructor and public
+extension/MIME array boundaries clone storage, and internal callers use the
+narrow primary-extension accessor instead of indexing an exposed backing
+array.
 
 ## Testable view geometry
 

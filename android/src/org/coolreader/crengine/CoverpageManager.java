@@ -516,7 +516,7 @@ public class CoverpageManager {
 				}
 				if (file != null) {
 					final ImageItem fileInfo = file;
-					if (fileInfo.file.format.canParseCoverpages) {
+					if (fileInfo.file.format.canParseCoverpages()) {
 						BackgroundThread.instance().postBackground(() -> {
 							if (!mLifecycle.isActive())
 								return;
@@ -715,7 +715,9 @@ public class CoverpageManager {
 			if (!mLifecycle.isActive())
 				return;
 			byte[] imageData = data;
-			if (data == null && file.format != null && file.format.canParseCoverpages) {
+			if (data == null
+					&& file.format != null
+					&& file.format.canParseCoverpages()) {
 				imageData = mEngine.scanBookCover(file.getPathName());
 				if (imageData == null)
 					imageData = new byte[] {};

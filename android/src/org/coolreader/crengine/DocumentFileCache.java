@@ -74,8 +74,9 @@ public final class DocumentFileCache {
 			codebase = fileInfo.crc32;
 		else
 			codebase = android.os.SystemClock.uptimeMillis();
-		if (null != fileInfo.format)
-			extension = fileInfo.format.getExtensions()[0];
+		if (null != fileInfo.format
+				&& fileInfo.format.getPrimaryExtension() != null)
+			extension = fileInfo.format.getPrimaryExtension();
 		else
 			extension = ".fb2";
 		if (fileInfo.isArchive) {

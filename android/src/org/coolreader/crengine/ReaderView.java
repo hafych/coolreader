@@ -3307,8 +3307,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			displayName = "document";
 		if (DocumentFormat.byExtension(displayName) == source.getFormat())
 			return displayName;
-		String[] extensions = source.getFormat().getExtensions();
-		return extensions.length > 0 ? displayName + extensions[0] : displayName;
+		String extension =
+				source.getFormat().getPrimaryExtension();
+		return extension != null ? displayName + extension : displayName;
 	}
 
 	private static String safeDocumentPathForLog(String path) {

@@ -57,6 +57,19 @@ BACKGROUND_TEXTURE_CATALOG_TEST = (
     / "crengine"
     / "BackgroundTextureCatalogTest.java"
 )
+DOCUMENT_FORMAT = SOURCE / "crengine" / "DocumentFormat.java"
+DOCUMENT_FORMAT_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "DocumentFormatTest.java"
+)
 SERVICES = SOURCE / "crengine" / "Services.java"
 SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
@@ -959,6 +972,53 @@ def main() -> None:
         if marker not in background_texture_catalog_test_text:
             violations.append(
                 f"{relative(BACKGROUND_TEXTURE_CATALOG_TEST)} omits texture "
+                f"regression: {marker}")
+
+    document_format_text = DOCUMENT_FORMAT.read_text(encoding="utf-8")
+    for marker in (
+        "private final String[] extensions",
+        "private final String[] mimeFormats",
+        "this.extensions = extensions.clone()",
+        "this.mimeFormats = mimeFormats.clone()",
+        "return extensions.clone()",
+        "return mimeFormats.clone()",
+        "public String getPrimaryExtension()",
+    ):
+        if marker not in document_format_text:
+            violations.append(
+                f"{relative(DOCUMENT_FORMAT)} omits immutable format "
+                f"metadata marker: {marker}")
+    for legacy in (
+        "return extensions;",
+        "return mimeFormats;",
+    ):
+        if legacy in document_format_text:
+            violations.append(
+                f"{relative(DOCUMENT_FORMAT)} exposes mutable format "
+                f"metadata: {legacy}")
+    for field_name in (
+            "canParseProperties",
+            "canParseCoverpages"):
+        if re.search(
+                rf"^\s*final\s+boolean\s+{field_name}\b",
+                document_format_text,
+                re.MULTILINE):
+            violations.append(
+                f"{relative(DOCUMENT_FORMAT)} exposes package metadata field: "
+                f"{field_name}")
+
+    document_format_test_text = DOCUMENT_FORMAT_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "extensionAndMimeArraysAreIndependentSnapshots",
+        "emptyFormatHasNoPrimaryExtensionOrMimeType",
+        "instanceMetadataFieldsArePrivateFinal",
+        'extensions[0] = ".changed"',
+        'mimeFormats[0] = "application/changed"',
+    ):
+        if marker not in document_format_test_text:
+            violations.append(
+                f"{relative(DOCUMENT_FORMAT_TEST)} omits format metadata "
                 f"regression: {marker}")
 
     freezable_registry_text = FREEZABLE_REGISTRY.read_text(

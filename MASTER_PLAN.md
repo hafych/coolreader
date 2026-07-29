@@ -159,6 +159,8 @@ DRM или ограничений доступа, подбор/получени�
   immutable matcher без public rule-array и с JVM regression на wildcard rules.
   Built-in background textures вынесены из `Engine` в immutable catalog;
   immutable metadata и `none → external → built-in` List snapshot JVM-tested.
+  `DocumentFormat` extension/MIME metadata теперь clone-on-boundary, private
+  final и используется через primary-extension API без backing-array escape.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
