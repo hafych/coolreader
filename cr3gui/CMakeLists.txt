@@ -95,7 +95,7 @@ elseif ( ${GUI} STREQUAL CRGUI_QT )
     FIND_PACKAGE(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
     
     SET(CR3_SOURCES ${CR3_SOURCES} src/cr3qt.cpp)
-    SET(EXTRA_LIBS Qt5::Core Qt5::Gui Qt5::Widgets ${STD_LIBS})
+    SET(EXTRA_LIBS Qt5::Core Qt5::Gui Qt5::Widgets)
     SET(CR3_STYLES ${CR3_STYLES} data/fb3.css)
 
     INSTALL( FILES ${CR3_STYLES} DESTINATION root/crengine)
@@ -240,4 +240,3 @@ if (${GUI} STREQUAL CRGUI_XCB)
     ADD_EXECUTABLE(logocnv ${LOGOCNV_SOURCES})
     TARGET_LINK_LIBRARIES(logocnv crengine ${STD_LIBS} ${EXTRA_LIBS})
 endif (${GUI} STREQUAL CRGUI_XCB)
-

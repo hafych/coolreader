@@ -6928,8 +6928,13 @@ require_source_text(
 )
 require_source_text(
   "${LEGACY_GUI_CMAKE_SOURCE}"
-  "SET(EXTRA_LIBS Qt5::Core Qt5::Gui Qt5::Widgets"
+  "SET(EXTRA_LIBS Qt5::Core Qt5::Gui Qt5::Widgets)"
   "the legacy Qt backend must link explicit Qt5 module targets"
+)
+forbid_source_text(
+  "${LEGACY_GUI_CMAKE_SOURCE}"
+  "SET(EXTRA_LIBS Qt5::Core Qt5::Gui Qt5::Widgets \${STD_LIBS})"
+  "the legacy Qt backend must not link standard libraries twice"
 )
 forbid_source_text(
   "${LEGACY_GUI_CMAKE_SOURCE}"
