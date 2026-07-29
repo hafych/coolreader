@@ -6109,6 +6109,36 @@ static int testImageSourceOwnership() {
     LVImageSourceRef xpm = LVCreateXPMImageSource(validXpm);
     if (xpm.isNull() || xpm->GetWidth() != 2 || xpm->GetHeight() != 2)
         return fail("XPM source rejected a valid fixture");
+
+    int rejectedDrawCalls = 0;
+    LVImageSourceRef drawFixture(
+            new DimensionOnlyImageSource(
+                    2, 2, rejectedDrawCalls));
+    LVImageSourceRef invalidDrawFixture(
+            new DimensionOnlyImageSource(
+                    0, 2, rejectedDrawCalls));
+    LVColorDrawBuf guardedColorDraw(2, 2, 32);
+    LVGrayDrawBuf guardedGrayDraw(2, 2, 8);
+    guardedColorDraw.Draw(
+            LVImageSourceRef(), 0, 0, 2, 2, false);
+    guardedColorDraw.Draw(
+            drawFixture, 0, 0, 0, 2, false);
+    guardedColorDraw.Draw(
+            invalidDrawFixture, 0, 0, 2, 2, false);
+    guardedGrayDraw.Draw(
+            LVImageSourceRef(), 0, 0, 2, 2, false);
+    guardedGrayDraw.Draw(
+            drawFixture, 0, 0, 2, 0, false);
+    guardedGrayDraw.Draw(
+            invalidDrawFixture, 0, 0, 2, 2, false);
+    if (rejectedDrawCalls != 0
+            || guardedColorDraw.getDrawnImagesCount() != 0
+            || guardedColorDraw.getDrawnImagesSurface() != 0
+            || guardedGrayDraw.getDrawnImagesCount() != 0
+            || guardedGrayDraw.getDrawnImagesSurface() != 0)
+        return fail(
+                "draw buffers entered an invalid image draw request");
+
     CountingImageDecodeCallback xpmCallback;
     if (!xpm->Decode(&xpmCallback) || !xpm->Decode(&xpmCallback))
         return fail("XPM source could not reuse its RAII buffers");

@@ -160,7 +160,8 @@ DRM или ограничений доступа, подбор/получени�
   unpacked 8/16/32-bit pixel storage, checked byte-count/format contracts и
   downstream cancellation,
   scoped stream-image decoder factory candidates, scaled-image
-  maps/RGBA snapshots, nine-patch metadata cache and color-transform
+  maps/RGBA snapshots, guarded color/gray image draw entry points,
+  nine-patch metadata cache and color-transform
   workspaces/cancellation/64-bit statistics, WOL TOC/image/LZSS buffers and
   reader result ownership, default stream-region buffers,
   owned/borrowed memory streams, block write-cache buffers/LRU, mapped-file

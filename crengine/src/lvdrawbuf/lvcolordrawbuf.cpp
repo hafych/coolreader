@@ -709,6 +709,10 @@ int  LVColorDrawBuf::GetBitsPerPixel() const
 void LVColorDrawBuf::Draw( LVImageSourceRef img, int x, int y, int width, int height, bool dither )
 {
     //fprintf( stderr, "LVColorDrawBuf::Draw( img(%d, %d), %d, %d, %d, %d\n", img->GetWidth(), img->GetHeight(), x, y, width, height );
+    if (img.isNull() || width <= 0 || height <= 0
+            || img->GetWidth() <= 0 || img->GetHeight() <= 0
+            || _dx <= 0 || _dy <= 0 || !_data)
+        return;
     LVImageScaledDrawCallback drawcb( this, img, x, y, width, height, dither, _invertImages, _smoothImages );
     img->Decode( &drawcb );
     _drawnImagesCount++;

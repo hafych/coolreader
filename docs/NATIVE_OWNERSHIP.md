@@ -315,7 +315,10 @@ cancellation, reuse, source failure, abort and exception recovery.
 maps plus its full smooth-scaling RGBA snapshot through `std::vector`. The
 allocator-specific result returned by `qSmoothScaleImage()` is held by a
 scoped `std::unique_ptr` with the matching platform deleter. A failed decode
-does not run the smooth post-processing pass over a partial snapshot.
+does not run the smooth post-processing pass over a partial snapshot. Color
+and grayscale draw entry points reject null or dimension-invalid image
+sources, invalid destination sizes and unusable backing buffers before
+constructing that callback, entering decode or changing render statistics.
 
 The legacy C-style `draw_buf_t` allocation boundary validates bit depth,
 dimensions, row layout and total byte multiplication before allocation. It

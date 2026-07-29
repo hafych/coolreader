@@ -4106,6 +4106,20 @@ require_source_text(
   "bitmap(layout.storageBytes, 0)"
   "gray bitmap conversion must allocate every output row plus its guard"
 )
+foreach(DRAW_BUFFER_SOURCE
+    "${COLOR_DRAW_BUFFER_SOURCE}"
+    "${GRAY_DRAW_BUFFER_SOURCE}")
+  require_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "if (img.isNull() || width <= 0 || height <= 0"
+    "image draw entry points must reject invalid requests before decode"
+  )
+endforeach()
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "draw buffers entered an invalid image draw request"
+  "invalid image draw requests must retain native regression coverage"
+)
 require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "testDrawBufferStorageOwnership"
