@@ -771,9 +771,10 @@ void V3DocViewWin::showOrientationMenu()
 void V3DocViewWin::showRecentBooksMenu()
 {
     lvRect rc = _wm->getScreen()->getRect();
-    CRRecentBooksMenu * menu_win =
-            new CRRecentBooksMenu(_wm, _docview.get(), 8, rc);
-    _wm->activateWindow( menu_win );
+    std::unique_ptr<CRRecentBooksMenu> menu =
+            std::make_unique<CRRecentBooksMenu>(
+                    _wm, _docview.get(), 8, rc);
+    _wm->activateWindow(std::move(menu));
 }
 
 
@@ -825,40 +826,45 @@ void V3DocViewWin::showHelpDialog()
     }
 	//lString8 help = UnicodeToUtf8( LVReadTextFile( _helpFile ) );
 	if ( !help.empty() ) {
-		CRViewDialog * dlg = new CRViewDialog(
+        std::unique_ptr<CRViewDialog> dlg = std::make_unique<CRViewDialog>(
                 _wm, Utf8ToUnicode(lString8(_("Help"))),
                 help, lvRect(), true, true);
-                int fs = _props->getIntDef( PROP_FONT_SIZE, 22 );
-                dlg->getDocView()->setFontSize(fs);
-		_wm->activateWindow( dlg );
+        int fs = _props->getIntDef( PROP_FONT_SIZE, 22 );
+        dlg->getDocView()->setFontSize(fs);
+        _wm->activateWindow(std::move(dlg));
 	}
 }
 
 void V3DocViewWin::showBookmarksMenu( bool goMode )
 {
     lvRect rc = _wm->getScreen()->getRect();
-    CRBookmarkMenu * menu_win =
-            new CRBookmarkMenu(_wm, _docview.get(), 8, rc, goMode);
-    _wm->activateWindow( menu_win );
+    std::unique_ptr<CRBookmarkMenu> menu =
+            std::make_unique<CRBookmarkMenu>(
+                    _wm, _docview.get(), 8, rc, goMode);
+    _wm->activateWindow(std::move(menu));
 }
 
 void V3DocViewWin::showCitesMenu()
 {
     lvRect rc = _wm->getScreen()->getRect();
-    CRCitesMenu * menu_win =
-            new CRCitesMenu(_wm, _docview.get(), 8, rc);
-    _wm->activateWindow( menu_win );
+    std::unique_ptr<CRCitesMenu> menu =
+            std::make_unique<CRCitesMenu>(
+                    _wm, _docview.get(), 8, rc);
+    _wm->activateWindow(std::move(menu));
 }
 
 void V3DocViewWin::showMainMenu()
 {
     lvRect fullRc = _wm->getScreen()->getRect();
-    CRFullScreenMenu * menu_win = new CRFullScreenMenu(
-            _wm, 0, Utf8ToUnicode(lString8(_("Main Menu"))), 8, fullRc);
-    menu_win->setSkinName(cs32("#main"));
-    auto addMenuItem = [menu_win](int command, const char * label) {
-        menu_win->addItem(std::make_unique<CRMenuItem>(
-                menu_win, command, label,
+    std::unique_ptr<CRFullScreenMenu> menu =
+            std::make_unique<CRFullScreenMenu>(
+                    _wm, 0, Utf8ToUnicode(lString8(_("Main Menu"))),
+                    8, fullRc);
+    menu->setSkinName(cs32("#main"));
+    auto addMenuItem = [parent = menu.get()](
+            int command, const char * label) {
+        parent->addItem(std::make_unique<CRMenuItem>(
+                parent, command, label,
                 LVImageSourceRef(), LVFontRef()));
     };
 	CRGUIAcceleratorTableRef menuItems =
@@ -898,26 +904,26 @@ void V3DocViewWin::showMainMenu()
         addMenuItem(MCMD_HELP_KEYS, _("Keyboard layout"));
 	}
 
-    menu_win->setAccelerators( getMenuAccelerators() );
+    menu->setAccelerators( getMenuAccelerators() );
 
     lString32 s = Utf8ToUnicode(
             lString8(_("$1 - choose command\n$2, $3 - close")));
 #ifdef CR_POCKETBOOK
 	s.replaceParam(
-            1, menu_win->getCommandKeyName(MCMD_SELECT));
+            1, menu->getCommandKeyName(MCMD_SELECT));
 #else
     s.replaceParam(
-            1, menu_win->getItemNumberKeysName());
+            1, menu->getItemNumberKeysName());
 #endif
     s.replaceParam(
-            2, menu_win->getCommandKeyName(MCMD_OK));
+            2, menu->getCommandKeyName(MCMD_OK));
     s.replaceParam(
-            3, menu_win->getCommandKeyName(MCMD_CANCEL));
-    menu_win->setStatusText( s );
-    menu_win->setFullscreen( true );
+            3, menu->getCommandKeyName(MCMD_CANCEL));
+    menu->setStatusText( s );
+    menu->setFullscreen( true );
 
-    menu_win->reconfigure(0);
-    _wm->activateWindow( menu_win );
+    menu->reconfigure(0);
+    _wm->activateWindow(std::move(menu));
 }
 
 void addPropLine(
@@ -1085,12 +1091,12 @@ void V3DocViewWin::showAboutDialog()
     //CRLog::trace(txt.c_str());
     //=========================================================
     txt = CRViewDialog::makeFb2Xml(txt);
-    CRViewDialog * dlg = new CRViewDialog(
+    std::unique_ptr<CRViewDialog> dlg = std::make_unique<CRViewDialog>(
             _wm, title, txt, lvRect(), true, true);
     dlg->getDocView()->setVisiblePageCount(1);
     int fs = _props->getIntDef( PROP_FILE_PROPS_FONT_SIZE, 22 );
     dlg->getDocView()->setFontSize(fs);
-    _wm->activateWindow( dlg );
+    _wm->activateWindow(std::move(dlg));
 }
 
 /// returns true if command is processed

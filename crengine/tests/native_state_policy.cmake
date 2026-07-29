@@ -7189,17 +7189,17 @@ require_source_text(
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
-  "menu_win->setSkinName(cs32(\"#main\"));"
+  "menu->setSkinName(cs32(\"#main\"));"
   "main-menu skin identifiers must use the current string width"
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
-  "auto addMenuItem = [menu_win](int command, const char * label)"
+  "auto addMenuItem = [parent = menu.get()]("
   "main-menu item construction must use one owner-aware publication boundary"
 )
 require_source_text(
   "${MAIN_WINDOW_SOURCE}"
-  "menu_win->addItem(std::make_unique<CRMenuItem>"
+  "parent->addItem(std::make_unique<CRMenuItem>"
   "main-menu item candidates must enter scoped ownership before publication"
 )
 forbid_source_text(
@@ -8136,6 +8136,61 @@ forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "CRMenu * menu = mainMenu->createOrientationMenu"
   "orientation factory results must not regress to raw ownership"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRRecentBooksMenu> menu ="
+  "recent-books menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRBookmarkMenu> menu ="
+  "bookmark menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRCitesMenu> menu ="
+  "citation menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRFullScreenMenu> menu ="
+  "main-menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "auto addMenuItem = [parent = menu.get()]("
+  "main-menu items must retain a non-owning parent link"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "std::unique_ptr<CRViewDialog> dlg = std::make_unique<CRViewDialog>("
+  "main-window dialog candidates must enter scoped ownership"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRRecentBooksMenu * menu_win ="
+  "recent-books menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRBookmarkMenu * menu_win ="
+  "bookmark menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRCitesMenu * menu_win ="
+  "citation menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRFullScreenMenu * menu_win = new"
+  "main-menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "CRViewDialog * dlg = new"
+  "main-window dialog candidates must not begin as raw owners"
 )
 require_source_text(
   "${SETTINGS_HEADER}"
