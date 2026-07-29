@@ -395,6 +395,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Replaceable Android delayed tasks now claim an exact one-shot generation.
   Replaced or canceled wrappers cannot run because a newer task exists, and
   completed callbacks no longer leave a stale pending slot behind.
+- Reader animation and GC schedulers are now generation-owned and canceled
+  during every teardown. Animation updates no longer coordinate unrelated
+  Activities through a class monitor or retain active state after destruction.
 - Scroll-view animation frames now use fractional progress instead of truncated
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates

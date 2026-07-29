@@ -1463,6 +1463,24 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} retains parallel progress field: "
                 f"{legacy}")
+    for marker in (
+        "private volatile ViewAnimationControl currentAnimation",
+        "private final Object animationUpdateLock",
+        "private final DelayedExecutor animationScheduler",
+        "private final DelayedExecutor gcTask",
+        "private void cancelDelayedReaderWork()",
+        "animationScheduler.cancel()",
+        "gcTask.cancel()",
+        "synchronized (animationUpdateLock)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits reader-owned delayed work "
+                f"marker: {marker}")
+    if "synchronized (AnimationUpdate.class)" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} coordinates reader generations on "
+            "the process-wide AnimationUpdate class monitor")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(

@@ -169,6 +169,12 @@ resource and resolved-title snapshot, and `hide` is idempotent. A zero position
 remains a valid visible start state; duplicate callbacks do not redraw or
 reacquire E-Ink refresh suppression, and the renderer cannot combine fields
 from different progress generations.
+Animation and GC delayed executors are private final members of one
+`ReaderView`. Animation handoff uses that reader's instance lock and a volatile
+active-animation reference rather than the nested class monitor shared by all
+Activities. `destroy()` always cancels both executors and clears pending
+animation state before native document teardown, including repeated or
+partially initialized teardown.
 
 Each `ReaderView` also owns its bitmap pool and `VMRuntimeHack`. The optional
 legacy VM reflection bindings are final, accounting is synchronized and uses a

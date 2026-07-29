@@ -405,6 +405,29 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void delayedWorkBelongsToOneReaderGeneration()
+			throws Exception {
+		for (String name : new String[]{
+				"animationScheduler",
+				"gcTask",
+				"animationUpdateLock"}) {
+			Field field = ReaderView.class.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		Field animation =
+				ReaderView.class.getDeclaredField("currentAnimation");
+		assertFalse(Modifier.isStatic(animation.getModifiers()));
+		assertTrue(Modifier.isPrivate(animation.getModifiers()));
+		assertTrue(Modifier.isVolatile(animation.getModifiers()));
+		Method teardown =
+				ReaderView.class.getDeclaredMethod(
+						"cancelDelayedReaderWork");
+		assertTrue(Modifier.isPrivate(teardown.getModifiers()));
+	}
+
+	@Test
 	public void gestureAccelerationIsReaderOwnedAndImmutable()
 			throws Exception {
 		Field acceleration =

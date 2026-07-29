@@ -3919,7 +3919,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 
-	private ViewAnimationControl currentAnimation = null;
+	private volatile ViewAnimationControl currentAnimation = null;
 
 	private int pageFlipAnimationSpeedMs = DEF_PAGE_FLIP_MS; // if 0 : no animation
 	private int pageFlipAnimationMode = PAGE_ANIMATION_SLIDE2; //PAGE_ANIMATION_PAPER; // if 0 : no animation
@@ -4296,7 +4296,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BackgroundThread.instance().postBackground(() -> {
 				alog.d("updating(" + x + ", " + y + ")");
 				boolean animate = false;
-				synchronized (AnimationUpdate.class) {
+				synchronized (animationUpdateLock) {
 
 					if (currentAnimation != null && currentAnimationUpdate == AnimationUpdate.this) {
 						currentAnimationUpdate = null;
@@ -4311,13 +4311,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	}
 
+	private final Object animationUpdateLock = new Object();
 	private AnimationUpdate currentAnimationUpdate;
 
 	private void updateAnimation(final int x, final int y) {
 		if (!mOpened)
 			return;
 		alog.d("updateAnimation(" + x + ", " + y + ")");
-		synchronized (AnimationUpdate.class) {
+		synchronized (animationUpdateLock) {
 			if (currentAnimationUpdate != null)
 				currentAnimationUpdate.set(x, y);
 			else
@@ -4342,7 +4343,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	DelayedExecutor animationScheduler = DelayedExecutor.createBackground("animation");
+	private final DelayedExecutor animationScheduler =
+			DelayedExecutor.createBackground("animation");
 
 	private void scheduleAnimation() {
 		if (!mOpened)
@@ -5981,6 +5983,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void destroy() {
 		log.i("ReaderView.destroy() is called");
+		cancelDelayedReaderWork();
 		if (mInitialized) {
 			//close();
 			BackgroundThread.instance().postBackground(() -> {
@@ -5995,6 +5998,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			//engine.waitTasksCompletion();
 			if (null != ttsToolbar)
 				ttsToolbar.stopAndClose();
+		}
+	}
+
+	private void cancelDelayedReaderWork() {
+		animationScheduler.cancel();
+		gcTask.cancel();
+		synchronized (animationUpdateLock) {
+			currentAnimationUpdate = null;
+			currentAnimation = null;
 		}
 	}
 
@@ -6383,7 +6395,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private static final int GC_INTERVAL = 15000; // 15 seconds
-	DelayedExecutor gcTask = DelayedExecutor.createGUI("gc");
+	private final DelayedExecutor gcTask =
+			DelayedExecutor.createGUI("gc");
 
 	public void scheduleGc() {
 		try {

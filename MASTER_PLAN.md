@@ -180,6 +180,10 @@ DRM или ограничений доступа, подбор/получени�
   `ReplaceableTaskSlot`: replacement/cancel инвалидируют точный wrapper,
   successful claim очищает slot до delegate, stale generations и повторный
   запуск не проходят, reentrant reschedule сохраняет нового владельца.
+  Animation/GC delayed executors теперь private final у одного `ReaderView`;
+  animation handoff использует instance lock и volatile active reference вместо
+  process-wide class monitor, а `destroy()` безусловно отменяет оба executor и
+  очищает pending animation state до native teardown.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
