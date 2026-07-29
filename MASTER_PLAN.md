@@ -77,7 +77,7 @@ DRM или ограничений доступа, подбор/получени�
 
 - [-] Clang job блокирует high-confidence diagnostics без frozen baseline.
   Все first-party предупреждения исправлены (0 при `-Wall -Wextra -Wpedantic`).
-  Legacy settings GUI warning cleanup/overrides, document callbacks/battery,
+  Legacy GUI warning cleanup/current command mapping, document callbacks/battery,
   controls/property/font-menu helpers, font property keys,
   CSS/image/document/history/settings/help paths,
   dialog/menu/about/search text, on-screen keyboard layouts и T9 layout

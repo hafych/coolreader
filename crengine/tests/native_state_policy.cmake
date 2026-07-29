@@ -7254,6 +7254,21 @@ require_source_text(
   "|| !(direction == 1 || direction == -1)"
   "paged search must validate origin and direction independently"
 )
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "case DCMD_SET_BASE_FONT_WEIGHT: return _(\"Set base font weight\");"
+  "keymap descriptions must use the current font-weight command"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "DCMD_TOGGLE_BOLD"
+  "keymap descriptions must not use the removed bold-toggle command"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "sprintf("
+  "keymap descriptions must use bounded formatting"
+)
 forbid_source_text(
   "${VIEW_DIALOG_SOURCE}"
   "CRViewDialog::findText( lString16"

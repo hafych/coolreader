@@ -453,7 +453,7 @@ const char * getKeyName( int keyCode )
 {
 	static char name[256];
 	if ( (keyCode>='0' && keyCode<='9') || keyCode=='+' || keyCode=='-' ) {
-		sprintf( name, "'%c'", keyCode );
+		snprintf(name, sizeof(name), "'%c'", keyCode);
 		return name;
 	}
 	switch ( keyCode ) {
@@ -531,7 +531,9 @@ const char * getKeyName( int keyCode, int option )
 	if ( !option )
 		return ::getKeyName( keyCode );
 	static char name[256];
-	sprintf(name, "%s %s", _("Long"), ::getKeyName( keyCode ) );
+	snprintf(
+            name, sizeof(name), "%s %s",
+            _("Long"), ::getKeyName(keyCode));
 	return name;
 }
 
@@ -553,7 +555,7 @@ static const char * getCommandName( int command )
 	case DCMD_GO_PAGE: return _("Go to page");
 	case DCMD_ZOOM_IN: return _("Zoom in");
 	case DCMD_ZOOM_OUT: return _("Zoom out");
-    case DCMD_TOGGLE_BOLD: return _("Toggle bold text");
+    case DCMD_SET_BASE_FONT_WEIGHT: return _("Set base font weight");
 	case DCMD_TOGGLE_TEXT_FORMAT: return _("Toggle text format");
 	case DCMD_BOOKMARK_SAVE_N: return _("Save bookmark by number");
 	case DCMD_BOOKMARK_GO_N: return _("Go to bookmark by number");
@@ -639,10 +641,12 @@ const char * getCommandName( int command, int param )
 	if ( command == PB_CMD_VOLUME && param == 3)
 		return TR("@KA_volm");
 #endif
-    if ( !param )
+	if ( !param )
 		return ::getCommandName( command );
 	static char buf[ 256 ];
-	sprintf(buf, "%s (%d)", ::getCommandName( command ), param);
+	snprintf(
+            buf, sizeof(buf), "%s (%d)",
+            ::getCommandName(command), param);
 	return buf;
 }
 
@@ -664,7 +668,9 @@ void CRViewDialog::showKeymapDialog()
 	txt << "</table>";
 	//============================================================
     txt = CRViewDialog::makeFb2Xml(txt);
-    CRViewDialog * dlg = new CRViewDialog( _wm, lString16(_("Keyboard layout")), txt, lvRect(), true, true );
+    CRViewDialog * dlg = new CRViewDialog(
+            _wm, Utf8ToUnicode(lString8(_("Keyboard layout"))),
+            txt, lvRect(), true, true);
     dlg->getDocView()->setVisiblePageCount(1);
     _wm->activateWindow( dlg );
     //TODO:
