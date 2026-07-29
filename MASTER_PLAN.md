@@ -209,6 +209,12 @@ DRM или ограничений доступа, подбор/получени�
   generation, destroy закрывает gate, а pause/close/reload/TTS save синхронно
   получают свежий snapshot через ту же FIFO перед persistence; прямого
   GUI → `DocView` чтения текущей позиции больше нет.
+  Подавление повторной DB-записи позиции также вынесено из mutable
+  `lastSavedBookmark` в synchronized `ReaderPositionPersistenceState`: exact
+  request связан с identity книги и immutable position (включая null),
+  фиксируется только после успешных save/flush через один captured binder,
+  replacement и stale animation reset не очищают состояние другой книги, а
+  destroy permanently закрывает owner.
   Selection preview/end также используют один exact `CloseableTaskGate` token:
   каждый drag sample заменяет owner, stale terminal callback не открывает
   toolbar и не очищает selection нового жеста, clear/reload/close отменяют

@@ -59,6 +59,7 @@ import android.view.View.OnTouchListener;
 import org.coolreader.CoolReader;
 import org.coolreader.R;
 import org.coolreader.crengine.InputDialog.InputHandler;
+import org.coolreader.db.CRDBService;
 import org.coolreader.genrescollection.GenresCollection;
 import org.coolreader.tts.TTSControlServiceAccessor;
 import org.koekak.android.ebookdownloader.SonyBookSelector;
@@ -6581,7 +6582,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				scheduleSaveCurrentPositionBookmark(
 						DEF_SAVE_POSITION_INTERVAL,
 						expectedBook, interaction);
-				lastSavedBookmark = null;
+				positionPersistenceState.invalidate(
+						expectedBook);
 				updateCurrentPositionStatus(
 						expectedBook, interaction);
 			}
@@ -7477,6 +7479,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							FileInfo.USE_DOCUMENT_FONTS_FLAG);
 			profileNumber = bookInfo.getFileInfo().getProfileId();
 			mBookInfo = bookInfo;
+			positionPersistenceState.replace(bookInfo);
 			//Properties oldSettings = new Properties(mSettings);
 			// TODO: enable storing of profile per book
 			mActivity.setCurrentProfile(profileNumber);
@@ -8096,6 +8099,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			new CloseableTaskGate();
 	private final DelayedExecutor positionSaveScheduler =
 			DelayedExecutor.createGUI("position-save");
+	private final ReaderPositionPersistenceState<BookInfo>
+			positionPersistenceState =
+					new ReaderPositionPersistenceState<>();
 
 	private final static int DEF_SAVE_POSITION_INTERVAL = 180000; // 3 minutes
 
@@ -8391,27 +8397,38 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 
-	Bookmark lastSavedBookmark = null;
-
 	private void savePositionBookmark(
 			BookInfo bookInfo,
 			Bookmark bookmark) {
-		if (bookmark != null
-				&& bookInfo != null
-				&& mBookInfo == bookInfo
-				&& isBookLoaded()
-				&& mActivity.getDB() != null) {
-			//setBookPosition();
-			if (lastSavedBookmark == null
-					|| !lastSavedBookmark.getStartPos().equals(
-							bookmark.getStartPos())) {
-				if (mServiceLifecycle.isActive()) {
-					mHistory.updateRecentDir();
-					mActivity.getDB().saveBookInfo(bookInfo);
-					mActivity.getDB().flush();
-					lastSavedBookmark = bookmark;
-				}
-			}
+		if (bookmark == null
+				|| bookInfo == null
+				|| mBookInfo != bookInfo
+				|| !isBookLoaded()
+				|| !mServiceLifecycle.isActive())
+			return;
+		CRDBService.LocalBinder db = mActivity.getDB();
+		if (db == null)
+			return;
+		ReaderPositionPersistenceState.Request<BookInfo> request =
+				positionPersistenceState.begin(
+						bookInfo, bookmark.getStartPos());
+		if (request == null)
+			return;
+		boolean saved = false;
+		try {
+			if (!mServiceLifecycle.isActive()
+					|| mBookInfo != bookInfo
+					|| !isBookLoaded())
+				return;
+			mHistory.updateRecentDir();
+			db.saveBookInfo(bookInfo);
+			db.flush();
+			saved = true;
+		} finally {
+			if (saved)
+				positionPersistenceState.complete(request);
+			else
+				positionPersistenceState.cancel(request);
 		}
 	}
 
@@ -8610,6 +8627,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		readerOptionsDialogLifecycle.close();
 		settingsSyncLifecycle.close();
 		timeTickLifecycle.close();
+		positionPersistenceState.close();
 		documentLoadLifecycle.close();
 		closeGestureTimeouts();
 		synchronized (viewportResizeState) {
@@ -8753,7 +8771,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			invalidateTapHighlight();
 			cancelPositionSave();
 			cancelSelectionUpdates();
-			lastSavedBookmark = null;
 			BackgroundThread.ensureBackground();
 			log.d("readerCallback.OnLoadFileStart " + filename);
 			if (enable_progress_callback) {

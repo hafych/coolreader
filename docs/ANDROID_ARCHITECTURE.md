@@ -431,6 +431,15 @@ their final exact snapshot through the same FIFO before persistence, preserving
 fresh-position semantics without a GUI-to-`DocView` call. A stale capture can
 therefore neither publish into the model nor save a bookmark into its
 replacement.
+Duplicate suppression after that capture belongs to synchronized
+`ReaderPositionPersistenceState`, not to a mutable retained `Bookmark`. Each
+database write has an exact request tied to the current `BookInfo` identity and
+an immutable position string, including a valid null value. A write is recorded
+only after the captured nullable-safe binder accepts save and flush; failure,
+replacement and a newer request invalidate only their matching pending token.
+Document load replaces the state with its exact book, stale animation cleanup
+can invalidate only that same identity, and reader destruction closes the owner
+permanently.
 Interactive selection previews and their terminal update share one
 `CloseableTaskGate`. Every drag sample replaces the prior identity token, and
 both native work and GUI completion must still own that token. A stale

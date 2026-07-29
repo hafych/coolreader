@@ -2573,6 +2573,13 @@ def main() -> None:
         "Bookmark bookmark,\n"
         "\t\t\tDocumentLoadLifecycle.Interaction interaction)",
         "savePositionBookmark(bookInfo, bookmark)",
+        "private final ReaderPositionPersistenceState<BookInfo>",
+        "positionPersistenceState.replace(bookInfo)",
+        "positionPersistenceState.begin(",
+        "positionPersistenceState.complete(request)",
+        "positionPersistenceState.cancel(request)",
+        "positionPersistenceState.invalidate(",
+        "positionPersistenceState.close()",
         "selectionUpdateLifecycle.replace()",
         "selectionUpdateLifecycle.isActive(owner)",
         "selectionUpdateLifecycle.complete(owner)",
@@ -2843,6 +2850,7 @@ def main() -> None:
         "public Bookmark getCurrentPositionBookmark()",
         "public Bookmark saveCurrentPositionBookmarkSync(",
         "public void savePositionBookmark(Bookmark",
+        "lastSavedBookmark",
     ):
         if legacy in reader_view_text:
             violations.append(

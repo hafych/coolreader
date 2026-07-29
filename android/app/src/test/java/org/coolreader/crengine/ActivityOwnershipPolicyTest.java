@@ -428,6 +428,7 @@ public class ActivityOwnershipPolicyTest {
 				"resizeScheduler",
 				"positionSaveLifecycle",
 				"positionSaveScheduler",
+				"positionPersistenceState",
 				"imageViewerState",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
@@ -478,6 +479,30 @@ public class ActivityOwnershipPolicyTest {
 					assertTrue(
 							methodName
 									+ " must serialize image session state",
+							Modifier.isSynchronized(
+									method.getModifiers()));
+			}
+		}
+		for (Field field :
+				ReaderPositionPersistenceState.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+		for (String methodName : new String[]{
+				"replace",
+				"begin",
+				"complete",
+				"cancel",
+				"invalidate",
+				"close"}) {
+			for (Method method :
+					ReaderPositionPersistenceState.class
+							.getDeclaredMethods()) {
+				if (method.getName().equals(methodName))
+					assertTrue(
+							methodName
+									+ " must serialize position persistence",
 							Modifier.isSynchronized(
 									method.getModifiers()));
 			}
