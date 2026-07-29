@@ -7007,6 +7007,41 @@ forbid_source_text(
   "PocketBook battery calls must not regress to the retired one-value API"
 )
 require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString32 manualFile ="
+  "PocketBook manual paths must retain current-width storage"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "char manual_file["
+  "PocketBook manual paths must not use a fixed output buffer"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString16 mofilename"
+  "PocketBook translation paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "HyphMan::initDictionaries(lString16"
+  "PocketBook hyphenation paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "loadSkin(lString16"
+  "PocketBook skin paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "ldomDocCache::init(lString16"
+  "PocketBook cache paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "/share/c3/manual"
+  "PocketBook fallback manual path must retain the cr3 directory"
+)
+require_source_text(
   "${NANOX_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "NanoX window managers must adopt a newly created screen"

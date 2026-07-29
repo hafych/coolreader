@@ -2438,15 +2438,26 @@ int InitDoc(const char *exename, char *fileName)
     CRLog::trace("InitDoc()");
 
     pbGlobals = new CRPocketBookGlobals(fileName);
-    char manual_file[512] = USERDATA"/share/c3/manual/cr3-manual-en.fb2";
+    lString32 manualFile =
+            Utf8ToUnicode(lString8(
+                    USERDATA
+                    "/share/cr3/manual/cr3-manual-en.fb2"));
     {
         const char *lang = pbGlobals->getLang();
 
         if ( lang && lang[0] ) {
             // set translator
             CRLog::info("Current language is %s, looking for translation file", lang);
-            lString16 mofilename = USERDATA"/share/cr3/i18n/" + lString16(lang) + ".mo";
-            lString16 mofilename2 = USERDATA2"/share/cr3/i18n/" + lString16(lang) + ".mo";
+            lString32 langText =
+                    Utf8ToUnicode(lString8(lang));
+            lString32 mofilename =
+                    Utf8ToUnicode(lString8(
+                            USERDATA"/share/cr3/i18n/"))
+                    + langText + U".mo";
+            lString32 mofilename2 =
+                    Utf8ToUnicode(lString8(
+                            USERDATA2"/share/cr3/i18n/"))
+                    + langText + U".mo";
             std::unique_ptr<CRMoFileTranslator> t(
                     new CRMoFileTranslator());
             if ( t->openMoFile( mofilename2 ) || t->openMoFile( mofilename ) ) {
@@ -2455,9 +2466,17 @@ int InitDoc(const char *exename, char *fileName)
             } else {
                 CRLog::info("translation file %s.mo not found", lang);
             }
-            sprintf( manual_file, USERDATA"/share/cr3/manual/cr3-manual-%s.fb2", lang );
-            if ( !LVFileExists( lString16(manual_file).c_str() ) )
-                sprintf( manual_file, USERDATA2"/share/cr3/manual/cr3-manual-%s.fb2", lang );
+            manualFile =
+                    Utf8ToUnicode(lString8(
+                            USERDATA
+                            "/share/cr3/manual/cr3-manual-"))
+                    + langText + U".fb2";
+            if ( !LVFileExists(manualFile) )
+                manualFile =
+                        Utf8ToUnicode(lString8(
+                                USERDATA2
+                                "/share/cr3/manual/cr3-manual-"))
+                        + langText + U".fb2";
         }
     }
 
@@ -2510,16 +2529,33 @@ int InitDoc(const char *exename, char *fileName)
 
         loadKeymaps(*wm, keymap_locations);
         loadPocketBookKeyMaps(*wm);
-        HyphMan::initDictionaries(lString16(USERDATA"/share/cr3/hyph/"));
-        if (!wm->loadSkin(lString16(CONFIGPATH"/cr3/skin")))
-            if (!wm->loadSkin(lString16(USERDATA2"/share/cr3/skin")))
-                wm->loadSkin(lString16(USERDATA"/share/cr3/skin"));
+        HyphMan::initDictionaries(
+                Utf8ToUnicode(lString8(
+                        USERDATA"/share/cr3/hyph/")));
+        if (!wm->loadSkin(
+                    Utf8ToUnicode(lString8(
+                            CONFIGPATH"/cr3/skin"))))
+            if (!wm->loadSkin(
+                        Utf8ToUnicode(lString8(
+                                USERDATA2"/share/cr3/skin"))))
+                wm->loadSkin(
+                        Utf8ToUnicode(lString8(
+                                USERDATA"/share/cr3/skin")));
 
-        ldomDocCache::init(lString16(STATEPATH"/cr3/.cache"), PB_CR3_CACHE_SIZE);
+        ldomDocCache::init(
+                Utf8ToUnicode(lString8(
+                        STATEPATH"/cr3/.cache")),
+                PB_CR3_CACHE_SIZE);
         if (!ldomDocCache::enabled())
-            ldomDocCache::init(lString16(USERDATA2"/share/cr3/.cache"), PB_CR3_CACHE_SIZE);
+            ldomDocCache::init(
+                    Utf8ToUnicode(lString8(
+                            USERDATA2"/share/cr3/.cache")),
+                    PB_CR3_CACHE_SIZE);
         if (!ldomDocCache::enabled())
-            ldomDocCache::init(lString16(USERDATA"/share/cr3/.cache"), PB_CR3_CACHE_SIZE);
+            ldomDocCache::init(
+                    Utf8ToUnicode(lString8(
+                            USERDATA"/share/cr3/.cache")),
+                    PB_CR3_CACHE_SIZE);
         CRLog::trace("creating main window...");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
                 std::make_unique<CRPocketBookDocView>(wm);
@@ -2528,9 +2564,8 @@ int InitDoc(const char *exename, char *fileName)
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
-        if (manual_file[0])
-            main_win->setHelpFile(
-                    Utf8ToUnicode(lString8(manual_file)));
+        if (!manualFile.empty())
+            main_win->setHelpFile(manualFile);
         if (!main_win->loadDefaultCover(
                     Utf8ToUnicode(lString8(
                             CONFIGPATH"/cr3/cr3_def_cover.png"))))
