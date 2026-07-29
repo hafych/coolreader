@@ -424,7 +424,8 @@ public class ActivityOwnershipPolicyTest {
 				"viewportResizeState",
 				"resizeScheduler",
 				"positionSaveLifecycle",
-				"positionSaveScheduler"}) {
+				"positionSaveScheduler",
+				"selectionUpdateLifecycle"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -468,6 +469,9 @@ public class ActivityOwnershipPolicyTest {
 					"ReaderView retains numeric position-save generations",
 					field.getName().equals(
 							"lastSavePositionTaskId"));
+			assertFalse(
+					"ReaderView retains numeric selection generations",
+					field.getName().equals("nextUpdateId"));
 		}
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
@@ -503,6 +507,11 @@ public class ActivityOwnershipPolicyTest {
 						"closePositionSave");
 		assertTrue(Modifier.isPrivate(
 				closePositionSave.getModifiers()));
+		Method closeSelectionUpdates =
+				ReaderView.class.getDeclaredMethod(
+						"closeSelectionUpdates");
+		assertTrue(Modifier.isPrivate(
+				closeSelectionUpdates.getModifiers()));
 		Method complete =
 				CloseableTaskGate.class.getDeclaredMethod(
 						"complete",

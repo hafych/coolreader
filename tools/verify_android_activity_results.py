@@ -1993,6 +1993,7 @@ def main() -> None:
         "private final DelayedExecutor resizeScheduler",
         "private final CloseableTaskGate positionSaveLifecycle",
         "private final DelayedExecutor positionSaveScheduler",
+        "private final CloseableTaskGate selectionUpdateLifecycle",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -2010,6 +2011,8 @@ def main() -> None:
         "private void closePositionSave()",
         "positionSaveLifecycle.close()",
         "positionSaveScheduler.cancel()",
+        "private void closeSelectionUpdates()",
+        "selectionUpdateLifecycle.close()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -2038,6 +2041,9 @@ def main() -> None:
         "private void applyPositionSave(",
         "mBookInfo != bookInfo",
         "savePositionBookmark(bookInfo, bookmark)",
+        "selectionUpdateLifecycle.replace()",
+        "selectionUpdateLifecycle.isActive(owner)",
+        "selectionUpdateLifecycle.complete(owner)",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -2056,6 +2062,7 @@ def main() -> None:
         "requestedWidth",
         "requestedHeight",
         "lastSavePositionTaskId",
+        "nextUpdateId",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",
     ):

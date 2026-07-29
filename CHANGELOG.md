@@ -398,6 +398,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   cancelable scheduler. Synchronous save, pause, reload and replacement remove
   stale callbacks, while captured book identity prevents an old bookmark from
   being persisted into the newly opened book.
+- Selection drag previews and terminal updates now share an exact lifecycle
+  token. A stale gesture-end callback cannot complete or clear a newer
+  selection, and clear, reload, close or destruction invalidate queued work.
 - Temporary E-Ink full-refresh suppression now uses reader-owned client leases.
   Overlapping clients restore the saved interval exactly once, while duplicate
   or unmatched releases no longer restore an invalid sentinel interval.

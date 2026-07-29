@@ -145,6 +145,12 @@ Handler. Replacement, synchronous save, pause and book reload remove the exact
 pending callback; destroy closes the gate. The callback claims its token once
 and verifies the captured `BookInfo` is still the current book before saving,
 so a bookmark from an older document cannot be written into its replacement.
+Interactive selection previews and their terminal update share one
+`CloseableTaskGate`. Every drag sample replaces the prior identity token, and
+both native work and GUI completion must still own that token. A stale
+gesture-end callback therefore cannot open a toolbar or clear selection after
+a newer gesture begins. Clear, reload and book close cancel the current update;
+reader destruction permanently closes the gate before native teardown.
 `PositionProperties` widens scrollable-height subtraction and percentage
 multiplication before clamping to its 0–10000 contract. Scroll movement uses the
 same widened range. The stateless `DocumentPositionPolicy` converts zero-based

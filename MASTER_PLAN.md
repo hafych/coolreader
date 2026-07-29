@@ -184,6 +184,10 @@ DRM или ограничений доступа, подбор/получени�
   sync/pause/reload отменяют pending callback, destroy закрывает gate, а
   one-shot apply проверяет captured `BookInfo` identity и не может записать
   bookmark старой книги в текущую.
+  Selection preview/end также используют один exact `CloseableTaskGate` token:
+  каждый drag sample заменяет owner, stale terminal callback не открывает
+  toolbar и не очищает selection нового жеста, clear/reload/close отменяют
+  current update, а destroy permanently закрывает gate до native teardown.
   Временное отключение E-Ink full refresh вынесено в synchronized
   ReaderView-owned lease tracker: overlapping clients восстанавливают исходный
   interval только после последнего matching release, а duplicate/unmatched

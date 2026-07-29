@@ -510,11 +510,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		return keyCode;
 	}
 
-	private int nextUpdateId = 0;
+	private final CloseableTaskGate selectionUpdateLifecycle =
+			new CloseableTaskGate();
 
 	private void updateSelection(int startX, int startY, int endX, int endY, final boolean isUpdateEnd) {
 		final Selection sel = new Selection();
-		final int myId = ++nextUpdateId;
+		final CloseableTaskGate.Token owner =
+				selectionUpdateLifecycle.replace();
+		if (owner == null)
+			return;
 		sel.startX = startX;
 		sel.startY = startY;
 		sel.endX = endX;
@@ -522,7 +526,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		mEngine.execute(new Task() {
 			@Override
 			public void work() throws Exception {
-				if (myId != nextUpdateId && !isUpdateEnd)
+				if (!selectionUpdateLifecycle.isActive(owner))
 					return;
 				doc.updateSelection(sel);
 				if (!sel.isEmpty()) {
@@ -536,6 +540,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 			@Override
 			public void done() {
+				if (!selectionUpdateLifecycle.complete(owner))
+					return;
 				if (isUpdateEnd) {
 					String text = sel.text;
 					if (text != null && text.length() > 0) {
@@ -545,7 +551,21 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					}
 				}
 			}
+
+			@Override
+			public void fail(Exception e) {
+				selectionUpdateLifecycle.complete(owner);
+				super.fail(e);
+			}
 		});
+	}
+
+	private void cancelSelectionUpdates() {
+		selectionUpdateLifecycle.cancel();
+	}
+
+	private void closeSelectionUpdates() {
+		selectionUpdateLifecycle.close();
 	}
 
 	public static boolean isMultiSelection(Selection sel) {
@@ -1447,6 +1467,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void clearSelection() {
 		BackgroundThread.ensureGUI();
+		cancelSelectionUpdates();
 		if (mBookInfo == null || !isBookLoaded())
 			return;
 		mEngine.post(new Task() {
@@ -6265,6 +6286,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BackgroundThread.ensureGUI();
 		log.i("ReaderView.close() is called");
 		invalidateTapHighlight();
+		cancelSelectionUpdates();
 		if (!mOpened)
 			return;
 		cancelSwapTask();
@@ -6328,6 +6350,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closeSwapTasks();
 		closeTapHighlight();
 		closePositionSave();
+		closeSelectionUpdates();
 		synchronized (viewportResizeState) {
 			viewportResizeState.close();
 			resizeScheduler.cancel();
@@ -6472,6 +6495,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			cancelSwapTask();
 			invalidateTapHighlight();
 			cancelPositionSave();
+			cancelSelectionUpdates();
 			lastSavedBookmark = null;
 			BackgroundThread.ensureBackground();
 			log.d("readerCallback.OnLoadFileStart " + filename);
