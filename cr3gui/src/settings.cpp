@@ -824,33 +824,31 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 #endif
 
         //====== Image scaling ==============
-        CRMenu * scalingMenu = new CRMenu(_wm, mainMenu, mm_ImageScaling,
-                _("Image scaling"), LVImageSourceRef(), LVFontRef(), valueFont, props );
-        CRMenu * blockImagesZoominModeMenu = new CRMenu(_wm, scalingMenu, mm_blockImagesZoominMode,
-                _("Block image scaling mode"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_IMG_SCALING_ZOOMIN_BLOCK_MODE );
-        addMenuItems( blockImagesZoominModeMenu, image_scaling_modes );
-        scalingMenu->addItem( blockImagesZoominModeMenu );
-        CRMenu * blockImagesZoominScaleMenu = new CRMenu(_wm, scalingMenu, mm_blockImagesZoominScale,
-                _("Block image max zoom"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_IMG_SCALING_ZOOMIN_BLOCK_SCALE );
-        addMenuItems( blockImagesZoominScaleMenu, image_scaling_factors );
-        scalingMenu->addItem( blockImagesZoominScaleMenu );
-
-        CRMenu * inlineImagesZoominModeMenu = new CRMenu(_wm, scalingMenu, mm_inlineImagesZoominMode,
-                _("Inline image scaling mode"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_IMG_SCALING_ZOOMIN_INLINE_MODE );
-        addMenuItems( inlineImagesZoominModeMenu, image_scaling_modes );
-        scalingMenu->addItem( inlineImagesZoominModeMenu );
-        CRMenu * inlineImagesZoominScaleMenu = new CRMenu(_wm, scalingMenu, mm_inlineImagesZoominScale,
-                _("Inline image max zoom"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_IMG_SCALING_ZOOMIN_INLINE_SCALE );
-        addMenuItems( inlineImagesZoominScaleMenu, image_scaling_factors );
-        scalingMenu->addItem( inlineImagesZoominScaleMenu );
+        std::unique_ptr<CRMenu> scalingMenu = std::make_unique<CRMenu>(
+                _wm, mainMenu, mm_ImageScaling, _("Image scaling"),
+                LVImageSourceRef(), LVFontRef(), valueFont, props);
+        scalingMenu->addItem(createOptionMenu(
+                scalingMenu.get(), mm_blockImagesZoominMode,
+                _("Block image scaling mode"), valueFont, props,
+                PROP_IMG_SCALING_ZOOMIN_BLOCK_MODE, image_scaling_modes));
+        scalingMenu->addItem(createOptionMenu(
+                scalingMenu.get(), mm_blockImagesZoominScale,
+                _("Block image max zoom"), valueFont, props,
+                PROP_IMG_SCALING_ZOOMIN_BLOCK_SCALE,
+                image_scaling_factors));
+        scalingMenu->addItem(createOptionMenu(
+                scalingMenu.get(), mm_inlineImagesZoominMode,
+                _("Inline image scaling mode"), valueFont, props,
+                PROP_IMG_SCALING_ZOOMIN_INLINE_MODE, image_scaling_modes));
+        scalingMenu->addItem(createOptionMenu(
+                scalingMenu.get(), mm_inlineImagesZoominScale,
+                _("Inline image max zoom"), valueFont, props,
+                PROP_IMG_SCALING_ZOOMIN_INLINE_SCALE,
+                image_scaling_factors));
         scalingMenu->setAccelerators( _menuAccelerators );
         scalingMenu->setSkinName(cs32("#settings"));
         scalingMenu->reconfigure( 0 );
-        mainMenu->addItem( scalingMenu );
+        mainMenu->addItem(std::move(scalingMenu));
         reconfigure(0);
 }
 

@@ -8038,6 +8038,31 @@ forbid_source_text(
   "controls menu candidates must not begin as raw owners"
 )
 require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> scalingMenu = std::make_unique<CRMenu>("
+  "image-scaling menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "scalingMenu->addItem(createOptionMenu("
+  "image-scaling child menus must transfer through owner-aware boundaries"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(scalingMenu));"
+  "image-scaling menus must transfer through the owner-aware boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * scalingMenu = new"
+  "image-scaling menu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * blockImagesZoominModeMenu = new"
+  "image-scaling child candidates must not begin as raw owners"
+)
+require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"
