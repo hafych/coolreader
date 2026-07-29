@@ -406,6 +406,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   the UI thread. Pause, replacement and close unregister sensors, clear queued
   fade work, restore volume and quit the thread without blocking sleeps;
   malformed or zero volume cannot underflow during fade-out.
+- Audiobook sentence timing caches now use a strict, resource-safe codec and
+  are published only as complete snapshots. Malformed, unknown, duplicate or
+  incomplete positions cannot partially overwrite live sentence timings, and
+  raw timing readers plus media metadata handles are always released.
 - Repeating touch buttons now cancel their exact pending callback on release,
   cancellation, replacement or View detachment. Stray terminal events are
   safe, pressed state is cleared, and an old gesture cannot repeat into a new

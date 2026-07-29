@@ -941,6 +941,33 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void audiobookTimingCacheIsImmutableAndMatcherOwned()
+			throws Exception {
+		Field cache =
+				WordTimingAudiobookMatcher.class.getDeclaredField(
+						"timingCache");
+		assertFalse(Modifier.isStatic(cache.getModifiers()));
+		assertTrue(Modifier.isPrivate(cache.getModifiers()));
+		assertTrue(Modifier.isFinal(cache.getModifiers()));
+
+		assertTrue(
+				Modifier.isFinal(
+						AudiobookTimingCache.class
+								.getModifiers()));
+		assertEquals(
+				0,
+				AudiobookTimingCache.class
+						.getDeclaredFields().length);
+		for (Field field :
+				AudiobookTimingCache.Entry.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

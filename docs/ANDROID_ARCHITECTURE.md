@@ -60,6 +60,13 @@ never sleeps or runs on the GUI Looper. Replacement, pause, stop and close use
 one idempotent cleanup path that unregisters the sensor, removes messages,
 restores the original volume and quits the thread. Its pure fade state clamps
 malformed provider values and reaches exactly zero without underflow.
+Audiobook sentence timing persistence is delegated to the stateless
+`AudiobookTimingCache` codec. It closes readers and writers, returns immutable
+entries, and rejects malformed, non-finite or negative timing data.
+`WordTimingAudiobookMatcher` indexes a complete one-to-one cache snapshot
+before replacing any `SentenceTiming`; unknown, duplicate or missing sentence
+positions therefore cannot leave a partially restored book. Raw word-timing
+input and `MediaMetadataRetriever` resources are also closed on every path.
 Repeated touch actions use the same exact-wrapper principle. Each press owns a
 `ReplaceableTaskSlot` callback and one pressed View. Release, cancellation, a
 new press or View detachment invalidates the pending wrapper and clears the

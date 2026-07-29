@@ -206,6 +206,11 @@ DRM или ограничений доступа, подбор/получени�
   pause/stop/close идемпотентно отписывает sensor, очищает messages,
   восстанавливает volume и завершает thread без UI `sleep`; fade state
   clamped и JVM-tested до точного нуля без underflow.
+  Sentence timing cache вынесен из audiobook matcher в stateless immutable
+  codec со strict finite/non-negative parsing и scoped IO; matcher принимает
+  только complete one-to-one snapshot известных sentence positions и
+  публикует его целиком после валидации, а raw timing reader и
+  `MediaMetadataRetriever` закрываются на всех путях.
   Повторяемые touch-actions также используют exact one-shot generation:
   `UP`/`CANCEL`, новое нажатие и detach View отменяют pending wrapper, снимают
   pressed-state и не позволяют callback старого жеста действовать на новый.

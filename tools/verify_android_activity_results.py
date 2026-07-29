@@ -45,6 +45,36 @@ SETTINGS_FILE_STORE_TEST = (
     / "crengine"
     / "SettingsFileStoreTest.java"
 )
+AUDIOBOOK_TIMING_CACHE = (
+    SOURCE / "crengine" / "AudiobookTimingCache.java"
+)
+AUDIOBOOK_TIMING_CACHE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "AudiobookTimingCacheTest.java"
+)
+WORD_TIMING_AUDIOBOOK_MATCHER = (
+    SOURCE / "crengine" / "WordTimingAudiobookMatcher.java"
+)
+WORD_TIMING_AUDIOBOOK_MATCHER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "WordTimingAudiobookMatcherTest.java"
+)
 READER_ACTION = SOURCE / "crengine" / "ReaderAction.java"
 ACTION_ICON_SET = SOURCE / "crengine" / "ActionIconSet.java"
 DEFAULT_INPUT_ACTIONS = SOURCE / "crengine" / "DefaultInputActions.java"
@@ -842,6 +872,89 @@ def main() -> None:
             violations.append(
                 f"{relative(SETTINGS_FILE_STORE_TEST)} omits settings "
                 f"persistence regression: {marker}")
+
+    audiobook_cache_text = AUDIOBOOK_TIMING_CACHE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class AudiobookTimingCache",
+        "List<Entry> read(File source) throws IOException",
+        "void write(File target, List<Entry> entries)",
+        "try (BufferedReader reader =",
+        "return Collections.unmodifiableList(entries)",
+        "List<Entry> snapshot = new ArrayList<>(entries)",
+        "try (FileWriter writer = new FileWriter(target))",
+        "String[] columns = line.split(\",\", 6)",
+        "static final class Entry",
+        "private final double totalBookDuration",
+        "Double.isNaN(value)",
+        "Double.isInfinite(value)",
+    ):
+        if marker not in audiobook_cache_text:
+            violations.append(
+                f"{relative(AUDIOBOOK_TIMING_CACHE)} omits strict "
+                f"audiobook cache marker: {marker}")
+
+    audiobook_cache_test_text = (
+        AUDIOBOOK_TIMING_CACHE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "entriesRoundTripWithoutMutableListEscape",
+        "malformedValuesAreRejectedWithLineNumber",
+        "invalidSnapshotCannotTruncateExistingCache",
+        '"part,2.mp3"',
+        '"p1,NaN,0,1,true,a.mp3',
+        "restored.clear()",
+    ):
+        if marker not in audiobook_cache_test_text:
+            violations.append(
+                f"{relative(AUDIOBOOK_TIMING_CACHE_TEST)} omits "
+                f"audiobook cache regression: {marker}")
+
+    word_timing_matcher_text = (
+        WORD_TIMING_AUDIOBOOK_MATCHER.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "private final AudiobookTimingCache timingCache",
+        "try (BufferedReader br =",
+        "timingCache.read(sentenceTimingCacheFile)",
+        "Map<String, AudiobookTimingCache.Entry> pending",
+        "pending.size() != sentencesByStartPos.size()",
+        "Map<SentenceInfo, SentenceTiming> resolved",
+        "entry.getKey().sentenceTiming = entry.getValue()",
+        "timingCache.write(sentenceTimingCacheFile, entries)",
+        "finally {",
+        "retriever.release()",
+    ):
+        if marker not in word_timing_matcher_text:
+            violations.append(
+                f"{relative(WORD_TIMING_AUDIOBOOK_MATCHER)} omits "
+                f"atomic timing publication marker: {marker}")
+    for legacy in (
+        "parseSentenceTimingLine(",
+        "new FileWriter(sentenceTimingCacheFile)",
+        "br.close()",
+        "fw.close()",
+    ):
+        if legacy in word_timing_matcher_text:
+            violations.append(
+                f"{relative(WORD_TIMING_AUDIOBOOK_MATCHER)} retains "
+                f"incremental/unscoped timing cache marker: {legacy}")
+
+    word_timing_matcher_test_text = (
+        WORD_TIMING_AUDIOBOOK_MATCHER_TEST.read_text(
+            encoding="utf-8")
+    )
+    for marker in (
+        "completeCachePublishesOneAtomicTimingSnapshot",
+        "incompleteCacheCannotPartiallyReplaceTimings",
+        "unknownOrDuplicatePositionRejectsWholeCache",
+        "publishedSnapshotCanBeWrittenAndReadAgain",
+        "assertSame(oldFirst, first.sentenceTiming)",
+    ):
+        if marker not in word_timing_matcher_test_text:
+            violations.append(
+                f"{relative(WORD_TIMING_AUDIOBOOK_MATCHER_TEST)} omits "
+                f"atomic timing regression: {marker}")
 
     app_locale_text = APP_LOCALE_SELECTION.read_text(encoding="utf-8")
     for marker in (
