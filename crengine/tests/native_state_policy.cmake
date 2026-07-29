@@ -5039,6 +5039,73 @@ forbid_source_text(
   "string chunk backing arrays must remain allocator-managed"
 )
 
+# --- lvstring: transactional copy-on-write buffer publication ---
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "Char *reallocateStringBuffer(Char *buffer, int capacity)"
+  "string buffer growth must pass through the checked staging boundary"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "candidate->buf32 = allocateStringBuffer<lChar32>(sz)"
+  "string32 chunks must acquire their buffer before publication"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "candidate->buf16 = allocateStringBuffer<lChar16>(sz)"
+  "string16 chunks must acquire their buffer before publication"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "candidate->buf8 = allocateStringBuffer<lChar8>(sz)"
+  "string8 chunks must acquire their buffer before publication"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "if (replaceCurrent)\n        release();\n    pchunk = candidate"
+  "COW strings must publish complete chunks only after releasing old ownership"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "n > poldchunk->len ? n : poldchunk->len"
+  "shared-string reserve must retain room for the committed contents"
+)
+require_source_text(
+  "${LVSTRING_SOURCE}"
+  "bool LVRunStringBufferOwnershipRegression()"
+  "string buffer ownership must expose deterministic failure coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "copy-on-write string buffer ownership regression failed"
+  "string buffer rollback must retain native regression coverage"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "pchunk->buf32 = (lChar32*) ::realloc"
+  "string32 growth must not overwrite its sole owner with realloc"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "pchunk->buf16 = (lChar16*) ::realloc"
+  "string16 growth must not overwrite its sole owner with realloc"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "pchunk->buf8 = (lChar8*) ::realloc"
+  "string8 growth must not overwrite its sole owner with realloc"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "assert( pchunk->buf"
+  "release string allocations must not rely on debug-only OOM checks"
+)
+forbid_source_text(
+  "${LVSTRING_SOURCE}"
+  "release();\n            alloc("
+  "COW replacement must allocate before releasing the committed chunk"
+)
+
 # --- ldom: custom block-pool ownership and size classes ---
 require_source_text(
   "${MEMORY_MANAGER_HEADER}"

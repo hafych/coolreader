@@ -338,7 +338,7 @@ public:
 private:
     lstring_chunk_t * pchunk;
     static lstring_chunk_t * EMPTY_STR_8;
-    void alloc(size_type sz);
+    void alloc(size_type sz, bool replaceCurrent = true);
     void free();
     inline void addref() const {
 #ifdef USE_ATOMIC_REFCOUNT
@@ -363,7 +363,9 @@ public:
     /// default constrictor
     explicit lString8() : pchunk(EMPTY_STR_8) { addref(); }
     /// constructor of empty string with buffer of specified size
-    explicit lString8( int size ) : pchunk(EMPTY_STR_8) { addref(); reserve(size); }
+    explicit lString8( int size ) : pchunk(EMPTY_STR_8) {
+        alloc(size, false);
+    }
     /// copy constructor
     lString8(const lString8 & str) : pchunk(str.pchunk) { addref(); }
     /// constructor from C string
@@ -598,7 +600,7 @@ public:
 private:
     lstring_chunk_t * pchunk;
     static lstring_chunk_t * EMPTY_STR_16;
-    void alloc(size_type sz);
+    void alloc(size_type sz, bool replaceCurrent = true);
     void free();
     inline void addref() const {
 #ifdef USE_ATOMIC_REFCOUNT
@@ -833,7 +835,7 @@ public:
 private:
     lstring_chunk_t * pchunk;
     static lstring_chunk_t * EMPTY_STR_32;
-    void alloc(size_type sz);
+    void alloc(size_type sz, bool replaceCurrent = true);
     void free();
     inline void addref() const {
 #ifdef USE_ATOMIC_REFCOUNT
@@ -1269,6 +1271,7 @@ int TrimDoubleSpaces(lChar32 * buf, int len,  bool allowStartSpace, bool allowEn
 /// remove soft-hyphens from string
 lString32 removeSoftHyphens( lString32 s );
 
+bool LVRunStringBufferOwnershipRegression();
 
 #define LCSTR(x) (UnicodeToUtf8(x).c_str())
 bool splitIntegerList( lString32 s, lString32 delim, int & value1, int & value2 );

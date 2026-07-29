@@ -3582,6 +3582,12 @@ static int testDocumentHeaderRestoreOwnership() {
     return 0;
 }
 
+static int testStringBufferOwnership() {
+    if (!LVRunStringBufferOwnershipRegression())
+        return fail("copy-on-write string buffer ownership regression failed");
+    return 0;
+}
+
 #if (LDOM_USE_OWN_MEM_MAN == 1)
 static int testStringChunkStorageOwnership() {
     if (!LVRunStringChunkStorageOwnershipRegression())
@@ -7514,6 +7520,8 @@ int main() {
     if (testDocumentCacheIndexRestoreOwnership() != 0)
         return 1;
     if (testDocumentHeaderRestoreOwnership() != 0)
+        return 1;
+    if (testStringBufferOwnership() != 0)
         return 1;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
     if (testStringChunkStorageOwnership() != 0)

@@ -41,7 +41,9 @@
 #include <stddef.h>
 #include <time.h>
 #include <array>
+#include <atomic>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -84,6 +86,54 @@ lstring16_chunk_t * lString16::EMPTY_STR_16 = &empty_chunk_16;
 static lChar32 empty_str_32[] = {0};
 static lstring32_chunk_t empty_chunk_32(empty_str_32);
 lstring32_chunk_t * lString32::EMPTY_STR_32 = &empty_chunk_32;
+
+namespace {
+
+std::atomic<bool> fail_next_string_buffer_allocation_for_regression(false);
+
+void reportStringBufferAllocationFailure()
+{
+    crFatalError(-2, "string buffer allocation failed");
+    throw std::bad_alloc();
+}
+
+template <typename Char>
+size_t stringBufferByteCount(int capacity)
+{
+    if (capacity < 0
+            || static_cast<size_t>(capacity)
+                    > std::numeric_limits<size_t>::max() / sizeof(Char) - 1)
+        reportStringBufferAllocationFailure();
+    return (static_cast<size_t>(capacity) + 1) * sizeof(Char);
+}
+
+template <typename Char>
+Char *allocateStringBuffer(int capacity)
+{
+    if (fail_next_string_buffer_allocation_for_regression.exchange(
+                false, std::memory_order_relaxed))
+        throw std::bad_alloc();
+    Char *result = static_cast<Char *>(
+            std::malloc(stringBufferByteCount<Char>(capacity)));
+    if (result == NULL)
+        reportStringBufferAllocationFailure();
+    return result;
+}
+
+template <typename Char>
+Char *reallocateStringBuffer(Char *buffer, int capacity)
+{
+    if (fail_next_string_buffer_allocation_for_regression.exchange(
+                false, std::memory_order_relaxed))
+        throw std::bad_alloc();
+    Char *result = static_cast<Char *>(
+            std::realloc(buffer, stringBufferByteCount<Char>(capacity)));
+    if (result == NULL)
+        reportStringBufferAllocationFailure();
+    return result;
+}
+
+} // namespace
 
 //================================================================================
 // atomic string storages for string literals
@@ -981,87 +1031,103 @@ void lString32::free()
 #endif
 }
 
-void lString32::alloc(int sz)
+void lString32::alloc(int sz, bool replaceCurrent)
 {
+    lstring_chunk_t *candidate;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
-    pchunk = lstring_chunk_t::alloc();
+    candidate = lstring_chunk_t::alloc();
 #else
-    pchunk = (lstring_chunk_t*)::malloc(sizeof(lstring_chunk_t));
+    candidate = static_cast<lstring_chunk_t *>(
+            std::malloc(sizeof(lstring_chunk_t)));
+    if (candidate == NULL)
+        reportStringBufferAllocationFailure();
 #endif
-    pchunk->buf32 = (lChar32*) ::malloc( sizeof(lChar32) * (sz+1) );
-    assert( pchunk->buf32!=NULL );
-    pchunk->size = sz;
-    pchunk->refCount = 1;
+    try {
+        candidate->buf32 = allocateStringBuffer<lChar32>(sz);
+    } catch (...) {
+#if (LDOM_USE_OWN_MEM_MAN == 1)
+        lstring_chunk_t::free(candidate);
+#else
+        std::free(candidate);
+#endif
+        throw;
+    }
+    candidate->size = sz;
+    candidate->len = 0;
+    candidate->buf32[0] = 0;
+    candidate->refCount = 1;
+    if (replaceCurrent)
+        release();
+    pchunk = candidate;
 }
 
 lString32::lString32(const lChar32 * str)
+    : pchunk(EMPTY_STR_32)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_32;
+    if (!str || !(*str)) {
         addref();
         return;
     }
     size_type len = _lStr_len(str);
-    alloc( len );
+    alloc(len, false);
     pchunk->len = len;
     _lStr_cpy( pchunk->buf32, str );
 }
 
 lString32::lString32(const lChar8 * str)
+    : pchunk(EMPTY_STR_32)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_32;
+    if (!str || !(*str)) {
         addref();
         return;
     }
-    pchunk = EMPTY_STR_32;
+    lString32 converted = Utf8ToUnicode(str);
+    pchunk = converted.pchunk;
     addref();
-    *this = Utf8ToUnicode( str );
 }
 
 /// constructor from utf8 character array fragment
 lString32::lString32(const lChar8 * str, size_type count)
+    : pchunk(EMPTY_STR_32)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_32;
+    if (!str || !(*str)) {
         addref();
         return;
     }
-    pchunk = EMPTY_STR_32;
+    lString32 converted = Utf8ToUnicode(str, count);
+    pchunk = converted.pchunk;
     addref();
-    *this = Utf8ToUnicode( str, count );
 }
 
 
 lString32::lString32(const value_type * str, size_type count)
+    : pchunk(EMPTY_STR_32)
 {
-    if ( !str || !(*str) || count<=0 )
-    {
-        pchunk = EMPTY_STR_32; addref();
+    if ( !str || !(*str) || count<=0 ) {
+        addref();
+        return;
     }
     else
     {
         size_type len = _lStr_nlen(str, count);
-        alloc(len);
+        alloc(len, false);
         _lStr_ncpy( pchunk->buf32, str, len );
         pchunk->len = len;
     }
 }
 
 lString32::lString32(const lString32 & str, size_type offset, size_type count)
+    : pchunk(EMPTY_STR_32)
 {
     if ( count > str.length() - offset )
         count = str.length() - offset;
-    if (count<=0)
-    {
-        pchunk = EMPTY_STR_32; addref();
+    if (count<=0) {
+        addref();
+        return;
     }
     else
     {
-        alloc(count);
+        alloc(count, false);
         _lStr_memcpy( pchunk->buf32, str.pchunk->buf32+offset, count );
         pchunk->buf32[count]=0;
         pchunk->len = count;
@@ -1082,13 +1148,13 @@ lString32 & lString32::assign(const lChar32 * str)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf32 = (lChar32*) ::realloc( pchunk->buf32, sizeof(lChar32)*(len+1) );
+                pchunk->buf32 =
+                        reallocateStringBuffer(pchunk->buf32, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_cpy( pchunk->buf32, str );
@@ -1111,13 +1177,13 @@ lString32 & lString32::assign(const lChar8 * str)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf32 = (lChar32*) ::realloc( pchunk->buf32, sizeof(lChar32)*(len+1) );
+                pchunk->buf32 =
+                        reallocateStringBuffer(pchunk->buf32, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_cpy( pchunk->buf32, str );
@@ -1140,13 +1206,13 @@ lString32 & lString32::assign(const lChar32 * str, size_type count)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf32 = (lChar32*) ::realloc( pchunk->buf32, sizeof(lChar32)*(len+1) );
+                pchunk->buf32 =
+                        reallocateStringBuffer(pchunk->buf32, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_ncpy( pchunk->buf32, str, count );
@@ -1169,13 +1235,13 @@ lString32 & lString32::assign(const lChar8 * str, size_type count)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf32 = (lChar32*) ::realloc( pchunk->buf32, sizeof(lChar32)*(len+1) );
+                pchunk->buf32 =
+                        reallocateStringBuffer(pchunk->buf32, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_ncpy( pchunk->buf32, str, count );
@@ -1198,7 +1264,6 @@ lString32 & lString32::assign(const lString32 & str, size_type offset, size_type
         {
             if (&str != this)
             {
-                release();
                 alloc(count);
             }
             if (offset>0)
@@ -1214,13 +1279,13 @@ lString32 & lString32::assign(const lString32 & str, size_type offset, size_type
                 if (pchunk->size<=count)
                 {
                     // resize is necessary
-                    pchunk->buf32 = (lChar32*) ::realloc( pchunk->buf32, sizeof(lChar32)*(count+1) );
+                    pchunk->buf32 =
+                            reallocateStringBuffer(pchunk->buf32, count);
                     pchunk->size = count+1;
                 }
             }
             else
             {
-                release();
                 alloc(count);
             }
             _lStr_memcpy( pchunk->buf32, str.pchunk->buf32+offset, count );
@@ -1249,7 +1314,6 @@ lString32 & lString32::erase(size_type offset, size_type count)
         else
         {
             lstring_chunk_t * poldchunk = pchunk;
-            release();
             alloc( newlen );
             _lStr_memcpy( pchunk->buf32, poldchunk->buf32, offset );
             _lStr_memcpy( pchunk->buf32+offset, poldchunk->buf32+offset+count, newlen-offset+1 );
@@ -1266,15 +1330,17 @@ void lString32::reserve(size_type n)
     {
         if (pchunk->size < n)
         {
-            pchunk->buf32 = (lChar32*) ::realloc( pchunk->buf32, sizeof(lChar32)*(n+1) );
+            pchunk->buf32 =
+                    reallocateStringBuffer(pchunk->buf32, n);
             pchunk->size = n;
         }
     }
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
-        alloc( n );
+        const size_type capacity =
+                n > poldchunk->len ? n : poldchunk->len;
+        alloc(capacity);
         _lStr_memcpy( pchunk->buf32, poldchunk->buf32, poldchunk->len+1 );
         pchunk->len = poldchunk->len;
     }
@@ -1285,7 +1351,6 @@ void lString32::lock( size_type newsize )
     if (refCount()>1)
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newsize );
         size_type len = newsize;
         if (len>poldchunk->len)
@@ -1301,7 +1366,6 @@ void lString32::reset( size_type size )
 {
     if (refCount()>1 || pchunk->size<size)
     {
-        release();
         alloc( size );
     }
     pchunk->buf32[0] = 0;
@@ -1313,7 +1377,8 @@ void lString32::resize(size_type n, lChar32 e)
     lock( n );
     if (n>=pchunk->size)
     {
-        pchunk->buf32 = (lChar32*) ::realloc( pchunk->buf32, sizeof(lChar32)*(n+1) );
+        pchunk->buf32 =
+                reallocateStringBuffer(pchunk->buf32, n);
         pchunk->size = n;
     }
     // fill with data if expanded
@@ -1434,7 +1499,8 @@ lString32 & lString32::pack()
         }
         else
         {
-            pchunk->buf32 = cr_realloc( pchunk->buf32, pchunk->len+1 );
+            pchunk->buf32 =
+                    reallocateStringBuffer(pchunk->buf32, pchunk->len);
             pchunk->size = pchunk->len;
         }
     }
@@ -1475,7 +1541,6 @@ lString32 & lString32::trimNonAlpha()
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newlen );
         _lStr_memcpy( pchunk->buf32, poldchunk->buf32+firstns, newlen );
         pchunk->buf32[newlen] = 0;
@@ -1513,7 +1578,6 @@ lString32 & lString32::trim()
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newlen );
         _lStr_memcpy( pchunk->buf32, poldchunk->buf32+firstns, newlen );
         pchunk->buf32[newlen] = 0;
@@ -1779,89 +1843,104 @@ void lString16::free()
 #endif
 }
 
-void lString16::alloc(int sz)
+void lString16::alloc(int sz, bool replaceCurrent)
 {
+    lstring_chunk_t *candidate;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
-    pchunk = lstring_chunk_t::alloc();
+    candidate = lstring_chunk_t::alloc();
 #else
-    pchunk = (lstring_chunk_t*)::malloc(sizeof(lstring_chunk_t));
+    candidate = static_cast<lstring_chunk_t *>(
+            std::malloc(sizeof(lstring_chunk_t)));
+    if (candidate == NULL)
+        reportStringBufferAllocationFailure();
 #endif
-    pchunk->buf16 = (lChar16*) ::malloc( sizeof(lChar16) * (sz+1) );
-    assert( pchunk->buf16!=NULL );
-    pchunk->size = sz;
-    pchunk->refCount = 1;
+    try {
+        candidate->buf16 = allocateStringBuffer<lChar16>(sz);
+    } catch (...) {
+#if (LDOM_USE_OWN_MEM_MAN == 1)
+        lstring_chunk_t::free(candidate);
+#else
+        std::free(candidate);
+#endif
+        throw;
+    }
+    candidate->size = sz;
+    candidate->len = 0;
+    candidate->buf16[0] = 0;
+    candidate->refCount = 1;
+    if (replaceCurrent)
+        release();
+    pchunk = candidate;
 }
 
 lString16::lString16(const value_type * str)
+    : pchunk(EMPTY_STR_16)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_16;
+    if (!str || !(*str)) {
         addref();
         return;
     }
     size_type len = _lStr_len(str);
-    alloc( len );
+    alloc(len, false);
     pchunk->len = len;
     _lStr_cpy( pchunk->buf16, str );
 }
 
 lString16::lString16(const lChar8 * str)
+    : pchunk(EMPTY_STR_16)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_16;
+    if (!str || !(*str)) {
         addref();
         return;
     }
-    pchunk = EMPTY_STR_16;
+    lString16 converted = UnicodeToUtf16(Utf8ToUnicode(str));
+    pchunk = converted.pchunk;
     addref();
-    *this = UnicodeToUtf16( Utf8ToUnicode( str ) );
 }
 
 /// constructor from utf8 character array fragment
 lString16::lString16(const lChar8 * str, size_type count)
+    : pchunk(EMPTY_STR_16)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_16;
+    if (!str || !(*str)) {
         addref();
         return;
     }
-    pchunk = EMPTY_STR_16;
+    lString16 converted =
+            UnicodeToUtf16(Utf8ToUnicode(str, count));
+    pchunk = converted.pchunk;
     addref();
-    *this = UnicodeToUtf16( Utf8ToUnicode( str, count ) );
 }
 
 
 lString16::lString16(const value_type * str, size_type count)
+    : pchunk(EMPTY_STR_16)
 {
-    if ( !str || !(*str) || count<=0 )
-    {
-        pchunk = EMPTY_STR_16;
+    if ( !str || !(*str) || count<=0 ) {
         addref();
+        return;
     }
     else
     {
         size_type len = _lStr_nlen(str, count);
-        alloc(len);
+        alloc(len, false);
         _lStr_ncpy( pchunk->buf16, str, len );
         pchunk->len = len;
     }
 }
 
 lString16::lString16(const lString16 & str, size_type offset, size_type count)
+    : pchunk(EMPTY_STR_16)
 {
     if ( count > str.length() - offset )
         count = str.length() - offset;
-    if (count<=0)
-    {
-        pchunk = EMPTY_STR_16;
+    if (count<=0) {
         addref();
+        return;
     }
     else
     {
-        alloc(count);
+        alloc(count, false);
         _lStr_memcpy( pchunk->buf16, str.pchunk->buf16+offset, count );
         pchunk->buf16[count]=0;
         pchunk->len = count;
@@ -1882,13 +1961,13 @@ lString16 & lString16::assign(const value_type * str)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf16 = (lChar16*) ::realloc( pchunk->buf16, sizeof(lChar16)*(len+1) );
+                pchunk->buf16 =
+                        reallocateStringBuffer(pchunk->buf16, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_cpy( pchunk->buf16, str );
@@ -1911,13 +1990,13 @@ lString16 & lString16::assign(const lChar8 * str)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf16 = (lChar16*) ::realloc( pchunk->buf16, sizeof(lChar16)*(len+1) );
+                pchunk->buf16 =
+                        reallocateStringBuffer(pchunk->buf16, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_cpy( pchunk->buf16, str );
@@ -1940,13 +2019,13 @@ lString16 & lString16::assign(const value_type * str, size_type count)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf16 = (lChar16*) ::realloc( pchunk->buf16, sizeof(lChar16)*(len+1) );
+                pchunk->buf16 =
+                        reallocateStringBuffer(pchunk->buf16, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_ncpy( pchunk->buf16, str, count );
@@ -1969,13 +2048,13 @@ lString16 & lString16::assign(const lChar8 * str, size_type count)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf16 = (lChar16*) ::realloc( pchunk->buf16, sizeof(lChar16)*(len+1) );
+                pchunk->buf16 =
+                        reallocateStringBuffer(pchunk->buf16, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_ncpy( pchunk->buf16, str, count );
@@ -1998,7 +2077,6 @@ lString16 & lString16::assign(const lString16 & str, size_type offset, size_type
         {
             if (&str != this)
             {
-                release();
                 alloc(count);
             }
             if (offset>0)
@@ -2014,13 +2092,13 @@ lString16 & lString16::assign(const lString16 & str, size_type offset, size_type
                 if (pchunk->size<=count)
                 {
                     // resize is necessary
-                    pchunk->buf16 = (lChar16*) ::realloc( pchunk->buf16, sizeof(lChar16)*(count+1) );
+                    pchunk->buf16 =
+                            reallocateStringBuffer(pchunk->buf16, count);
                     pchunk->size = count+1;
                 }
             }
             else
             {
-                release();
                 alloc(count);
             }
             _lStr_memcpy( pchunk->buf16, str.pchunk->buf16+offset, count );
@@ -2049,7 +2127,6 @@ lString16 & lString16::erase(size_type offset, size_type count)
         else
         {
             lstring_chunk_t * poldchunk = pchunk;
-            release();
             alloc( newlen );
             _lStr_memcpy( pchunk->buf16, poldchunk->buf16, offset );
             _lStr_memcpy( pchunk->buf16+offset, poldchunk->buf16+offset+count, newlen-offset+1 );
@@ -2066,15 +2143,17 @@ void lString16::reserve(size_type n)
     {
         if (pchunk->size < n)
         {
-            pchunk->buf16 = (lChar16*) ::realloc( pchunk->buf16, sizeof(lChar16)*(n+1) );
+            pchunk->buf16 =
+                    reallocateStringBuffer(pchunk->buf16, n);
             pchunk->size = n;
         }
     }
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
-        alloc( n );
+        const size_type capacity =
+                n > poldchunk->len ? n : poldchunk->len;
+        alloc(capacity);
         _lStr_memcpy( pchunk->buf16, poldchunk->buf16, poldchunk->len+1 );
         pchunk->len = poldchunk->len;
     }
@@ -2085,7 +2164,6 @@ void lString16::lock( size_type newsize )
     if (refCount()>1)
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newsize );
         size_type len = newsize;
         if (len>poldchunk->len)
@@ -2101,7 +2179,6 @@ void lString16::reset( size_type size )
 {
     if (refCount()>1 || pchunk->size<size)
     {
-        release();
         alloc( size );
     }
     pchunk->buf16[0] = 0;
@@ -2113,7 +2190,8 @@ void lString16::resize(size_type n, value_type e)
     lock( n );
     if (n>=pchunk->size)
     {
-        pchunk->buf16 = (lChar16*) ::realloc( pchunk->buf16, sizeof(lChar16)*(n+1) );
+        pchunk->buf16 =
+                reallocateStringBuffer(pchunk->buf16, n);
         pchunk->size = n;
     }
     // fill with data if expanded
@@ -2261,7 +2339,8 @@ lString16 & lString16::pack()
         }
         else
         {
-            pchunk->buf16 = cr_realloc( pchunk->buf16, pchunk->len + 1 );
+            pchunk->buf16 =
+                    reallocateStringBuffer(pchunk->buf16, pchunk->len);
             pchunk->size = pchunk->len;
         }
     }
@@ -2297,7 +2376,6 @@ lString16 & lString16::trimNonAlpha()
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newlen );
         _lStr_memcpy( pchunk->buf16, poldchunk->buf16+firstns, newlen );
         pchunk->buf16[newlen] = 0;
@@ -2335,7 +2413,6 @@ lString16 & lString16::trim()
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newlen );
         _lStr_memcpy( pchunk->buf16, poldchunk->buf16+firstns, newlen );
         pchunk->buf16[newlen] = 0;
@@ -2452,73 +2529,90 @@ void lString8::free()
 #endif
 }
 
-void lString8::alloc(int sz)
+void lString8::alloc(int sz, bool replaceCurrent)
 {
+    lstring_chunk_t *candidate;
 #if (LDOM_USE_OWN_MEM_MAN == 1)
-    pchunk = lstring_chunk_t::alloc();
+    candidate = lstring_chunk_t::alloc();
 #else
-    pchunk = (lstring_chunk_t*)::malloc(sizeof(lstring_chunk_t));
+    candidate = static_cast<lstring_chunk_t *>(
+            std::malloc(sizeof(lstring_chunk_t)));
+    if (candidate == NULL)
+        reportStringBufferAllocationFailure();
 #endif
-    pchunk->buf8 = (lChar8*) ::malloc( sizeof(lChar8) * (sz+1) );
-    assert( pchunk->buf8!=NULL );
-    pchunk->size = sz;
-    pchunk->refCount = 1;
+    try {
+        candidate->buf8 = allocateStringBuffer<lChar8>(sz);
+    } catch (...) {
+#if (LDOM_USE_OWN_MEM_MAN == 1)
+        lstring_chunk_t::free(candidate);
+#else
+        std::free(candidate);
+#endif
+        throw;
+    }
+    candidate->size = sz;
+    candidate->len = 0;
+    candidate->buf8[0] = 0;
+    candidate->refCount = 1;
+    if (replaceCurrent)
+        release();
+    pchunk = candidate;
 }
 
 lString8::lString8(const lChar8 * str)
+    : pchunk(EMPTY_STR_8)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_8;
+    if (!str || !(*str)) {
         addref();
         return;
     }
     size_type len = _lStr_len(str);
-    alloc( len );
+    alloc(len, false);
     pchunk->len = len;
     _lStr_cpy( pchunk->buf8, str );
 }
 
 lString8::lString8(const lChar32 * str)
+    : pchunk(EMPTY_STR_8)
 {
-    if (!str || !(*str))
-    {
-        pchunk = EMPTY_STR_8;
+    if (!str || !(*str)) {
         addref();
         return;
     }
     size_type len = _lStr_len(str);
-    alloc( len );
+    alloc(len, false);
     pchunk->len = len;
     _lStr_cpy( pchunk->buf8, str );
 }
 
 lString8::lString8(const value_type * str, size_type count)
+    : pchunk(EMPTY_STR_8)
 {
-    if ( !str || !(*str) || count<=0 )
-    {
-        pchunk = EMPTY_STR_8; addref();
+    if ( !str || !(*str) || count<=0 ) {
+        addref();
+        return;
     }
     else
     {
         size_type len = _lStr_nlen(str, count);
-        alloc(len);
+        alloc(len, false);
         _lStr_ncpy( pchunk->buf8, str, len );
         pchunk->len = len;
     }
 }
 
 lString8::lString8(const lString8 & str, size_type offset, size_type count)
+    : pchunk(EMPTY_STR_8)
 {
     if ( count > str.length() - offset )
         count = str.length() - offset;
-    if (count<=0)
-    {
-        pchunk = EMPTY_STR_8; addref();
+    if (count<=0) {
+        addref();
+        return;
     }
     else
     {
-        alloc(count);
+        alloc(count, false);
         _lStr_memcpy( pchunk->buf8, str.pchunk->buf8+offset, count );
         pchunk->buf8[count]=0;
         pchunk->len = count;
@@ -2539,13 +2633,13 @@ lString8 & lString8::assign(const lChar8 * str)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf8 = (lChar8*) ::realloc( pchunk->buf8, sizeof(lChar8)*(len+1) );
+                pchunk->buf8 =
+                        reallocateStringBuffer(pchunk->buf8, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_cpy( pchunk->buf8, str );
@@ -2568,13 +2662,13 @@ lString8 & lString8::assign(const lChar8 * str, size_type count)
             if (pchunk->size<=len)
             {
                 // resize is necessary
-                pchunk->buf8 = (lChar8*) ::realloc( pchunk->buf8, sizeof(lChar8)*(len+1) );
+                pchunk->buf8 =
+                        reallocateStringBuffer(pchunk->buf8, len);
                 pchunk->size = len+1;
             }
         }
         else
         {
-            release();
             alloc(len);
         }
         _lStr_ncpy( pchunk->buf8, str, count );
@@ -2597,7 +2691,6 @@ lString8 & lString8::assign(const lString8 & str, size_type offset, size_type co
         {
             if (&str != this)
             {
-                release();
                 alloc(count);
             }
             if (offset>0)
@@ -2613,13 +2706,13 @@ lString8 & lString8::assign(const lString8 & str, size_type offset, size_type co
                 if (pchunk->size<=count)
                 {
                     // resize is necessary
-                    pchunk->buf8 = (lChar8*) ::realloc( pchunk->buf8, sizeof(lChar8)*(count+1) );
+                    pchunk->buf8 =
+                            reallocateStringBuffer(pchunk->buf8, count);
                     pchunk->size = count+1;
                 }
             }
             else
             {
-                release();
                 alloc(count);
             }
             _lStr_memcpy( pchunk->buf8, str.pchunk->buf8+offset, count );
@@ -2648,7 +2741,6 @@ lString8 & lString8::erase(size_type offset, size_type count)
         else
         {
             lstring_chunk_t * poldchunk = pchunk;
-            release();
             alloc( newlen );
             _lStr_memcpy( pchunk->buf8, poldchunk->buf8, offset );
             _lStr_memcpy( pchunk->buf8+offset, poldchunk->buf8+offset+count, newlen-offset+1 );
@@ -2665,15 +2757,17 @@ void lString8::reserve(size_type n)
     {
         if (pchunk->size < n)
         {
-            pchunk->buf8 = (lChar8*) ::realloc( pchunk->buf8, sizeof(lChar8)*(n+1) );
+            pchunk->buf8 =
+                    reallocateStringBuffer(pchunk->buf8, n);
             pchunk->size = n;
         }
     }
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
-        alloc( n );
+        const size_type capacity =
+                n > poldchunk->len ? n : poldchunk->len;
+        alloc(capacity);
         _lStr_memcpy( pchunk->buf8, poldchunk->buf8, poldchunk->len+1 );
         pchunk->len = poldchunk->len;
     }
@@ -2684,7 +2778,6 @@ void lString8::lock( size_type newsize )
     if (refCount()>1)
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newsize );
         size_type len = newsize;
         if (len>poldchunk->len)
@@ -2700,7 +2793,6 @@ void lString8::reset( size_type size )
 {
     if (refCount()>1 || pchunk->size<size)
     {
-        release();
         alloc( size );
     }
     pchunk->buf8[0] = 0;
@@ -2712,7 +2804,8 @@ void lString8::resize(size_type n, lChar8 e)
     lock( n );
     if (n>=pchunk->size)
     {
-        pchunk->buf8 = (lChar8*) ::realloc( pchunk->buf8, sizeof(lChar8)*(n+1) );
+        pchunk->buf8 =
+                reallocateStringBuffer(pchunk->buf8, n);
         pchunk->size = n;
     }
     // fill with data if expanded
@@ -3251,7 +3344,8 @@ lString8 & lString8::pack()
         }
         else
         {
-            pchunk->buf8 = cr_realloc( pchunk->buf8, pchunk->len+1 );
+            pchunk->buf8 =
+                    reallocateStringBuffer(pchunk->buf8, pchunk->len);
             pchunk->size = pchunk->len;
         }
     }
@@ -3292,7 +3386,6 @@ lString8 & lString8::trim()
     else
     {
         lstring_chunk_t * poldchunk = pchunk;
-        release();
         alloc( newlen );
         _lStr_memcpy( pchunk->buf8, poldchunk->buf8+firstns, newlen );
         pchunk->buf8[newlen] = 0;
@@ -6246,4 +6339,206 @@ lString32 removeSoftHyphens( lString32 s )
         s = s1 + s2;
     }
     return s;
+}
+
+bool LVRunStringBufferOwnershipRegression()
+{
+    struct FailureReset {
+        ~FailureReset()
+        {
+            fail_next_string_buffer_allocation_for_regression.store(
+                    false, std::memory_order_relaxed);
+        }
+    } reset;
+
+    static const lChar16 stable16Text[] = {
+        's', 't', 'a', 'b', 'l', 'e', '1', '6', 0
+    };
+    static const lChar16 suffix16Text[] = {'-', 'c', 'o', 'p', 'y', 0};
+    static const lChar16 copied16Text[] = {
+        's', 't', 'a', 'b', 'l', 'e', '1', '6',
+        '-', 'c', 'o', 'p', 'y', 0
+    };
+    static const lChar32 stable32Text[] = {
+        's', 't', 'a', 'b', 'l', 'e', '3', '2', 0
+    };
+    static const lChar32 suffix32Text[] = {'-', 'c', 'o', 'p', 'y', 0};
+    static const lChar32 copied32Text[] = {
+        's', 't', 'a', 'b', 'l', 'e', '3', '2',
+        '-', 'c', 'o', 'p', 'y', 0
+    };
+
+    try {
+        lString8 value8("stable8");
+        const lChar8 *buffer8 = value8.c_str();
+        const int capacity8 = value8.capacity();
+        bool failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            value8.reserve(capacity8 + 64);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        if (!failed || value8.c_str() != buffer8
+                || value8 != lString8("stable8")
+                || value8.capacity() != capacity8)
+            return false;
+
+        lString8 shared8(value8);
+        const lChar8 *sharedBuffer8 = shared8.c_str();
+        const int sharedCapacity8 = shared8.capacity();
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            shared8.append("-copy");
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        if (!failed || shared8 != value8
+                || shared8.c_str() != sharedBuffer8
+                || shared8.capacity() != sharedCapacity8)
+            return false;
+        shared8.append("-copy");
+        if (value8 != lString8("stable8")
+                || shared8 != lString8("stable8-copy"))
+            return false;
+        lString8 narrowReserve8(value8);
+        narrowReserve8.reserve(1);
+        if (narrowReserve8 != value8)
+            return false;
+
+        lString16 value16(stable16Text);
+        const lChar16 *buffer16 = value16.c_str();
+        const int capacity16 = value16.capacity();
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            value16.reserve(capacity16 + 64);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        if (!failed || value16.c_str() != buffer16
+                || value16.compare(stable16Text) != 0
+                || value16.capacity() != capacity16)
+            return false;
+
+        lString16 shared16(value16);
+        const lChar16 *sharedBuffer16 = shared16.c_str();
+        const int sharedCapacity16 = shared16.capacity();
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            shared16.append(suffix16Text);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        if (!failed || shared16.compare(stable16Text) != 0
+                || shared16.c_str() != sharedBuffer16
+                || shared16.capacity() != sharedCapacity16)
+            return false;
+        shared16.append(suffix16Text);
+        if (value16.compare(stable16Text) != 0
+                || shared16.compare(copied16Text) != 0)
+            return false;
+        lString16 narrowReserve16(value16);
+        narrowReserve16.reserve(1);
+        if (narrowReserve16.compare(stable16Text) != 0)
+            return false;
+
+        lString32 value32(stable32Text);
+        const lChar32 *buffer32 = value32.c_str();
+        const int capacity32 = value32.capacity();
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            value32.reserve(capacity32 + 64);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        if (!failed || value32.c_str() != buffer32
+                || value32.compare(stable32Text) != 0
+                || value32.capacity() != capacity32)
+            return false;
+
+        lString32 shared32(value32);
+        const lChar32 *sharedBuffer32 = shared32.c_str();
+        const int sharedCapacity32 = shared32.capacity();
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            shared32.append(suffix32Text);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        if (!failed || shared32.compare(stable32Text) != 0
+                || shared32.c_str() != sharedBuffer32
+                || shared32.capacity() != sharedCapacity32)
+            return false;
+        shared32.append(suffix32Text);
+        if (value32.compare(stable32Text) != 0
+                || shared32.compare(copied32Text) != 0)
+            return false;
+        lString32 narrowReserve32(value32);
+        narrowReserve32.reserve(1);
+        if (narrowReserve32.compare(stable32Text) != 0)
+            return false;
+
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            lString8 rejected("rejected");
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        lString8 recovered("after failure");
+        if (!failed || recovered != lString8("after failure"))
+            return false;
+
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            lString8 rejectedCapacity(32);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        lString8 recoveredCapacity(32);
+        if (!failed || !recoveredCapacity.empty()
+                || recoveredCapacity.c_str()[0] != 0)
+            return false;
+
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            lString16 rejected(stable16Text);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        lString16 recovered16(stable16Text);
+        if (!failed || recovered16.compare(stable16Text) != 0)
+            return false;
+
+        failed = false;
+        fail_next_string_buffer_allocation_for_regression.store(
+                true, std::memory_order_relaxed);
+        try {
+            lString32 rejected(stable32Text);
+        } catch (const std::bad_alloc &) {
+            failed = true;
+        }
+        lString32 recovered32(stable32Text);
+        if (!failed || recovered32.compare(stable32Text) != 0)
+            return false;
+    } catch (...) {
+        return false;
+    }
+    return true;
 }

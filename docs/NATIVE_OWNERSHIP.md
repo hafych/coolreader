@@ -328,6 +328,16 @@ outlives that string's static teardown. A local regression instance forces
 slice growth, verifies freelist reuse, performs repeated clear, and reinitializes
 8-, 16- and 32-bit chunk paths under sanitizers.
 
+The COW string classes also stage each 8-, 16- or 32-bit chunk and its
+malloc-backed character buffer before replacing the committed chunk. Checked
+allocation rejects invalid byte counts in release builds, candidate cleanup
+returns an unpublished chunk to the matching allocator, and `realloc` results
+reach the sole owning field only after success. Shared detachment also clamps
+an undersized `reserve()` request to the committed length before copying. A
+deterministic fail-once regression covers unique-buffer growth, shared-chunk
+detachment and constructor cleanup for all three character widths; every
+failed operation preserves the prior contents, capacity and buffer identity.
+
 The desktop DOM block allocator likewise owns each malloc-backed slice through
 an allocator-matched `unique_ptr`, and its bounded slice and size-class tables
 hold exclusive owners rather than raw process-lifetime pointers. Free-list

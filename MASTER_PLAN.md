@@ -129,8 +129,9 @@ DRM или ограничений доступа, подбор/получени�
   regions/OS handles, file-stream FILE/HANDLE/owned/borrowed descriptor
   lifecycle, directory scan handles/item candidates, archive factory/item
   candidates, serialization-buffer storage и string-collection slots/hashed
-  buckets, bounded custom string-chunk и DOM block-pool slice/size-class
-  owners, DOM name/id owner/index storage, generic hash-table buckets/chains,
+  buckets, transactional COW string buffer allocation/growth, bounded custom
+  string-chunk и DOM block-pool slice/size-class owners, DOM name/id
+  owner/index storage, generic hash-table buckets/chains,
   generic value-array, transactional reference adoption/clone, reference-vector,
   transactional owning/borrowed pointer-vector adoption/storage and
   contiguous matrix-cell storage,
