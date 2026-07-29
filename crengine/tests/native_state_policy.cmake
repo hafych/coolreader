@@ -568,6 +568,11 @@ forbid_source_text(
   "the modern Qt scrollbar must not return to an unguarded raw borrow"
 )
 require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "ui->view->setPropsChangeCallback(nullptr);"
+  "the modern Qt property observer must detach before its owner is destroyed"
+)
+require_source_text(
   "${MODERN_QT_CMAKE_SOURCE}"
   "SET (EXTRA_LIBS \${STD_LIBS} Qt5::Core Qt5::Gui Qt5::Widgets )"
   "modern Qt5 builds must link imported targets on every host"

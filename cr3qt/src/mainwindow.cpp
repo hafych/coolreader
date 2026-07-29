@@ -168,7 +168,10 @@ void MainWindow::closeEvent ( QCloseEvent * )
     ui->view->saveWindowPos( this, "main." );
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    ui->view->setPropsChangeCallback(nullptr);
+}
 
 void MainWindow::on_view_destroyed()
 {
