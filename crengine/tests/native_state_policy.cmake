@@ -7813,6 +7813,11 @@ forbid_source_text(
   "Win32 GUI handlers must not retain dead raw range examples"
 )
 forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "lString8 * array = new"
+  "XCB startup must not retain dead raw allocation examples"
+)
+forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "lString16Collection fontDirs"
   "GUI platform startup must use current-width font directories"

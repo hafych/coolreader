@@ -1335,38 +1335,6 @@ int main(int argc, char **argv)
     CRLog::info("Trying to translate: 'On'='%s'", gettext("On"));
     CRLog::info("Trying to translate: 'About...'='%s'", gettext("About..."));
 
-    #if 0
-    // memory leak test
-    {
-        {
-            lString8 s;
-            s << "bla bla bla";
-            lString8 s2("xxxxx");
-            s << s2;
-            lString8 * array = new lString8[25];
-            array[2] = lString8("text1");
-            array[6] = lString8("text2");
-            array[24] = lString8("text3");
-            for ( int k=0; k<10000; k++ )
-                array[7] << "123";
-            typedef LVRef<int> IntRef;
-            delete [] array;
-            {
-                LVCacheMap <int, IntRef> map( 20 );
-                map.set(1, IntRef( new int(3) ));
-                map.set(2, IntRef( new int(4) ));
-            }
-            lString8 buf;
-            lStringBuf8<100> proxy( buf );
-            for ( int i=0; i<5000; i++ )
-                buf << 'A';
-        }
-        ShutdownCREngine();
-        return 0;
-    }
-    #endif
-
-
     lString32Collection fontDirs;
     //fontDirs.add( lString16(L"/usr/local/share/cr3/fonts") );
     //fontDirs.add( lString16(L"/usr/local/share/fonts/truetype/freefont") );
