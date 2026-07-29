@@ -27,17 +27,11 @@
 
 LVFontRef LoadFontFromFile( const char * fname )
 {
-    LVFontRef ref;
-    LBitmapFont * font = new LBitmapFont;
-    if (font->LoadFromFile( fname ) )
-    {
-        ref = font;
-    }
-    else
-    {
-        delete font;
-    }
-    return ref;
+    std::unique_ptr<LBitmapFont> candidate =
+            std::make_unique<LBitmapFont>();
+    if (!candidate->LoadFromFile(fname))
+        return LVFontRef(NULL);
+    return LVFontRef(candidate.release());
 }
 
 bool LBitmapFont::getGlyphInfo( lUInt32 code, LVFont::glyph_info_t * glyph, lChar32 def_char, lUInt32 fallbackPassMask )
@@ -141,7 +135,7 @@ LVFontGlyphCacheItem *LBitmapFont::getGlyph(lUInt32 ch, lChar32 def_char, lUInt3
 int LBitmapFont::LoadFromFile( const char * fname )
 {
     Clear();
-    int res = (void*)lvfontOpen( fname, &m_font )!=NULL;
+    int res = lvfontOpen(fname, &m_font) != 0;
     if (!res)
         return 0;
     lvfont_header_t * hdr = (lvfont_header_t*) m_font;

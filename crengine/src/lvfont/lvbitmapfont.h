@@ -92,6 +92,16 @@ public:
 
     virtual int getExtraMetric(font_extra_metric_t metric, bool scaled_to_px=true) { return 0; }
 
+    virtual int getLeftSideBearing(
+            lChar32, bool = false, bool = false) {
+        return 0;
+    }
+
+    virtual int getRightSideBearing(
+            lChar32, bool = false, bool = false) {
+        return 0;
+    }
+
     virtual bool hasOTMathSupport() const { return false; }
 
     virtual lvfont_handle GetHandle() { return m_font; }

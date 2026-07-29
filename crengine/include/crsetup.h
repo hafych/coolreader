@@ -117,7 +117,9 @@
 
 #define USE_ANSI_FILES                       1
 #define GRAY_INVERSE                         0
+#ifndef USE_FREETYPE
 #define USE_FREETYPE                         1
+#endif
 #define USE_FT_EMBOLDEN                      1
 #define USE_HARFBUZZ                         1
 #define USE_FRIBIDI                          1

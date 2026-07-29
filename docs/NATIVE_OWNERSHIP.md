@@ -829,6 +829,16 @@ remains the documented caller-side transfer boundary. Native coverage opens
 the same minimal valid LFNT image twice and rejects a corrupt-header candidate
 without publishing or leaking it.
 
+The C++ bitmap wrapper and bitmap/Win32 managers likewise keep each concrete
+font in `unique_ptr` through `LoadFromFile()` or `Create()`, releasing it only
+into `LVFontRef` after success. Bitmap cache lookup uses an automatic
+`LVFontDef` probe, so lookup exceptions do not require a manual delete. Source
+policy covers both compile-time backends, while the LFNT lifecycle regression
+continues to exercise their shared file/handle boundary under sanitizers. The
+bitmap configuration can override the default FreeType macro, includes its
+stream factory directly and implements the current side-bearing interface, so
+an alternate `USE_FREETYPE=0` syntax gate compiles the actual legacy branch.
+
 The Win32 glyph cache keeps its hash buckets and bounded three-entry chains as
 `unique_ptr` owner links; lookups return borrowed entries whose addresses stay
 stable while unrelated entries are inserted. Each entry owns decoded glyph

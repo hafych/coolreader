@@ -2,6 +2,7 @@ if(NOT DEFINED SOURCE_ROOT)
   message(FATAL_ERROR "SOURCE_ROOT is required")
 endif()
 
+file(READ "${SOURCE_ROOT}/crengine/include/crsetup.h" CR_SETUP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm_internal.h" FORMATTER_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtextfm.h" FORMATTER_HEADER)
@@ -58,8 +59,12 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypeface.h" FREETYPE_FACE_HE
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontboldtransform.cpp" FONT_BOLD_TRANSFORM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfnt.cpp" BITMAP_FONT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvfnt.h" BITMAP_FONT_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvbitmapfont.cpp" BITMAP_FONT_WRAPPER_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvbitmapfont.h" BITMAP_FONT_WRAPPER_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvbitmapfontman.cpp" BITMAP_FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvwin32font.cpp" WIN32_FONT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvwin32font.h" WIN32_FONT_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvwin32fontman.cpp" WIN32_FONT_MANAGER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.h" FONT_CACHE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontcache.cpp" FONT_CACHE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfreetypefontman.cpp" FREETYPE_FONT_MANAGER_SOURCE)
@@ -7228,6 +7233,101 @@ forbid_source_text(
   "${BITMAP_FONT_SOURCE}"
   "fclose(f)"
   "bitmap-font input teardown must remain automatic"
+)
+require_source_text(
+  "${BITMAP_FONT_WRAPPER_SOURCE}"
+  "std::unique_ptr<LBitmapFont> candidate ="
+  "bitmap-font wrapper candidates must begin in scoped ownership"
+)
+require_source_text(
+  "${CR_SETUP_HEADER}"
+  "#ifndef USE_FREETYPE\n#define USE_FREETYPE"
+  "legacy bitmap-font builds must be able to override the default backend"
+)
+require_source_text(
+  "${BITMAP_FONT_MANAGER_SOURCE}"
+  "#include \"lvstreamutils.h\""
+  "bitmap-font managers must include their file-stream factory declaration"
+)
+require_source_text(
+  "${BITMAP_FONT_WRAPPER_HEADER}"
+  "virtual int getLeftSideBearing("
+  "bitmap-font backends must satisfy the current font metric contract"
+)
+require_source_text(
+  "${BITMAP_FONT_WRAPPER_HEADER}"
+  "virtual int getRightSideBearing("
+  "bitmap-font backends must satisfy both side-bearing contracts"
+)
+require_source_text(
+  "${BITMAP_FONT_WRAPPER_SOURCE}"
+  "lvfontOpen(fname, &m_font) != 0"
+  "bitmap-font handle creation must use its integer result directly"
+)
+require_source_text(
+  "${BITMAP_FONT_WRAPPER_SOURCE}"
+  "return LVFontRef(candidate.release());"
+  "bitmap-font wrappers must transfer only at the reference boundary"
+)
+require_source_text(
+  "${BITMAP_FONT_MANAGER_SOURCE}"
+  "LVFontDef def("
+  "bitmap-font cache probes must use automatic storage"
+)
+require_source_text(
+  "${BITMAP_FONT_MANAGER_SOURCE}"
+  "std::unique_ptr<LBitmapFont> candidate ="
+  "bitmap-font manager load candidates must remain scoped"
+)
+require_source_text(
+  "${BITMAP_FONT_MANAGER_SOURCE}"
+  "LVFontRef ref(candidate.release());"
+  "bitmap-font manager candidates must transfer only after loading"
+)
+require_source_text(
+  "${WIN32_FONT_MANAGER_SOURCE}"
+  "std::unique_ptr<LVWin32Font> candidate ="
+  "Win32 grayscale font candidates must remain scoped"
+)
+require_source_text(
+  "${WIN32_FONT_MANAGER_SOURCE}"
+  "std::unique_ptr<LVWin32DrawFont> candidate ="
+  "Win32 color font candidates must remain scoped"
+)
+require_source_text(
+  "${WIN32_FONT_MANAGER_SOURCE}"
+  "LVFontRef ref(candidate.release());"
+  "Win32 font candidates must transfer only after creation"
+)
+forbid_source_text(
+  "${BITMAP_FONT_WRAPPER_SOURCE}"
+  "LBitmapFont * font = new LBitmapFont"
+  "bitmap-font wrappers must not keep raw load candidates"
+)
+forbid_source_text(
+  "${BITMAP_FONT_WRAPPER_SOURCE}"
+  "(void*)lvfontOpen"
+  "bitmap-font handle creation must not cast an integer result to a pointer"
+)
+forbid_source_text(
+  "${BITMAP_FONT_MANAGER_SOURCE}"
+  "LVFontDef *def = new LVFontDef"
+  "bitmap-font cache probes must not require manual teardown"
+)
+forbid_source_text(
+  "${BITMAP_FONT_MANAGER_SOURCE}"
+  "LBitmapFont *font = new LBitmapFont"
+  "bitmap-font managers must not keep raw load candidates"
+)
+forbid_source_text(
+  "${WIN32_FONT_MANAGER_SOURCE}"
+  "LVWin32Font * font = new LVWin32Font"
+  "Win32 grayscale fonts must not remain raw load candidates"
+)
+forbid_source_text(
+  "${WIN32_FONT_MANAGER_SOURCE}"
+  "LVWin32DrawFont * font = new LVWin32DrawFont"
+  "Win32 color fonts must not remain raw load candidates"
 )
 
 # --- Win32 glyph-cache graph ownership ---

@@ -103,21 +103,22 @@ LVFontRef LVWin32FontManager::GetFont(int size, int weight, bool bitalic, css_fo
     
 
 #if COLOR_BACKBUFFER==0
-    LVWin32Font * font = new LVWin32Font;
+    std::unique_ptr<LVWin32Font> candidate =
+            std::make_unique<LVWin32Font>();
 #else
-    LVWin32DrawFont * font = new LVWin32DrawFont;
+    std::unique_ptr<LVWin32DrawFont> candidate =
+            std::make_unique<LVWin32DrawFont>();
 #endif
 
     LVFontDef * fdef = item->getDef();
-    if ( font->Create(size, weight, italic?true:false, fdef->getFamily(), fdef->getTypeFace()) )
+    if ( candidate->Create(size, weight, italic?true:false, fdef->getFamily(), fdef->getTypeFace()) )
     {
         //fprintf(_log, "    : loading from file %s : %s %d\n", item->getDef()->getName().c_str(),
         //    item->getDef()->getTypeFace().c_str(), item->getDef()->getSize() );
-        LVFontRef ref(font);
+        LVFontRef ref(candidate.release());
         _cache.addInstance( &newDef, ref );
         return ref;
     }
-    delete font;
     return LVFontRef(NULL);
 }
 
