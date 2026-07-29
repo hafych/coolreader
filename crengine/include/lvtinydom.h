@@ -293,6 +293,8 @@ protected:
     char _type;       /// type, to show in log
     bool _maxSizeReachedWarned;
     ldomTextStorageChunk * getChunk( lUInt32 address );
+    ldomTextStorageChunk * addChunk(
+            std::unique_ptr<ldomTextStorageChunk> chunk);
 public:
     /// type
     lUInt16 cacheType();

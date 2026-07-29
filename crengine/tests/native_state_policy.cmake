@@ -4538,6 +4538,36 @@ require_source_text(
 )
 require_source_text(
   "${DOM_SOURCE}"
+  "LVPtrVector<ldomTextStorageChunk> candidate"
+  "DOM chunk-index loading must stage an isolated owner list"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "serializedChunkIndexSize = 4"
+  "DOM chunk-index counts must remain bounded by serialized bytes"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "_chunks.swap(candidate)"
+  "DOM chunk-index loading must publish only its complete candidate"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "std::unique_ptr<ldomTextStorageChunk> chunk"
+  "DOM runtime chunk creation must cross a scoped helper boundary"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "ldomDataStorageManager::addChunk("
+  "DOM runtime chunks must enter owning storage before raw-view publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "&& parentManager.getText(textAddress)\n                    == lString8(\"shared header\")"
+  "DOM chunk-index regression must retain malformed-load rollback coverage"
+)
+require_source_text(
+  "${DOM_SOURCE}"
   "void ldomTextStorageChunk::clearUnpacked()"
   "DOM chunk resident accounting must have one teardown path"
 )
@@ -4560,6 +4590,16 @@ forbid_source_text(
   "${DOM_SOURCE}"
   "setunpacked("
   "DOM text-storage teardown must not regress to manual buffer transfer"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_chunks.add( new ldomTextStorageChunk"
+  "DOM chunks must not begin as raw owners"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_activeChunk = new ldomTextStorageChunk"
+  "DOM active-chunk views must not publish before owning-list adoption"
 )
 
 # --- file-stream owned and borrowed OS resources ---

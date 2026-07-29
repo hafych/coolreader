@@ -140,8 +140,9 @@ DRM или ограничений доступа, подбор/получени�
   contexts/chunk output/block scratch, scoped live-block candidates and
   bounded transactional index snapshots/publication, DOM blob
   payload/item/index storage,
-  DOM text-storage chunk resident buffers/cache transitions and persistent
-  node-part catalogs/cache loading, CSS declaration buffers,
+  DOM text-storage chunk resident buffers/cache transitions, transactional
+  chunk catalogs/runtime candidate adoption and persistent node-part
+  catalogs/cache loading, CSS declaration buffers,
   selector/rule chains, stylesheet snapshots, transactional style-record
   restore и bounded sparse style-index publication,
   reference-cache

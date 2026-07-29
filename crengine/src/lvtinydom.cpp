@@ -2740,7 +2740,29 @@ bool LVRunDomChunkStorageRegression()
     const lUInt32 textAddress =
             parentManager.allocText(
                     31, 27, lString8("shared header"));
-    return parentManager.getParent(textAddress) == 27;
+    if (parentManager.getParent(textAddress) != 27
+            || parentManager.getText(textAddress)
+                    != lString8("shared header"))
+        return false;
+
+    LVStreamRef malformedIndexStream = LVCreateMemoryStream();
+    CacheFile malformedIndexFile(1, CacheCompressionNone);
+    if (malformedIndexStream.isNull()
+            || !malformedIndexFile.create(malformedIndexStream))
+        return false;
+    SerialBuf malformedIndex(1, true);
+    malformedIndex << static_cast<lUInt32>(2);
+    malformedIndex << static_cast<lUInt32>(64);
+    if (malformedIndex.error()
+            || !malformedIndexFile.write(
+                    parentManager.cacheType(), 0xFFFF,
+                    malformedIndex, false))
+        return false;
+    parentManager.setCache(&malformedIndexFile);
+    return !parentManager.load()
+            && parentManager.getParent(textAddress) == 27
+            && parentManager.getText(textAddress)
+                    == lString8("shared header");
 #else
     return true;
 #endif
@@ -4182,26 +4204,46 @@ bool ldomDataStorageManager::load()
         CRLog::error("ldomDataStorageManager::load() - Cannot read chunk index");
         return false;
     }
-    lUInt32 n;
+    lUInt32 n = 0;
     buf >> n;
-    if (n > 10000)
+    static const lUInt32 maximumSerializedChunkCount = 10000;
+    static const int serializedChunkIndexSize = 4;
+    if (buf.error()
+            || n > maximumSerializedChunkCount
+            || n > static_cast<lUInt32>(
+                    buf.space() / serializedChunkIndexSize)) {
+        buf.seterror();
         return false; // invalid
-    _recentChunk = NULL;
-    _chunks.clear();
+    }
+    LVPtrVector<ldomTextStorageChunk> candidate;
+    candidate.reserve(static_cast<int>(n));
     lUInt32 compsize = 0;
     lUInt32 uncompsize = 0;
     for (lUInt32 i=0; i<n; i++ ) {
         buf >> uncompsize;
-        if ( buf.error() ) {
-            _chunks.clear();
+        if ( buf.error() )
             return false;
-        }
-        _chunks.add( new ldomTextStorageChunk( this, (lUInt16)i,compsize, uncompsize ) );
+        std::unique_ptr<ldomTextStorageChunk> chunk =
+                std::make_unique<ldomTextStorageChunk>(
+                        this, static_cast<lUInt16>(i),
+                        compsize, uncompsize);
+        candidate.add(chunk.release());
     }
+    _chunks.swap(candidate);
+    _activeChunk = NULL;
+    _recentChunk = NULL;
     return true;
 #else
     return false;
 #endif
+}
+
+ldomTextStorageChunk * ldomDataStorageManager::addChunk(
+        std::unique_ptr<ldomTextStorageChunk> chunk)
+{
+    ldomTextStorageChunk *view = chunk.get();
+    _chunks.add(chunk.release());
+    return view;
 }
 
 /// get chunk pointer and update usage data
@@ -4252,7 +4294,8 @@ void ldomDataStorageManager::getStyleData( lUInt32 elemDataIndex, ldomNodeStyleI
     while ( _chunks.length() <= chunkIndex ) {
         //if ( _chunks.length()>0 )
         //    _chunks[_chunks.length()-1]->compact();
-        _chunks.add( new ldomTextStorageChunk(STYLE_DATA_CHUNK_SIZE, this, _chunks.length()) );
+        addChunk(std::make_unique<ldomTextStorageChunk>(
+                STYLE_DATA_CHUNK_SIZE, this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
     }
@@ -4270,7 +4313,8 @@ void ldomDataStorageManager::setStyleData( lUInt32 elemDataIndex, const ldomNode
     while ( _chunks.length() <= chunkIndex ) {
         //if ( _chunks.length()>0 )
         //    _chunks[_chunks.length()-1]->compact();
-        _chunks.add( new ldomTextStorageChunk(STYLE_DATA_CHUNK_SIZE, this, _chunks.length()) );
+        addChunk(std::make_unique<ldomTextStorageChunk>(
+                STYLE_DATA_CHUNK_SIZE, this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
     }
@@ -4289,7 +4333,8 @@ void ldomDataStorageManager::getRendRectData( lUInt32 elemDataIndex, lvdomElemen
     while ( _chunks.length() <= chunkIndex ) {
         //if ( _chunks.length()>0 )
         //    _chunks[_chunks.length()-1]->compact();
-        _chunks.add( new ldomTextStorageChunk(RECT_DATA_CHUNK_SIZE, this, _chunks.length()) );
+        addChunk(std::make_unique<ldomTextStorageChunk>(
+                RECT_DATA_CHUNK_SIZE, this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
     }
@@ -4307,7 +4352,8 @@ void ldomDataStorageManager::setRendRectData( lUInt32 elemDataIndex, const lvdom
     while ( _chunks.length() <= chunkIndex ) {
         //if ( _chunks.length()>0 )
         //    _chunks[_chunks.length()-1]->compact();
-        _chunks.add( new ldomTextStorageChunk(RECT_DATA_CHUNK_SIZE, this, _chunks.length()) );
+        addChunk(std::make_unique<ldomTextStorageChunk>(
+                RECT_DATA_CHUNK_SIZE, this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
     }
@@ -4320,8 +4366,9 @@ void ldomDataStorageManager::setRendRectData( lUInt32 elemDataIndex, const lvdom
 lUInt32 ldomDataStorageManager::allocText( lUInt32 dataIndex, lUInt32 parentIndex, const lString8 & text )
 {
     if ( !_activeChunk ) {
-        _activeChunk = new ldomTextStorageChunk(this, _chunks.length());
-        _chunks.add( _activeChunk );
+        _activeChunk = addChunk(
+                std::make_unique<ldomTextStorageChunk>(
+                        this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
     }
@@ -4329,8 +4376,9 @@ lUInt32 ldomDataStorageManager::allocText( lUInt32 dataIndex, lUInt32 parentInde
     if ( offset<0 ) {
         // no space in current chunk, add one more chunk
         //_activeChunk->compact();
-        _activeChunk = new ldomTextStorageChunk(this, _chunks.length());
-        _chunks.add( _activeChunk );
+        _activeChunk = addChunk(
+                std::make_unique<ldomTextStorageChunk>(
+                        this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
         offset = _activeChunk->addText( dataIndex, parentIndex, text );
@@ -4343,8 +4391,9 @@ lUInt32 ldomDataStorageManager::allocText( lUInt32 dataIndex, lUInt32 parentInde
 lUInt32 ldomDataStorageManager::allocElem( lUInt32 dataIndex, lUInt32 parentIndex, int childCount, int attrCount )
 {
     if ( !_activeChunk ) {
-        _activeChunk = new ldomTextStorageChunk(this, _chunks.length());
-        _chunks.add( _activeChunk );
+        _activeChunk = addChunk(
+                std::make_unique<ldomTextStorageChunk>(
+                        this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
     }
@@ -4352,8 +4401,9 @@ lUInt32 ldomDataStorageManager::allocElem( lUInt32 dataIndex, lUInt32 parentInde
     if ( offset<0 ) {
         // no space in current chunk, add one more chunk
         //_activeChunk->compact();
-        _activeChunk = new ldomTextStorageChunk(this, _chunks.length());
-        _chunks.add( _activeChunk );
+        _activeChunk = addChunk(
+                std::make_unique<ldomTextStorageChunk>(
+                        this, _chunks.length()));
         getChunk( (_chunks.length()-1)<<16 );
         compact( 0 );
         offset = _activeChunk->addElem( dataIndex, parentIndex, childCount, attrCount );

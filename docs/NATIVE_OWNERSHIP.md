@@ -761,6 +761,12 @@ instead of a manual scratch array. Native regressions verify byte-stable output,
 successful whole-snapshot replacement, retained ID-node lookup, corrupted-input
 rollback and oversized-count rejection.
 
+The persistent DOM chunk catalog is likewise decoded into a byte-bounded
+owning candidate list and swapped only after every indexed size has been read.
+Malformed catalogs preserve the live chunks and their active data. Runtime
+style, rectangle, text and element chunks all cross one `unique_ptr`-based
+adoption helper before `_activeChunk` or another raw view can observe them.
+
 The legacy pre-20200824 HTML autoclose table is an array of owned rule vectors.
 Construction stages each rule in a local vector and swaps duplicate tag entries,
 while modern DOM versions simply retain an empty table with automatic teardown.
