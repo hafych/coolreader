@@ -22,6 +22,9 @@ READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 PAGE_CURVE_TABLES = SOURCE / "crengine" / "PageCurveTables.java"
 BACKLIGHT_OPTIONS = SOURCE / "crengine" / "BacklightOptions.java"
+BACKLIGHT_TIMEOUT_POLICY = (
+    SOURCE / "crengine" / "BacklightTimeoutPolicy.java"
+)
 BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
 DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
 BLOCKING_RESULT = SOURCE / "crengine" / "BlockingResult.java"
@@ -109,6 +112,18 @@ BACKLIGHT_OPTIONS_TEST = (
     / "coolreader"
     / "crengine"
     / "BacklightOptionsTest.java"
+)
+BACKLIGHT_TIMEOUT_POLICY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "BacklightTimeoutPolicyTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -202,6 +217,48 @@ def main() -> None:
         violations.append("BaseActivity is not lifecycle-aware")
     if "mDictionaryLauncher" not in base_text:
         violations.append("Dictan result launcher is missing")
+    for marker in (
+        "private final ScreenBacklightControl backlightControl",
+        "private Runnable backlightTimerTask",
+        "private long lastUserActivityTime",
+        "BacklightTimeoutPolicy.nextCheckDelay(",
+        "BacklightTimeoutPolicy.shouldDim(",
+        "BacklightTimeoutPolicy.isExpired(",
+    ):
+        if marker not in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} omits backlight lifecycle "
+                f"marker: {marker}")
+    if "private static long lastUserActivityTime" in base_text:
+        violations.append(
+            f"{relative(BASE_ACTIVITY)} retains process-wide user activity")
+
+    backlight_timeout_policy_text = BACKLIGHT_TIMEOUT_POLICY.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class BacklightTimeoutPolicy",
+        "durationMillis * 8L / 10",
+        "inactiveMillis > durationMillis",
+        "Math.max(1, durationMillis / 20)",
+    ):
+        if marker not in backlight_timeout_policy_text:
+            violations.append(
+                f"{relative(BACKLIGHT_TIMEOUT_POLICY)} omits timeout "
+                f"marker: {marker}")
+
+    backlight_timeout_policy_test_text = (
+        BACKLIGHT_TIMEOUT_POLICY_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "dimmingStartsStrictlyAfterEightyPercent",
+        "expiryStartsStrictlyAfterFullDuration",
+        "thresholdArithmeticDoesNotOverflow",
+        "Integer.MAX_VALUE",
+    ):
+        if marker not in backlight_timeout_policy_test_text:
+            violations.append(
+                f"{relative(BACKLIGHT_TIMEOUT_POLICY_TEST)} omits timeout "
+                f"regression: {marker}")
 
     nook_controller_text = NOOK_CONTROLLER.read_text(encoding="utf-8")
     if re.search(

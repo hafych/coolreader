@@ -188,6 +188,35 @@ public class ActivityOwnershipPolicyTest {
 		}
 	}
 
+	@Test
+	public void backlightTimeoutStateBelongsToOneActivityGeneration()
+			throws Exception {
+		Field control =
+				BaseActivity.class.getDeclaredField("backlightControl");
+		assertFalse(Modifier.isStatic(control.getModifiers()));
+		assertTrue(Modifier.isFinal(control.getModifiers()));
+		for (Field field : BaseActivity.class.getDeclaredFields()) {
+			assertFalse(
+					"BaseActivity retains process-wide backlight state "
+							+ field.getName(),
+					field.getName().equals("lastUserActivityTime")
+							|| field.getName().equals("backlightTimerTask"));
+		}
+		Class<?> controlClass = null;
+		for (Class<?> nested : BaseActivity.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("ScreenBacklightControl"))
+				controlClass = nested;
+		}
+		assertTrue(controlClass != null);
+		for (String name : new String[]{
+				"lastUserActivityTime",
+				"backlightTimerTask"}) {
+			Field field = controlClass.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+	}
+
 	private static void assertVolatileField(Class<?> type, String name)
 			throws Exception {
 		Field field = type.getDeclaredField(name);

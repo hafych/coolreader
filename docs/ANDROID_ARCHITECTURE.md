@@ -80,6 +80,12 @@ longer live in process-wide fields. Shared backlight values are exposed only
 through the pure `BacklightOptions` owner; callers receive copies and localized
 titles are built per Activity instead of mutating a global array.
 
+Screen-backlight user-activity timestamps and scheduled timer tasks belong to
+the `ScreenBacklightControl` of one `BaseActivity` generation. Threshold and
+reschedule decisions are delegated to the pure, overflow-safe
+`BacklightTimeoutPolicy`; activity from a replacement screen cannot extend an
+older screen's WakeLock.
+
 ## Migration rule
 
 New Android components should:

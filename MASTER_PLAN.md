@@ -132,7 +132,8 @@ DRM или ограничений доступа, подбор/получени�
   synchronized/frozen HyphDict registry без backing-array escape и
   immutable/testable owner lookup-таблиц page-curl, плюс one-shot
   interrupt-preserving blocking result без зависимости dispatcher от UI и
-  generation-scoped OptionsDialog resource/format state без shared title arrays.
+  generation-scoped OptionsDialog resource/format state без shared title arrays,
+  а также Activity-owned backlight timestamp/timer и pure timeout policy.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

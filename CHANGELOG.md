@@ -371,6 +371,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android option dialogs now keep resource and document-format state per
   Activity generation; backlight values return copies and localized labels no
   longer mutate process-wide arrays.
+- Android backlight inactivity timestamps and timer tasks are now owned by one
+  Activity generation, with overflow-safe dim/expiry thresholds covered by
+  pure JVM tests.
 - All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
   `sign-compare` and `unused-but-set-variable` promoted to the full
   `-Werror` gate alongside the existing high-confidence classes.

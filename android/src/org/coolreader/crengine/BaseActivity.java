@@ -1095,18 +1095,14 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		}
 	}
 
-	private Runnable backlightTimerTask = null;
-	private static long lastUserActivityTime;
 	public static final int DEF_SCREEN_BACKLIGHT_TIMER_INTERVAL = 3 * 60 * 1000;
 	private int screenBacklightDuration = DEF_SCREEN_BACKLIGHT_TIMER_INTERVAL;
 
 	private class ScreenBacklightControl {
-		PowerManager.WakeLock wl = null;
-
-		public ScreenBacklightControl() {
-		}
-
-		long lastUpdateTimeStamp;
+		private PowerManager.WakeLock wl;
+		private Runnable backlightTimerTask;
+		private long lastUserActivityTime;
+		private long lastUpdateTimeStamp;
 
 		public void onUserActivity() {
 			lastUserActivityTime = Utils.timeStamp();
@@ -1162,13 +1158,16 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				long interval = Utils.timeInterval(lastUserActivityTime);
 //				log.v("ScreenBacklightControl: timer task, lastActivityMillis = "
 //						+ interval);
-				int nextTimerInterval = screenBacklightDuration / 20;
-				boolean dim = false;
-				if (interval > screenBacklightDuration * 8 / 10) {
-					nextTimerInterval = nextTimerInterval / 8;
-					dim = true;
-				}
-				if (interval > screenBacklightDuration) {
+				int nextTimerInterval =
+						BacklightTimeoutPolicy.nextCheckDelay(
+								interval,
+								screenBacklightDuration);
+				boolean dim = BacklightTimeoutPolicy.shouldDim(
+						interval,
+						screenBacklightDuration);
+				if (BacklightTimeoutPolicy.isExpired(
+						interval,
+						screenBacklightDuration)) {
 					log.v("ScreenBacklightControl: interval is expired");
 					release();
 				} else {
@@ -1189,7 +1188,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		backlightControl.release();
 	}
 
-	ScreenBacklightControl backlightControl = new ScreenBacklightControl();
+	private final ScreenBacklightControl backlightControl =
+			new ScreenBacklightControl();
 
 
 	private EinkScreen.EinkUpdateMode mScreenUpdateMode = EinkScreen.EinkUpdateMode.Clear;
