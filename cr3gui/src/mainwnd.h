@@ -127,10 +127,6 @@ public:
     void setBookmarkDir( lString32 dir ) { _bookmarkDir = dir; }
     void flush() override;
     bool loadDocument( lString32 filename );
-    bool loadDocument( lString16 filename )
-    {
-        return loadDocument(Utf16ToUnicode(filename));
-    }
     bool loadDefaultCover( lString32 filename );
     bool loadCSS( lString32 filename );
     bool loadSettings( lString32 filename );

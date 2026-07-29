@@ -1450,7 +1450,8 @@ int InitDoc(char *fileName)
         _docview->setBatteryState( checkPowerState() );
         //_docview->setBatteryState( ::getBatteryState() );
         wm->activateWindow(std::move(mainWindowOwner));
-        if ( !main_win->loadDocument( lString16(fileName) ) ) {
+        if ( !main_win->loadDocument(
+                    Utf8ToUnicode(lString8(fileName))) ) {
             printf("Cannot open book file %s\n", fileName);
             delete wm;
             return 0;

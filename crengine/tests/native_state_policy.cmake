@@ -7223,6 +7223,21 @@ forbid_source_text(
   "main windows must not expose a legacy dictionary-config path adapter"
 )
 forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool loadDocument( lString16"
+  "main windows must not expose a legacy document path adapter"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadDocument( lString16"
+  "GUI platform document callers must use current-width paths"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "loadDocument(lString16"
+  "GUI platform document callers must not use compact legacy adapters"
+)
+forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "loadDictConfig( lString16"
   "GUI platform dictionary-config callers must use current-width paths"
