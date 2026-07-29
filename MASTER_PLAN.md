@@ -206,9 +206,9 @@ DRM или ограничений доступа, подбор/получени�
   row/control graphs, scoped export dialogs/callback restoration и transient
   context-menu/search-feedback widgets, guarded live search-dialog observer,
   close-time teardown и transactional publication для всех modeless dialogs,
-  explicit history bookmark borrow,
-  guarded document-view borrows
-  и replace-safe scrollbar/property observers, shared property-adapter
+  explicit history bookmark borrow, guarded document-view borrows и
+  method-scoped file-properties engine borrow, replace-safe
+  scrollbar/property observers, shared property-adapter
   factories без implementation downcasts,
   GUI window/event queue ownership и
   scoped accelerator/command-event/main-menu/recent/bookmark item

@@ -878,6 +878,16 @@ forbid_source_text(
   "CR3View * _cr3v;"
   "modern Qt file properties must not return to an unguarded view borrow"
 )
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "LVDocView & docview = *_cr3v->getDocView();"
+  "modern Qt file properties must keep engine access method-scoped"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "LVDocView * _docview;"
+  "modern Qt file properties must not retain a persistent engine borrow"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(

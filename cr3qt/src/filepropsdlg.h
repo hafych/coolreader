@@ -35,7 +35,6 @@ namespace Ui {
 }
 
 class CR3View;
-class LVDocView;
 
 class FilePropsDialog : public QDialog {
     Q_OBJECT
@@ -59,7 +58,6 @@ protected:
 private:
     std::unique_ptr<Ui::FilePropsDialog> m_ui;
     QPointer<CR3View> _cr3v;
-    LVDocView * _docview;
 };
 
 #endif // FILEPROPSDLG_H

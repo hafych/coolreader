@@ -35,7 +35,6 @@ FilePropsDialog::FilePropsDialog(QWidget *parent, CR3View * docView ) :
     QDialog(parent),
     m_ui(new Ui::FilePropsDialog)
     ,_cr3v(docView)
-    ,_docview(docView->getDocView())
 {
     setAttribute(Qt::WA_DeleteOnClose, true);
     m_ui->setupUi(this);
@@ -63,7 +62,8 @@ FilePropsDialog::FilePropsDialog(QWidget *parent, CR3View * docView ) :
 
 void FilePropsDialog::closeEvent ( QCloseEvent * )
 {
-    _cr3v->saveWindowPos( this, "fileprops." );
+    if (_cr3v)
+        _cr3v->saveWindowPos( this, "fileprops." );
 }
 
 FilePropsDialog::~FilePropsDialog() = default;
@@ -82,7 +82,7 @@ bool FilePropsDialog::showDlg( QWidget * parent, CR3View * docView )
 
 QString FilePropsDialog::getDocText( const char * path, const char * delim )
 {
-    ldomDocument * doc = _docview->getDocument();
+    ldomDocument * doc = _cr3v->getDocView()->getDocument();
     lString32 res;
     for ( int i=0; i<100; i++ ) {
         lString8 p = lString8(path) + "[" + fmt::decimal(i+1) + "]";
@@ -176,8 +176,9 @@ void FilePropsDialog::addInfoSection( QString name )
 
 void FilePropsDialog::fillItems()
 {
-    _docview->savePosition();
-    CRFileHistRecord * hist = _docview->getCurrentFileHistRecord();
+    LVDocView & docview = *_cr3v->getDocView();
+    docview.savePosition();
+    CRFileHistRecord * hist = docview.getCurrentFileHistRecord();
 
     lString32 title("Cool Reader ");
 #ifndef PACKAGE_VERSION
@@ -188,12 +189,12 @@ void FilePropsDialog::fillItems()
     lString8 txt;
     //=========================================================
     txt << "<table><col width=\"25%\"/><col width=\"75%\"/>\n";
-    CRPropRef props = _docview->getDocProps();
+    CRPropRef props = docview.getDocProps();
 
-    addPropLine( tr("Current page"), cr2qt(lString32::itoa(_docview->getCurPage())) );
-    addPropLine( tr("Total pages"), cr2qt(lString32::itoa(_docview->getPageCount())) );
-    addPropLine( tr("Battery state"), cr2qt(lString32::itoa(_docview->getBatteryChargeLevel()) + "%") );
-    addPropLine( tr("Current Time"), cr2qt(_docview->getTimeString()) );
+    addPropLine( tr("Current page"), cr2qt(lString32::itoa(docview.getCurPage())) );
+    addPropLine( tr("Total pages"), cr2qt(lString32::itoa(docview.getPageCount())) );
+    addPropLine( tr("Battery state"), cr2qt(lString32::itoa(docview.getBatteryChargeLevel()) + "%") );
+    addPropLine( tr("Current Time"), cr2qt(docview.getTimeString()) );
     // TODO:
     if ( hist ) {
         CRBookmark * lastpos = hist->getLastPos();
