@@ -31,8 +31,8 @@
 class CRScreenKeyboard : public CRGUIWindowBase
 {
 protected:
-    lString16 & _buffer;
-    lString16 _value;
+    lString32 & _buffer;
+    lString32 _value;
     CRMenuSkinRef _skin;
     lString32 _title;
     int _resultCmd;
@@ -45,9 +45,9 @@ protected:
     bool digitEntered( lChar32 c );
 public:
 	void setDefaultLayout();
-	void setLayout( CRKeyboardLayoutRef layout );
+    void setLayout( CRKeyboardLayoutRef layout );
     CRScreenKeyboard(CRGUIWindowManager * wm, int id,
-                     const lString32 & caption, lString16 & buffer,
+                     const lString32 & caption, lString32 & buffer,
                      lvRect & rc);
 
     ~CRScreenKeyboard() override { }

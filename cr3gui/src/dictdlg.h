@@ -43,10 +43,6 @@ class CRTinyDict : public CRDictionary
 	TinyDictionaryList dicts;
 public:
 	explicit CRTinyDict( const lString32 & config );
-	explicit CRTinyDict( const lString16 & config )
-        : CRTinyDict(Utf16ToUnicode(config))
-    {
-    }
 	~CRTinyDict() override { }
     lString8 translate(const lString8 & w) override;
     bool empty() override { return dicts.length()==0; }
@@ -56,7 +52,11 @@ public:
 class CRDocViewWindow;
 
 extern void
-showT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, int id, lString16 & buffer);
+showT9Keyboard(
+        CRGUIWindowManager * wm,
+        CRDocViewWindow * mainwin,
+        int id,
+        lString32 & buffer);
 
 
 #endif

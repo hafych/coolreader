@@ -51,7 +51,7 @@ bool CRScreenKeyboard::digitEntered( lChar32 c )
     _lastDigit = 0;
     if ( !ch )
         return false;
-    _value << UnicodeToUtf16(&ch, 1);
+    _value << ch;
     setDirty();
     return true;
 }
@@ -90,7 +90,7 @@ void CRScreenKeyboard::setDefaultLayout()
 
 CRScreenKeyboard::CRScreenKeyboard(
         CRGUIWindowManager * wm, int id, const lString32 & caption,
-        lString16 & buffer, lvRect & rc)
+        lString32 & buffer, lvRect & rc)
 : CRGUIWindowBase( wm ), _buffer( buffer ), _value( buffer ), _title( caption ), _resultCmd(id), _lastDigit(0)
 {
     _passKeysToParent = false;
@@ -163,8 +163,8 @@ void CRScreenKeyboard::draw()
     }
     // draw input area
     clientSkin->draw( *drawbuf, inputRect );
-    lString32 inputText = cs32(" ");
-    inputText << Utf16ToUnicode(_value) << "_";
+    lString32 inputText(U" ");
+    inputText << _value << U"_";
     clientSkin->drawText(*drawbuf, inputRect, inputText);
 }
 
@@ -181,15 +181,7 @@ bool CRScreenKeyboard::onCommand( int command, int params )
         if ( _lastDigit!=0 )
             _lastDigit = 0;
         else if ( _value.length()>0 ) {
-            int eraseStart = _value.length() - 1;
-            lChar16 last = _value[eraseStart];
-            if (last >= 0xDC00 && last <= 0xDFFF
-                    && eraseStart > 0) {
-                lChar16 previous = _value[eraseStart - 1];
-                if (previous >= 0xD800 && previous <= 0xDBFF)
-                    --eraseStart;
-            }
-            _value.erase(eraseStart, _value.length() - eraseStart);
+            _value.erase(_value.length() - 1, 1);
             setDirty();
         } else {
             _wm->closeWindow( this );

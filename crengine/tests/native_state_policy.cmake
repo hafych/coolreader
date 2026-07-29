@@ -257,7 +257,7 @@ forbid_source_text(
   "rectangle clipping must not allocate an unmanaged result"
 )
 
-# --- legacy GUI T9 encoding width compatibility ---
+# --- current-width GUI T9 encoding ---
 require_source_text(
   "${T9_ENCODING_HEADER}"
   "lString32Collection keytable_;"
@@ -273,10 +273,10 @@ require_source_text(
   "normalized.lowercase();"
   "T9 input normalization must remain Unicode-aware"
 )
-require_source_text(
+forbid_source_text(
   "${T9_ENCODING_HEADER}"
-  "return encode_string(Utf16ToUnicode(s));"
-  "legacy T9 input must cross an explicit UTF-16 to UTF-32 boundary"
+  "lString16"
+  "T9 input must not retain the retired UTF-16 adapter"
 )
 require_source_text(
   "${DICTIONARY_DIALOG_SOURCE}"
@@ -290,13 +290,13 @@ require_source_text(
 )
 require_source_text(
   "${DICTIONARY_DIALOG_SOURCE}"
-  "_buf = UnicodeToUtf16(src);"
-  "dictionary T9 output must cross an explicit legacy buffer boundary"
+  "_buf = src;"
+  "dictionary T9 output must retain current-width publication"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"
-  "static int testT9EncodingCompatibility()"
-  "T9 width compatibility must retain portable native coverage"
+  "static int testT9EncodingCurrentWidth()"
+  "T9 current-width behavior must retain portable native coverage"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"
@@ -308,10 +308,10 @@ require_source_text(
   "explicit CRTinyDict( const lString32 & config );"
   "dictionary paths must accept the current string width"
 )
-require_source_text(
+forbid_source_text(
   "${DICTIONARY_DIALOG_HEADER}"
-  "CRTinyDict(Utf16ToUnicode(config))"
-  "legacy dictionary paths must cross an explicit compatibility boundary"
+  "lString16"
+  "dictionary interfaces must not retain retired UTF-16 adapters"
 )
 require_source_text(
   "${DICTIONARY_DIALOG_SOURCE}"
@@ -8074,13 +8074,13 @@ require_source_text(
 )
 require_source_text(
   "${SCREEN_KEYBOARD_SOURCE}"
-  "_value << UnicodeToUtf16(&ch, 1);"
-  "screen keyboard UTF-16 consumers must cross an explicit boundary"
+  "_value << ch;"
+  "screen keyboard input must retain Unicode scalars"
 )
 require_source_text(
   "${SCREEN_KEYBOARD_SOURCE}"
-  "_value.erase(eraseStart, _value.length() - eraseStart);"
-  "screen keyboard backspace must erase complete UTF-16 scalars"
+  "_value.erase(_value.length() - 1, 1);"
+  "screen keyboard backspace must erase one Unicode scalar"
 )
 require_source_text(
   "${SCREEN_KEYBOARD_SOURCE}"
@@ -8089,8 +8089,8 @@ require_source_text(
 )
 forbid_source_text(
   "${SCREEN_KEYBOARD_HEADER}"
-  "lString16Collection"
-  "screen keyboard layouts must not use the removed UTF-16 collection"
+  "lString16"
+  "screen keyboard storage must not retain retired UTF-16 buffers"
 )
 forbid_source_text(
   "${SCREEN_KEYBOARD_SOURCE}"
@@ -8102,10 +8102,10 @@ require_source_text(
   "CRGUIWindowManager * wm, lString32 title, lString8 text,"
   "document dialogs must accept the current title width"
 )
-require_source_text(
+forbid_source_text(
   "${VIEW_DIALOG_HEADER}"
-  "wm, Utf16ToUnicode(title), text, rect, showScroll, showFrame"
-  "legacy document-dialog titles must cross an explicit boundary"
+  "Utf16ToUnicode(title)"
+  "document dialogs must not retain the retired title adapter"
 )
 require_source_text(
   "${VIEW_DIALOG_SOURCE}"
@@ -8836,10 +8836,10 @@ require_source_text(
   "lString32 _pattern;"
   "search-result navigation must store the current string width"
 )
-require_source_text(
+forbid_source_text(
   "${SELECTION_NAV_HEADER}"
-  "wm, mainwin, Utf16ToUnicode(pattern)"
-  "legacy search-result patterns must cross an explicit boundary"
+  "lString16"
+  "search-result navigation must not retain retired UTF-16 adapters"
 )
 require_source_text(
   "${SELECTION_NAV_SOURCE}"
@@ -8847,9 +8847,19 @@ require_source_text(
   "search-result accelerator identifiers must use the current width"
 )
 require_source_text(
+  "${VIEW_DIALOG_HEADER}"
+  "lString32 _searchPattern;"
+  "keyboard search text must retain current-width storage"
+)
+require_source_text(
   "${VIEW_DIALOG_SOURCE}"
-  "Utf16ToUnicode(_searchPattern)"
-  "legacy keyboard search text must cross the navigation boundary explicitly"
+  "_wm, this, _searchPattern"
+  "keyboard search text must cross navigation without narrowing"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_HEADER}"
+  "lString16"
+  "view dialogs must not retain retired UTF-16 adapters"
 )
 forbid_source_text(
   "${SELECTION_NAV_SOURCE}"

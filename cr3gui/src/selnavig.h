@@ -38,13 +38,6 @@ public:
     CRSelNavigationDialog(
             CRGUIWindowManager * wm, CRViewDialog * mainwin,
             lString32 pattern);
-    CRSelNavigationDialog(
-            CRGUIWindowManager * wm, CRViewDialog * mainwin,
-            lString16 pattern)
-        : CRSelNavigationDialog(
-                wm, mainwin, Utf16ToUnicode(pattern))
-    {
-    }
 
     /// returns true if command is processed
     bool onCommand( int command, int params ) override;

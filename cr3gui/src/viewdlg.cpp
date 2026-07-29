@@ -422,8 +422,7 @@ bool CRViewDialog::onCommand( int command, int params )
                 if ( findText( _searchPattern, 0, 1 ) || findText( _searchPattern, -1, 1 )) {
                     std::unique_ptr<CRSelNavigationDialog> dlg =
                             std::make_unique<CRSelNavigationDialog>(
-                                    _wm, this,
-                                    Utf16ToUnicode(_searchPattern));
+                                    _wm, this, _searchPattern);
                     _wm->activateWindow(std::move(dlg));
                 }
             }

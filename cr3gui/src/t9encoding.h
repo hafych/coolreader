@@ -88,12 +88,6 @@ public:
         return result;
     }
 
-    lString8
-    encode_string( const lString16 &s ) const
-    {
-        return encode_string(Utf16ToUnicode(s));
-    }
-
 protected:
    void defkey(const lChar32 *chars) {
         assert(keytable_.length() <= 10);

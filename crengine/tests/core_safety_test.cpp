@@ -112,13 +112,11 @@ static int testRectangleClipValue() {
     return 0;
 }
 
-static int testT9EncodingCompatibility() {
+static int testT9EncodingCurrentWidth() {
     T9ClassicEncoding classic;
     if (classic.length() != 10
             || classic.encode_string(lString32(U"Quick")) != "78425")
         return fail("classic T9 mapping changed during UTF-32 migration");
-    if (classic.encode_string(UnicodeToUtf16(U"Quick")) != "78425")
-        return fail("legacy UTF-16 T9 input boundary changed");
 
     const lChar32 *unicodeDefinitions[] = {
         U"", U"абв", U"где", NULL
@@ -142,9 +140,6 @@ static int testT9EncodingCompatibility() {
     if (supplementaryEncoding.encode_string(
                 lString32(U"\U0001F600")) != "1")
         return fail("UTF-32 T9 input split a supplementary character");
-    if (supplementaryEncoding.encode_string(
-                UnicodeToUtf16(U"\U0001F600")) != "1")
-        return fail("legacy UTF-16 T9 input split a surrogate pair");
     return 0;
 }
 
@@ -7762,7 +7757,7 @@ int main() {
 #endif
     if (testRectangleClipValue() != 0)
         return 1;
-    if (testT9EncodingCompatibility() != 0)
+    if (testT9EncodingCurrentWidth() != 0)
         return 1;
     if (testMutex() != 0)
         return 1;

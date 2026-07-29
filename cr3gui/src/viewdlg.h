@@ -40,7 +40,7 @@ protected:
     bool _showScroll;
     bool _showFrame;
     int _lastNavigationDirection;
-    lString16 _searchPattern;
+    lString32 _searchPattern;
 	static LVRef<CRDictionary> _dict;
     virtual void draw( int pageOffset );
     void draw() override;
@@ -51,7 +51,7 @@ public:
 
     void prepareNextPageImage( int offset );
 
-    void showWaitIcon() { /* _wm->showWaitIcon( lString16("cr3_wait_icon.png") );*/ }
+    void showWaitIcon() { }
     CRGUIAcceleratorTableRef getMenuAccelerators()
     {
         return  _wm->getAccTables().get("menu");
@@ -71,25 +71,13 @@ public:
 
     void showSearchDialog();
 
-	void showDictWithVKeyboard();
+    void showDictWithVKeyboard();
 
     bool findText( lString32 pattern, int origin, int direction );
-    bool findText( lString16 pattern, int origin, int direction )
-    {
-        return findText(Utf16ToUnicode(pattern), origin, direction);
-    }
 
     int findPagesText( lString32 pattern, int origin, int direction );
-    int findPagesText( lString16 pattern, int origin, int direction )
-    {
-        return findPagesText(Utf16ToUnicode(pattern), origin, direction);
-    }
 
 	bool findInDictionary( lString32 pattern );
-    bool findInDictionary( lString16 pattern )
-    {
-        return findInDictionary(Utf16ToUnicode(pattern));
-    }
 
     void showKeymapDialog();
 
@@ -100,13 +88,6 @@ public:
     CRViewDialog(
             CRGUIWindowManager * wm, lString32 title, lString8 text,
             lvRect rect, bool showScroll, bool showFrame);
-    CRViewDialog(
-            CRGUIWindowManager * wm, lString16 title, lString8 text,
-            lvRect rect, bool showScroll, bool showFrame)
-        : CRViewDialog(
-                wm, Utf16ToUnicode(title), text, rect, showScroll, showFrame)
-    {
-    }
 
     bool onCommand( int command, int params = 0 ) override;
 };

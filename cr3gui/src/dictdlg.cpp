@@ -328,7 +328,7 @@ public:
 class CRT9Keyboard : public BackgroundFitWindow
 {
 	int _command;
-	lString16 & _buf;
+	lString32 & _buf;
     TEncoding encoding_;
     selector selector_;
 protected:
@@ -339,7 +339,11 @@ public:
 	void setDefaultLayout();
 	void setLayout( CRKeyboardLayoutRef layout );
 
-	CRT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, int id, lString16 & buffer );
+	CRT9Keyboard(
+            CRGUIWindowManager * wm,
+            CRDocViewWindow * mainwin,
+            int id,
+            lString32 & buffer);
 
     bool onCommand( int command, int params ) override;
 
@@ -375,7 +379,11 @@ void CRT9Keyboard::setLayout( CRKeyboardLayoutRef layout )
 	setDirty();
 }
 
-CRT9Keyboard::CRT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, int id, lString16 & buffer )
+CRT9Keyboard::CRT9Keyboard(
+        CRGUIWindowManager * wm,
+        CRDocViewWindow * mainwin,
+        int id,
+        lString32 & buffer)
 	: BackgroundFitWindow(wm, mainwin)
 	, _command( id )
 	, _buf( buffer )
@@ -472,7 +480,7 @@ bool CRT9Keyboard::onCommand( int command, int params )
                     return true;
                 }
 				CRLog::info("Closing dict");
-				_buf = UnicodeToUtf16(src);
+				_buf = src;
 				_mainwin->getDocView()->clearSelection();
 				_wm->postCommand( _command, 1 );
 				_wm->closeWindow(this);
@@ -496,7 +504,11 @@ bool CRT9Keyboard::onCommand( int command, int params )
     return true;
 }
 
-void showT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, int id, lString16 & buffer)
+void showT9Keyboard(
+        CRGUIWindowManager * wm,
+        CRDocViewWindow * mainwin,
+        int id,
+        lString32 & buffer)
 {
     std::unique_ptr<CRT9Keyboard> dlg =
             std::make_unique<CRT9Keyboard>(
