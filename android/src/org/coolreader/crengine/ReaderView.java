@@ -69,11 +69,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
@@ -1911,8 +1909,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 		return true;
 	}
-
-	static private SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
 	public void showBookInfo() {
 		final ArrayList<String> items = new ArrayList<String>();

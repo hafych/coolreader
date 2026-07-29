@@ -353,6 +353,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Natural page-flip table lookups now clamp widened indices through a tested
   geometry component instead of using overflow-prone inline arithmetic and an
   out-of-bounds `length` fallback.
+- Android heap diagnostics now allocate one snapshot per invocation, and the
+  unused process-wide `ReaderView` date formatter has been removed.
 - All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
   `sign-compare` and `unused-but-set-variable` promoted to the full
   `-Werror` gate alongside the existing high-confidence classes.

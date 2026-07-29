@@ -125,7 +125,8 @@ DRM или ограничений доступа, подбор/получени�
   Выполнено: Activity-owned service graph и immutable dependency snapshot,
   generation-scoped callback cancellation, application-context service
   connectors, явные зависимости `CoolReader`/`ReaderView`/диалогов и bounded
-  widened page-flip lookup geometry с отдельным JVM regression.
+  widened page-flip lookup geometry с отдельным JVM regression, method-scoped
+  heap diagnostics и удаление мёртвого process-wide date formatter.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

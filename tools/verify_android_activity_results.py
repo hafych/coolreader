@@ -270,6 +270,13 @@ def main() -> None:
     find_pattern(
         READER_VIEW,
         reader_view_text,
+        r"\b(?:private\s+static|static\s+private|static)\s+"
+        r"(?:final\s+)?SimpleDateFormat\b",
+        "retains a process-wide mutable date formatter",
+        violations)
+    find_pattern(
+        READER_VIEW,
+        reader_view_text,
         r"\[[^\]\n]*\*\s*SIN_TABLE_SIZE\s*/",
         "indexes a page-flip table with unchecked int arithmetic",
         violations)
@@ -474,6 +481,23 @@ def main() -> None:
     if "stopServices();" not in cool_reader_text:
         violations.append(
             f"{relative(COOL_READER)} does not stop its owned service graph")
+    find_pattern(
+        COOL_READER,
+        cool_reader_text,
+        r"\b(?:private\s+)?static\s+(?:final\s+)?Debug\.MemoryInfo\b",
+        "shares a mutable heap diagnostic snapshot across calls",
+        violations)
+    find_pattern(
+        COOL_READER,
+        cool_reader_text,
+        r"\b(?:private\s+)?static\s+(?:final\s+)?Field\[\]\s+\w+\b",
+        "retains reflection results as mutable Activity static state",
+        violations)
+    if "final Debug.MemoryInfo info = new Debug.MemoryInfo()" not in (
+            cool_reader_text):
+        violations.append(
+            f"{relative(COOL_READER)} does not scope heap diagnostics "
+            "to one invocation")
 
     command = "python3 tools/verify_android_activity_results.py"
     for workflow in (

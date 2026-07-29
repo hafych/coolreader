@@ -1150,9 +1150,6 @@ public class CoolReader extends BaseActivity {
 		log.i("CoolReader.onStop() exiting");
 	}
 
-	private static Debug.MemoryInfo info = new Debug.MemoryInfo();
-	private static Field[] infoFields = Debug.MemoryInfo.class.getFields();
-
 	private static String dumpFields(Field[] fields, Object obj) {
 		StringBuilder buf = new StringBuilder();
 		try {
@@ -1170,8 +1167,14 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public static void dumpHeapAllocation() {
+		final Debug.MemoryInfo info = new Debug.MemoryInfo();
 		Debug.getMemoryInfo(info);
-		log.d("nativeHeapAlloc=" + Debug.getNativeHeapAllocatedSize() + ", nativeHeapSize=" + Debug.getNativeHeapSize() + ", info: " + dumpFields(infoFields, info));
+		log.d(
+				"nativeHeapAlloc=" + Debug.getNativeHeapAllocatedSize()
+						+ ", nativeHeapSize=" + Debug.getNativeHeapSize()
+						+ ", info: "
+						+ dumpFields(
+								Debug.MemoryInfo.class.getFields(), info));
 	}
 
 

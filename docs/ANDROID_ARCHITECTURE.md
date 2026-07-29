@@ -22,7 +22,9 @@ cannot clear or stop a graph owned by a newer Activity.
 
 Activity UI helpers follow the same rule. For example, each `BaseActivity` owns
 its custom E-Ink toast queue, main-thread handler and popup window, then cancels
-and dismisses them during `onDestroy`.
+and dismisses them during `onDestroy`. Diagnostic heap snapshots are created
+per invocation rather than being shared by every Activity generation, and
+unused formatter objects are not retained at process scope.
 
 ## Process-scoped infrastructure
 
