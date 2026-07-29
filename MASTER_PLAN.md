@@ -149,7 +149,8 @@ DRM или ограничений доступа, подбор/получени�
   locale resolution, плюс ReaderView-owned animation timing с fractional scroll
   steps, validated rolling samples и widened autoscroll duration arithmetic, а
   также ReaderView-owned saturating reading-time tracker без getter mutation и
-  double-count на повторных lifecycle signals.
+  double-count на повторных lifecycle signals, плюс locale-aware long reading
+  time formatter без int narrowing для multi-day persisted durations.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

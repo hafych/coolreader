@@ -374,6 +374,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Reading-time queries no longer increment persisted duration while tracking is
   paused. Lifecycle signals are idempotent, clock regressions cannot subtract
   time, and accumulation saturates instead of overflowing.
+- Last-position reading durations now retain long precision for multi-day and
+  saturated values instead of narrowing milliseconds to an `int` before
+  formatting.
 - Natural page-flip table lookups now clamp widened indices through a tested
   geometry component instead of using overflow-prone inline arithmetic and an
   out-of-bounds `length` fallback.

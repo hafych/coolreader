@@ -31,6 +31,7 @@ READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
 ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
 READING_TIME_TRACKER = SOURCE / "crengine" / "ReadingTimeTracker.java"
+READING_TIME_FORMATTER = SOURCE / "crengine" / "ReadingTimeFormatter.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
@@ -251,6 +252,18 @@ READING_TIME_TRACKER_TEST = (
     / "coolreader"
     / "crengine"
     / "ReadingTimeTrackerTest.java"
+)
+READING_TIME_FORMATTER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReadingTimeFormatterTest.java"
 )
 DICTIONARY_CATALOG_TEST = (
     ROOT
@@ -1323,9 +1336,47 @@ def main() -> None:
     for marker in (
         "deleteFolder(FileInfo folder, Scanner scanner",
         "deleteFolderDocTree(FileInfo folder, Scanner scanner",
+        "return ReadingTimeFormatter.format(timeElapsed)",
     ):
         if marker not in utils_text:
             violations.append(f"{relative(UTILS)} omits marker: {marker}")
+    if re.search(r"\(int\)\s*timeElapsed", utils_text):
+        violations.append(
+            f"{relative(UTILS)} narrows persisted reading time before "
+            "formatting")
+
+    reading_time_formatter_text = READING_TIME_FORMATTER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ReadingTimeFormatter",
+        "private static final long MILLIS_PER_MINUTE = 60_000L",
+        "private static final long MILLIS_PER_HOUR",
+        "Math.max(0L, elapsedMillis)",
+        "long hours = duration / MILLIS_PER_HOUR",
+        "duration % MILLIS_PER_HOUR / MILLIS_PER_MINUTE",
+        'String.format(locale, "%d:%02d", hours, minutes)',
+    ):
+        if marker not in reading_time_formatter_text:
+            violations.append(
+                f"{relative(READING_TIME_FORMATTER)} omits widened "
+                f"formatting marker: {marker}")
+
+    reading_time_formatter_test_text = READING_TIME_FORMATTER_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "normalDurationsPreserveHoursAndPaddedMinutes",
+        "durationsBeyondIntMillisecondsRemainAccurate",
+        "longMaximumDoesNotNarrowOrOverflow",
+        "negativePersistedDurationIsClampedToZero",
+        "missingLocaleIsRejected",
+        "formatterRetainsOnlyPrimitiveConstants",
+        '"2562047788015:12"',
+        "Long.MAX_VALUE",
+    ):
+        if marker not in reading_time_formatter_test_text:
+            violations.append(
+                f"{relative(READING_TIME_FORMATTER_TEST)} omits formatting "
+                f"regression: {marker}")
 
     for path in (ABOUT_DIALOG, OPTIONS_DIALOG):
         text = path.read_text(encoding="utf-8")

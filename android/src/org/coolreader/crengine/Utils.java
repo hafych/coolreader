@@ -563,13 +563,8 @@ public class Utils {
 //		return timeFormatThreadLocal.get();
 //	}
 	
-	public static String formatTimeElapsed( long timeElapsed )
-	{
-		int hours = (int) timeElapsed/(60*60*1000);
-		int min = (int) timeElapsed % (60*60*1000) / (60*1000);
-//		int sec = (int) timeElapsed % (60*60*1000) % (60 * 1000) / 1000;
-//		return String.format("%02d:%02d:%02d", hours, min, sec);
-		return String.format("%d:%02d", hours, min);
+	public static String formatTimeElapsed(long timeElapsed) {
+		return ReadingTimeFormatter.format(timeElapsed);
 	}
 	public static String formatSize( int size )
 	{

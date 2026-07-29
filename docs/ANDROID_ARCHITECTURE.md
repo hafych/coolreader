@@ -86,7 +86,9 @@ These timing rules are pure JVM-tested rather than embedded in rendering code.
 Reading-session duration is similarly owned by one `ReadingTimeTracker`.
 Visibility/focus start and stop signals are idempotent, elapsed reads never
 mutate persisted data, clock regressions cannot subtract time, and accumulation
-saturates instead of overflowing.
+saturates instead of overflowing. `ReadingTimeFormatter` carries that `long`
+contract through last-position UI: it clamps invalid negative values and never
+narrows multi-day or saturated durations before locale-aware formatting.
 
 Options UI state is scoped to each `OptionsDialog` generation. Resource-backed
 motion and gesture choices, format capability flags, and icon visibility no
