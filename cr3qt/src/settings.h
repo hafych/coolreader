@@ -36,6 +36,7 @@
 #endif
 
 #include "crqtutil.h"
+#include <QPointer>
 #include <memory>
 
 namespace Ui {
@@ -167,7 +168,7 @@ protected:
 
 private:
     std::unique_ptr<Ui::SettingsDlg> m_ui;
-    CR3View * m_docview;
+    QPointer<CR3View> m_docview;
     PropsRef m_props;
     QString m_oldHyph;
     QStringList m_backgroundFiles;

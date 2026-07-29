@@ -28,6 +28,7 @@
 #include <QtGui/QDialog>
 #endif
 #include <QModelIndex>
+#include <QPointer>
 #include <memory>
 
 namespace Ui {
@@ -51,7 +52,7 @@ protected:
 
 private:
     std::unique_ptr<Ui::TocDlg> m_ui;
-    CR3View * m_docview;
+    QPointer<CR3View> m_docview;
 
 private slots:
     void on_buttonBox_rejected();

@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <QPointer>
 #include <memory>
 
 namespace Ui {
@@ -51,7 +52,7 @@ protected:
 
 private:
     std::unique_ptr<Ui::AddBookmarkDialog> m_ui;
-    CR3View * _docview;
+    QPointer<CR3View> _docview;
     // Borrowed from the document history for the dialog lifetime.
     CRBookmark * _bm;
     bool _edit;

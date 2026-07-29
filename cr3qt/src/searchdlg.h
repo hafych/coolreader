@@ -46,7 +46,7 @@ protected:
 
 private:
     std::unique_ptr<Ui::SearchDialog> ui;
-    CR3View * _docview;
+    QPointer<CR3View> _docview;
     lString32 _lastPattern;
     static QPointer<SearchDialog> _instance;
 private slots:

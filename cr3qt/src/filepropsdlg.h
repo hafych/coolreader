@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <QPointer>
 #include <memory>
 
 namespace Ui {
@@ -57,7 +58,7 @@ protected:
 
 private:
     std::unique_ptr<Ui::FilePropsDialog> m_ui;
-    CR3View * _cr3v;
+    QPointer<CR3View> _cr3v;
     LVDocView * _docview;
 };
 

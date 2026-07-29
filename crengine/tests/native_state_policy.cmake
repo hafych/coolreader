@@ -776,6 +776,28 @@ forbid_source_text(
   "AddBookmarkDialog * dlg = new AddBookmarkDialog"
   "modern Qt bookmark dialogs must not return to raw construction"
 )
+string(REGEX MATCHALL "QPointer<CR3View>"
+  MODERN_QT_VIEW_BORROWS "${MODERN_QT_UI_SOURCE}")
+list(LENGTH MODERN_QT_VIEW_BORROWS MODERN_QT_VIEW_BORROW_COUNT)
+if(NOT MODERN_QT_VIEW_BORROW_COUNT EQUAL 7)
+  message(FATAL_ERROR
+    "all modern Qt modeless view borrows must remain lifetime-guarded")
+endif()
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "CR3View * _docview;"
+  "modern Qt dialogs must not return to an unguarded document-view borrow"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "CR3View * m_docview;"
+  "modern Qt dialogs must not return to an unguarded document-view borrow"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "CR3View * _cr3v;"
+  "modern Qt file properties must not return to an unguarded view borrow"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(

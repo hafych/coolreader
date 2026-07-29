@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <QPointer>
 #include <memory>
 #include <QModelIndex>
 
@@ -50,7 +51,7 @@ protected:
 
 private:
     std::unique_ptr<Ui::RecentBooksDlg> m_ui;
-    CR3View * m_docview;
+    QPointer<CR3View> m_docview;
     void openBook( int index );
 private slots:
     void on_actionClearAll_triggered();
