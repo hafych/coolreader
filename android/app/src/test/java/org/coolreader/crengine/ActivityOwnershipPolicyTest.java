@@ -1206,6 +1206,67 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void dictionaryLookupIsLatestOwnedAndCancelable()
+			throws Exception {
+		Field requests =
+				CoolReader.class.getDeclaredField(
+						"dictionaryLookupRequests");
+		assertTrue(Modifier.isPrivate(
+				requests.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				requests.getModifiers()));
+		assertEquals(
+				DictionaryLookupSession.class,
+				requests.getType());
+		Field scheduler =
+				CoolReader.class.getDeclaredField(
+						"dictionaryLookupScheduler");
+		assertTrue(Modifier.isPrivate(
+				scheduler.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				scheduler.getModifiers()));
+		assertEquals(
+				DelayedExecutor.class,
+				scheduler.getType());
+		for (Field field :
+				DictionaryLookupSession.Request.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		assertSynchronizedMethod(
+				DictionaryLookupSession.class,
+				"replace",
+				String.class);
+		assertSynchronizedMethod(
+				DictionaryLookupSession.class,
+				"cancel");
+		assertSynchronizedMethod(
+				DictionaryLookupSession.class,
+				"complete",
+				DictionaryLookupSession.Request.class);
+		assertSynchronizedMethod(
+				DictionaryLookupSession.class,
+				"close");
+		Method scheduleLookup =
+				CoolReader.class.getDeclaredMethod(
+						"scheduleDictionaryLookup",
+						String.class,
+						long.class);
+		assertTrue(Modifier.isPrivate(
+				scheduleLookup.getModifiers()));
+		Method applyLookup =
+				CoolReader.class.getDeclaredMethod(
+						"applyDictionaryLookup",
+						ServiceLifecycle.class,
+						DictionaryLookupSession.Request.class);
+		assertTrue(Modifier.isPrivate(
+				applyLookup.getModifiers()));
+	}
+
+	@Test
 	public void nonReaderOptionsPreparationIsLatestOwned()
 			throws Exception {
 		Field requests =

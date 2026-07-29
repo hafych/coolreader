@@ -377,6 +377,13 @@ DRM или ограничений доступа, подбор/получени�
   Toolbar adjustment, copy, dictionary persistence, bookmark/search actions,
   quotation metadata и delayed overlap scroll делегированы exact handler, а
   наружный document-ownership probe из `ReaderView` удалён.
+  Activity-boundary словарного поиска теперь принадлежит
+  `DictionaryLookupSession` и cancelable GUI scheduler: новый lookup,
+  `showDictionary()` или destroy физически снимает predecessor, а внешний
+  dictionary intent может запустить только exact active request. Чистая
+  code-point-aware нормализация принимает односимвольные и supplementary
+  Unicode-слова, сохраняет trailing combining marks и удаляет только внешнюю
+  пунктуацию.
   Bookmark list/editor chain теперь так же сохраняет captured
   book+interaction: list, edit, shortcut и selection entry points получают
   только узкий `BookmarkInteractionHandler`, а add/update/delete/go-to и

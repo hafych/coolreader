@@ -445,6 +445,12 @@ render. A reload consumes all five captured per-book settings, including the
 embedded-font command. If the interaction has been replaced, the handler
 rejects every document/native/DB effect; unrelated Activity settings selected
 in the same dialog may still be applied normally.
+Activity-level dictionary lookup is owned by `DictionaryLookupSession` and a
+cancelable GUI scheduler. A newer lookup, `showDictionary()` or Activity
+destruction physically removes its predecessor, and only the exact active
+request may launch an external dictionary intent. Pure code-point-aware query
+normalization accepts single and supplementary Unicode letters, retains
+trailing combining marks and removes only outer punctuation.
 Profile selection follows the stricter document boundary. A
 `SwitchProfileDialog` retains only a `ProfileSwitchHandler` created for the
 captured `BookInfo` and interaction. The handler validates both the profile

@@ -70,7 +70,9 @@ import org.coolreader.crengine.CRRootView;
 import org.coolreader.crengine.CRToolBar;
 import org.coolreader.crengine.CoverpageManager;
 import org.coolreader.crengine.DeletionSnapshot;
+import org.coolreader.crengine.DelayedExecutor;
 import org.coolreader.crengine.DeviceInfo;
+import org.coolreader.crengine.DictionaryLookupSession;
 import org.coolreader.crengine.DocumentFileCache;
 import org.coolreader.crengine.DocumentLoadLifecycle;
 import org.coolreader.crengine.DocumentsContractWrapper;
@@ -152,6 +154,10 @@ public class CoolReader extends BaseActivity {
 			new DocumentLoadLifecycle();
 	private final BookInfoDialogSession bookInfoDialogRequests =
 			new BookInfoDialogSession();
+	private final DictionaryLookupSession dictionaryLookupRequests =
+			new DictionaryLookupSession();
+	private final DelayedExecutor dictionaryLookupScheduler =
+			DelayedExecutor.createGUI("dictionary-lookup");
 	private final LogcatExportSession logcatExportRequests =
 			new LogcatExportSession();
 	private final OptionsDialogRequestSession<OptionsDialog.Mode>
@@ -379,6 +385,8 @@ public class CoolReader extends BaseActivity {
 		}
 		documentLoadLifecycle.close();
 		bookInfoDialogRequests.close();
+		dictionaryLookupScheduler.cancel();
+		dictionaryLookupRequests.close();
 		logcatExportRequests.close();
 		libraryRootRequests.close();
 		libraryDocumentRequests.close();
@@ -2156,25 +2164,15 @@ public class CoolReader extends BaseActivity {
 	// Dictionary support
 
 
-	public void findInDictionary(String s) {
-		if (s != null && s.length() != 0) {
-			int start, end;
-
-			// Skip over non-letter characters at the beginning and end of the search string
-			for (start = 0; start < s.length(); start++)
-				if (Character.isLetterOrDigit(s.charAt(start)))
-					break;
-			for (end = s.length() - 1; end >= start; end--)
-				if (Character.isLetterOrDigit(s.charAt(end)))
-					break;
-
-			if (end > start) {
-				final String pattern = s.substring(start, end + 1);
-
-				BackgroundThread.instance().postBackground(() -> BackgroundThread.instance()
-						.postGUI(() -> findInDictionaryInternal(pattern), 100));
-			}
+	public void findInDictionary(String text) {
+		String query =
+				DictionaryLookupSession.normalizeQuery(text);
+		if (query == null) {
+			dictionaryLookupScheduler.cancel();
+			dictionaryLookupRequests.cancel();
+			return;
 		}
+		scheduleDictionaryLookup(query, 100L);
 	}
 
 	private void findInDictionaryInternal(String s) {
@@ -2187,7 +2185,38 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showDictionary() {
-		findInDictionaryInternal(null);
+		scheduleDictionaryLookup(null, 0L);
+	}
+
+	private void scheduleDictionaryLookup(
+			String query,
+			long delayMillis) {
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		if (mDestroyed
+				|| lifecycle == null
+				|| !lifecycle.isActive()) {
+			dictionaryLookupScheduler.cancel();
+			dictionaryLookupRequests.cancel();
+			return;
+		}
+		DictionaryLookupSession.Request request =
+				dictionaryLookupRequests.replace(query);
+		if (request == null)
+			return;
+		dictionaryLookupScheduler.postDelayed(
+				() -> applyDictionaryLookup(
+						lifecycle, request),
+				delayMillis);
+	}
+
+	private void applyDictionaryLookup(
+			ServiceLifecycle lifecycle,
+			DictionaryLookupSession.Request request) {
+		if (!lifecycle.isActive()
+				|| !dictionaryLookupRequests
+						.complete(request))
+			return;
+		findInDictionaryInternal(request.getQuery());
 	}
 
 	private void handleSelectLibraryRootResult(
