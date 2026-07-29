@@ -1217,11 +1217,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (event.getAction() == MotionEvent.ACTION_UP) {
 				long duration = Utils.timeInterval(firstDown);
 				switch (state) {
-					case STATE_DOWN_1:
-						if (hiliteTapZoneOnTap) {
-							hiliteTapZone(true, x, y, width, height);
-							scheduleUnhilite(LONG_KEYPRESS_TIME);
-						}
+						case STATE_DOWN_1:
+							if (hiliteTapZoneOnTap) {
+								TapHighlightState.Show highlight =
+										showTapHighlight(
+												x, y, width, height);
+								scheduleUnhilite(
+										highlight,
+										LONG_KEYPRESS_TIME);
+							}
 						if (duration > LONG_KEYPRESS_TIME) {
 							if (longTapAction == ReaderAction.START_SELECTION)
 								return startSelection();
@@ -1974,8 +1978,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (!autoScrollSessions.requestStart(animation))
 			return;
 		animation.start();
-		nextHiliteId++;
-		hiliteRect = null;
+		invalidateTapHighlight();
 	}
 
 	private void toggleAutoScroll() {
@@ -3816,7 +3819,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				log.d("skipping duplicate drawPage request");
 				return;
 			}
-			nextHiliteId++;
+			invalidateTapHighlight();
 			if (currentAnimation != null) {
 				log.d("skipping drawPage request while scroll animation is in progress");
 				return;
@@ -4038,8 +4041,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					int toX = dir2 > 0 ? 0 : w;
 					new PageViewAnimation(fromX, w, dir2);
 					if (currentAnimation != null) {
-						nextHiliteId++;
-						hiliteRect = null;
+						invalidateTapHighlight();
 						currentAnimation.update(toX, h / 2);
 						currentAnimation.move(speed, true);
 						currentAnimation.stop(-1, -1);
@@ -4049,8 +4051,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				} else {
 					new ScrollViewAnimation(dir > 0 ? h*7/8 : 0-(h*7/8));
 					if (currentAnimation != null) {
-						nextHiliteId++;
-						hiliteRect = null;
+						invalidateTapHighlight();
 						currentAnimation.move(speed, true);
 						currentAnimation.stop(-1, -1);
 						if (onFinishHandler != null)
@@ -4061,10 +4062,203 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	static private Rect tapZoneBounds(int startX, int startY, int maxX, int maxY) {
-		TapZoneGeometry.Bounds bounds =
-				TapZoneGeometry.boundsAt(
-						startX, startY, maxX, maxY);
+	private final static int HILITE_RECT_ALPHA = 64;
+	private final TapHighlightState tapHighlightState =
+			new TapHighlightState();
+	private final DelayedExecutor tapHighlightScheduler =
+			DelayedExecutor.createGUI("tap-highlight");
+
+	private void unhiliteTapZone() {
+		TapHighlightState.Hide hide;
+		synchronized (tapHighlightState) {
+			hide = tapHighlightState.requestHideAll();
+			tapHighlightScheduler.cancel();
+		}
+		applyTapHighlightHide(hide);
+	}
+
+	private TapHighlightState.Show showTapHighlight(
+			final int startX,
+			final int startY,
+			final int maxX,
+			final int maxY) {
+		alog.d("highliteTapZone(" + startX + ", " + startY + ")");
+		int txcolor = mSettings.getColor(PROP_FONT_COLOR, Color.BLACK);
+		final int color = (txcolor & 0xFFFFFF) | (HILITE_RECT_ALPHA << 24);
+		TapHighlightState.Show show;
+		synchronized (tapHighlightState) {
+			show = tapHighlightState.requestShow(
+					TapZoneGeometry.boundsAt(
+							startX, startY, maxX, maxY),
+					color);
+			tapHighlightScheduler.cancel();
+		}
+		if (show == null)
+			return null;
+		BackgroundThread.instance().executeBackground(() -> {
+			if (!tapHighlightState.isCurrent(show))
+				return;
+
+			if (isAutoScrollActive()) {
+				invalidateTapHighlight();
+				return;
+			}
+
+			BackgroundThread.ensureBackground();
+			final BitmapInfo pageImage = preparePageImage(0);
+			if (pageImage != null && pageImage.bitmap != null && pageImage.position != null) {
+				TapHighlightState.Transition transition =
+						tapHighlightState.applyShow(show);
+				drawTapHighlightTransition(transition);
+			} else {
+				invalidateTapHighlight();
+			}
+		});
+		return show;
+	}
+
+	private void scheduleUnhilite(
+			TapHighlightState.Show owner,
+			int delay) {
+		if (owner == null)
+			return;
+		synchronized (tapHighlightState) {
+			if (tapHighlightState.isCurrent(owner)) {
+				tapHighlightScheduler.postDelayed(
+						() -> unhiliteTapZone(owner),
+						delay);
+			}
+		}
+	}
+
+	private void unhiliteTapZone(
+			TapHighlightState.Show owner) {
+		TapHighlightState.Hide hide;
+		synchronized (tapHighlightState) {
+			hide = tapHighlightState.requestOwnedHide(owner);
+			if (hide != null)
+				tapHighlightScheduler.cancel();
+		}
+		applyTapHighlightHide(hide);
+	}
+
+	private void applyTapHighlightHide(
+			TapHighlightState.Hide hide) {
+		if (hide == null)
+			return;
+		BackgroundThread.instance().executeBackground(() -> {
+			TapHighlightState.Transition transition =
+					tapHighlightState.applyHide(hide);
+			if (transition == null
+					|| !transition.hasVisualChange())
+				return;
+			BackgroundThread.ensureBackground();
+			BitmapInfo pageImage = preparePageImage(0);
+			if (pageImage != null
+					&& pageImage.bitmap != null
+					&& pageImage.position != null) {
+				drawTapHighlightTransition(transition);
+			}
+		});
+	}
+
+	private void drawTapHighlightTransition(
+			TapHighlightState.Transition transition) {
+		if (transition == null
+				|| !transition.hasVisualChange())
+			return;
+		Rect dirty = tapHighlightDirtyRect(transition);
+		if (dirty == null || dirty.isEmpty())
+			return;
+		drawCallback(canvas -> {
+			if (!mInitialized || mCurrentPageInfo == null)
+				return;
+			log.d("onDraw() -- drawing page image");
+			Rect dst =
+					new Rect(
+							0, 0,
+							canvas.getWidth(),
+							canvas.getHeight());
+			Rect src =
+					new Rect(
+							0, 0,
+							mCurrentPageInfo.bitmap.getWidth(),
+							mCurrentPageInfo.bitmap.getHeight());
+			drawDimmedBitmap(
+					canvas,
+					mCurrentPageInfo.bitmap,
+					src,
+					dst);
+			TapHighlightState.Show current =
+					transition.current();
+			if (current != null
+					&& tapHighlightState.isVisible(current)) {
+				drawTapHighlightBorder(canvas, current);
+			}
+		}, dirty, false);
+	}
+
+	private void drawTapHighlightBorder(
+			Canvas canvas,
+			TapHighlightState.Show show) {
+		Rect bounds = tapHighlightRect(show);
+		Paint paint = new Paint();
+		paint.setStyle(Paint.Style.FILL);
+		paint.setColor(show.color());
+		int width =
+				Math.max(
+						1,
+						(int) (2.0f
+								* mActivity.getDensityFactor()));
+		canvas.drawRect(
+				new Rect(
+						bounds.left,
+						bounds.top,
+						bounds.right - width,
+						bounds.top + width),
+				paint);
+		canvas.drawRect(
+				new Rect(
+						bounds.left,
+						bounds.top + width,
+						bounds.left + width,
+						bounds.bottom - width),
+				paint);
+		canvas.drawRect(
+				new Rect(
+						bounds.right - width - width,
+						bounds.top + width,
+						bounds.right - width,
+						bounds.bottom - width),
+				paint);
+		canvas.drawRect(
+				new Rect(
+						bounds.left + width,
+						bounds.bottom - width - width,
+						bounds.right - width - width,
+						bounds.bottom - width),
+				paint);
+	}
+
+	private static Rect tapHighlightDirtyRect(
+			TapHighlightState.Transition transition) {
+		Rect dirty = null;
+		if (transition.previous() != null)
+			dirty = tapHighlightRect(transition.previous());
+		if (transition.current() != null) {
+			Rect current =
+					tapHighlightRect(transition.current());
+			if (dirty == null)
+				dirty = current;
+			else
+				dirty.union(current);
+		}
+		return dirty;
+	}
+
+	private static Rect tapHighlightRect(
+			TapHighlightState.Show show) {
+		TapZoneGeometry.Bounds bounds = show.bounds();
 		return new Rect(
 				bounds.left(),
 				bounds.top(),
@@ -4072,70 +4266,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				bounds.bottom());
 	}
 
-	volatile private int nextHiliteId = 0;
-	private final static int HILITE_RECT_ALPHA = 64;
-	private Rect hiliteRect = null;
-
-	private void unhiliteTapZone() {
-		hiliteTapZone(false, 0, 0, surface.getWidth(), surface.getHeight());
+	private void invalidateTapHighlight() {
+		synchronized (tapHighlightState) {
+			tapHighlightState.invalidate();
+			tapHighlightScheduler.cancel();
+		}
 	}
 
-	private void hiliteTapZone(final boolean hilite, final int startX, final int startY, final int maxX, final int maxY) {
-		alog.d("highliteTapZone(" + startX + ", " + startY + ")");
-		final int myHiliteId = ++nextHiliteId;
-		int txcolor = mSettings.getColor(PROP_FONT_COLOR, Color.BLACK);
-		final int color = (txcolor & 0xFFFFFF) | (HILITE_RECT_ALPHA << 24);
-		BackgroundThread.instance().executeBackground(() -> {
-			if (myHiliteId != nextHiliteId || (!hilite && hiliteRect == null))
-				return;
-
-			if (isAutoScrollActive()) {
-				hiliteRect = null;
-				return;
-			}
-
-			BackgroundThread.ensureBackground();
-			final BitmapInfo pageImage = preparePageImage(0);
-			if (pageImage != null && pageImage.bitmap != null && pageImage.position != null) {
-				//PositionProperties currPos = pageImage.position;
-				final Rect rc = hilite ? tapZoneBounds(startX, startY, maxX, maxY) : hiliteRect;
-				if (hilite)
-					hiliteRect = rc;
-				else
-					hiliteRect = null;
-				if (rc != null)
-					drawCallback(canvas -> {
-						if (mInitialized && mCurrentPageInfo != null) {
-							log.d("onDraw() -- drawing page image");
-							Rect dst = new Rect(0, 0, canvas.getWidth(), canvas.getHeight());
-							Rect src = new Rect(0, 0, mCurrentPageInfo.bitmap.getWidth(), mCurrentPageInfo.bitmap.getHeight());
-							drawDimmedBitmap(canvas, mCurrentPageInfo.bitmap, src, dst);
-							if (hilite) {
-								Paint p = new Paint();
-								p.setStyle(Paint.Style.FILL);
-								p.setColor(color);
-								int w = (int)(2.0f*mActivity.getDensityFactor());
-//					    			if ( true ) {
-								canvas.drawRect(new Rect(rc.left, rc.top, rc.right - w, rc.top + w), p);
-								canvas.drawRect(new Rect(rc.left, rc.top + w, rc.left + w, rc.bottom - w), p);
-								canvas.drawRect(new Rect(rc.right - w - w, rc.top + w, rc.right - w, rc.bottom - w), p);
-								canvas.drawRect(new Rect(rc.left + w, rc.bottom - w - w, rc.right - w - w, rc.bottom - w), p);
-//					    			} else {
-//					    				canvas.drawRect(rc, p);
-//					    			}
-							}
-						}
-					}, rc, false);
-			}
-		});
-	}
-
-	private void scheduleUnhilite(int delay) {
-		final int myHiliteId = nextHiliteId;
-		BackgroundThread.instance().postGUI(() -> {
-			if (myHiliteId == nextHiliteId && hiliteRect != null)
-				unhiliteTapZone();
-		}, delay);
+	private void closeTapHighlight() {
+		synchronized (tapHighlightState) {
+			tapHighlightState.close();
+			tapHighlightScheduler.cancel();
+		}
 	}
 
 	int currentBrightnessValueIndex = -1;
@@ -4351,8 +4493,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				new ScrollViewAnimation(dir * currPos.pageHeight * 7 / 8);
 			}
 			if (currentAnimation != null) {
-				nextHiliteId++;
-				hiliteRect = null;
+				invalidateTapHighlight();
 			}
 		});
 	}
@@ -6038,6 +6179,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void close() {
 		BackgroundThread.ensureGUI();
 		log.i("ReaderView.close() is called");
+		invalidateTapHighlight();
 		if (!mOpened)
 			return;
 		cancelSwapTask();
@@ -6099,6 +6241,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		animationScheduler.cancel();
 		gcTask.cancel();
 		closeSwapTasks();
+		closeTapHighlight();
 		synchronized (autoScrollSessions) {
 			autoScrollSessions.close();
 			autoScrollScheduler.cancel();
@@ -6235,6 +6378,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		public void OnLoadFileStart(String filename) {
 			cancelSwapTask();
+			invalidateTapHighlight();
 			BackgroundThread.ensureBackground();
 			log.d("readerCallback.OnLoadFileStart " + filename);
 			if (enable_progress_callback) {

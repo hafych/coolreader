@@ -418,7 +418,9 @@ public class ActivityOwnershipPolicyTest {
 				"gcTask",
 				"animationUpdateLock",
 				"swapTaskLifecycle",
-				"swapTaskScheduler"}) {
+				"swapTaskScheduler",
+				"tapHighlightState",
+				"tapHighlightScheduler"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -443,6 +445,12 @@ public class ActivityOwnershipPolicyTest {
 					"ReaderView retains a racy swap task pointer",
 					field.getName().equals(
 							"currentSwapTask"));
+			assertFalse(
+					"ReaderView retains numeric highlight generations",
+					field.getName().equals("nextHiliteId"));
+			assertFalse(
+					"ReaderView retains parallel highlight geometry",
+					field.getName().equals("hiliteRect"));
 		}
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
@@ -468,12 +476,37 @@ public class ActivityOwnershipPolicyTest {
 						"closeSwapTasks");
 		assertTrue(Modifier.isPrivate(
 				closeSwapTasks.getModifiers()));
+		Method closeTapHighlight =
+				ReaderView.class.getDeclaredMethod(
+						"closeTapHighlight");
+		assertTrue(Modifier.isPrivate(
+				closeTapHighlight.getModifiers()));
 		Method complete =
 				CloseableTaskGate.class.getDeclaredMethod(
 						"complete",
 						CloseableTaskGate.Token.class);
 		assertTrue(Modifier.isSynchronized(
 				complete.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				TapHighlightState.class.getModifiers()));
+		for (Field field :
+				TapHighlightState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Class<?> nested :
+				TapHighlightState.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				assertFalse(Modifier.isStatic(
+						field.getModifiers()));
+				assertTrue(Modifier.isPrivate(
+						field.getModifiers()));
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+			}
+		}
 	}
 
 	@Test

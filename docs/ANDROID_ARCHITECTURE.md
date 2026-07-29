@@ -126,6 +126,13 @@ Tap actions and their highlight rectangles likewise share the pure
 non-divisible surface sizes, clamps coordinates, widens boundary arithmetic and
 returns an empty immutable rectangle for an invalid surface, so action routing
 and visual feedback cannot drift or divide by zero.
+Tap-highlight visibility and bounds are published through one synchronized
+`TapHighlightState` instead of a non-atomic numeric generation plus a shared
+mutable `Rect`. Show/hide transitions carry both old and new immutable bounds
+so replacement redraws the complete dirty union. Delayed unhighlight uses a
+reader-owned cancelable scheduler and can hide only its latest request;
+animation/page/book invalidation clears the same owner, while `destroy()`
+closes it before native teardown.
 `PositionProperties` widens scrollable-height subtraction and percentage
 multiplication before clamping to its 0–10000 contract. Scroll movement uses the
 same widened range. The stateless `DocumentPositionPolicy` converts zero-based

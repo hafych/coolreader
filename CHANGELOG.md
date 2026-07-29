@@ -386,6 +386,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Tap-zone actions and highlight rectangles now use the same overflow-safe 3×3
   geometry. Non-divisible surface sizes can no longer highlight a neighboring
   action, and an invalid zero-sized surface cannot trigger division by zero.
+- Tap highlights now publish identity-owned show/hide transitions instead of
+  racing a numeric generation against a mutable rectangle. Replacements redraw
+  both dirty zones, delayed unhighlight cannot hide a newer request, and reader
+  reload/close cancel queued work while destruction closes it permanently.
 - Temporary E-Ink full-refresh suppression now uses reader-owned client leases.
   Overlapping clients restore the saved interval exactly once, while duplicate
   or unmatched releases no longer restore an invalid sentinel interval.

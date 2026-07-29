@@ -179,6 +179,9 @@ BITMAP_MEMORY_ACCOUNTING = (
 )
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 TAP_ZONE_GEOMETRY = SOURCE / "crengine" / "TapZoneGeometry.java"
+TAP_HIGHLIGHT_STATE = (
+    SOURCE / "crengine" / "TapHighlightState.java"
+)
 POSITION_PROPERTIES = SOURCE / "crengine" / "PositionProperties.java"
 DOCUMENT_POSITION_POLICY = (
     SOURCE / "crengine" / "DocumentPositionPolicy.java"
@@ -228,6 +231,18 @@ TAP_ZONE_GEOMETRY_TEST = (
     / "coolreader"
     / "crengine"
     / "TapZoneGeometryTest.java"
+)
+TAP_HIGHLIGHT_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "TapHighlightStateTest.java"
 )
 POSITION_PROPERTIES_TEST = (
     ROOT
@@ -1957,6 +1972,8 @@ def main() -> None:
         "private final DelayedExecutor autoScrollScheduler",
         "private final CloseableTaskGate swapTaskLifecycle",
         "private final DelayedExecutor swapTaskScheduler",
+        "private final TapHighlightState tapHighlightState",
+        "private final DelayedExecutor tapHighlightScheduler",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -1966,6 +1983,9 @@ def main() -> None:
         "private void closeSwapTasks()",
         "swapTaskLifecycle.close()",
         "swapTaskScheduler.cancel()",
+        "private void closeTapHighlight()",
+        "tapHighlightState.close()",
+        "tapHighlightScheduler.cancel()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -1977,6 +1997,12 @@ def main() -> None:
         "swapTaskLifecycle.isActive(owner)",
         "swapTaskScheduler.postDelayed(",
         "swapTaskLifecycle.complete(owner)",
+        "tapHighlightState.requestShow(",
+        "tapHighlightState.requestOwnedHide(owner)",
+        "tapHighlightState.applyShow(show)",
+        "tapHighlightState.applyHide(hide)",
+        "tapHighlightScheduler.postDelayed(",
+        "drawTapHighlightTransition(transition)",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -1989,6 +2015,8 @@ def main() -> None:
     for legacy in (
         "currentAutoScrollAnimation",
         "currentSwapTask",
+        "nextHiliteId",
+        "hiliteRect",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",
     ):
@@ -2037,6 +2065,51 @@ def main() -> None:
             violations.append(
                 f"{relative(AUTO_SCROLL_SESSION_STATE_TEST)} omits "
                 f"autoscroll lifecycle regression: {marker}")
+
+    tap_highlight_state_text = TAP_HIGHLIGHT_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class TapHighlightState",
+        "private Object current",
+        "private Show visible",
+        "private boolean closed",
+        "synchronized Show requestShow(",
+        "synchronized Hide requestHideAll()",
+        "synchronized Hide requestOwnedHide(Show owner)",
+        "synchronized Transition applyShow(Show show)",
+        "synchronized Transition applyHide(Hide hide)",
+        "synchronized boolean isVisible(Show show)",
+        "synchronized void invalidate()",
+        "synchronized boolean close()",
+        "static final class Show",
+        "static final class Hide",
+        "static final class Transition",
+        "private final Show previous",
+        "private final Show current",
+    ):
+        if marker not in tap_highlight_state_text:
+            violations.append(
+                f"{relative(TAP_HIGHLIGHT_STATE)} omits atomic tap "
+                f"highlight marker: {marker}")
+
+    tap_highlight_state_test_text = (
+        TAP_HIGHLIGHT_STATE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "latestShowWinsAndPublishesOnlyWhenApplied",
+        "replacementTransitionCarriesBothDirtyBounds",
+        "ownedHideClearsPriorVisibleAndPendingOwner",
+        "staleTimerCannotHideReplacement",
+        "globalHideIsOneShotAndCanCancelPendingShow",
+        "invalidationRejectsQueuedShowAndClearsVisible",
+        "invalidBoundsAreNotScheduled",
+        "nullBoundsAreRejected",
+        "closePermanentlyRejectsQueuedAndNewWork",
+    ):
+        if marker not in tap_highlight_state_test_text:
+            violations.append(
+                f"{relative(TAP_HIGHLIGHT_STATE_TEST)} omits tap "
+                f"highlight lifecycle regression: {marker}")
     for marker in (
         "FontFaceSwitcher.select(",
         "if (selected == null)",

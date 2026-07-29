@@ -168,6 +168,12 @@ DRM или ограничений доступа, подбор/получени�
   Tap action routing и highlight bounds `ReaderView` теперь используют одну
   pure JVM-tested 3×3 geometry с совпадающими границами для некратных размеров,
   clamped coordinates, widened arithmetic и safe empty invalid-surface bounds.
+  Tap highlight visibility/bounds также переведены с non-atomic numeric
+  generation и shared mutable `Rect` на synchronized identity-owned
+  `TapHighlightState`: replacement redraws union старых/новых immutable bounds,
+  delayed unhighlight принадлежит cancelable reader scheduler и действует
+  только на latest request, page/reload/close invalidation и destroy исключают
+  stale callbacks.
   Временное отключение E-Ink full refresh вынесено в synchronized
   ReaderView-owned lease tracker: overlapping clients восстанавливают исходный
   interval только после последнего matching release, а duplicate/unmatched
