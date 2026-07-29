@@ -7803,6 +7803,16 @@ forbid_source_text(
   "GUI startup must not retain an unused unchecked file-read helper"
 )
 forbid_source_text(
+  "${GUI_STARTUP_SOURCE}"
+  "TexHyph * method = new"
+  "GUI startup must not retain dead raw hyphenation examples"
+)
+forbid_source_text(
+  "${WIN_GUI_SOURCE}"
+  "ldomXRange * wordRange = new"
+  "Win32 GUI handlers must not retain dead raw range examples"
+)
+forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "lString16Collection fontDirs"
   "GUI platform startup must use current-width font directories"
