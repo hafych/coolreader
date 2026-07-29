@@ -702,98 +702,66 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         mainMenu->addItem(std::move(orientationMenu));
 #endif
 #ifdef CR_POCKETBOOK
-        CRMenu * rotateModeMenu = new CRMenu(_wm, mainMenu, mm_rotateMode,
-                _("Rotate"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_POCKETBOOK_ROTATE_MODE );
-        addMenuItems( rotateModeMenu, rotate_mode_options );
-        mainMenu->addItem( rotateModeMenu );
-        CRMenu * rotateAngleMenu = new CRMenu(_wm, mainMenu, mm_rotateAngle,
-                _("Page turn angle"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_POCKETBOOK_ROTATE_ANGLE );
-        addMenuItems( rotateAngleMenu, rotate_angle_options );
-        mainMenu->addItem( rotateAngleMenu );
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_rotateMode, _("Rotate"),
+                valueFont, props, PROP_POCKETBOOK_ROTATE_MODE,
+                rotate_mode_options));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_rotateAngle, _("Page turn angle"),
+                valueFont, props, PROP_POCKETBOOK_ROTATE_ANGLE,
+                rotate_angle_options));
 #endif
-        CRMenu * footnotesMenu = new CRMenu(_wm, mainMenu, mm_Footnotes,
-                _("Footnotes at page bottom"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FOOTNOTES );
-        addMenuItems( footnotesMenu, footnotes );
-        mainMenu->addItem( footnotesMenu );
-
-/*
-        SetTimeMenuItem * setTime = new SetTimeMenuItem( mainMenu, mm_SetTime, _wm->translateString("VIEWER_MENU_SET_TIME", "Set time"),
-                LVImageSourceRef(), menuFont, L"bla" );
-        mainMenu->addItem( setTime );
-*/
-        CRMenu * showTimeMenu = new CRMenu(_wm, mainMenu, mm_ShowTime,
-                _("Show time"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_SHOW_TIME );
-        addMenuItems( showTimeMenu, showtime );
-        mainMenu->addItem( showTimeMenu );
-
-        CRMenu * landscapePagesMenu = new CRMenu(_wm, mainMenu, mm_LandscapePages,
-                _("Landscape pages"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_LANDSCAPE_PAGES );
-        addMenuItems( landscapePagesMenu, landscape_pages );
-        mainMenu->addItem( landscapePagesMenu );
-
-        CRMenu * preformattedTextMenu = new CRMenu(_wm, mainMenu, mm_PreformattedText,
-                _("Preformatted text"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_TXT_OPTION_PREFORMATTED );
-        addMenuItems( preformattedTextMenu, preformatted_text );
-        mainMenu->addItem( preformattedTextMenu );
-
-        //
-
-        CRMenu * embeddedStylesMenu = new CRMenu(_wm, mainMenu, mm_EmbeddedStyles,
-                _("Document embedded styles"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_EMBEDDED_STYLES );
-        addMenuItems( embeddedStylesMenu, embedded_styles );
-        mainMenu->addItem( embeddedStylesMenu );
-
-        CRMenu * embeddedFontsMenu = new CRMenu(_wm, mainMenu, mm_EmbeddedFonts,
-                _("Document embedded fonts"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_EMBEDDED_FONTS );
-        addMenuItems( embeddedFontsMenu, embedded_fonts );
-        mainMenu->addItem( embeddedFontsMenu );
-
-        CRMenu * inverseModeMenu = new CRMenu(_wm, mainMenu, mm_Inverse,
-                _("Inverse display"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_DISPLAY_INVERSE );
-        addMenuItems( inverseModeMenu, inverse_mode );
-        mainMenu->addItem( inverseModeMenu );
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_Footnotes, _("Footnotes at page bottom"),
+                valueFont, props, PROP_FOOTNOTES, footnotes));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_ShowTime, _("Show time"),
+                valueFont, props, PROP_SHOW_TIME, showtime));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_LandscapePages, _("Landscape pages"),
+                valueFont, props, PROP_LANDSCAPE_PAGES,
+                landscape_pages));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_PreformattedText, _("Preformatted text"),
+                valueFont, props, PROP_TXT_OPTION_PREFORMATTED,
+                preformatted_text));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_EmbeddedStyles, _("Document embedded styles"),
+                valueFont, props, PROP_EMBEDDED_STYLES,
+                embedded_styles));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_EmbeddedFonts, _("Document embedded fonts"),
+                valueFont, props, PROP_EMBEDDED_FONTS,
+                embedded_fonts));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_Inverse, _("Inverse display"),
+                valueFont, props, PROP_DISPLAY_INVERSE,
+                inverse_mode));
 
 #if ENABLE_UPDATE_MODE_SETTING==1
-        CRMenu * fastUpdatesMenu = new CRMenu(_wm, mainMenu, mm_FastUpdates,
-                _("Display update mode"),
-                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_DISPLAY_FULL_UPDATE_INTERVAL );
-        addMenuItems( fastUpdatesMenu, screen_update_options );
-        mainMenu->addItem( fastUpdatesMenu );
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_FastUpdates, _("Display update mode"),
+                valueFont, props, PROP_DISPLAY_FULL_UPDATE_INTERVAL,
+                screen_update_options));
 #endif
         if ( _wm->getScreen()->getTurboUpdateSupported() ) {
-            CRMenu * turboUpdatesMenu = new CRMenu(_wm, mainMenu, mm_TurboUpdateMode,
-                    _("Turbo update mode"),
-                    LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_DISPLAY_TURBO_UPDATE_MODE );
-            addMenuItems( turboUpdatesMenu, turbo_update_options );
-            mainMenu->addItem( turboUpdatesMenu );
+            mainMenu->addItem(createOptionMenu(
+                    mainMenu, mm_TurboUpdateMode, _("Turbo update mode"),
+                    valueFont, props, PROP_DISPLAY_TURBO_UPDATE_MODE,
+                    turbo_update_options));
         }
 
-        CRMenu * highlightbookmarksMenu = new CRMenu(_wm, mainMenu, mm_HighlightBookmarks,
-                _("Highlight bookmarks"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_HIGHLIGHT_COMMENT_BOOKMARKS );
-        addMenuItems( highlightbookmarksMenu, highlight_bookmark );
-        mainMenu->addItem( highlightbookmarksMenu );
-
-        CRMenu * statusLineMenu = new CRMenu(_wm, mainMenu, mm_StatusLine,
-                _("Status line"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_STATUS_LINE );
-        addMenuItems( statusLineMenu, status_line );
-        mainMenu->addItem( statusLineMenu );
-
-        CRMenu * kerningMenu = new CRMenu(_wm, mainMenu, mm_Kerning,
-                _("Font kerning"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_KERNING_ENABLED );
-        addMenuItems( kerningMenu, kerning_options );
-        mainMenu->addItem( kerningMenu );
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_HighlightBookmarks, _("Highlight bookmarks"),
+                valueFont, props, PROP_HIGHLIGHT_COMMENT_BOOKMARKS,
+                highlight_bookmark));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_StatusLine, _("Status line"),
+                valueFont, props, PROP_STATUS_LINE, status_line));
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_Kerning, _("Font kerning"),
+                valueFont, props, PROP_FONT_KERNING_ENABLED,
+                kerning_options));
 
         //====== Hyphenation ==========
 		if ( HyphMan::getDictList() ) {
@@ -817,11 +785,10 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
             mainMenu->addItem( hyphMenu );
 		}
 
-        CRMenu * floatingPunctuationMenu = new CRMenu(_wm, mainMenu, mm_FloatingPunctuation,
-                _("Floating punctuation"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FLOATING_PUNCTUATION );
-        addMenuItems( floatingPunctuationMenu, floating_punctuation_options );
-        mainMenu->addItem( floatingPunctuationMenu );
+        mainMenu->addItem(createOptionMenu(
+                mainMenu, mm_FloatingPunctuation, _("Floating punctuation"),
+                valueFont, props, PROP_FLOATING_PUNCTUATION,
+                floating_punctuation_options));
 
 
         //====== Margins ==============

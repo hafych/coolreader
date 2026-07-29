@@ -7947,6 +7947,31 @@ forbid_source_text(
   "CRMenu * fontGammaMenu = new"
   "font-gamma submenu candidates must not begin as raw owners"
 )
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * footnotesMenu = new"
+  "footnotes submenu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * embeddedStylesMenu = new"
+  "embedded-styles submenu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * statusLineMenu = new"
+  "status-line submenu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * floatingPunctuationMenu = new"
+  "floating-punctuation submenu candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "SetTimeMenuItem * setTime = new"
+  "dead settings examples must not retain raw ownership patterns"
+)
 require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
