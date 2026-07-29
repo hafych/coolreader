@@ -392,6 +392,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Reader load/format progress now starts explicitly hidden and publishes
   position/title atomically. Zero-position progress is visible, while duplicate
   show and hide callbacks no longer trigger redundant redraw transitions.
+- Replaceable Android delayed tasks now claim an exact one-shot generation.
+  Replaced or canceled wrappers cannot run because a newer task exists, and
+  completed callbacks no longer leave a stale pending slot behind.
 - Scroll-view animation frames now use fractional progress instead of truncated
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates

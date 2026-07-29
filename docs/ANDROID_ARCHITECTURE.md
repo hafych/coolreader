@@ -42,6 +42,11 @@ Synchronous cross-thread calls use a one-shot `BlockingResult` owned by the
 dispatcher layer, not a nested `ReaderView` type. It releases every waiter,
 completes failure paths, and restores an interrupted waiter's flag after
 delivery.
+Replaceable delayed callbacks use a pure `ReplaceableTaskSlot`. Replacement or
+cancellation invalidates the exact old wrapper, only the current generation can
+claim execution, and a successful claim clears the slot before invoking user
+code. Reentrant scheduling therefore cannot be cleared by its predecessor, and
+an already-removed callback cannot run merely because a newer callback exists.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

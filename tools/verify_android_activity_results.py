@@ -102,6 +102,10 @@ FEED_TIMESTAMP_PARSER = (
 )
 BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
 DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
+DELAYED_EXECUTOR = SOURCE / "crengine" / "DelayedExecutor.java"
+REPLACEABLE_TASK_SLOT = (
+    SOURCE / "crengine" / "ReplaceableTaskSlot.java"
+)
 BLOCKING_RESULT = SOURCE / "crengine" / "BlockingResult.java"
 FREEZABLE_REGISTRY = SOURCE / "crengine" / "FreezableRegistry.java"
 PAGE_FLIP_GEOMETRY_TEST = (
@@ -163,6 +167,18 @@ DEFERRED_TASK_QUEUE_TEST = (
     / "coolreader"
     / "crengine"
     / "DeferredTaskQueueTest.java"
+)
+REPLACEABLE_TASK_SLOT_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReplaceableTaskSlotTest.java"
 )
 BLOCKING_RESULT_TEST = (
     ROOT
@@ -1191,6 +1207,61 @@ def main() -> None:
             violations.append(
                 f"{relative(DEFERRED_TASK_QUEUE_TEST)} omits regression "
                 f"marker: {marker}")
+
+    delayed_executor_text = DELAYED_EXECUTOR.read_text(encoding="utf-8")
+    for marker in (
+        "public final class DelayedExecutor",
+        "private final ReplaceableTaskSlot tasks",
+        "public synchronized void postDelayed(",
+        "public synchronized void cancel()",
+        "tasks.replace(loggedTask)",
+        "target.removeCallbacks(replacement.previous())",
+        "if (!accepted)",
+        "tasks.cancel()",
+    ):
+        if marker not in delayed_executor_text:
+            violations.append(
+                f"{relative(DELAYED_EXECUTOR)} omits replaceable callback "
+                f"marker: {marker}")
+    for legacy in (
+        "private Runnable currentTask",
+        "if (currentTask != null)",
+    ):
+        if legacy in delayed_executor_text:
+            violations.append(
+                f"{relative(DELAYED_EXECUTOR)} retains stale callback "
+                f"check: {legacy}")
+
+    replaceable_slot_text = REPLACEABLE_TASK_SLOT.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ReplaceableTaskSlot",
+        "synchronized Replacement replace(Runnable task)",
+        "synchronized Runnable cancel()",
+        "private synchronized boolean claim(GuardedTask task)",
+        "if (current != task)",
+        "current = null",
+        "if (claim(this))",
+    ):
+        if marker not in replaceable_slot_text:
+            violations.append(
+                f"{relative(REPLACEABLE_TASK_SLOT)} omits one-shot slot "
+                f"marker: {marker}")
+
+    replaceable_slot_test_text = REPLACEABLE_TASK_SLOT_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "replacementInvalidatesOldWrapper",
+        "claimedWrapperRunsOnlyOnceAndClearsSlot",
+        "cancelInvalidatesPendingWrapperIdempotently",
+        "runningDelegateCanScheduleNextGeneration",
+        "first.current().run()",
+        "wrapper.run();",
+    ):
+        if marker not in replaceable_slot_test_text:
+            violations.append(
+                f"{relative(REPLACEABLE_TASK_SLOT_TEST)} omits replaceable "
+                f"task regression: {marker}")
 
     blocking_result_text = BLOCKING_RESULT.read_text(encoding="utf-8")
     for marker in (

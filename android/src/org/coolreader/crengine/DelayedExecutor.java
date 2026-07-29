@@ -26,14 +26,15 @@ import android.os.Handler;
  * Can schedule execution of runnable.
  * When previously scheduled runnable was not yet executed, it's being canceled and being replaced with new one.
  */
-public class DelayedExecutor {
+public final class DelayedExecutor {
 
 	public static final Logger log = L.create("dt", Log.INFO);
 	
-	private boolean isBackground;
+	private final boolean isBackground;
 	private Handler handler;
-	private Runnable currentTask;
-	private String name;
+	private final ReplaceableTaskSlot tasks =
+			new ReplaceableTaskSlot();
+	private final String name;
 
 	private Handler getHandler() {
 		if (handler != null)
@@ -48,13 +49,11 @@ public class DelayedExecutor {
 	}
 	
 	public static DelayedExecutor createBackground(String name) {
-		DelayedExecutor task = new DelayedExecutor(true, name);
-		return task;
+		return new DelayedExecutor(true, name);
 	}
 	
 	public static DelayedExecutor createGUI(String name) {
-		DelayedExecutor task = new DelayedExecutor(false, name);
-		return task;
+		return new DelayedExecutor(false, name);
 	}
 	
 	/**
@@ -70,18 +69,17 @@ public class DelayedExecutor {
 	 * @param task is task to execute delayed.
 	 * @param delay is delay, milliseconds.
 	 */
-	public void postDelayed(final Runnable task, final long delay) {
-		Runnable myTask = new Runnable() {
+	public synchronized void postDelayed(
+			final Runnable task,
+			final long delay) {
+		Handler target = getHandler();
+		Runnable loggedTask = new Runnable() {
 			@Override
 			public void run() {
 				try {
-					if (currentTask != null) {
-						log.v("Running task " + toString());
-						task.run();
-						log.v("Done task " + toString());
-					} else {
-						log.w("Skipping probably canceled task " + toString());
-					}
+					log.v("Running task " + toString());
+					task.run();
+					log.v("Done task " + toString());
 				} catch (Exception e) {
 					log.e("Exception while executing task", e);
 				}
@@ -92,29 +90,32 @@ public class DelayedExecutor {
 				return name + " " + task.hashCode();
 			}
 		};
-		synchronized(this) {
-			if (currentTask != null) {
-				log.d("Cancelling pending task " + currentTask);
-				getHandler().removeCallbacks(currentTask); // cancel pending task, replace with new one
-			}
-			currentTask = myTask;
-			if (delay > 0) {
-				log.d("Posting delayed task " + currentTask + " delay=" + delay);
-				getHandler().postDelayed(currentTask, delay);
-			} else {
-				log.d("Posting task " + currentTask);
-				getHandler().post(currentTask);
-			}
+		ReplaceableTaskSlot.Replacement replacement =
+				tasks.replace(loggedTask);
+		if (replacement.previous() != null) {
+			log.d("Cancelling pending task "
+					+ replacement.previous());
+			target.removeCallbacks(replacement.previous());
 		}
+		boolean accepted;
+		if (delay > 0) {
+			log.d("Posting delayed task "
+					+ replacement.current() + " delay=" + delay);
+			accepted = target.postDelayed(
+					replacement.current(), delay);
+		} else {
+			log.d("Posting task " + replacement.current());
+			accepted = target.post(replacement.current());
+		}
+		if (!accepted)
+			tasks.cancel();
 	}
 
-	public void cancel() {
-		synchronized(this) {
-			if (currentTask != null) {
-				log.d("Cancelling pending task " + currentTask);
-				getHandler().removeCallbacks(currentTask); // cancel pending task, replace with new one
-				currentTask = null;
-			}
+	public synchronized void cancel() {
+		Runnable canceled = tasks.cancel();
+		if (canceled != null) {
+			log.d("Cancelling pending task " + canceled);
+			getHandler().removeCallbacks(canceled);
 		}
 	}
 	

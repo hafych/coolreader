@@ -97,6 +97,46 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void delayedExecutorOwnsOneShotReplacementSlot()
+			throws Exception {
+		Field tasks = DelayedExecutor.class.getDeclaredField("tasks");
+		assertFalse(Modifier.isStatic(tasks.getModifiers()));
+		assertTrue(Modifier.isPrivate(tasks.getModifiers()));
+		assertTrue(Modifier.isFinal(tasks.getModifiers()));
+		assertEquals(ReplaceableTaskSlot.class, tasks.getType());
+		for (Field field : DelayedExecutor.class.getDeclaredFields()) {
+			assertFalse(
+					"DelayedExecutor retains legacy callback slot",
+					field.getName().equals("currentTask"));
+		}
+		for (Field field :
+				ReplaceableTaskSlot.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+		for (Class<?> nested :
+				ReplaceableTaskSlot.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				if (field.isSynthetic())
+					continue;
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (Method method :
+				ReplaceableTaskSlot.class.getDeclaredMethods()) {
+			if (method.getName().equals("replace")
+					|| method.getName().equals("cancel")
+					|| method.getName().equals("claim")) {
+				assertTrue(
+						method.getName() + " must serialize slot state",
+						Modifier.isSynchronized(
+								method.getModifiers()));
+			}
+		}
+	}
+
+	@Test
 	public void engineProcessSnapshotIsImmutableAndPathStateIsScoped()
 			throws Exception {
 		assertFinalStaticField(Engine.class, "PROGRESS_STYLE");
