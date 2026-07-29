@@ -127,7 +127,7 @@ protected:
 public:
     lString16 getBookmarkDir() { return _bookmarkDir; }
     void setBookmarkDir( lString16 dir ) { _bookmarkDir = dir; }
-    virtual void flush(); // override
+    void flush() override;
     bool loadDocument( lString16 filename );
     bool loadDefaultCover( lString16 filename );
     bool loadCSS( lString16 filename );
@@ -141,25 +141,25 @@ public:
 	bool setHelpFile( lString16 filename );
 	lString16 getHelpFile( );
 	/// on starting file loading
-	virtual void OnLoadFileStart( lString16 filename );
+	void OnLoadFileStart( lString32 filename ) override;
 	/// format detection finished
-	virtual void OnLoadFileFormatDetected( doc_format_t fileFormat );
+	void OnLoadFileFormatDetected( doc_format_t fileFormat ) override;
 	/// file loading is finished successfully - drawCoveTo() may be called there
-	virtual void OnLoadFileEnd();
+	void OnLoadFileEnd() override;
 	/// file progress indicator, called with values 0..100
-	virtual void OnLoadFileProgress( int percent );
+	void OnLoadFileProgress( int percent ) override;
     /// first page is loaded from file an can be formatted for preview
-    virtual void OnLoadFileFirstPagesReady();
+    void OnLoadFileFirstPagesReady() override;
 	/// document formatting started
-	virtual void OnFormatStart();
+	void OnFormatStart() override;
 	/// document formatting finished
-	virtual void OnFormatEnd();
+	void OnFormatEnd() override;
 	/// format progress, called with values 0..100
-	virtual void OnFormatProgress( int percent );
+	void OnFormatProgress( int percent ) override;
 	/// file load finiished with error
-	virtual void OnLoadFileError( lString16 message );
+	void OnLoadFileError( lString32 message ) override;
     /// Override to handle external links
-    virtual void OnExternalLink( lString16 url, ldomNode * node );
+    void OnExternalLink( lString32 url, ldomNode * node ) override;
 
     /// returns current properties
     CRPropRef getProps() { return _props; }
@@ -198,9 +198,9 @@ public:
     void showHelpDialog();
 
 
-    virtual bool onCommand( int command, int params );
+    bool onCommand( int command, int params ) override;
 
-    virtual void closing();
+    void closing() override;
 };
 
 

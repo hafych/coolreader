@@ -17,6 +17,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crgui.cpp" GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.h" SETTINGS_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.cpp" SETTINGS_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/mainwnd.h" MAIN_WINDOW_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/mainwnd.cpp" MAIN_WINDOW_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -6952,6 +6954,76 @@ require_source_text(
   "${FULLSCREEN_MENU_SOURCE}"
   "wm, id, Utf16ToUnicode(caption), numItems, rc"
   "legacy fullscreen captions must cross an explicit compatibility boundary"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "void OnLoadFileStart( lString32 filename ) override;"
+  "document load-start callbacks must override the current interface"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "void OnLoadFileError( lString32 message ) override;"
+  "document load-error callbacks must override the current interface"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "void OnExternalLink( lString32 url, ldomNode * node ) override;"
+  "external-link callbacks must override the current interface"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "void OnLoadFileFormatDetected( doc_format_t fileFormat ) override;"
+  "document format callbacks must state their override contract"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "void OnFormatProgress( int percent ) override;"
+  "document format-progress callbacks must state their override contract"
+)
+require_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "bool onCommand( int command, int params ) override;"
+  "main-window command hooks must state their override contract"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::OnLoadFileStart( lString32 filename )"
+  "document load-start callback definitions must keep the current width"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::OnLoadFileError( lString32 message )"
+  "document load-error callback definitions must keep the current width"
+)
+require_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::OnExternalLink( lString32 url, ldomNode * node )"
+  "external-link callback definitions must keep the current width"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "OnLoadFileStart( lString16"
+  "document load-start callbacks must not hide the current interface"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "OnLoadFileError( lString16"
+  "document load-error callbacks must not hide the current interface"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "OnExternalLink( lString16"
+  "external-link callbacks must not hide the current interface"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "time((time_t)0)"
+  "document progress callbacks must pass a pointer-compatible time argument"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "showProgress(lString16"
+  "document progress icons must use the current string width"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

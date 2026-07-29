@@ -364,9 +364,10 @@ V3DocViewWin::V3DocViewWin( CRGUIWindowManager * wm, lString16 dataDir )
 }
 
 /// on starting file loading
-void V3DocViewWin::OnLoadFileStart( lString16 filename )
+void V3DocViewWin::OnLoadFileStart( lString32 filename )
 {
-    _loadFileStart = time((time_t)0);
+    CR_UNUSED(filename);
+    _loadFileStart = time(nullptr);
 }
 
 /// format detection finished
@@ -416,9 +417,9 @@ void V3DocViewWin::OnLoadFileEnd()
 void V3DocViewWin::OnLoadFileProgress( int percent )
 {
     CRLog::trace("OnLoadFileProgress(%d)", percent);
-    time_t t = time((time_t)0);
+    time_t t = time(nullptr);
     if ( t - _loadFileStart >= SECONDS_BEFORE_PROGRESS_BAR ) {
-        _wm->showProgress(lString16("cr3_wait_icon.png"), 10+percent/2);
+        _wm->showProgress(cs32("cr3_wait_icon.png"), 10+percent/2);
 #ifdef TRACE_DOC_MEM_STATS
         _docview->getDocument()->dumpStatistics();
 #endif
@@ -428,17 +429,17 @@ void V3DocViewWin::OnLoadFileProgress( int percent )
 /// document formatting started
 void V3DocViewWin::OnFormatStart()
 {
-    time_t t = time((time_t)0);
+    time_t t = time(nullptr);
     if ( t - _loadFileStart >= SECONDS_BEFORE_PROGRESS_BAR )
-        _wm->showProgress(lString16("cr3_wait_icon.png"), 60);
+        _wm->showProgress(cs32("cr3_wait_icon.png"), 60);
 }
 
 /// document formatting finished
 void V3DocViewWin::OnFormatEnd()
 {
-    time_t t = time((time_t)0);
+    time_t t = time(nullptr);
     if ( t - _loadFileStart >= SECONDS_BEFORE_PROGRESS_BAR )
-        _wm->showProgress(lString16("cr3_wait_icon.png"), 100);
+        _wm->showProgress(cs32("cr3_wait_icon.png"), 100);
     // Background cache file saving is disabled when _docview->updateCache(infinite) is called here.
     // To implement background cache file saving, schedule on Idle state following task:
     // in each idle cycle call _docview->updateCache(timeOut) while it returns CR_TIMEOUT
@@ -452,9 +453,9 @@ void V3DocViewWin::OnFormatEnd()
 void V3DocViewWin::OnFormatProgress( int percent )
 {
     CRLog::trace("OnFormatProgress(%d)", percent);
-    time_t t = time((time_t)0);
+    time_t t = time(nullptr);
     if ( t - _loadFileStart >= SECONDS_BEFORE_PROGRESS_BAR ) {
-        _wm->showProgress(lString16("cr3_wait_icon.png"), 60+percent*4/10);
+        _wm->showProgress(cs32("cr3_wait_icon.png"), 60+percent*4/10);
 #ifdef TRACE_DOC_MEM_STATS
         _docview->getDocument()->dumpStatistics();
 #endif
@@ -462,13 +463,16 @@ void V3DocViewWin::OnFormatProgress( int percent )
 }
 
 /// file load finiished with error
-void V3DocViewWin::OnLoadFileError( lString16 message )
+void V3DocViewWin::OnLoadFileError( lString32 message )
 {
+    CR_UNUSED(message);
 }
 
 /// Override to handle external links
-void V3DocViewWin::OnExternalLink( lString16 url, ldomNode * node )
+void V3DocViewWin::OnExternalLink( lString32 url, ldomNode * node )
 {
+    CR_UNUSED(url);
+    CR_UNUSED(node);
 }
 
 bool V3DocViewWin::loadDefaultCover( lString16 filename )
