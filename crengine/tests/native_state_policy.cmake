@@ -4038,8 +4038,38 @@ require_source_text(
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
-  "if (!dst || y < 0 || y >= src_dy || !data)"
+  "if (!dst || y < 0 || y >= rowLimit || !data)"
   "scaled-image callbacks must reject invalid source rows"
+)
+require_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "bool failed"
+  "scaled-image callbacks must retain explicit result state"
+)
+require_source_text(
+  "${SCALED_IMAGE_HEADER}"
+  "bool IsSuccessful() const"
+  "scaled-image result state must be observable by draw entry points"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "processingScaledOutput ? dst_dy : src_dy"
+  "smooth post-processing must validate destination row coordinates"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "if (isNinePatch)\n        smoothscale = false"
+  "nine-patch drawing must use its dedicated mapped scaling path"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "failed = true"
+  "scaled-image callback failures must remain sticky"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "smoothscale = false;\n#endif"
+  "Android must select mapped scaling before callback setup"
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
@@ -4082,6 +4112,26 @@ require_source_text(
   "scaled-image offset overflow must retain native regression coverage"
 )
 require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "smooth scaling stopped in source row space"
+  "smooth upscaling must retain complete destination-row coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "nine-patch draw entered generic smooth scaling"
+  "nine-patch mapped scaling must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "failed image decode changed draw statistics"
+  "failed decodes must retain draw-accounting regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "callback-reported image error changed draw statistics"
+  "callback errors must retain draw-accounting regression coverage"
+)
+require_source_text(
   "${SCALED_IMAGE_SOURCE}"
   "static_cast<lInt64>(i)"
   "scaled-image coordinate products must widen before evaluation"
@@ -4103,8 +4153,13 @@ forbid_source_text(
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
-  "if ( errors || !smoothscale )"
-  "failed image decodes must not render partial smooth-scale snapshots"
+  "if (errors) {\n        failed = true"
+  "failed image decodes must publish callback failure state"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "if (!smoothscale)\n        return"
+  "mapped image completion must not run smooth post-processing"
 )
 forbid_source_text(
   "${SCALED_IMAGE_HEADER}"
@@ -4239,6 +4294,11 @@ require_source_text(
 foreach(DRAW_BUFFER_SOURCE
     "${COLOR_DRAW_BUFFER_SOURCE}"
     "${GRAY_DRAW_BUFFER_SOURCE}")
+  require_source_text(
+    "${DRAW_BUFFER_SOURCE}"
+    "img->Decode(&drawcb) && drawcb.IsSuccessful()"
+    "draw statistics must require decoder and callback success"
+  )
   require_source_text(
     "${DRAW_BUFFER_SOURCE}"
     "recordDrawnImage(width, height)"

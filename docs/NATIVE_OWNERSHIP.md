@@ -329,10 +329,17 @@ Every decoded row is validated before drawing. Destination row and column
 offsets are widened before addition, clipped before narrowing and indexed from
 the real scanline base, so negative placement never constructs a pointer before
 the backing buffer and extreme offsets cannot overflow signed coordinates.
-Successful entry uses one shared 64-bit accounting path; both the image count
-and aggregate surface avoid signed overflow, and area multiplication widens
-each positive dimension before evaluation. Repeated accumulation saturates at
-the 64-bit maximum instead of wrapping either statistic.
+Smooth post-processing switches row validation from source to destination
+coordinates, stops on the first rejected output row and records allocation or
+callback errors in sticky operation state. Nine-patch images always use their
+dedicated non-uniform coordinate maps; Android likewise selects mapped scaling
+before decode because its completion path does not run the smooth scaler.
+Draw entry points update statistics only when both the source decoder and the
+complete callback/post-process operation succeed. Successful draws use one
+shared 64-bit accounting path; both the image count and aggregate surface avoid
+signed overflow, and area multiplication widens each positive dimension before
+evaluation. Repeated accumulation saturates at the 64-bit maximum instead of
+wrapping either statistic.
 
 The legacy C-style `draw_buf_t` allocation boundary validates bit depth,
 dimensions, row layout and total byte multiplication before allocation. It

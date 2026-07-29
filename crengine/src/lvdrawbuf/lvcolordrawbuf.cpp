@@ -714,8 +714,8 @@ void LVColorDrawBuf::Draw( LVImageSourceRef img, int x, int y, int width, int he
             || _dx <= 0 || _dy <= 0 || !_data)
         return;
     LVImageScaledDrawCallback drawcb( this, img, x, y, width, height, dither, _invertImages, _smoothImages );
-    img->Decode( &drawcb );
-    recordDrawnImage(width, height);
+    if (img->Decode(&drawcb) && drawcb.IsSuccessful())
+        recordDrawnImage(width, height);
 }
 
 /// fills buffer with specified color

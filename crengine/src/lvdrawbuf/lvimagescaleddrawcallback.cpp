@@ -184,7 +184,8 @@ std::vector<int> LVImageScaledDrawCallback::GenNinePatchMap(
 LVImageScaledDrawCallback::LVImageScaledDrawCallback(LVBaseDrawBuf *dstbuf, LVImageSourceRef img, int x, int y, int width, int height, bool dith, bool inv, bool smooth)
     : src(img), dst(dstbuf), dst_x(x), dst_y(y), dst_dx(width),
       dst_dy(height), src_dx(img->GetWidth()), src_dy(img->GetHeight()),
-      dither(dith), invert(inv), smoothscale(smooth), isNinePatch(false)
+      dither(dith), invert(inv), smoothscale(smooth), isNinePatch(false),
+      processingScaledOutput(false), failed(false)
 {
     const CR9PatchInfo * np = img->GetNinePatchInfo();
     lvRect ninePatch;
@@ -192,11 +193,22 @@ LVImageScaledDrawCallback::LVImageScaledDrawCallback(LVBaseDrawBuf *dstbuf, LVIm
         isNinePatch = true;
         ninePatch = np->frame;
     }
+    // Nine-patch scaling is non-uniform and already has dedicated coordinate
+    // maps. A generic smooth resize would scale the border metadata and then
+    // feed destination-sized rows through source-sized maps a second time.
+    if (isNinePatch)
+        smoothscale = false;
     // If smoothscaling was requested, but no scaling was needed, disable the post-processing pass
     if (smoothscale && src_dx == dst_dx && src_dy == dst_dy) {
         smoothscale = false;
         //fprintf( stderr, "Disabling smoothscale because no scaling was needed (%dx%d -> %dx%d)\n", src_dx, src_dy, dst_dx, dst_dy );
     }
+#ifdef ANDROID
+    // qSmoothScaleImage() is not used by the Android completion path.
+    // Select mapped scaling before maps are generated instead of buffering
+    // source rows that would never be drawn.
+    smoothscale = false;
+#endif
     // Smooth scaling needs a complete decoded RGBA snapshot. Keep that
     // allocation bounded and fall back to mapped scaling if it is unavailable.
     if (smoothscale) {
@@ -234,8 +246,10 @@ void LVImageScaledDrawCallback::OnStartDecode(LVImageSource *)
 bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *data)
 {
     //fprintf( stderr, "l_%d ", y );
-    if (!dst || y < 0 || y >= src_dy || !data)
-        return false;
+    const int rowLimit =
+            processingScaledOutput ? dst_dy : src_dy;
+    if (!dst || y < 0 || y >= rowLimit || !data)
+        return reject();
     if (isNinePatch) {
         if (y == 0 || y == src_dy-1) // ignore first and last lines
             return true;
@@ -244,7 +258,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
     if (smoothscale) {
         //fprintf( stderr, "Smoothscale l_%d pass\n", y );
         if (decoded.empty())
-            return false;
+            return reject();
         const std::size_t rowBytes =
                 static_cast<std::size_t>(src_dx) * sizeof(lUInt32);
         memcpy(decoded.data() + static_cast<std::size_t>(y) * rowBytes,
@@ -300,7 +314,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
             lUInt32 * row = reinterpret_cast<lUInt32 *>(
                     dst->GetScanLine(destinationY));
             if (!row)
-                return false;
+                return reject();
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
@@ -350,7 +364,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
             lUInt16 * row = reinterpret_cast<lUInt16 *>(
                     dst->GetScanLine(destinationY));
             if (!row)
-                return false;
+                return reject();
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
@@ -391,7 +405,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
         {
             lUInt8 * row = dst->GetScanLine(destinationY);
             if (!row)
-                return false;
+                return reject();
             for (int x=0; x<dst_dx; x++)
             {
                 int srcx = !xmap.empty() ? xmap[x] : x;
@@ -455,7 +469,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
             //fprintf( stderr, "." );
             lUInt8 * row = dst->GetScanLine(destinationY);
             if (!row)
-                return false;
+                return reject();
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
@@ -512,7 +526,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
             //fprintf( stderr, "." );
             lUInt8 * row = dst->GetScanLine(destinationY);
             if (!row)
-                return false;
+                return reject();
             for (int x=0; x<dst_dx; x++)
             {
                 lUInt32 cl = data[!xmap.empty() ? xmap[x] : x];
@@ -558,7 +572,7 @@ bool LVImageScaledDrawCallback::OnLineDecoded(LVImageSource *, int y, lUInt32 *d
         }
         else
         {
-            return false;
+            return reject();
         }
     }
     return true;
@@ -568,7 +582,11 @@ void LVImageScaledDrawCallback::OnEndDecode(
         LVImageSource *obj, bool errors)
 {
     // If decoding failed or we're not smooth scaling, we're done.
-    if ( errors || !smoothscale )
+    if (errors) {
+        failed = true;
+        return;
+    }
+    if (!smoothscale)
         return;
 #ifndef ANDROID
     // Scale our decoded data...
@@ -581,18 +599,23 @@ void LVImageScaledDrawCallback::OnEndDecode(
         // Hu oh... Scaling failed! Return *without* drawing anything!
         // We skipped map generation, so we can't easily fallback to nearest-neighbor...
         //fprintf( stderr, "Smooth scaling failed :(\n" );
+        failed = true;
         return;
     }
     
     // Process as usual, with a bit of a hack to avoid code duplication...
     smoothscale = false;
+    processingScaledOutput = true;
     for (int y=0; y < dst_dy; y++) {
         lUInt8 * row = scaled.get()
                 + static_cast<std::size_t>(y)
                 * static_cast<std::size_t>(dst_dx)
                 * sizeof(lUInt32);
-        this->OnLineDecoded( obj, y, (lUInt32 *) row );
+        if (!this->OnLineDecoded(
+                    obj, y, reinterpret_cast<lUInt32 *>(row)))
+            break;
     }
+    processingScaledOutput = false;
     
     // This prints the unscaled decoded buffer, for debugging purposes ;).
     /*

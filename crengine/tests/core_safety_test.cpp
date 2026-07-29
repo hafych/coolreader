@@ -5249,12 +5249,15 @@ private:
     int _width;
     int _height;
     int &_decodeCalls;
+    bool _decodeResult;
 
 public:
     DimensionOnlyImageSource(
-            int width, int height, int &decodeCalls)
+            int width, int height, int &decodeCalls,
+            bool decodeResult = false)
         : _width(width), _height(height),
-          _decodeCalls(decodeCalls)
+          _decodeCalls(decodeCalls),
+          _decodeResult(decodeResult)
     {
     }
 
@@ -5264,10 +5267,32 @@ public:
     int GetWidth() const override { return _width; }
     int GetHeight() const override { return _height; }
 
-    bool Decode(LVImageDecoderCallback *) override
+    bool Decode(LVImageDecoderCallback *callback) override
     {
         ++_decodeCalls;
-        return false;
+        if (_decodeResult && callback) {
+            callback->OnStartDecode(this);
+            callback->OnEndDecode(this, false);
+        }
+        return _decodeResult;
+    }
+};
+
+class ReportedErrorImageSource : public LVImageSource {
+public:
+    ldomNode *GetSourceNode() override { return NULL; }
+    LVStream *GetSourceStream() override { return NULL; }
+    void Compact() override {}
+    int GetWidth() const override { return 2; }
+    int GetHeight() const override { return 2; }
+
+    bool Decode(LVImageDecoderCallback *callback) override
+    {
+        if (!callback)
+            return true;
+        callback->OnStartDecode(this);
+        callback->OnEndDecode(this, true);
+        return true;
     }
 };
 
@@ -6180,7 +6205,7 @@ static int testImageSourceOwnership() {
     LVImageSourceRef largeDrawFixture(
             new DimensionOnlyImageSource(
                     largeDrawDimension, largeDrawDimension,
-                    rejectedDrawCalls));
+                    rejectedDrawCalls, true));
     guardedColorDraw.Draw(
             largeDrawFixture, 0, 0,
             largeDrawDimension, largeDrawDimension, false);
@@ -6203,7 +6228,7 @@ static int testImageSourceOwnership() {
             new DimensionOnlyImageSource(
                     maximumDrawDimension,
                     maximumDrawDimension,
-                    saturatedDrawCalls));
+                    saturatedDrawCalls, true));
     LVColorDrawBuf saturatedDraw(2, 2, 32);
     for (int i = 0; i < 5; ++i) {
         saturatedDraw.Draw(
@@ -6582,6 +6607,26 @@ static int testImageSourceOwnership() {
         return fail("nine-patch frame scaling overflowed");
 
     static const lUInt32 scaledSentinel = 0x00123456;
+    LVImageSourceRef smoothNinePatch(
+            new NinePatchFixtureImageSource(true, true));
+    if (!smoothNinePatch->DetectNinePatch())
+        return fail("nine-patch draw fixture was not detected");
+    LVColorDrawBuf mappedNinePatch(8, 8, 32);
+    mappedNinePatch.Clear(scaledSentinel);
+    mappedNinePatch.setSmoothScalingImages(true);
+    mappedNinePatch.Draw(
+            smoothNinePatch, 0, 0, 8, 8, false);
+    if (mappedNinePatch.getDrawnImagesCount() != 1)
+        return fail("nine-patch draw entered generic smooth scaling");
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            if (mappedNinePatch.GetPixel(x, y)
+                    != 0x00ffffff)
+                return fail(
+                        "nine-patch draw entered generic smooth scaling");
+        }
+    }
+
     LVColorDrawBuf validatedRows(2, 2, 32);
     LVImageScaledDrawCallback rowValidator(
             &validatedRows, xpm, 0, 0, 2, 2,
@@ -6594,7 +6639,8 @@ static int testImageSourceOwnership() {
             || rowValidator.OnLineDecoded(
                     xpm.get(), -1, validScaledRow)
             || rowValidator.OnLineDecoded(
-                    xpm.get(), 2, validScaledRow))
+                    xpm.get(), 2, validScaledRow)
+            || rowValidator.IsSuccessful())
         return fail("scaled-image draw accepted an invalid source row");
 
     LVColorDrawBuf clippedColor(2, 2, 32);
@@ -6634,16 +6680,16 @@ static int testImageSourceOwnership() {
         scaled.Clear(scaledSentinel);
         scaled.setSmoothScalingImages(smooth);
         scaled.Draw(xpm, 0, 0, 4, 4, false);
-        bool changed = false;
         for (int y = 0; y < 4; ++y) {
-            for (int x = 0; x < 4; ++x)
-                changed = changed
-                        || scaled.GetPixel(x, y) != scaledSentinel;
+            for (int x = 0; x < 4; ++x) {
+                if (scaled.GetPixel(x, y) == scaledSentinel)
+                    return fail(smooth
+                            ? "smooth scaling stopped in source row space"
+                            : "mapped image scaling did not render its RAII maps");
+            }
         }
-        if (!changed)
-            return fail(smooth
-                    ? "smooth image scaling did not render its RAII snapshot"
-                    : "mapped image scaling did not render its RAII maps");
+        if (scaled.getDrawnImagesCount() != 1)
+            return fail("successful image draw was not accounted");
     }
 
     static const int oversizedSmoothDimension = 16385;
@@ -6722,12 +6768,24 @@ static int testImageSourceOwnership() {
     failedScale.Draw(failingSource, 0, 0, 4, 4, false);
     if (failingDecodeCalls != 2)
         return fail("failed scaling fixture did not enter decode");
+    if (failedScale.getDrawnImagesCount() != 0
+            || failedScale.getDrawnImagesSurface() != 0)
+        return fail("failed image decode changed draw statistics");
     for (int y = 0; y < 4; ++y) {
         for (int x = 0; x < 4; ++x) {
             if (failedScale.GetPixel(x, y) != scaledSentinel)
                 return fail("failed smooth scaling rendered partial data");
         }
     }
+
+    LVColorDrawBuf reportedErrorDraw(2, 2, 32);
+    reportedErrorDraw.Draw(
+            LVImageSourceRef(new ReportedErrorImageSource()),
+            0, 0, 2, 2, false);
+    if (reportedErrorDraw.getDrawnImagesCount() != 0
+            || reportedErrorDraw.getDrawnImagesSurface() != 0)
+        return fail(
+                "callback-reported image error changed draw statistics");
 
     static const char *invalidXpm[] = {
         "2 2 2 1",

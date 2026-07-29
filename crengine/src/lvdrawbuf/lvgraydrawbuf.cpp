@@ -452,8 +452,8 @@ void LVGrayDrawBuf::Draw( LVImageSourceRef img, int x, int y, int width, int hei
             || _dx <= 0 || _dy <= 0 || !_data)
         return;
     LVImageScaledDrawCallback drawcb( this, img, x, y, width, height, _ditherImages, _invertImages, _smoothImages );
-    img->Decode( &drawcb );
-    recordDrawnImage(width, height);
+    if (img->Decode(&drawcb) && drawcb.IsSuccessful())
+        recordDrawnImage(width, height);
 }
 
 

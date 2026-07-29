@@ -161,7 +161,9 @@ DRM или ограничений доступа, подбор/получени�
   downstream cancellation,
   scoped stream-image decoder factory candidates, scaled-image
   overflow-safe maps/clipping, bounded RGBA snapshots with mapped fallback,
-  guarded color/gray image draw entry points and
+  complete smooth-output/nine-patch lifecycle,
+  guarded color/gray image draw entry
+  points with success-only accounting and
   saturating 64-bit render statistics,
   nine-patch metadata cache and color-transform
   workspaces/cancellation/64-bit statistics, WOL TOC/image/LZSS buffers and

@@ -45,6 +45,14 @@ private:
     bool smoothscale;
     std::vector<lUInt8> decoded;
     bool isNinePatch;
+    bool processingScaledOutput;
+    bool failed;
+
+    bool reject()
+    {
+        failed = true;
+        return false;
+    }
 public:
     static std::vector<int> GenMap( int src_len, int dst_len );
     static std::vector<int> GenNinePatchMap( int src_len, int dst_len, int frame1, int frame2);
@@ -53,6 +61,7 @@ public:
     virtual void OnStartDecode( LVImageSource * );
     virtual bool OnLineDecoded( LVImageSource *, int y, lUInt32 * data );
     virtual void OnEndDecode( LVImageSource * obj, bool );
+    bool IsSuccessful() const { return !failed; }
 };
 
 #endif  // __LVIMAGESCALEDDRAWCALLBACK_H_INCLUDED__
