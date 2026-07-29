@@ -8129,6 +8129,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closeCurrentDocument(true);
 	}
 
+	public boolean cancelPendingDocumentLoad() {
+		BackgroundThread.ensureGUI();
+		stopTts();
+		boolean cancelled =
+				documentLoadLifecycle.cancelPending();
+		if (cancelled)
+			closeCurrentDocument(false);
+		return cancelled;
+	}
+
 	private void closeCurrentDocument(boolean cancelDocumentLoad) {
 		BackgroundThread.ensureGUI();
 		log.i("ReaderView.close() is called");

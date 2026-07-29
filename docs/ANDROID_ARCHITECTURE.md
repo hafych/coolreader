@@ -130,10 +130,12 @@ across background and GUI queues. A newer selection invalidates native work
 immediately instead of waiting for SAF preprocessing to reach the reader.
 Browser/root navigation cancels a still-pending open, but preserves the token
 after the reader has atomically marked the document published so its exact
-stream reconciliation can finish off-screen. Reader close and Activity
-destruction reject every phase. An unaccepted or replaced descriptor is closed
-by the layer that still owns it, including cached descriptors produced after
-teardown.
+stream reconciliation can finish off-screen. When cancellation claims an
+unpublished request, `ReaderView` queues a serialized native/cache close after
+any parse already in flight, so that parse cannot leave an ownerless document
+open. Reader close and Activity destruction reject every phase. An unaccepted
+or replaced descriptor is closed by the layer that still owns it, including
+cached descriptors produced after teardown.
 Adding or reselecting a library root is owned by an atomic
 `LibraryRootRequestState`. Pending identity is stored separately from the
 nullable previous URI, so an add request survives Bundle restore, an
@@ -598,8 +600,9 @@ and detached at the serialized Engine boundary after native close and before
 the next `LoadDocumentTask`. Late GUI success or failure releases only those
 four captured identities with one-shot deduplication; it never nulls or
 recycles a replacement book's shared cache. Close also queues this native
-boundary for an unpublished in-flight load, while leaving image-viewer mode
-during replacement does not submit a new draw request.
+boundary when browser/root navigation claims an unpublished in-flight load,
+while leaving image-viewer mode during replacement does not submit a new draw
+request.
 Autoscroll has a separate synchronized `AutoScrollSessionState` and cancelable
 GUI scheduler. A session is renderable only after its exact owner completes
 background initialization; initialization temporarily suppresses drawing and

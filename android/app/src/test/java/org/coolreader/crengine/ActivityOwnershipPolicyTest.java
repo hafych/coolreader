@@ -688,6 +688,14 @@ public class ActivityOwnershipPolicyTest {
 				readerDocumentLoads.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				readerDocumentLoads.getModifiers()));
+		Method cancelPendingDocumentLoad =
+				ReaderView.class.getDeclaredMethod(
+						"cancelPendingDocumentLoad");
+		assertTrue(Modifier.isPublic(
+				cancelPendingDocumentLoad.getModifiers()));
+		assertEquals(
+				boolean.class,
+				cancelPendingDocumentLoad.getReturnType());
 		assertSynchronizedMethod(
 				DocumentLoadLifecycle.class,
 				"interaction");

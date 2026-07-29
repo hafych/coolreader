@@ -351,8 +351,10 @@ DRM или ограничений доступа, подбор/получени�
   history lookup, background/GUI handoff, native load и memory-stream
   reconciliation используют один exact token. Новый выбор, close и destroy
   сразу инвалидируют всю старую цепочку; переход в browser/root отменяет
-  pending open, но не обрывает reconciliation уже опубликованной книги. Stale
-  SAF result не открывает Reader и закрывает ещё не переданный descriptor.
+  pending open и по успешному claim ставит после уже запущенного parse
+  сериализованное native/cache-закрытие, но не обрывает reconciliation уже
+  опубликованной книги. Stale SAF result не открывает Reader и закрывает ещё не
+  переданный descriptor.
   Add/reselect library root теперь принадлежит атомарному
   `LibraryRootRequestState`: pending identity хранится отдельно от nullable
   previous URI, поэтому add-request корректно переживает Bundle restore,

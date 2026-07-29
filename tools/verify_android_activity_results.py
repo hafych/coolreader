@@ -2472,7 +2472,9 @@ def main() -> None:
         "beginPageCacheClose()",
         "private void publishSerializedPageCacheClose(",
         "private void finishPageCacheClose(",
+        "public boolean cancelPendingDocumentLoad()",
         "documentLoadLifecycle.replace()",
+        "documentLoadLifecycle.cancelPending()",
         "documentLoadLifecycle.isActive(loadOwner)",
         "documentLoadLifecycle.complete(loadOwner)",
         "documentLoadLifecycle.cancel()",
@@ -2678,6 +2680,33 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} does not rotate the document "
                 "interaction before cancelling its render")
+
+    cancel_pending_start = reader_view_text.find(
+        "\n\tpublic boolean cancelPendingDocumentLoad()")
+    cancel_pending_end = reader_view_text.find(
+        "\n\tprivate void closeCurrentDocument(",
+        cancel_pending_start)
+    if cancel_pending_start < 0 or cancel_pending_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits pending-load close ownership")
+    else:
+        cancel_pending_text = reader_view_text[
+            cancel_pending_start:cancel_pending_end
+        ]
+        stop_tts_index = cancel_pending_text.find("stopTts()")
+        cancel_index = cancel_pending_text.find(
+            "documentLoadLifecycle.cancelPending()")
+        close_index = cancel_pending_text.find(
+            "closeCurrentDocument(false)")
+        return_index = cancel_pending_text.find("return cancelled")
+        if not (
+                stop_tts_index >= 0
+                and cancel_index > stop_tts_index
+                and close_index > cancel_index
+                and return_index > close_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not stop TTS before "
+                "claiming a pending load and queueing its close boundary")
 
     close_document_start = reader_view_text.find(
         "\n\tprivate void closeCurrentDocument(")
@@ -2938,6 +2967,11 @@ def main() -> None:
             f"{relative(READER_VIEW)} bypasses TTS-aware document "
             "replacement")
     if reader_view_text.count(
+            "documentLoadLifecycle.cancelPending()") != 1:
+        violations.append(
+            f"{relative(READER_VIEW)} bypasses owned pending-load "
+            "cancellation")
+    if reader_view_text.count(
             "readerSurfaceState.isClosed()") < 13:
         violations.append(
             f"{relative(READER_VIEW)} does not gate every surface/input "
@@ -3172,6 +3206,7 @@ def main() -> None:
         "ReaderPageCacheClose.class",
         '"initialCurrent"',
         '"publishSerialized"',
+        '"cancelPendingDocumentLoad"',
         '"isDocumentInteractionCurrent"',
         '"isOwnedDocumentLoadCurrent"',
         "SearchDlg.SearchHandler.class",
@@ -5044,6 +5079,7 @@ def main() -> None:
         "mReaderView.stopTtsForDocumentChange()",
         "private DocumentLoadLifecycle.Request replaceDocumentLoad()",
         "private void cancelPendingDocumentLoad()",
+        "mReaderView.cancelPendingDocumentLoad()",
         "stopTtsForDocumentChange();",
         "mReaderView.stopTtsForDocumentChange();\n"
         "\t\t\tif (!CLOSE_BOOK_ON_STOP)",
@@ -5062,6 +5098,30 @@ def main() -> None:
         violations.append(
             f"{relative(COOL_READER)} bypasses TTS-aware pending-open "
             "cancellation")
+    cancel_pending_start = cool_reader_text.find(
+        "\n\tprivate void cancelPendingDocumentLoad()")
+    cancel_pending_end = cool_reader_text.find(
+        "\n\tpublic void showRootWindow()", cancel_pending_start)
+    if cancel_pending_start < 0 or cancel_pending_end < 0:
+        violations.append(
+            f"{relative(COOL_READER)} omits pending-load cancellation")
+    else:
+        cancel_pending_text = cool_reader_text[
+            cancel_pending_start:cancel_pending_end
+        ]
+        reader_cancel_index = cancel_pending_text.find(
+            "mReaderView.cancelPendingDocumentLoad()")
+        fallback_stop_index = cancel_pending_text.find(
+            "stopTtsForDocumentChange()")
+        fallback_cancel_index = cancel_pending_text.find(
+            "documentLoadLifecycle.cancelPending()")
+        if not (
+                reader_cancel_index >= 0
+                and fallback_stop_index > reader_cancel_index
+                and fallback_cancel_index > fallback_stop_index):
+            violations.append(
+                f"{relative(COOL_READER)} does not route pending-load "
+                "cancellation through the reader close owner")
     find_pattern(
         COOL_READER,
         cool_reader_text,

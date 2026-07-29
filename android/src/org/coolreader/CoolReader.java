@@ -1426,6 +1426,10 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void cancelPendingDocumentLoad() {
+		if (mReaderView != null) {
+			mReaderView.cancelPendingDocumentLoad();
+			return;
+		}
 		stopTtsForDocumentChange();
 		documentLoadLifecycle.cancelPending();
 	}
