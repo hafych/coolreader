@@ -923,11 +923,13 @@ in an exclusive owner with the scaler's platform-specific deleter:
 `_aligned_free` for MinGW and `free` elsewhere. The glyph slot borrows that
 buffer only while copying the smaller BGRA image back into its existing
 storage. Ratio, width, pitch and copy-byte arithmetic is validated before
-scaling, and hidden upscaling is rejected. Bitmap layout and metrics publish
-only after the pixel transform succeeds, so a rejected scaler workspace leaves
-the entire slot unchanged. Native coverage repeats a synthetic 4-by-4 to 2-by-2
+scaling, and hidden upscaling is rejected. All signed bitmap-bearing, metric
+and advance candidates also check multiplication bounds before the pixel copy.
+Bitmap layout and metrics publish only after every candidate and the pixel
+transform succeed, so a rejected scaler workspace or metric overflow leaves the
+entire slot unchanged. Native coverage repeats a synthetic 4-by-4 to 2-by-2
 scale, checks both the copied solid-color pixels and every adjusted metric, and
-verifies transactional rollback under sanitizers.
+verifies both rollback paths under sanitizers.
 
 The legacy bitmap-font loader treats its file and complete malloc-backed image
 as scoped candidates. It reads bytes with a byte-count contract, validates the

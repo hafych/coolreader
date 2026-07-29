@@ -11879,6 +11879,21 @@ require_source_text(
 )
 require_source_text(
   "${FREETYPE_FACE_SOURCE}"
+  "scaleSignedGlyphMetric"
+  "FreeType color glyph metrics must use checked signed arithmetic"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "std::numeric_limits<T>::max()"
+  "FreeType color glyph metric multiplication must check its upper bound"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "std::numeric_limits<T>::min()"
+  "FreeType color glyph metric multiplication must check its lower bound"
+)
+require_source_text(
+  "${FREETYPE_FACE_SOURCE}"
   "if (!scaled_bmp)\n                    return false"
   "FreeType color glyph failure must precede metadata publication"
 )
@@ -11886,6 +11901,11 @@ forbid_source_text(
   "${FREETYPE_FACE_SOURCE}"
   "new_bmp_pitch * new_h"
   "FreeType color glyph copies must not use signed size arithmetic"
+)
+forbid_source_text(
+  "${FREETYPE_FACE_SOURCE}"
+  "scale_mul*slot->"
+  "FreeType color glyph publication must not use signed metric multiplication"
 )
 require_source_text(
   "${FREETYPE_FACE_HEADER}"

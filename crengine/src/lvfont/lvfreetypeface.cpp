@@ -402,6 +402,25 @@ struct SmoothScaledGlyphBufferDeleter {
     }
 };
 
+template <typename T>
+bool scaleSignedGlyphMetric(
+        T value, int scaleMul, int scaleDiv, T &scaled)
+{
+    const T multiplier = static_cast<T>(scaleMul);
+    if ((value > 0
+                && value
+                        > std::numeric_limits<T>::max()
+                                / multiplier)
+            || (value < 0
+                && value
+                        < std::numeric_limits<T>::min()
+                                / multiplier))
+        return false;
+    scaled = static_cast<T>(
+            value * multiplier / static_cast<T>(scaleDiv));
+    return true;
+}
+
 }
 
 static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scale_div, bool onlyMetrics) {
@@ -445,6 +464,55 @@ static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scal
             return false;
         const std::size_t copyBytes =
                 unsignedPitch * static_cast<std::size_t>(new_h);
+        int bitmapLeft = 0;
+        int bitmapTop = 0;
+        FT_Pos metricHeight = 0;
+        FT_Pos metricWidth = 0;
+        FT_Pos horiAdvance = 0;
+        FT_Pos vertAdvance = 0;
+        FT_Pos horiBearingX = 0;
+        FT_Pos horiBearingY = 0;
+        FT_Pos vertBearingX = 0;
+        FT_Pos vertBearingY = 0;
+        FT_Pos advanceX = 0;
+        FT_Pos advanceY = 0;
+        if (!scaleSignedGlyphMetric(
+                    slot->bitmap_left,
+                    scale_mul, scale_div, bitmapLeft)
+                || !scaleSignedGlyphMetric(
+                        slot->bitmap_top,
+                        scale_mul, scale_div, bitmapTop)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.height,
+                        scale_mul, scale_div, metricHeight)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.width,
+                        scale_mul, scale_div, metricWidth)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.horiAdvance,
+                        scale_mul, scale_div, horiAdvance)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.vertAdvance,
+                        scale_mul, scale_div, vertAdvance)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.horiBearingX,
+                        scale_mul, scale_div, horiBearingX)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.horiBearingY,
+                        scale_mul, scale_div, horiBearingY)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.vertBearingX,
+                        scale_mul, scale_div, vertBearingX)
+                || !scaleSignedGlyphMetric(
+                        slot->metrics.vertBearingY,
+                        scale_mul, scale_div, vertBearingY)
+                || !scaleSignedGlyphMetric(
+                        slot->advance.x,
+                        scale_mul, scale_div, advanceX)
+                || !scaleSignedGlyphMetric(
+                        slot->advance.y,
+                        scale_mul, scale_div, advanceY))
+            return false;
         if (/*new_w < slot->bitmap.width &&*/ new_h < slot->bitmap.rows) {
             // need to downscale
             if (!onlyMetrics
@@ -475,18 +543,18 @@ static bool downScaleColorGlyphBitmap(FT_GlyphSlot slot, int scale_mul, int scal
         slot->bitmap.pitch = slot->bitmap.pitch > 0 ? new_bmp_pitch : 0;
         slot->bitmap.width = slot->bitmap.width > 0 ? new_w : 0;
         slot->bitmap.rows = slot->bitmap.rows > 0 ? new_h : 0;
-        slot->bitmap_left = scale_mul*slot->bitmap_left/scale_div;
-        slot->bitmap_top = scale_mul*slot->bitmap_top/scale_div;
-        slot->metrics.height = scale_mul*slot->metrics.height/scale_div;
-        slot->metrics.width = scale_mul*slot->metrics.width/scale_div;
-        slot->metrics.horiAdvance = scale_mul*slot->metrics.horiAdvance/scale_div;
-        slot->metrics.vertAdvance = scale_mul*slot->metrics.vertAdvance/scale_div;
-        slot->metrics.horiBearingX = scale_mul*slot->metrics.horiBearingX/scale_div;
-        slot->metrics.horiBearingY = scale_mul*slot->metrics.horiBearingY/scale_div;
-        slot->metrics.vertBearingX = scale_mul*slot->metrics.vertBearingX/scale_div;
-        slot->metrics.vertBearingY = scale_mul*slot->metrics.vertBearingY/scale_div;
-        slot->advance.x = scale_mul*slot->advance.x/scale_div;
-        slot->advance.y = scale_mul*slot->advance.y/scale_div;
+        slot->bitmap_left = bitmapLeft;
+        slot->bitmap_top = bitmapTop;
+        slot->metrics.height = metricHeight;
+        slot->metrics.width = metricWidth;
+        slot->metrics.horiAdvance = horiAdvance;
+        slot->metrics.vertAdvance = vertAdvance;
+        slot->metrics.horiBearingX = horiBearingX;
+        slot->metrics.horiBearingY = horiBearingY;
+        slot->metrics.vertBearingX = vertBearingX;
+        slot->metrics.vertBearingY = vertBearingY;
+        slot->advance.x = advanceX;
+        slot->advance.y = advanceY;
     }
     return true;
 }
@@ -580,6 +648,59 @@ bool LVRunFreeTypeColorGlyphScaleOwnershipRegression()
                     NULL, 1, 2, false)
             || downScaleColorGlyphBitmap(
                     &rejected, 1, 0, false)) {
+        return false;
+    }
+
+    std::array<lUInt8, 64> metricPixels;
+    metricPixels.fill(0x5a);
+    const std::array<lUInt8, 64> originalMetricPixels =
+            metricPixels;
+    FT_GlyphSlotRec metricOverflow = {};
+    metricOverflow.bitmap.pixel_mode = FT_PIXEL_MODE_BGRA;
+    metricOverflow.bitmap.width = 4;
+    metricOverflow.bitmap.rows = 4;
+    metricOverflow.bitmap.pitch = 16;
+    metricOverflow.bitmap.buffer = metricPixels.data();
+    metricOverflow.bitmap_left = 4;
+    metricOverflow.bitmap_top = 6;
+    metricOverflow.metrics.width =
+            std::numeric_limits<FT_Pos>::max();
+    metricOverflow.metrics.height = 768;
+    metricOverflow.advance.x = 1024;
+    metricOverflow.advance.y = 1280;
+    if (downScaleColorGlyphBitmap(
+                &metricOverflow, 2, 3, false)
+            || metricPixels != originalMetricPixels
+            || metricOverflow.bitmap.width != 4
+            || metricOverflow.bitmap.rows != 4
+            || metricOverflow.bitmap.pitch != 16
+            || metricOverflow.bitmap_left != 4
+            || metricOverflow.bitmap_top != 6
+            || metricOverflow.metrics.width
+                    != std::numeric_limits<FT_Pos>::max()
+            || metricOverflow.metrics.height != 768
+            || metricOverflow.advance.x != 1024
+            || metricOverflow.advance.y != 1280) {
+        return false;
+    }
+
+    metricOverflow.metrics.width = 640;
+    metricOverflow.metrics.horiBearingX =
+            std::numeric_limits<FT_Pos>::min();
+    if (downScaleColorGlyphBitmap(
+                &metricOverflow, 2, 3, false)
+            || metricPixels != originalMetricPixels
+            || metricOverflow.bitmap.width != 4
+            || metricOverflow.bitmap.rows != 4
+            || metricOverflow.bitmap.pitch != 16
+            || metricOverflow.bitmap_left != 4
+            || metricOverflow.bitmap_top != 6
+            || metricOverflow.metrics.width != 640
+            || metricOverflow.metrics.height != 768
+            || metricOverflow.metrics.horiBearingX
+                    != std::numeric_limits<FT_Pos>::min()
+            || metricOverflow.advance.x != 1024
+            || metricOverflow.advance.y != 1280) {
         return false;
     }
     return true;
