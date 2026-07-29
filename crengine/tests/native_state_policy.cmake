@@ -7173,6 +7173,21 @@ forbid_source_text(
   "help document implementations must not retain legacy path widths"
 )
 forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "lString16 _dataDir;"
+  "main windows must not retain unused legacy data-directory state"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_HEADER}"
+  "lString16 getHelpFile"
+  "main windows must not expose an unused legacy help-path accessor"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "V3DocViewWin::getHelpFile"
+  "main windows must not implement an unused legacy help-path accessor"
+)
+forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "getAccTables().get(lString16"
   "main-window accelerator table lookups must use the current string width"

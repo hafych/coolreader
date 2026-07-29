@@ -115,7 +115,6 @@ class V3DocViewWin : public CRViewDialog, public LVDocViewCallback
 protected:
     CRPropRef _props;
     CRPropRef _newProps;
-    lString16 _dataDir;
     lString32 _settingsFileName;
     lString32 _historyFileName;
     lString8  _css;
@@ -179,7 +178,6 @@ public:
     {
         return setHelpFile(Utf16ToUnicode(filename));
     }
-	lString16 getHelpFile( );
 	/// on starting file loading
 	void OnLoadFileStart( lString32 filename ) override;
 	/// format detection finished

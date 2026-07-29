@@ -72,8 +72,12 @@
 DECL_DEF_CR_FONT_SIZES;
 
 
-V3DocViewWin::V3DocViewWin( CRGUIWindowManager * wm, lString16 dataDir )
-: CRViewDialog ( wm, lString16::empty_str, lString8::empty_str, lvRect(), false, false ), _dataDir(dataDir), _loadFileStart(0)
+V3DocViewWin::V3DocViewWin(
+        CRGUIWindowManager * wm, lString16 /* dataDir */)
+: CRViewDialog(
+        wm, lString16::empty_str, lString8::empty_str,
+        lvRect(), false, false),
+  _loadFileStart(0)
 {
     CRLog::trace("V3DocViewWin()");
     LVArray<int> sizes( cr_font_sizes, sizeof(cr_font_sizes)/sizeof(int) );
@@ -83,13 +87,6 @@ V3DocViewWin::V3DocViewWin( CRGUIWindowManager * wm, lString16 dataDir )
     _docview->setCallback( this );
     _props = LVCreatePropsContainer();
     _newProps = _props;
-    // TODO: move skin outside
-    //lString16 skinfile = _dataDir;
-    //LVAppendPathDelimiter( skinfile );
-    //skinfile << L"skin";
-    //lString8 s8 = UnicodeToLocal( skinfile );
-    //CRLog::debug("Skin file is %s", s8.c_str() );
-    //loadSkin( skinfile );
 
 #define BATTERY_HEADER \
         "36 19 5 1", \
@@ -785,11 +782,6 @@ bool V3DocViewWin::setHelpFile( lString32 filename )
 		return true;
 	}
 	return false;
-}
-
-lString16 V3DocViewWin::getHelpFile( )
-{
-	return UnicodeToUtf16(_helpFile);
 }
 
 void V3DocViewWin::openRecentBook( int index )
