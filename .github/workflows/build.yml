@@ -108,7 +108,7 @@ jobs:
       - name: Install Clang and native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang cmake pkg-config zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libzstd-dev libutf8proc-dev
+          sudo apt-get install -y build-essential clang cmake pkg-config qtbase5-dev zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libunibreak-dev libzstd-dev libutf8proc-dev
 
       - name: Configure Clang warning build
         run: cmake -S . -B build-clang -DGUI=FB2PROPS -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DUSE_CLANG_WARNING_GATE=ON
@@ -118,6 +118,12 @@ jobs:
 
       - name: Run native smoke tests
         run: ctest --test-dir build-clang --output-on-failure
+
+      - name: Configure legacy Qt frontend warning build
+        run: cmake -S . -B build-clang-crgui -DGUI=CRGUI_QT -DDEVICE_NAME=all -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DUSE_CLANG_WARNING_GATE=ON
+
+      - name: Build legacy Qt frontend with selected diagnostics as errors
+        run: cmake --build build-clang-crgui --target cr3 --parallel
 
   build-android:
     name: Build Android APK

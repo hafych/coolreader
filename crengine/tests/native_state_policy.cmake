@@ -5,6 +5,7 @@ endif()
 file(READ "${SOURCE_ROOT}/CMakeLists.txt" ROOT_CMAKE_SOURCE)
 file(READ "${SOURCE_ROOT}/tools/KWWidgetsInternationalizationMacros.cmake"
   GETTEXT_MACROS_SOURCE)
+file(READ "${SOURCE_ROOT}/.github/workflows/build.yml" BUILD_WORKFLOW_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crsetup.h" CR_SETUP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtypes.h" LV_TYPES_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
@@ -273,6 +274,21 @@ forbid_source_text(
   "${TINYDICT_SOURCE}"
   "unsigned txtpos;"
   "dictionary streams must not retain unused private state"
+)
+require_source_text(
+  "${BUILD_WORKFLOW_SOURCE}"
+  "qtbase5-dev"
+  "the Clang warning job must install its legacy Qt compile contract"
+)
+require_source_text(
+  "${BUILD_WORKFLOW_SOURCE}"
+  "-DGUI=CRGUI_QT"
+  "the Clang warning job must configure the legacy Qt frontend"
+)
+require_source_text(
+  "${BUILD_WORKFLOW_SOURCE}"
+  "cmake --build build-clang-crgui --target cr3 --parallel"
+  "the Clang warning job must compile the legacy Qt frontend target"
 )
 
 # --- value-owned rectangle clipping ---
