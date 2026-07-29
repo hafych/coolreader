@@ -6861,6 +6861,11 @@ forbid_source_text(
   "exedir +"
   "Win32 resource paths must not regress to the legacy path variable"
 )
+forbid_source_text(
+  "${WIN_GUI_SOURCE}"
+  "sprintf("
+  "Win32 GUI error formatting must remain bounded"
+)
 require_source_text(
   "${JINKE_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("

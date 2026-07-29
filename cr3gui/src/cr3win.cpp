@@ -462,14 +462,21 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
     if (!fontMan->GetFontCount())
     {
-        //error
-        char str[1000];
 #if (USE_FREETYPE==1)
-        sprintf(str, "Cannot open font file(s) fonts/*.ttf \nCannot work without font\nPlace some TTF files to font\\ directory" );
+        const char *message =
+                "Cannot open font file(s) fonts/*.ttf\n"
+                "Cannot work without font\n"
+                "Place some TTF files to font\\ directory";
 #else
-        sprintf(str, "Cannot open font file(s) font#.lbf \nCannot work without font\nUse FontConv utility to generate .lbf fonts from TTF" );
+        const char *message =
+                "Cannot open font file(s) font#.lbf\n"
+                "Cannot work without font\n"
+                "Use FontConv utility to generate .lbf fonts from TTF";
 #endif
-        MessageBoxA( NULL, str, "CR Engine :: Fb2Test -- fatal error!", MB_OK);
+        MessageBoxA(
+                NULL, message,
+                "CR Engine :: Fb2Test -- fatal error!",
+                MB_OK);
         return 1;
     }
 
@@ -524,9 +531,13 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
         winman.activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument( LocalToUnicode( cmdline )) ) {
-            char str[100];
-            sprintf(str, "Cannot open document file %s", cmdline.c_str());
-            MessageBoxA( NULL, str, "CR Engine :: Fb2Test -- fatal error!", MB_OK);
+            lString8 message(
+                    "Cannot open document file ");
+            message << cmdline;
+            MessageBoxA(
+                    NULL, message.c_str(),
+                    "CR Engine :: Fb2Test -- fatal error!",
+                    MB_OK);
             return 1;
         } else {
             winman.runEventLoop();
