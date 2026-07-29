@@ -5244,6 +5244,33 @@ public:
     }
 };
 
+class DimensionOnlyImageSource : public LVImageSource {
+private:
+    int _width;
+    int _height;
+    int &_decodeCalls;
+
+public:
+    DimensionOnlyImageSource(
+            int width, int height, int &decodeCalls)
+        : _width(width), _height(height),
+          _decodeCalls(decodeCalls)
+    {
+    }
+
+    ldomNode *GetSourceNode() override { return NULL; }
+    LVStream *GetSourceStream() override { return NULL; }
+    void Compact() override {}
+    int GetWidth() const override { return _width; }
+    int GetHeight() const override { return _height; }
+
+    bool Decode(LVImageDecoderCallback *) override
+    {
+        ++_decodeCalls;
+        return false;
+    }
+};
+
 class NinePatchFixtureImageSource : public LVImageSource {
 private:
     bool _markers;
@@ -6306,10 +6333,16 @@ static int testImageSourceOwnership() {
     for (int bpp : unpackedBpps) {
         LVImageSourceRef unpacked =
                 LVCreateUnpackedImageSource(xpm, 1024, bpp);
-        CountingImageDecodeCallback unpackedCallback;
+        RejectingImageDecodeCallback rejectedUnpackedCallback;
         if (unpacked.isNull()
                 || unpacked.get() == xpm.get()
-                || !unpacked->Decode(&unpackedCallback)
+                || unpacked->Decode(&rejectedUnpackedCallback)
+                || rejectedUnpackedCallback.starts != 1
+                || rejectedUnpackedCallback.lines != 1
+                || rejectedUnpackedCallback.errorEnds != 1)
+            return fail("unpacked image ignored callback cancellation");
+        CountingImageDecodeCallback unpackedCallback;
+        if (!unpacked->Decode(&unpackedCallback)
                 || !unpacked->Decode(&unpackedCallback))
             return fail("unpacked image source could not reuse its buffers");
         if (unpackedCallback.starts != 2
@@ -6317,6 +6350,24 @@ static int testImageSourceOwnership() {
                 || unpackedCallback.ends != 2)
             return fail("unpacked image callback lifecycle is incomplete");
     }
+
+    if (LVCreateUnpackedImageSource(
+                xpm, 1024, 12).get() != xpm.get()
+            || LVCreateUnpackedImageSource(
+                    xpm, -1, 16).get() != xpm.get())
+        return fail("unpacked image factory accepted an invalid contract");
+    int oversizedUnpackCalls = 0;
+    LVImageSourceRef oversizedUnpackSource(
+            new DimensionOnlyImageSource(
+                    std::numeric_limits<int>::max(),
+                    std::numeric_limits<int>::max(),
+                    oversizedUnpackCalls));
+    if (LVCreateUnpackedImageSource(
+                oversizedUnpackSource,
+                std::numeric_limits<int>::max(),
+                32).get() != oversizedUnpackSource.get()
+            || oversizedUnpackCalls != 0)
+        return fail("unpacked image size arithmetic overflowed");
 
     int failingDecodeCalls = 0;
     LVImageSourceRef failingSource(

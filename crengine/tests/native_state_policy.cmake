@@ -3792,6 +3792,21 @@ require_source_text(
 )
 require_source_text(
   "${IMAGE_FACTORY_SOURCE}"
+  "(bpp != 8 && bpp != 16 && bpp != 32)"
+  "unpacked image factory must enforce its public pixel-format contract"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "std::numeric_limits<std::size_t>::max()"
+  "unpacked image factory must bound pixel-count multiplication"
+)
+require_source_text(
+  "${UNPACKED_IMAGE_SOURCE}"
+  "callback->OnEndDecode(this, true)"
+  "unpacked image cancellation must close its callback lifecycle"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
   "std::unique_ptr<LVUnpackedImgSource> img"
   "unpacked image candidates must have explicit ownership"
 )
@@ -3829,6 +3844,26 @@ forbid_source_text(
   "${IMAGE_FACTORY_SOURCE}"
   "LVUnpackedImgSource * img"
   "unpacked image construction must not use implicit raw ownership"
+)
+forbid_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "int sz = dx*dy"
+  "unpacked image byte counts must not use unchecked signed arithmetic"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "unpacked image ignored callback cancellation"
+  "unpacked image cancellation must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "unpacked image size arithmetic overflowed"
+  "unpacked image size bounds must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "unpacked image factory accepted an invalid contract"
+  "unpacked image format validation must retain native regression coverage"
 )
 require_source_text(
   "${SCALED_IMAGE_HEADER}"

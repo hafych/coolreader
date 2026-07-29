@@ -266,11 +266,16 @@ workspace and borrowed callback view are cleared.
 
 `LVUnpackedImgSource` owns grayscale, RGB565 and 32-bit pixel snapshots through
 separate `std::vector` buffers and uses a scoped vector for conversion rows.
-Only the buffer selected by the requested bit depth is populated. Automatic
-teardown also closes the legacy 16-bit leak caused by checking the unrelated
-32-bit pointer before freeing RGB565 storage. The factory owns its candidate
-through `std::unique_ptr`; a failed source decode releases the partial pixel
-snapshot and returns the original source instead of publishing invalid data.
+Only the buffer selected by a validated 8/16/32-bit format is populated.
+Pixel and byte counts use checked unsigned multiplication before allocation,
+and an invalid format, dimension, limit or oversized source returns the
+original image without entering decode. Automatic teardown also closes the
+legacy 16-bit leak caused by checking the unrelated 32-bit pointer before
+freeing RGB565 storage. The factory owns its candidate through
+`std::unique_ptr`; a failed source decode releases the partial pixel snapshot
+and returns the original source instead of publishing invalid data. Repeated
+decode stops at the first downstream cancellation, reports an error completion
+and remains reusable.
 
 `LVAlphaTransformImgSource` keeps its downstream callback as an explicit
 synchronous borrow. The borrow is initialized and cleared around every

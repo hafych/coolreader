@@ -45,7 +45,44 @@
 #include "crlog.h"
 #include "parsebudget.h"
 
+#include <cstddef>
+#include <limits>
 #include <memory>
+
+namespace {
+
+bool getUnpackedByteCount(
+        const LVImageSourceRef &source, int maxSize, int bpp,
+        std::size_t &byteCount)
+{
+    if (source.isNull() || maxSize < 0
+            || (bpp != 8 && bpp != 16 && bpp != 32))
+        return false;
+    const int width = source->GetWidth();
+    const int height = source->GetHeight();
+    if (width <= 0 || height <= 0)
+        return false;
+    const std::size_t unsignedWidth =
+            static_cast<std::size_t>(width);
+    const std::size_t unsignedHeight =
+            static_cast<std::size_t>(height);
+    if (unsignedWidth
+            > std::numeric_limits<std::size_t>::max()
+                    / unsignedHeight)
+        return false;
+    const std::size_t pixelCount =
+            unsignedWidth * unsignedHeight;
+    const std::size_t bytesPerPixel =
+            static_cast<std::size_t>(bpp / 8);
+    if (pixelCount
+            > static_cast<std::size_t>(maxSize)
+                    / bytesPerPixel)
+        return false;
+    byteCount = pixelCount * bytesPerPixel;
+    return true;
+}
+
+} // namespace
 
 
 LVImageSourceRef LVCreateXPMImageSource( const char * data[] )
@@ -189,16 +226,17 @@ LVImageSourceRef LVCreateAlphaTransformImageSource(LVImageSourceRef srcImage, in
 /// creates decoded memory copy of image, if it's unpacked size is less than maxSize
 LVImageSourceRef LVCreateUnpackedImageSource( LVImageSourceRef srcImage, int maxSize, bool gray )
 {
-    if ( srcImage.isNull() )
+    const int bpp = gray ? 8 : 32;
+    std::size_t byteCount = 0;
+    if (!getUnpackedByteCount(
+                srcImage, maxSize, bpp, byteCount))
         return srcImage;
-    int dx = srcImage->GetWidth();
-    int dy = srcImage->GetHeight();
-    int sz = dx*dy * (gray?1:4);
-    if ( sz>maxSize )
-        return srcImage;
-    CRLog::trace("Unpacking image %dx%d (%d)", dx, dy, sz);
+    CRLog::trace(
+            "Unpacking image %dx%d (%d)",
+            srcImage->GetWidth(), srcImage->GetHeight(),
+            static_cast<int>(byteCount));
     std::unique_ptr<LVUnpackedImgSource> img(
-            new LVUnpackedImgSource(srcImage, gray ? 8 : 32));
+            new LVUnpackedImgSource(srcImage, bpp));
     if ( !img->isValid() )
         return srcImage;
     CRLog::trace("Unpacking done");
@@ -208,14 +246,14 @@ LVImageSourceRef LVCreateUnpackedImageSource( LVImageSourceRef srcImage, int max
 /// creates decoded memory copy of image, if it's unpacked size is less than maxSize
 LVImageSourceRef LVCreateUnpackedImageSource( LVImageSourceRef srcImage, int maxSize, int bpp )
 {
-    if ( srcImage.isNull() )
+    std::size_t byteCount = 0;
+    if (!getUnpackedByteCount(
+                srcImage, maxSize, bpp, byteCount))
         return srcImage;
-    int dx = srcImage->GetWidth();
-    int dy = srcImage->GetHeight();
-    int sz = dx*dy * (bpp>>3);
-    if ( sz>maxSize )
-        return srcImage;
-    CRLog::trace("Unpacking image %dx%d (%d)", dx, dy, sz);
+    CRLog::trace(
+            "Unpacking image %dx%d (%d)",
+            srcImage->GetWidth(), srcImage->GetHeight(),
+            static_cast<int>(byteCount));
     std::unique_ptr<LVUnpackedImgSource> img(
             new LVUnpackedImgSource(srcImage, bpp));
     if ( !img->isValid() )

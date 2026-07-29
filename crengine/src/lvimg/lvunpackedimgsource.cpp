@@ -25,6 +25,7 @@
 #include "../lvdrawbuf/lvdrawbuf_utils.h"
 
 #include <cstddef>
+#include <limits>
 #include <string.h>
 #include <vector>
 
@@ -48,16 +49,26 @@ inline lUInt32 grayUnpack(lUInt8 pixel)
 
 
 LVUnpackedImgSource::LVUnpackedImgSource(LVImageSourceRef src, int bpp)
-    : _isGray(bpp<=8)
+    : _isGray(bpp==8)
     , _valid(false)
     , _bpp(bpp)
-    , _dx( src->GetWidth() )
-    , _dy( src->GetHeight() )
+    , _dx(src.isNull() ? 0 : src->GetWidth())
+    , _dy(src.isNull() ? 0 : src->GetHeight())
 {
-    const std::size_t pixelCount = _dx > 0 && _dy > 0
-            ? static_cast<std::size_t>(_dx) * static_cast<std::size_t>(_dy)
-            : 0;
-    if ( bpp<=8  ) {
+    if (src.isNull() || _dx <= 0 || _dy <= 0
+            || (bpp != 8 && bpp != 16 && bpp != 32))
+        return;
+    const std::size_t unsignedWidth =
+            static_cast<std::size_t>(_dx);
+    const std::size_t unsignedHeight =
+            static_cast<std::size_t>(_dy);
+    if (unsignedWidth
+            > std::numeric_limits<std::size_t>::max()
+                    / unsignedHeight)
+        return;
+    const std::size_t pixelCount =
+            unsignedWidth * unsignedHeight;
+    if ( bpp==8 ) {
         _grayImage.resize(pixelCount);
     } else if ( bpp==16 ) {
         _colorImage16.resize(pixelCount);
@@ -105,8 +116,16 @@ bool LVUnpackedImgSource::Decode(LVImageDecoderCallback *callback)
 {
     if ( !_valid || !callback || _dx<=0 || _dy<=0 )
         return false;
+    const std::size_t pixelCount =
+            static_cast<std::size_t>(_dx)
+            * static_cast<std::size_t>(_dy);
+    if ((_isGray && _grayImage.size() != pixelCount)
+            || (_bpp == 16
+                    && _colorImage16.size() != pixelCount)
+            || (_bpp == 32
+                    && _colorImage.size() != pixelCount))
+        return false;
     callback->OnStartDecode( this );
-    //bool res = false;
     if ( _isGray ) {
         // gray
         std::vector<lUInt32> line(_dx);
@@ -118,7 +137,10 @@ bool LVUnpackedImgSource::Decode(LVImageDecoderCallback *callback)
             lUInt32 * dst = line.data();
             for ( int x=0; x<_dx; x++ )
                 dst[x] = grayUnpack( src[x] );
-            callback->OnLineDecoded( this, y, dst );
+            if (!callback->OnLineDecoded(this, y, dst)) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
         }
     } else if ( _bpp==16 ) {
         // 16bit
@@ -131,7 +153,10 @@ bool LVUnpackedImgSource::Decode(LVImageDecoderCallback *callback)
             lUInt32 * dst = line.data();
             for ( int x=0; x<_dx; x++ )
                 dst[x] = rgb565to888( src[x] );
-            callback->OnLineDecoded( this, y, dst );
+            if (!callback->OnLineDecoded(this, y, dst)) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
         }
     } else {
         // color
@@ -139,8 +164,12 @@ bool LVUnpackedImgSource::Decode(LVImageDecoderCallback *callback)
             const std::size_t offset =
                     static_cast<std::size_t>(_dx)
                     * static_cast<std::size_t>(y);
-            callback->OnLineDecoded(
-                    this, y, _colorImage.data() + offset);
+            if (!callback->OnLineDecoded(
+                        this, y,
+                        _colorImage.data() + offset)) {
+                callback->OnEndDecode(this, true);
+                return false;
+            }
         }
     }
     callback->OnEndDecode( this, false );
