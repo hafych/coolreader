@@ -126,12 +126,13 @@ BookmarkListDialog::~BookmarkListDialog() = default;
 
 bool BookmarkListDialog::showDlg( QWidget * parent, CR3View * docView )
 {
-    BookmarkListDialog * dlg = new BookmarkListDialog( parent, docView );
-    dlg->setModal( true );
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
-    //dlg->
+    std::unique_ptr<BookmarkListDialog> dialog(
+            new BookmarkListDialog(parent, docView));
+    dialog->setModal( true );
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+    dialog.release();
     return true;
 }
 

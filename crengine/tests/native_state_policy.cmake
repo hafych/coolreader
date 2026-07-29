@@ -804,6 +804,13 @@ if(NOT MODERN_QT_BOOKMARK_DIALOG_CANDIDATE_COUNT EQUAL 2)
   message(FATAL_ERROR
     "modern Qt bookmark dialogs must retain transactional publication")
 endif()
+string(REGEX MATCHALL "std::unique_ptr<[A-Za-z]+> dialog"
+  MODERN_QT_DIALOG_CANDIDATES "${MODERN_QT_UI_SOURCE}")
+list(LENGTH MODERN_QT_DIALOG_CANDIDATES MODERN_QT_DIALOG_CANDIDATE_COUNT)
+if(NOT MODERN_QT_DIALOG_CANDIDATE_COUNT EQUAL 8)
+  message(FATAL_ERROR
+    "all modern Qt modeless dialogs must retain transactional publication")
+endif()
 require_source_text(
   "${MODERN_QT_UI_SOURCE}"
   "Borrowed from the document history for the dialog lifetime."
@@ -818,6 +825,36 @@ forbid_source_text(
   "${MODERN_QT_UI_SOURCE}"
   "AddBookmarkDialog * dlg = new AddBookmarkDialog"
   "modern Qt bookmark dialogs must not return to raw construction"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "AboutDialog * dlg = new AboutDialog"
+  "modern Qt about dialogs must not return to raw construction"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "BookmarkListDialog * dlg = new BookmarkListDialog"
+  "modern Qt bookmark lists must not return to raw construction"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "FilePropsDialog * dlg = new FilePropsDialog"
+  "modern Qt file properties must not return to raw construction"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "RecentBooksDlg * dlg = new RecentBooksDlg"
+  "modern Qt recent-book dialogs must not return to raw construction"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "SettingsDlg * dlg = new SettingsDlg"
+  "modern Qt settings dialogs must not return to raw construction"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "TocDlg * dlg = new TocDlg"
+  "modern Qt TOC dialogs must not return to raw construction"
 )
 string(REGEX MATCHALL "QPointer<CR3View>"
   MODERN_QT_VIEW_BORROWS "${MODERN_QT_UI_SOURCE}")

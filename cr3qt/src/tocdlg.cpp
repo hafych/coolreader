@@ -64,8 +64,9 @@ bool TocDlg::showDlg(  QWidget * parent, CR3View * docView )
     LVTocItem * root = docView->getToc();
     if ( !root || !root->getChildCount() )
         return false;
-    TocDlg * dlg = new TocDlg( parent, docView );
-    dlg->show();
+    std::unique_ptr<TocDlg> dialog(new TocDlg(parent, docView));
+    dialog->show();
+    dialog.release();
     return true;
 }
 

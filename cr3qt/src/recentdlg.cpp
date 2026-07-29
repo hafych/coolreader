@@ -101,12 +101,13 @@ RecentBooksDlg::~RecentBooksDlg() = default;
 
 bool RecentBooksDlg::showDlg( QWidget * parent,  CR3View * docView )
 {
-    RecentBooksDlg * dlg = new RecentBooksDlg( parent, docView );
-    dlg->setModal( true );
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
-    //dlg->
+    std::unique_ptr<RecentBooksDlg> dialog(
+            new RecentBooksDlg(parent, docView));
+    dialog->setModal( true );
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+    dialog.release();
     return true;
 }
 

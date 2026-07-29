@@ -205,8 +205,9 @@ DRM или ограничений доступа, подбор/получени�
   PIMPL/document/word-selector, generated-UI helper owners и fallback-font
   row/control graphs, scoped export dialogs/callback restoration и transient
   context-menu/search-feedback widgets, guarded live search-dialog observer,
-  close-time teardown для всех modeless dialogs, transactional bookmark-editor
-  publication, explicit history bookmark borrow, guarded document-view borrows
+  close-time teardown и transactional publication для всех modeless dialogs,
+  explicit history bookmark borrow,
+  guarded document-view borrows
   и replace-safe scrollbar/property observers, shared property-adapter
   factories без implementation downcasts,
   GUI window/event queue ownership и

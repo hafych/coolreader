@@ -435,9 +435,10 @@ SettingsDlg::~SettingsDlg() = default;
 
 bool SettingsDlg::showDlg(  QWidget * parent, CR3View * docView )
 {
-    SettingsDlg * dlg = new SettingsDlg( parent, docView );
-    dlg->setAttribute(Qt::WA_DeleteOnClose, true);
-    dlg->show();
+    std::unique_ptr<SettingsDlg> dialog(new SettingsDlg(parent, docView));
+    dialog->setAttribute(Qt::WA_DeleteOnClose, true);
+    dialog->show();
+    dialog.release();
     return true;
 }
 

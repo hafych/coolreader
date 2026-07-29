@@ -99,12 +99,12 @@ void AboutDialog::changeEvent(QEvent *e)
 
 bool AboutDialog::showDlg( QWidget * parent )
 {
-    AboutDialog * dlg = new AboutDialog( parent );
-    //dlg->setModal( true );
-    dlg->setWindowTitle(tr("About CoolReader"));
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
+    std::unique_ptr<AboutDialog> dialog(new AboutDialog(parent));
+    dialog->setWindowTitle(tr("About CoolReader"));
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+    dialog.release();
 	return true;
 }
 

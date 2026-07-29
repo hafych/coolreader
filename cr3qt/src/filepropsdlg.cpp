@@ -70,12 +70,13 @@ FilePropsDialog::~FilePropsDialog() = default;
 
 bool FilePropsDialog::showDlg( QWidget * parent, CR3View * docView )
 {
-    FilePropsDialog * dlg = new FilePropsDialog( parent, docView );
-    dlg->setModal( true );
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
-    //dlg->
+    std::unique_ptr<FilePropsDialog> dialog(
+            new FilePropsDialog(parent, docView));
+    dialog->setModal( true );
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+    dialog.release();
     return true;
 }
 
