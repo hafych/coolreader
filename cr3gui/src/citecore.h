@@ -35,20 +35,11 @@ enum granularity {
     grn_block
 };
 
-//const lString16 phrase_bounds(L".?!");
-
-
-enum last_move_type {
-    not_moved,
-    moved_up,
-    moved_down
-};
-
-void
+inline void
 point_to_end(ldomXPointerEx& xp) {
     ldomNode * p = xp.getNode();
     if(p->isText()) {
-        lString16 text = p->getText();
+        lString32 text = p->getText();
         xp.setOffset(text.length());
     };
     if(p->isElement()) {
@@ -57,13 +48,13 @@ point_to_end(ldomXPointerEx& xp) {
             xp.nextVisibleText();
         if (xp.isText()) {
             ldomNode * p = xp.getNode();
-            lString16 text = p->getText();
+            lString32 text = p->getText();
             xp.setOffset(text.length());
         }
     }
 }
 
-void
+inline void
 point_to_begin(ldomXPointerEx& xp) {
     ldomNode * p = xp.getNode();
     if(p->isText())
@@ -71,13 +62,11 @@ point_to_begin(ldomXPointerEx& xp) {
 }
 
 class CiteSelection {
-    last_move_type last_move_;
     LVDocView& view_;
     ldomXPointerEx start_;
     ldomXPointerEx end_;
 public:
     CiteSelection(LVDocView& view) : 
-        last_move_(not_moved),
         view_(view) {
             ldomXPointerEx middle = view_.getCurrentPageMiddleParagraph();
             middle.prevVisibleText();

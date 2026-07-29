@@ -88,30 +88,34 @@ class CiteWindow : public BackgroundFitWindow
 	}
 #endif
 protected:
-    virtual void draw()
+    void draw() override
     {
         BackgroundFitWindow::draw();
-        CRRectSkinRef skin = _wm->getSkin()->getWindowSkin( L"#dialog" )->getClientSkin();
+        CRRectSkinRef skin =
+                _wm->getSkin()->getWindowSkin(U"#dialog")->getClientSkin();
         LVDrawBuf * buf = _wm->getScreen()->getCanvas().get();
         skin->draw( *buf, _rect );
-        lvRect borders = skin->getBorderWidths();
 #ifdef CR_POCKETBOOK
-        lString16 prompt;
+        lvRect borders = skin->getBorderWidths();
+        lString32 prompt;
         switch (_selectedIndex) {
         case 0:
-            prompt = lString16(_("Select next/prev paragraph"));
+            prompt = Utf8ToUnicode(
+                    lString8(_("Select next/prev paragraph")));
             break;
         case 1:
-            prompt = lString16(_("Select one more paragraph"));
+            prompt = Utf8ToUnicode(
+                    lString8(_("Select one more paragraph")));
             break;
         case 2:
-            prompt = lString16(_("Deselect paragraph"));
+            prompt = Utf8ToUnicode(lString8(_("Deselect paragraph")));
             break;
         case 3:
-            prompt = lString16(_("Select one more phrase"));
+            prompt = Utf8ToUnicode(
+                    lString8(_("Select one more phrase")));
             break;
         case 4:
-            prompt = lString16(_("Deselect phrase"));
+            prompt = Utf8ToUnicode(lString8(_("Deselect phrase")));
             break;
 
         }
@@ -122,7 +126,8 @@ protected:
             skin->draw( *_wm->getScreen()->getCanvas(), keyRect );
             skin->drawText( *_wm->getScreen()->getCanvas(), keyRect, prompt );
         }
-        CRToolBarSkinRef tbSkin = _wm->getSkin()->getToolBarSkin( L"#cite-toolbar" );
+        CRToolBarSkinRef tbSkin =
+                _wm->getSkin()->getToolBarSkin(U"#cite-toolbar");
         if (!tbSkin.isNull()) {
             keyRect.left += (borders.right + _wm->getScreen()->getWidth() * 2/3/*promptWidth*/);
             keyRect.right = _rect.right;
@@ -131,7 +136,7 @@ protected:
                 tbSkin->drawToolBar(*_wm->getScreen()->getCanvas(), keyRect, true, _selectedIndex);
         }
 #else
-                lString16 prompt(_("Select text"));
+        lString32 prompt = Utf8ToUnicode(lString8(_("Select text")));
 		buf->FillRect( _rect, 0xAAAAAA );
 		lvRect keyRect = _rect;
 		LVFontRef font = fontMan->GetFont( 20, 600, false, css_ff_sans_serif, lString8("Arial")); //skin->getFont();
@@ -151,7 +156,7 @@ public:
 		selector_(*mainwin->getDocView()),
 		mainwin_(mainwin)
     {
-		CRGUIAcceleratorTableRef acc = _wm->getAccTables().get("cite");
+		CRGUIAcceleratorTableRef acc = _wm->getAccTables().get(U"cite");
 		if ( acc.isNull() )
 			this->setAccelerators( mainwin->getDialogAccelerators() );
 		else
@@ -167,7 +172,7 @@ public:
 #endif
 	}
 
-	bool onCommand( int command, int params )
+	bool onCommand( int command, int params ) override
 	{
 		switch ( command ) {
 			case MCMD_SELECT_1:
@@ -225,8 +230,10 @@ public:
 					ldomXRange range;
 					selector_.getRange(range);
 					if ( !range.isNull() ) {
-                        mainwin_->getDocView()->saveRangeBookmark( range, bmkt_comment, lString16::empty_str);
-                        mainwin_->saveHistory(lString16::empty_str);
+                        mainwin_->getDocView()->saveRangeBookmark(
+                                range, bmkt_comment,
+                                lString32::empty_str);
+                        mainwin_->saveHistory(lString32::empty_str);
 					}
 					close();
 				};

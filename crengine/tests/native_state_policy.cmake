@@ -31,6 +31,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/recentdlg.h" RECENT_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/recentdlg.cpp" RECENT_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/bmkdlg.h" BOOKMARK_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/bmkdlg.cpp" BOOKMARK_DIALOG_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/citecore.h" CITE_SELECTION_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/citedlg.cpp" CITE_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7401,6 +7403,41 @@ forbid_source_text(
   "${BOOKMARK_DIALOG_SOURCE}"
   "int k, f;"
   "bookmark mode changes must not retain unused key state"
+)
+require_source_text(
+  "${CITE_SELECTION_HEADER}"
+  "lString32 text = p->getText();"
+  "citation selection offsets must use the document string width"
+)
+require_source_text(
+  "${CITE_DIALOG_SOURCE}"
+  "getWindowSkin(U\"#dialog\")"
+  "citation selection skin identifiers must use the current width"
+)
+require_source_text(
+  "${CITE_DIALOG_SOURCE}"
+  "lString32 prompt = Utf8ToUnicode"
+  "citation selection prompts must use the current string width"
+)
+require_source_text(
+  "${CITE_DIALOG_SOURCE}"
+  "range, bmkt_comment,\n                                lString32::empty_str"
+  "citation bookmarks must use the current comment width"
+)
+forbid_source_text(
+  "${CITE_SELECTION_HEADER}"
+  "last_move_"
+  "citation selection must not retain unused movement state"
+)
+forbid_source_text(
+  "${CITE_SELECTION_HEADER}"
+  "lString16"
+  "citation selection offsets must not narrow text to UTF-16"
+)
+forbid_source_text(
+  "${CITE_DIALOG_SOURCE}"
+  "lString16"
+  "citation dialog implementations must not narrow text to UTF-16"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

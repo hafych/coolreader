@@ -81,8 +81,8 @@ DRM или ограничений доступа, подбор/получени�
   controls/property/font-menu helpers, font property keys,
   CSS/image/document/history/settings/help paths,
   dialog/menu/about/search/number-input/TOC/recent-book/bookmark/citation
-  text, on-screen keyboard layouts и T9 layout storage приведены к
-  текущим `lString32`/UTF-32 контрактам.
+  selection text, on-screen keyboard layouts и T9 layout storage
+  приведены к текущим `lString32`/UTF-32 контрактам.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,
