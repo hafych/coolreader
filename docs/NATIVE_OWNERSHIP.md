@@ -941,3 +941,9 @@ Rectangle clipping returns an `optional<lvRect>` value. The absence of required
 trimming is represented by `nullopt`, so this geometry helper no longer
 allocates an undocumented raw result or requires caller-side deletion. Native
 coverage checks exact four-sided trims plus containing and disjoint clips.
+
+Menus expose an owner-aware `addItem(unique_ptr<CRMenuItem>)` boundary while
+retaining the raw overload for compatibility. The settings command-submenu
+factory holds the menu and each item exclusively through all configuration,
+then releases only the complete menu at its legacy return boundary. A forced
+mid-build exception verifies teardown of every already-published item.

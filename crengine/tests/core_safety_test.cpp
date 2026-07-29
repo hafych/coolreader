@@ -1707,6 +1707,23 @@ public:
     int lastParam() const { return _lastParam; }
 };
 
+class CountingMenuItem : public CRMenuItem {
+private:
+    std::atomic<int> &_destroyed;
+
+public:
+    CountingMenuItem(CRMenu *menu, int id,
+                     std::atomic<int> &destroyed)
+        : CRMenuItem(
+                menu, id, U"counted", LVImageSourceRef(), LVFontRef()),
+          _destroyed(destroyed) {
+    }
+
+    ~CountingMenuItem() override {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
 class CountingGuiDocView : public LVDocView {
 private:
     std::atomic<int> &_destroyed;
@@ -1808,6 +1825,27 @@ static int testGuiRuntimeOwnership() {
     }
     if (eventDestroyed.load(std::memory_order_relaxed) != 4)
         return fail("GUI manager teardown leaked a queued event");
+
+    std::atomic<int> menuItemDestroyed(0);
+    bool menuBuildFailed = false;
+    try {
+        GuiScreenOwnershipWindowManager manager(screen.get());
+        std::unique_ptr<CRMenu> menu(new CRMenu(
+                &manager, NULL, 900, U"owner",
+                LVImageSourceRef(), LVFontRef(), LVFontRef()));
+        menu->addItem(std::unique_ptr<CRMenuItem>(
+                new CountingMenuItem(
+                        menu.get(), 1, menuItemDestroyed)));
+        menu->addItem(std::unique_ptr<CRMenuItem>(
+                new CountingMenuItem(
+                        menu.get(), 2, menuItemDestroyed)));
+        throw std::runtime_error("reject menu");
+    } catch (const std::runtime_error &) {
+        menuBuildFailed = true;
+    }
+    if (!menuBuildFailed
+            || menuItemDestroyed.load(std::memory_order_relaxed) != 2)
+        return fail("GUI menu build rollback leaked scoped items");
 
     const int acceleratorQuads[] = {
         41, KEY_FLAG_LONG_PRESS, 701, 11,

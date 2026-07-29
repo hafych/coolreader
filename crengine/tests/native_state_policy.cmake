@@ -15,6 +15,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crtest.cpp" CRTEST_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crgui.cpp" GUI_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/settings.cpp" SETTINGS_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
@@ -6852,6 +6853,26 @@ require_source_text(
 )
 require_source_text(
   "${GUI_HEADER}"
+  "void addItem( std::unique_ptr<CRMenuItem> item )"
+  "GUI menus must expose an owner-aware item boundary"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> menu(new CRMenu("
+  "settings command menus must remain scoped during construction"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "menu->addItem(std::move(item));"
+  "settings command items must cross the owner-aware menu boundary"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "return menu.release();"
+  "settings command menus must expose one explicit legacy transfer"
+)
+require_source_text(
+  "${GUI_HEADER}"
   "std::unique_ptr<CRGUIEvent> takeEvent()"
   "GUI event dispatch must transfer a scoped event owner"
 )
@@ -6948,6 +6969,11 @@ require_source_text(
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"
+  "GUI menu build rollback leaked scoped items"
+  "GUI menu construction must retain rollback lifecycle coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
   "GUI document window leaked its document view"
   "GUI document-view teardown regression coverage must be retained"
 )
@@ -6990,6 +7016,16 @@ forbid_source_text(
   "${GUI_SOURCE}"
   "CRGUIEvent * event = new CRGUICommandEvent"
   "translated GUI command events must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * menu = new CRMenu(_wm, this"
+  "settings command menus must not begin as raw owners"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenuItem * item = new CRMenuItem( menu"
+  "settings command items must not begin as raw owners"
 )
 forbid_source_text(
   "${GUI_HEADER}"

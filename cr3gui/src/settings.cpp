@@ -95,20 +95,24 @@ public:
     {
         lString16 label = getSettingLabel( key, flags ) + " - " + lString16(_("choose command"));
         lString16 keyid = getSettingKey( key, flags );
-        CRMenu * menu = new CRMenu(_wm, this, _id, label, LVImageSourceRef(), LVFontRef(), LVFontRef(), _props, LCSTR(keyid), 8);
+        std::unique_ptr<CRMenu> menu(new CRMenu(
+                _wm, this, _id, label, LVImageSourceRef(),
+                LVFontRef(), LVFontRef(), _props, LCSTR(keyid), 8));
         for ( int i=0; i<_overrideCommands->length(); i++ ) {
             const CRGUIAccelerator * acc = _overrideCommands->get(i);
             lString16 cmdLabel = lString16( getCommandName(acc->commandId, acc->commandParam) );
             lString16 cmdValue = lString16::itoa(acc->commandId) << "," << lString16::itoa(acc->commandParam);
-            CRMenuItem * item = new CRMenuItem( menu, i, cmdLabel, LVImageSourceRef(), LVFontRef(), cmdValue.c_str());
-            menu->addItem(item);
+            std::unique_ptr<CRMenuItem> item(new CRMenuItem(
+                    menu.get(), i, cmdLabel, LVImageSourceRef(),
+                    LVFontRef(), cmdValue.c_str()));
+            menu->addItem(std::move(item));
         }
         menu->setAccelerators( getAccelerators() );
         menu->setSkinName(lString16("#settings"));
         menu->setValueFont(_valueFont);
         menu->setFullscreen(true);
         menu->reconfigure( 0 );
-        return menu;
+        return menu.release();
     }
     CRControlsMenu(CRMenu * baseMenu, int id, CRPropRef props, lString16 accelTableId, int numItems, lvRect & rc)
     : CRFullScreenMenu( baseMenu->getWindowManager(), id, lString16(_("Controls")), numItems, rc )

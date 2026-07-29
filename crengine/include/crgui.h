@@ -1174,6 +1174,9 @@ class CRMenu : public CRGUIWindowBase, public CRMenuItem {
         LVFontRef getValueFont() const { return _valueFont; }
         void setValueFont( LVFontRef font ) { _valueFont = font; }
         void addItem( CRMenuItem * item ) { _items.add( item ); }
+        void addItem( std::unique_ptr<CRMenuItem> item ) {
+            _items.add(item.release());
+        }
         CRMenuItem * findItem( int id ) {
             for ( int i=0; i<_items.length(); i++ )
                 if ( _items[i]->getId()==id )
