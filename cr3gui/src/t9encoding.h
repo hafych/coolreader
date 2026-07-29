@@ -75,9 +75,9 @@ public:
     }
 
     lString8
-    encode_string( const lString16 &s ) const
+    encode_string( const lString32 &s ) const
     {
-        lString32 normalized = Utf16ToUnicode(s);
+        lString32 normalized = s;
         normalized.lowercase();
         lString8 result;
         for (int i = 0; i < normalized.length(); i ++) {
@@ -86,6 +86,12 @@ public:
                             '0' + encode(normalized[i])));
         }
         return result;
+    }
+
+    lString8
+    encode_string( const lString16 &s ) const
+    {
+        return encode_string(Utf16ToUnicode(s));
     }
 
 protected:

@@ -43,25 +43,29 @@
 
 
 //TODO: place TinyDictionary to separate file
-CRTinyDict::CRTinyDict( const lString16& config )
+CRTinyDict::CRTinyDict( const lString32 & config )
 {
-    lString16 path = config;
-    LVAppendPathDelimiter( path );
-    LVContainerRef dir = LVOpenDirectory( config.c_str() );
-    if ( !dir )
-        dir = LVOpenDirectory( LVExtractPath(config).c_str() );
+    lString32 path = config;
+    LVContainerRef dir = LVOpenDirectory(path);
+    if ( !dir ) {
+        path = LVExtractPath(config);
+        dir = LVOpenDirectory(path);
+    }
+    LVAppendPathDelimiter(path);
     if ( !dir.isNull() ) {
         int count = dir->GetSize();
-        lString16 indexExt(".index");
+        lString32 indexExt(U".index");
         for ( int i=0; i<count; i++ ) {
             const LVContainerItemInfo * item = dir->GetObjectInfo( i );
             if ( !item->IsContainer() ) {
-                lString16 name = item->GetName();
+                lString32 name = item->GetName();
                 if ( name.endsWith( indexExt ) ) {
-                    lString16 nameBase = name.substr( 0, name.length() - indexExt.length() );
-                    lString16 name1 = nameBase + ".dict";
-                    lString16 name2 = nameBase + ".dict.dz";
-                    lString16 dataName;
+                    lString32 nameBase =
+                            name.substr(
+                                    0, name.length() - indexExt.length());
+                    lString32 name1 = nameBase + U".dict";
+                    lString32 name2 = nameBase + U".dict.dz";
+                    lString32 dataName;
                     int index = -1;
                     for ( int n=0; n<count; n++ ) {
                         const LVContainerItemInfo * item2 = dir->GetObjectInfo( n );
@@ -87,9 +91,9 @@ CRTinyDict::CRTinyDict( const lString16& config )
 
 lString8 CRTinyDict::translate(const lString8 & w)
 {
-    lString16 s16 = Utf8ToUnicode( w );
-    s16.lowercase();
-    lString8 word = UnicodeToUtf8( s16 );
+    lString32 normalized = Utf8ToUnicode(w);
+    normalized.lowercase();
+    lString8 word = UnicodeToUtf8(normalized);
     lString8 body;
     TinyDictResultList results;
     if ( dicts.length() == 0 ) {
@@ -128,12 +132,12 @@ lString8 CRTinyDict::translate(const lString8 & w)
 
 class WordWithRanges
 {
-    lString16 word;
-    lString16 wordLower;
+    lString32 word;
+    lString32 wordLower;
     lString8  encoded;
     LVArray<ldomWord> ranges;
 public:
-    const lString16 & getWord() { return word; }
+    const lString32 & getWord() const { return word; }
     const lString8 & getEncoded() { return encoded; }
     LVArray<ldomWord> & getRanges() { return ranges; }
     bool matchEncoded( const lString8 & prefix )
@@ -142,15 +146,9 @@ public:
             return false;
         return encoded.startsWith( prefix );
     }
-    bool matchWord( const lString16 & prefix )
+    bool equals( const lString32 & w )
     {
-        if ( prefix.empty() )
-            return false;
-        return word.startsWithNoCase( prefix );
-    }
-    bool equals( const lString16 & w )
-    {
-        lString16 w1( w );
+        lString32 w1(w);
         w1.lowercase();
         return w1 == wordLower;
     }
@@ -158,7 +156,9 @@ public:
     {
         ranges.add( range );
     }
-    WordWithRanges( const lString16 & w, const lString8 & enc, const ldomWord & range )
+    WordWithRanges(
+            const lString32 & w, const lString8 & enc,
+            const ldomWord & range)
     : word( w ), encoded( enc )
     {
         wordLower = w;
@@ -183,7 +183,7 @@ public:
             LVArray<ldomWord> words;
             range->getRangeWords(words);
             for ( int i=0; i<words.length(); i++ ) {
-                lString16 w = words[i].getText();
+                lString32 w = words[i].getText();
                 lString8 encoded = encoding_.encode_string( w );
                 if ( w.length() < DICT_MIN_WORD_LENGTH )
                     continue;
@@ -239,11 +239,7 @@ class selector {
     int current_;
     int level_;
     LVArray<WordWithRanges *> candidates_;
-    LVArray<lString16> encoded_;
     lString8 prefix_;
-//    LVArray<lString16> keytable_;
-    int repeat_;
-    int last_;
 public:
 	void reinit() { words_.init(); candidates_.clear(); }
     lString8 getPrefix() { return prefix_; }
@@ -252,10 +248,8 @@ public:
         current_(0),
         level_(0),
         candidates_(),
-        prefix_(),
-        repeat_(0)
+        prefix_()
         {
-//            init_keytable(keytable_);
             update_candidates();
         };
 
@@ -318,11 +312,11 @@ public:
         return false;
     }
 
-    const lString16 get()
+    lString32 get() const
     {
         if ( current_ >= 0 && current_ < candidates_.length() )
             return candidates_[current_]->getWord();
-        return lString16::empty_str;
+        return lString32::empty_str;
     }
 };
 
@@ -335,7 +329,7 @@ class CRT9Keyboard : public BackgroundFitWindow
     selector selector_;
 protected:
 
-    virtual void draw();
+    void draw() override;
 
 public:
 	void setDefaultLayout();
@@ -343,7 +337,7 @@ public:
 
 	CRT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, int id, lString16 & buffer );
 
-    virtual bool onCommand( int command, int params );
+    bool onCommand( int command, int params ) override;
 
 };
 
@@ -388,7 +382,7 @@ CRT9Keyboard::CRT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, i
     _passCommandsToParent = false;
 
     //this->setAccelerators( mainwin->getDialogAccelerators() );
-    setAccelerators( _wm->getAccTables().get("txkeyboard") );
+    setAccelerators( _wm->getAccTables().get(U"txkeyboard") );
 
     _rect = _wm->getScreen()->getRect();
     //_rect.bottom = _rect.top;
@@ -398,24 +392,23 @@ CRT9Keyboard::CRT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, i
 void CRT9Keyboard::draw()
 {
     BackgroundFitWindow::draw();
-    CRMenuSkinRef skin = _wm->getSkin()->getMenuSkin( L"#t9input" );
+    CRMenuSkinRef skin = _wm->getSkin()->getMenuSkin(U"#t9input");
     CRRectSkinRef shortcutSkin = skin->getItemShortcutSkin();
     CRRectSkinRef itemSkin = skin->getItemSkin();
     CRRectSkinRef clientSkin = skin->getClientSkin();
     LVDrawBuf * buf = _wm->getScreen()->getCanvas().get();
     skin->draw( *buf, _rect );
-    lString16 prompt = Utf8ToUnicode(selector_.getPrefix());
-    prompt << L"_";
+    lString32 prompt = Utf8ToUnicode(selector_.getPrefix());
+    prompt << U"_";
     skin->draw( *buf, _rect );
     //buf->FillRect( _rect, 0xAAAAAA );
     lvRect rect = _rect;
     lvRect borders = skin->getBorderWidths();
     rect.shrinkBy( borders );
     lvRect keyRect = rect;
-    lvPoint minSizeN = shortcutSkin->getMinSize();
     for ( int i=0; i<encoding_.length(); i++ ) {
-        lString16 txtN = lString16::itoa(i);
-        lString16 txt = UnicodeToUtf16(encoding_[i]);
+        lString32 txtN = lString32::itoa(i);
+        lString32 txt = encoding_[i];
         if ( txt.empty() )
             continue;
         // label 0..9
@@ -468,16 +461,14 @@ bool CRT9Keyboard::onCommand( int command, int params )
             break;
         case MCMD_OK:
             {
-                lString8 translated;
-                lString8 output;
-                lString16 src = selector_.get();
+                lString32 src = selector_.get();
                 if ( src.empty() ) {
 					_mainwin->getDocView()->clearSelection();
 					_wm->closeWindow(this);
                     return true;
                 }
 				CRLog::info("Closing dict");
-				_buf = src;
+				_buf = UnicodeToUtf16(src);
 				_mainwin->getDocView()->clearSelection();
 				_wm->postCommand( _command, 1 );
 				_wm->closeWindow(this);

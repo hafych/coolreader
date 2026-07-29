@@ -42,10 +42,14 @@ class CRTinyDict : public CRDictionary
 {
 	TinyDictionaryList dicts;
 public:
-	CRTinyDict( const lString16& config );
-	virtual ~CRTinyDict() { }
-    virtual lString8 translate(const lString8 & w);
-    virtual bool empty() { return dicts.length()==0; }
+	explicit CRTinyDict( const lString32 & config );
+	explicit CRTinyDict( const lString16 & config )
+        : CRTinyDict(Utf16ToUnicode(config))
+    {
+    }
+	~CRTinyDict() override { }
+    lString8 translate(const lString8 & w) override;
+    bool empty() override { return dicts.length()==0; }
 };
 
 

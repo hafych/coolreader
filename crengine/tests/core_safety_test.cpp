@@ -115,16 +115,16 @@ static int testRectangleClipValue() {
 static int testT9EncodingCompatibility() {
     T9ClassicEncoding classic;
     if (classic.length() != 10
-            || classic.encode_string(
-                    UnicodeToUtf16(U"Quick")) != "78425")
+            || classic.encode_string(lString32(U"Quick")) != "78425")
         return fail("classic T9 mapping changed during UTF-32 migration");
+    if (classic.encode_string(UnicodeToUtf16(U"Quick")) != "78425")
+        return fail("legacy UTF-16 T9 input boundary changed");
 
     const lChar32 *unicodeDefinitions[] = {
         U"", U"абв", U"где", NULL
     };
     TEncoding unicodeEncoding(unicodeDefinitions);
-    if (unicodeEncoding.encode_string(
-                UnicodeToUtf16(U"БЕД")) != "122")
+    if (unicodeEncoding.encode_string(lString32(U"БЕД")) != "122")
         return fail("T9 Unicode lowercase mapping was not preserved");
 
     lString32Collection replacement;
@@ -132,9 +132,19 @@ static int testT9EncodingCompatibility() {
     replacement.add(U"cd");
     unicodeEncoding.set(replacement);
     if (unicodeEncoding.length() != 2
-            || unicodeEncoding.encode_string(
-                    UnicodeToUtf16(U"Dab")) != "100")
+            || unicodeEncoding.encode_string(lString32(U"Dab")) != "100")
         return fail("T9 runtime layout replacement changed");
+
+    const lChar32 *supplementaryDefinitions[] = {
+        U"", U"\U0001F600", NULL
+    };
+    TEncoding supplementaryEncoding(supplementaryDefinitions);
+    if (supplementaryEncoding.encode_string(
+                lString32(U"\U0001F600")) != "1")
+        return fail("UTF-32 T9 input split a supplementary character");
+    if (supplementaryEncoding.encode_string(
+                UnicodeToUtf16(U"\U0001F600")) != "1")
+        return fail("legacy UTF-16 T9 input split a surrogate pair");
     return 0;
 }
 

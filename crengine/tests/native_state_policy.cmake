@@ -38,6 +38,7 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.cpp" LINKS_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.h" DICTIONARY_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.cpp" DICTIONARY_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
@@ -259,13 +260,18 @@ require_source_text(
 )
 require_source_text(
   "${T9_ENCODING_HEADER}"
-  "lString32 normalized = Utf16ToUnicode(s);"
-  "T9 input must cross an explicit UTF-16 to UTF-32 boundary"
+  "encode_string( const lString32 &s ) const"
+  "T9 encoding must accept the current string width directly"
 )
 require_source_text(
   "${T9_ENCODING_HEADER}"
   "normalized.lowercase();"
   "T9 input normalization must remain Unicode-aware"
+)
+require_source_text(
+  "${T9_ENCODING_HEADER}"
+  "return encode_string(Utf16ToUnicode(s));"
+  "legacy T9 input must cross an explicit UTF-16 to UTF-32 boundary"
 )
 require_source_text(
   "${DICTIONARY_DIALOG_SOURCE}"
@@ -274,13 +280,63 @@ require_source_text(
 )
 require_source_text(
   "${DICTIONARY_DIALOG_SOURCE}"
-  "UnicodeToUtf16(encoding_[i])"
-  "dictionary T9 drawing must cross an explicit UTF-32 to UTF-16 boundary"
+  "lString32 txt = encoding_[i];"
+  "dictionary T9 drawing must preserve the current string width"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "_buf = UnicodeToUtf16(src);"
+  "dictionary T9 output must cross an explicit legacy buffer boundary"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testT9EncodingCompatibility()"
   "T9 width compatibility must retain portable native coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "UTF-32 T9 input split a supplementary character"
+  "T9 width compatibility must retain supplementary-plane coverage"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_HEADER}"
+  "explicit CRTinyDict( const lString32 & config );"
+  "dictionary paths must accept the current string width"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_HEADER}"
+  "CRTinyDict(Utf16ToUnicode(config))"
+  "legacy dictionary paths must cross an explicit compatibility boundary"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "lString32 word;"
+  "dictionary page words must preserve the DOM string width"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "lString32 w = words[i].getText();"
+  "dictionary candidates must preserve the DOM string width"
+)
+forbid_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "lString16 path"
+  "dictionary filesystem paths must not narrow to UTF-16"
+)
+forbid_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "lString16 word"
+  "dictionary candidate words must not narrow to UTF-16"
+)
+forbid_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "UnicodeToUtf16(encoding_[i])"
+  "dictionary T9 drawing must not narrow current layout text"
+)
+forbid_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "lString8 translated;"
+  "dictionary T9 publication must not retain unused scratch strings"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"

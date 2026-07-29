@@ -170,7 +170,7 @@ bool CRViewDialog::hasDictionaries()
         dict_path = DICTD_CONF_ALT;
     if ( _dict.isNull() )
         _dict = LVRef<CRDictionary>(new CRTinyDict(
-                UnicodeToUtf16(Utf8ToUnicode(lString8(dict_path)))));
+                Utf8ToUnicode(lString8(dict_path))));
     if ( !_dict->empty() ) {
     	return true;
     }
@@ -265,7 +265,7 @@ bool CRViewDialog::findInDictionary( lString32 pattern )
     if ( _dict.isNull() ) {
         showWaitIcon();
         _dict = LVRef<CRDictionary>(new CRTinyDict(
-                UnicodeToUtf16(Utf8ToUnicode(lString8(DICTD_CONF)))));
+                Utf8ToUnicode(lString8(DICTD_CONF))));
     }
 	lString8 body = _dict->translate( UnicodeToUtf8( pattern ) );
     lString8 txt = CRViewDialog::makeFb2Xml( body );
