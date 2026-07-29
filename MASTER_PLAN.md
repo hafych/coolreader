@@ -205,6 +205,7 @@ DRM или ограничений доступа, подбор/получени�
   PIMPL/document/word-selector, generated-UI helper owners и fallback-font
   row/control graphs, scoped export dialogs/callback restoration и transient
   context-menu/search-feedback widgets, guarded live search-dialog observer,
+  close-time teardown для всех modeless dialogs,
   GUI window/event queue ownership и
   scoped accelerator/command-event/main-menu/recent/bookmark item
   publication candidates и lifecycle `CRDocViewWindow`, scoped page-image

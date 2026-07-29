@@ -38,6 +38,7 @@ RecentBooksDlg::RecentBooksDlg(QWidget *parent, CR3View * docView ) :
     m_ui(new Ui::RecentBooksDlg),
     m_docview(docView)
 {
+    setAttribute(Qt::WA_DeleteOnClose, true);
     m_ui->setupUi(this);
     m_ui->tableWidget->setColumnCount(4);
     m_ui->tableWidget->setHorizontalHeaderLabels ( QStringList() << tr("#") << tr("Author") << tr("Title") << tr("Filename") );

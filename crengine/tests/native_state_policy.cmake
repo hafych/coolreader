@@ -736,6 +736,13 @@ require_source_text(
   "setAttribute(Qt::WA_DeleteOnClose, true);"
   "modern Qt modeless search dialogs must retain Qt-owned teardown"
 )
+string(REGEX MATCHALL "WA_DeleteOnClose"
+  MODERN_QT_DELETE_ON_CLOSE "${MODERN_QT_UI_SOURCE}")
+list(LENGTH MODERN_QT_DELETE_ON_CLOSE MODERN_QT_DELETE_ON_CLOSE_COUNT)
+if(NOT MODERN_QT_DELETE_ON_CLOSE_COUNT EQUAL 8)
+  message(FATAL_ERROR
+    "all modern Qt modeless dialogs must retain close-time teardown")
+endif()
 forbid_source_text(
   "${MODERN_QT_UI_SOURCE}"
   "static SearchDialog* _instance;"

@@ -30,6 +30,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
     QDialog(parent),
     m_ui(new Ui::AboutDialog)
 {
+    setAttribute(Qt::WA_DeleteOnClose, true);
     m_ui->setupUi(this);
     m_ui->lblVersion->setText(QString("CoolReader %1").arg(CR_ENGINE_VERSION));
     m_ui->lblDate->setText(CR_ENGINE_BUILD_DATE);

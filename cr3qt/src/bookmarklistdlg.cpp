@@ -45,6 +45,7 @@ BookmarkListDialog::BookmarkListDialog(QWidget *parent, CR3View * docView ) :
     m_ui(new Ui::BookmarkListDialog),
     _docview(docView)
 {
+    setAttribute(Qt::WA_DeleteOnClose, true);
     m_ui->setupUi(this);
     setWindowTitle( tr("Bookmarks") );
 

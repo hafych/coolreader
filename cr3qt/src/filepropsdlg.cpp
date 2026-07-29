@@ -37,6 +37,7 @@ FilePropsDialog::FilePropsDialog(QWidget *parent, CR3View * docView ) :
     ,_cr3v(docView)
     ,_docview(docView->getDocView())
 {
+    setAttribute(Qt::WA_DeleteOnClose, true);
     m_ui->setupUi(this);
     setWindowTitle( tr("Document properties") );
 

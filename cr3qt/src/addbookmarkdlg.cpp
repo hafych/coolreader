@@ -47,6 +47,7 @@ AddBookmarkDialog::AddBookmarkDialog(QWidget *parent, CR3View * docView, CRBookm
     _edit(bm!=NULL)
 {
     initialized = false;
+    setAttribute(Qt::WA_DeleteOnClose, true);
     m_ui->setupUi(this);
     setWindowTitle( tr("Add bookmark") );
     if ( _bm==NULL )
