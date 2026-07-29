@@ -143,7 +143,9 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	public CRDBService.LocalBinder getDB() {
-		return mCRDBService != null ? mCRDBService.get() : null;
+		return mCRDBService != null
+				? mCRDBService.getOrNull()
+				: null;
 	}
 
 	public final ServiceDependencies getServiceDependencies() {

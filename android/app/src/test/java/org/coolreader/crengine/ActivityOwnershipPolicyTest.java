@@ -19,6 +19,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.coolreader.CoolReader;
 import org.coolreader.Dictionaries;
+import org.coolreader.db.CRDBServiceAccessor;
 import org.coolreader.plugins.litres.LitresPlugin;
 import org.coolreader.tts.TTSControlBinder;
 import org.coolreader.tts.TTSControlServiceAccessor;
@@ -1054,6 +1055,38 @@ public class ActivityOwnershipPolicyTest {
 						long.class);
 		assertTrue(Modifier.isPrivate(
 				scheduleTapGestureTimeout.getModifiers()));
+	}
+
+	@Test
+	public void databaseConnectorOwnsExactDetachableBinding()
+			throws Exception {
+		for (String name : new String[]{
+				"mContext",
+				"mLocker",
+				"bindingState"}) {
+			Field field =
+					CRDBServiceAccessor.class
+							.getDeclaredField(name);
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"mService",
+				"mServiceBound",
+				"bindIsCalled",
+				"onConnectCallbacks",
+				"mServiceConnection"}) {
+			for (Field field :
+					CRDBServiceAccessor.class
+							.getDeclaredFields()) {
+				assertFalse(field.getName().equals(legacy));
+			}
+		}
+		Method getOrNull =
+				CRDBServiceAccessor.class.getDeclaredMethod(
+						"getOrNull");
+		assertTrue(Modifier.isPublic(
+				getOrNull.getModifiers()));
 	}
 
 	@Test

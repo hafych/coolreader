@@ -186,6 +186,14 @@ delivering results to the dialog or browser.
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.
+The database connector owns each platform registration through a pure
+`ServiceBindingState`. Concurrent waiters join only that registration's
+callback queue. Bind failure, null binding and binding death discard the queue
+and permit a fresh retry; Activity unbind invalidates the exact registration so
+its late `onServiceConnected` cannot publish a binder or run callbacks.
+Temporary platform disconnect keeps the registration and accepts a system
+reconnect. The nullable `BaseActivity.getDB()` boundary represents both initial
+binding and temporary disconnect without throwing.
 
 The native Engine's SAF-era process snapshot contains only immutable empty
 legacy-root collections, a one-time font initialization candidate and the

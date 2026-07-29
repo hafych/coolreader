@@ -255,6 +255,12 @@ DRM или ограничений доступа, подбор/получени�
   публикует captured accessor/engine только активному service generation;
   TTS connector держит registration/binder/pending callbacks под одним lock,
   сообщает bind failure и очищает очередь при unbind.
+  DB connector теперь также владеет exact platform registration через
+  `ServiceBindingState`: concurrent waiters разделяют только текущую очередь,
+  bind failure/null binding/binding death очищают её и разрешают retry, unbind
+  инвалидирует late connection старого owner, а temporary disconnect сохраняет
+  registration для системного reconnect. `BaseActivity.getDB()` возвращает
+  nullable binder во время штатного bind/disconnect вместо исключения.
   Смена TTS engine теперь также latest-request-owned внутри сервиса:
   `TtsInitializationState` отделяет per-attempt candidate и daemon timeout,
   replacement отменяет timer и shutdown только прежнего candidate, а

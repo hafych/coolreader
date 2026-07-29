@@ -20,7 +20,7 @@
 
 package org.coolreader.db;
 
-import java.util.ArrayList;
+import java.util.List;
 
 import org.coolreader.crengine.MountPathCorrector;
 
@@ -34,93 +34,205 @@ import org.coolreader.crengine.Log;
 public class CRDBServiceAccessor {
 	private final static String TAG = "cr3db";
 	private final Context mContext;
-    private volatile CRDBService.LocalBinder mService;
-    private volatile boolean mServiceBound;
-	private volatile boolean bindIsCalled;
-	private final ArrayList<Runnable> onConnectCallbacks = new ArrayList<Runnable>();
-    private MountPathCorrector pathCorrector;
+	private final Object mLocker = new Object();
+	private final ServiceBindingState<CRDBService.LocalBinder> bindingState =
+			new ServiceBindingState<>();
+	private Binding currentBinding;
+	private MountPathCorrector pathCorrector;
 
-    public CRDBService.LocalBinder get() {
-    	if (mService == null)
-    		throw new RuntimeException("no service");
-    	return mService;
-    }
+	public CRDBService.LocalBinder get() {
+		CRDBService.LocalBinder binder = getOrNull();
+		if (binder == null)
+			throw new RuntimeException("no service");
+		return binder;
+	}
+
+	public CRDBService.LocalBinder getOrNull() {
+		return bindingState.getBinder();
+	}
     
 	public CRDBServiceAccessor(Context context, MountPathCorrector pathCorrector) {
 		mContext = context.getApplicationContext();
 		this.pathCorrector = pathCorrector;
 	}
 
-	public synchronized void setPathCorrector(MountPathCorrector pathCorrector) {
-		this.pathCorrector = pathCorrector;
-    	if (mService != null && pathCorrector != null)
-    		mService.setPathCorrector(pathCorrector);
+	public void setPathCorrector(MountPathCorrector pathCorrector) {
+		synchronized (mLocker) {
+			this.pathCorrector = pathCorrector;
+			CRDBService.LocalBinder binder =
+					bindingState.getBinder();
+			if (binder != null && pathCorrector != null)
+				binder.setPathCorrector(pathCorrector);
+		}
 	}
 
-    public void bind(final Runnable boundCallback) {
-    	synchronized(this) {
-			if (mService != null) {
-				Log.v(TAG, "CRDBService is already bound");
-				if (boundCallback != null)
-					boundCallback.run();
-				return;
-			}
-		}
-    	//Log.v(TAG, "binding CRDBService");
-    	if (boundCallback != null) {
-			synchronized(onConnectCallbacks) {
-				onConnectCallbacks.add(boundCallback);
-			}
-		}
-    	if (!bindIsCalled) {
-    		bindIsCalled = true;
-			if (mContext.bindService(new Intent(mContext,
-	                CRDBService.class), mServiceConnection, Context.BIND_AUTO_CREATE)) {
-	            mServiceBound = true;
-			    Log.v(TAG, "binding CRDBService in progress...");
-	    	} else {
-	    		Log.e(TAG, "cannot bind CRDBService");
-	    	}
-    	}
-    }
-
-    public void unbind() {
-    	Log.v(TAG, "unbinding CRDBService");
-        if (mServiceBound) {
-            // Detach our existing connection.
-            mContext.unbindService(mServiceConnection);
-            mServiceBound = false;
-            bindIsCalled = false;
-            mService = null;
-        }
-    }
-
-    private ServiceConnection mServiceConnection = new ServiceConnection() {
-        public void onServiceConnected(ComponentName className, IBinder service) {
-			synchronized(CRDBServiceAccessor.this) {
-				mService = ((CRDBService.LocalBinder) service);
-				Log.i(TAG, "connected to CRDBService");
-				if (pathCorrector != null)
-					mService.setPathCorrector(pathCorrector);
-			}
-        	synchronized(onConnectCallbacks) {
-				if (onConnectCallbacks.size() != 0) {
-					// run once
-					for (Runnable callback : onConnectCallbacks)
-						callback.run();
-					onConnectCallbacks.clear();
+	public void bind(final Runnable boundCallback) {
+		Runnable immediateCallback;
+		synchronized (mLocker) {
+			ServiceBindingState.BindRequest request =
+					bindingState.requestBind(boundCallback);
+			immediateCallback = request.getImmediateCallback();
+			if (request.shouldStartBinding()) {
+				ServiceBindingState.Registration registration =
+						request.getRegistration();
+				ServiceConnection connection =
+						createServiceConnection(registration);
+				currentBinding =
+						new Binding(registration, connection);
+				boolean bound;
+				RuntimeException bindError = null;
+				try {
+					bound = mContext.bindService(
+							new Intent(
+									mContext,
+									CRDBService.class),
+							connection,
+							Context.BIND_AUTO_CREATE);
+				} catch (RuntimeException e) {
+					bindError = e;
+					bound = false;
+				}
+				if (bound) {
+					Log.v(
+							TAG,
+							"binding CRDBService in progress...");
+				} else {
+					Log.e(
+							TAG,
+							"cannot bind CRDBService",
+							bindError);
+					bindingState.bindingFailed(registration);
+					currentBinding = null;
 				}
 			}
-        }
+		}
+		if (immediateCallback != null) {
+			Log.v(TAG, "CRDBService is already bound");
+			immediateCallback.run();
+		}
+	}
 
-        public void onServiceDisconnected(ComponentName className) {
-        	synchronized(CRDBServiceAccessor.this) {
-				mServiceBound = false;
-				bindIsCalled = false;
-				mService = null;
+	public void unbind() {
+		Log.v(TAG, "unbinding CRDBService");
+		Binding binding;
+		synchronized (mLocker) {
+			ServiceBindingState.Registration registration =
+					bindingState.unbind();
+			binding =
+					currentBinding != null
+									&& currentBinding.registration
+											== registration
+							? currentBinding
+							: null;
+			currentBinding = null;
+		}
+		if (binding != null)
+			unbindPlatformConnection(binding.connection);
+	}
+
+	private ServiceConnection createServiceConnection(
+			ServiceBindingState.Registration registration) {
+		return new ServiceConnection() {
+			@Override
+			public void onServiceConnected(
+					ComponentName className,
+					IBinder service) {
+				CRDBService.LocalBinder binder =
+						(CRDBService.LocalBinder) service;
+				List<Runnable> callbacks;
+				synchronized (mLocker) {
+					if (!bindingState.isCurrent(registration))
+						return;
+					if (pathCorrector != null)
+						binder.setPathCorrector(pathCorrector);
+					callbacks =
+							bindingState.connected(
+									registration,
+									binder);
+				}
+				Log.i(TAG, "connected to CRDBService");
+				for (Runnable callback : callbacks) {
+					if (!bindingState.isConnected(
+							registration,
+							binder))
+						return;
+					callback.run();
+				}
 			}
-			Log.i(TAG, "disconnected from CRDBService");
-        }
-    };
 
+			@Override
+			public void onServiceDisconnected(
+					ComponentName className) {
+				boolean disconnected;
+				synchronized (mLocker) {
+					disconnected =
+							bindingState.disconnected(
+									registration);
+				}
+				if (disconnected)
+					Log.i(TAG, "disconnected from CRDBService");
+			}
+
+			@Override
+			public void onBindingDied(ComponentName className) {
+				closeFailedBinding(
+						registration,
+						this,
+						"CRDBService binding died");
+			}
+
+			@Override
+			public void onNullBinding(ComponentName className) {
+				closeFailedBinding(
+						registration,
+						this,
+						"CRDBService returned a null binding");
+			}
+		};
+	}
+
+	private void closeFailedBinding(
+			ServiceBindingState.Registration registration,
+			ServiceConnection connection,
+			String message) {
+		boolean shouldUnbind = false;
+		synchronized (mLocker) {
+			if (bindingState.bindingFailed(registration)) {
+				shouldUnbind =
+						currentBinding != null
+								&& currentBinding.registration
+										== registration;
+				if (shouldUnbind)
+					currentBinding = null;
+			}
+		}
+		if (shouldUnbind) {
+			Log.e(TAG, message);
+			unbindPlatformConnection(connection);
+		}
+	}
+
+	private void unbindPlatformConnection(
+			ServiceConnection connection) {
+		try {
+			mContext.unbindService(connection);
+		} catch (IllegalArgumentException e) {
+			Log.e(
+					TAG,
+					"CRDBService connection was already unbound",
+					e);
+		}
+	}
+
+	private static final class Binding {
+		private final ServiceBindingState.Registration registration;
+		private final ServiceConnection connection;
+
+		private Binding(
+				ServiceBindingState.Registration registration,
+				ServiceConnection connection) {
+			this.registration = registration;
+			this.connection = connection;
+		}
+	}
 }
