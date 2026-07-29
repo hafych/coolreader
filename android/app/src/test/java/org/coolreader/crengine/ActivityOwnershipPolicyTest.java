@@ -581,6 +581,26 @@ public class ActivityOwnershipPolicyTest {
 				drawOwner.getType());
 		assertTrue(Modifier.isPrivate(drawOwner.getModifiers()));
 		assertTrue(Modifier.isFinal(drawOwner.getModifiers()));
+		Field renderRequest =
+				drawPageTask.getDeclaredField("renderRequest");
+		assertEquals(
+				ReaderRenderRequest.class,
+				renderRequest.getType());
+		assertTrue(Modifier.isPrivate(
+				renderRequest.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				renderRequest.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderRenderRequest.class.getModifiers()));
+		for (Field field :
+				ReaderRenderRequest.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
 		Class<?> loadDocumentTask = null;
 		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
 			if (nested.getSimpleName().equals("LoadDocumentTask")) {

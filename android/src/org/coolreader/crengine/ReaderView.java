@@ -1157,24 +1157,41 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			drawPage();
 		}
 
-		public BitmapInfo prepareImage() {
+		public BitmapInfo prepareImage(
+				ReaderRenderRequest renderRequest) {
 			// called from background thread
-			ImageInfo img = currentImage;
-			img.bufWidth = internalDX;
-			img.bufHeight = internalDY;
+			if (renderRequest != null
+					&& !isRenderRequestCurrent(renderRequest))
+				return null;
+			ImageInfo current = currentImage;
+			current.bufWidth = internalDX;
+			current.bufHeight = internalDY;
+			ImageInfo img = new ImageInfo(current);
 			if (mCurrentPageInfo != null) {
-				if (img.equals(mCurrentPageInfo.imageInfo))
+				if (img.equals(mCurrentPageInfo.imageInfo)
+						&& (renderRequest == null
+						|| isRenderRequestCurrent(
+								renderRequest)))
 					return mCurrentPageInfo;
-				mCurrentPageInfo.recycle();
-				mCurrentPageInfo = null;
 			}
 			PositionProperties currpos = doc.getPositionProps(null, false);
+			if (renderRequest != null
+					&& !isRenderRequestCurrent(renderRequest))
+				return null;
 			BitmapInfo bi = new BitmapInfo();
 			bi.imageInfo = new ImageInfo(img);
 			bi.bitmap = factory.get(internalDX, internalDY);
 			bi.position = currpos;
 			doc.drawImage(bi.bitmap, bi.imageInfo);
+			if (renderRequest != null
+					&& !isRenderRequestCurrent(renderRequest)) {
+				bi.recycle();
+				return null;
+			}
+			BitmapInfo previous = mCurrentPageInfo;
 			mCurrentPageInfo = bi;
+			if (previous != null)
+				previous.recycle();
 			return mCurrentPageInfo;
 		}
 
@@ -3902,6 +3919,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		final BookInfo expectedBook = mBookInfo;
 		final DocumentLoadLifecycle.Interaction interaction =
 				documentLoadLifecycle.interaction();
+		final ReaderRenderRequest renderRequest =
+				ReaderRenderRequest.fromInteraction(
+						expectedBook, interaction);
 		post(new Task() {
 			boolean res;
 
@@ -3926,7 +3946,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return;
 				if (res) {
 					invalidImages = true;
-					drawPage(doneHandler, false);
+					drawPage(
+							doneHandler,
+							false,
+							renderRequest);
 				}
 				if (movesDocument)
 					scheduleSaveCurrentPositionBookmark(
@@ -4013,6 +4036,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				&& mBookInfo == expectedBook
 				&& documentLoadLifecycle.isInteractionActive(
 						interaction);
+	}
+
+	private boolean isRenderRequestCurrent(
+			ReaderRenderRequest request) {
+		return mServiceLifecycle.isActive()
+				&& request != null
+				&& request.isCurrent(
+						mBookInfo, documentLoadLifecycle);
 	}
 
 	private void applySettings(Properties props) {
@@ -4231,7 +4262,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		bookInfoDialogLifecycle.cancel();
 		readerOptionsDialogLifecycle.cancel();
 		settingsSyncLifecycle.cancel();
-		return documentLoadLifecycle.replace();
+		DocumentLoadLifecycle.Request loadOwner =
+				documentLoadLifecycle.replace();
+		drawTaskLifecycle.cancel();
+		return loadOwner;
 	}
 
 	public boolean showManual() {
@@ -5074,7 +5108,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	 * @return page image and properties, null if requested page is unavailable (e.g. requested next/prev page is out of document range)
 	 */
 	private BitmapInfo preparePageImage(int offset) {
+		return preparePageImage(offset, null);
+	}
+
+	private BitmapInfo preparePageImage(
+			int offset, ReaderRenderRequest renderRequest) {
 		BackgroundThread.ensureBackground();
+		if (renderRequest != null
+				&& !isRenderRequestCurrent(renderRequest))
+			return null;
 		log.v("preparePageImage( " + offset + ")");
 		if (invalidImages) {
 			if (mCurrentPageInfo != null)
@@ -5092,6 +5134,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			internalDX = requested.width();
 			internalDY = requested.height();
 			doc.resize(internalDX, internalDY);
+			if (renderRequest != null
+					&& !isRenderRequestCurrent(renderRequest))
+				return null;
 //			internalDX=200;
 //			internalDY=300;
 //			doc.resize(internalDX, internalDY);
@@ -5106,11 +5151,21 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //			});
 		}
 
-		if (currentImageViewer != null)
-			return currentImageViewer.prepareImage();
+		if (currentImageViewer != null) {
+			BitmapInfo image =
+					currentImageViewer.prepareImage(
+							renderRequest);
+			return renderRequest == null
+					|| isRenderRequestCurrent(renderRequest)
+							? image
+							: null;
+		}
 
 		PositionProperties currpos = doc.getPositionProps(null, false);
-		if (null == currpos)
+		if (currpos == null
+				|| renderRequest != null
+						&& !isRenderRequestCurrent(
+								renderRequest))
 			return null;
 
 		boolean isPageView = currpos.pageMode != 0;
@@ -5123,6 +5178,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (offset == 0) {
 			// Current page requested
 			if (currposBitmap != null) {
+				if (renderRequest != null
+						&& !isRenderRequestCurrent(
+								renderRequest))
+					return null;
 				if (mNextPageInfo == currposBitmap) {
 					// reorder pages
 					BitmapInfo tmp = mNextPageInfo;
@@ -5147,6 +5206,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							? internalDY : requested.height());
 			applyBatteryStatusToDocument();
 			doc.getPageImage(bi.bitmap);
+			if (renderRequest != null
+					&& !isRenderRequestCurrent(renderRequest)) {
+				bi.recycle();
+				return null;
+			}
 			mCurrentPageInfo = bi;
 			//log.v("Prepared new current page image " + mCurrentPageInfo);
 			return mCurrentPageInfo;
@@ -5224,11 +5288,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private class DrawPageTask extends Task {
 		private final CloseableTaskGate.Token owner;
+		private final ReaderRenderRequest renderRequest;
 		private BitmapInfo bi;
 		private final Runnable doneHandler;
 		private final boolean isPartially;
 
-		DrawPageTask(Runnable doneHandler, boolean isPartially) {
+		DrawPageTask(
+				Runnable doneHandler,
+				boolean isPartially,
+				ReaderRenderRequest renderRequest) {
 //			// DEBUG stack trace
 //			try {
 //				throw new Exception("DrawPageTask() stack trace");
@@ -5236,6 +5304,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //				Log.d("cr3", "stack trace", e);
 //			}
 			this.owner = drawTaskLifecycle.replace();
+			this.renderRequest = renderRequest;
 			this.doneHandler = doneHandler;
 			this.isPartially = isPartially;
 			if (owner != null)
@@ -5244,7 +5313,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		public void work() {
 			BackgroundThread.ensureBackground();
-			if (!drawTaskLifecycle.isActive(owner)) {
+			if (!drawTaskLifecycle.isActive(owner)
+					|| !isRenderRequestCurrent(renderRequest)) {
 				log.d("skipping duplicate drawPage request");
 				return;
 			}
@@ -5254,8 +5324,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return;
 			}
 			log.e("DrawPageTask.work(" + internalDX + "," + internalDY + ")");
-			bi = preparePageImage(0);
-			if (bi != null) {
+			bi = preparePageImage(0, renderRequest);
+			if (bi != null
+					&& drawTaskLifecycle.isActive(owner)
+					&& isRenderRequestCurrent(renderRequest)) {
 				bookView.draw(isPartially);
 			}
 		}
@@ -5265,6 +5337,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BackgroundThread.ensureGUI();
 			boolean ownsRenderCompletion =
 					drawTaskLifecycle.complete(owner);
+			boolean ownsDocument =
+					isRenderRequestCurrent(renderRequest);
 //			log.d("drawPage : bitmap is ready, invalidating view to draw new bitmap");
 //			if ( bi!=null ) {
 //				setBitmap( bi.bitmap );
@@ -5272,9 +5346,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //			}
 //    		if (mOpened)
 			//hideProgress();
-			if (ownsRenderCompletion)
+			if (ownsRenderCompletion && ownsDocument)
 				scheduleGc();
 			if (doneHandler != null
+					&& ownsDocument
 					&& !drawTaskLifecycle.isClosed()
 					&& mServiceLifecycle.isActive())
 				doneHandler.run();
@@ -5282,7 +5357,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public void fail(Exception e) {
-			if (drawTaskLifecycle.complete(owner)) {
+			if (drawTaskLifecycle.complete(owner)
+					&& isRenderRequestCurrent(renderRequest)) {
 				hideProgress();
 				scheduleGc();
 			}
@@ -6951,12 +7027,26 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void drawPage(Runnable doneHandler, boolean isPartially) {
-		if (!readerNativeLifecycle.isInitialized())
+		drawPage(
+				doneHandler,
+				isPartially,
+				ReaderRenderRequest.capture(
+						mBookInfo,
+						documentLoadLifecycle));
+	}
+
+	private void drawPage(
+			Runnable doneHandler,
+			boolean isPartially,
+			ReaderRenderRequest renderRequest) {
+		if (!readerNativeLifecycle.isInitialized()
+				|| !isRenderRequestCurrent(renderRequest))
 			return;
 		log.v("drawPage() : submitting DrawPageTask");
 		if (mOpened)
 			scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
-		post(new DrawPageTask(doneHandler, isPartially));
+		post(new DrawPageTask(
+				doneHandler, isPartially, renderRequest));
 	}
 
 	private int internalDX = 0;
@@ -8046,6 +8136,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		bookInfoDialogLifecycle.cancel();
 		readerOptionsDialogLifecycle.cancel();
 		settingsSyncLifecycle.cancel();
+		drawTaskLifecycle.cancel();
 		stopTracking();
 		cancelDocumentAnimation();
 		invalidateTapHighlight();

@@ -572,14 +572,17 @@ animation state before native document teardown, including repeated or
 partially initialized teardown. The unused volatile animation serial, which
 never participated in ordering or cancellation, has been removed.
 Coalesced `DrawPageTask` work has a separate exact `CloseableTaskGate` owner
-instead of a numeric generation. Only the current token may enter rendering or
-publish its terminal GC schedule; the schedule is armed before a command
-completion callback so a reentrant draw can cancel it. Command completion is
-deliberately independent of latest-render ownership, so replacing a redundant
-draw does not swallow repeat-action or engine-command completion. It still
-requires both an open reader draw gate and the active service generation, while
-`destroy()` closes the gate before native teardown and permanently rejects late
-render, callback and GC work.
+instead of a numeric generation, plus an immutable `ReaderRenderRequest` that
+captures exact book and interaction identity, including the initial null-book
+generation. Only the current token and document request may enter rendering or
+publish its terminal GC schedule. A newly rendered bitmap is revalidated after
+native resize, position lookup and page rendering before it enters the shared
+page cache. Command completion remains independent of latest-render ownership,
+so a redundant draw does not swallow repeat-action or engine-command
+completion for the same document. Replacement and close cancel the draw gate;
+stale completion or failure cannot call the handler, schedule GC, or hide the
+next load's progress. `destroy()` closes the gate before native teardown and
+permanently rejects late render, callback and GC work.
 Autoscroll has a separate synchronized `AutoScrollSessionState` and cancelable
 GUI scheduler. A session is renderable only after its exact owner completes
 background initialization; initialization temporarily suppresses drawing and

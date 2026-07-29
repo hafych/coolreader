@@ -237,9 +237,14 @@ DRM или ограничений доступа, подбор/получени�
   очищает pending animation state до native teardown; неиспользуемый volatile
   animation serial без readers/writers удалён.
   Coalesced `DrawPageTask` теперь использует exact closeable token вместо
-  numeric generation: только current render завершает GC lifecycle, replacement
-  не поглощает независимый command completion, reentrant draw отменяет GC
-  predecessor, а destroy закрывает render/callback owner до native teardown.
+  numeric generation и immutable identity `ReaderRenderRequest` с captured
+  book+interaction (включая initial null-book generation). Только current
+  render входит в подготовку и завершает GC lifecycle; bitmap candidate
+  повторно проверяет document owner после native resize/position/render и
+  публикуется транзакционно. Reentrant draw не поглощает independent command
+  completion той же книги, но replacement/close отменяют gate, а stale
+  completion/failure не вызывает handler и не скрывает progress новой загрузки.
+  Destroy закрывает render/callback owner до native teardown.
   Autoscroll теперь принадлежит synchronized identity-owned
   `AutoScrollSessionState` и отдельному cancelable GUI scheduler: background
   init публикует render-ready только точному owner, stop/destroy не допускают

@@ -780,6 +780,9 @@ READER_BOOK_INFO_SNAPSHOT = (
 READER_SETTINGS_SYNC_SNAPSHOT = (
     SOURCE / "crengine" / "ReaderSettingsSyncSnapshot.java"
 )
+READER_RENDER_REQUEST = (
+    SOURCE / "crengine" / "ReaderRenderRequest.java"
+)
 READER_DOCUMENT_OPTIONS_TEST = (
     ROOT
     / "android"
@@ -815,6 +818,18 @@ READER_SETTINGS_SYNC_SNAPSHOT_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderSettingsSyncSnapshotTest.java"
+)
+READER_RENDER_REQUEST_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderRenderRequestTest.java"
 )
 INTERFACE_THEME = SOURCE / "crengine" / "InterfaceTheme.java"
 INTERFACE_THEME_CATALOG = (
@@ -2402,6 +2417,11 @@ def main() -> None:
         "drawTaskLifecycle.replace()",
         "drawTaskLifecycle.isActive(owner)",
         "drawTaskLifecycle.complete(owner)",
+        "drawTaskLifecycle.cancel()",
+        "ReaderRenderRequest.capture(",
+        "private final ReaderRenderRequest renderRequest",
+        "private boolean isRenderRequestCurrent(",
+        "preparePageImage(0, renderRequest)",
         "&& !drawTaskLifecycle.isClosed()",
         "&& mServiceLifecycle.isActive())",
         "ttsInitializationLifecycle.beginIfIdle()",
@@ -2484,6 +2504,143 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits reader-owned delayed work "
                 f"marker: {marker}")
+
+    page_prepare_start = reader_view_text.find(
+        "\n\tprivate BitmapInfo preparePageImage(\n"
+        "\t\t\tint offset, ReaderRenderRequest renderRequest)")
+    page_prepare_end = reader_view_text.find(
+        "\n\tprivate final CloseableTaskGate drawTaskLifecycle",
+        page_prepare_start)
+    if page_prepare_start < 0 or page_prepare_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned page preparation")
+    else:
+        page_prepare_text = reader_view_text[
+            page_prepare_start:page_prepare_end
+        ]
+        render_index = page_prepare_text.find(
+            "doc.getPageImage(bi.bitmap)")
+        validation_index = page_prepare_text.find(
+            "!isRenderRequestCurrent(renderRequest)",
+            render_index)
+        recycle_index = page_prepare_text.find(
+            "bi.recycle()",
+            validation_index)
+        publication_index = page_prepare_text.find(
+            "mCurrentPageInfo = bi",
+            validation_index)
+        if not (
+                render_index >= 0
+                and validation_index > render_index
+                and recycle_index > validation_index
+                and publication_index > recycle_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not revalidate and recycle "
+                "a stale bitmap before cache publication")
+
+    image_prepare_start = reader_view_text.find(
+        "\n\t\tpublic BitmapInfo prepareImage(\n"
+        "\t\t\t\tReaderRenderRequest renderRequest)")
+    image_prepare_end = reader_view_text.find(
+        "\n\t}\n\n\tprivate void startImageViewer",
+        image_prepare_start)
+    if image_prepare_start < 0 or image_prepare_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned image-viewer rendering")
+    else:
+        image_prepare_text = reader_view_text[
+            image_prepare_start:image_prepare_end
+        ]
+        image_render_index = image_prepare_text.find(
+            "doc.drawImage(bi.bitmap, bi.imageInfo)")
+        image_validation_index = image_prepare_text.find(
+            "!isRenderRequestCurrent(renderRequest)",
+            image_render_index)
+        image_publication_index = image_prepare_text.find(
+            "mCurrentPageInfo = bi",
+            image_validation_index)
+        if not (
+                "ImageInfo current = currentImage" in image_prepare_text
+                and "new ImageInfo(current)" in image_prepare_text
+                and image_render_index >= 0
+                and image_validation_index > image_render_index
+                and image_publication_index > image_validation_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not snapshot and "
+                "revalidate an image-viewer bitmap before publication")
+
+    draw_task_start = reader_view_text.find(
+        "\n\tprivate class DrawPageTask extends Task")
+    draw_task_end = reader_view_text.find(
+        "\n\t;\n\n\tstatic class ReaderSurfaceView",
+        draw_task_start)
+    if draw_task_start < 0 or draw_task_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned DrawPageTask")
+    else:
+        draw_task_text = reader_view_text[
+            draw_task_start:draw_task_end
+        ]
+        for marker in (
+            "private final ReaderRenderRequest renderRequest",
+            "isRenderRequestCurrent(renderRequest)",
+            "boolean ownsDocument =",
+            "doneHandler != null",
+            "&& ownsDocument",
+        ):
+            if marker not in draw_task_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} DrawPageTask omits exact "
+                    f"document completion marker: {marker}")
+
+    draw_submit_start = reader_view_text.find(
+        "\n\tprivate void drawPage(\n"
+        "\t\t\tRunnable doneHandler,\n"
+        "\t\t\tboolean isPartially,\n"
+        "\t\t\tReaderRenderRequest renderRequest)")
+    draw_submit_end = reader_view_text.find(
+        "\n\tprivate int internalDX", draw_submit_start)
+    if draw_submit_start < 0 or draw_submit_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned draw submission")
+    else:
+        draw_submit_text = reader_view_text[
+            draw_submit_start:draw_submit_end
+        ]
+        submit_validation_index = draw_submit_text.find(
+            "!isRenderRequestCurrent(renderRequest)")
+        submit_index = draw_submit_text.find(
+            "post(new DrawPageTask(")
+        if not (
+                submit_validation_index >= 0
+                and submit_index > submit_validation_index):
+            violations.append(
+                f"{relative(READER_VIEW)} lets a stale document request "
+                "replace the current draw owner")
+
+    replace_load_start = reader_view_text.find(
+        "\n\tprivate DocumentLoadLifecycle.Request "
+        "replaceDocumentLoad()")
+    replace_load_end = reader_view_text.find(
+        "\n\tpublic boolean showManual()", replace_load_start)
+    if replace_load_start < 0 or replace_load_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned document replacement")
+    else:
+        replace_load_text = reader_view_text[
+            replace_load_start:replace_load_end
+        ]
+        interaction_replace_index = replace_load_text.find(
+            "documentLoadLifecycle.replace()")
+        draw_cancel_index = replace_load_text.find(
+            "drawTaskLifecycle.cancel()")
+        if not (
+                interaction_replace_index >= 0
+                and draw_cancel_index > interaction_replace_index):
+            violations.append(
+                f"{relative(READER_VIEW)} does not rotate the document "
+                "interaction before cancelling its render")
+
     for marker in (
         "private final CloseableTaskGate settingsSyncLifecycle",
         "ReaderSettingsSyncSnapshot.capture(",
@@ -2775,6 +2932,8 @@ def main() -> None:
         "TtsDocumentSnapshot.class.getModifiers()",
         "ReaderBookInfoSnapshot.class.getModifiers()",
         "ReaderSettingsSyncSnapshot.class.getModifiers()",
+        "ReaderRenderRequest.class.getModifiers()",
+        '"renderRequest"',
         '"bookInfoDialogLifecycle"',
         '"settingsSyncLifecycle"',
         '"ttsDocumentHandler"',
@@ -2930,6 +3089,39 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_SETTINGS_SYNC_SNAPSHOT_TEST)} omits "
                 f"settings-sync regression: {marker}")
+
+    reader_render_request_text = (
+        READER_RENDER_REQUEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderRenderRequest",
+        "private final BookInfo expectedBook",
+        "private final DocumentLoadLifecycle.Interaction interaction",
+        "static ReaderRenderRequest capture(",
+        "static ReaderRenderRequest fromInteraction(",
+        "boolean isCurrent(",
+        "currentBook == expectedBook",
+        "lifecycle.isInteractionActive(interaction)",
+    ):
+        if marker not in reader_render_request_text:
+            violations.append(
+                f"{relative(READER_RENDER_REQUEST)} omits exact render "
+                f"identity marker: {marker}")
+
+    reader_render_request_test_text = (
+        READER_RENDER_REQUEST_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "currentBookIsMatchedByIdentity",
+        "emptyReaderGenerationOwnsOnlyNullBook",
+        "replacementInvalidatesRequestEvenForSameBook",
+        "cancelAndCloseInvalidateCapturedInteraction",
+        "missingOrClosedLifecycleCannotBeCaptured",
+    ):
+        if marker not in reader_render_request_test_text:
+            violations.append(
+                f"{relative(READER_RENDER_REQUEST_TEST)} omits render "
+                f"ownership regression: {marker}")
 
     key_double_click_state_text = KEY_DOUBLE_CLICK_STATE.read_text(
         encoding="utf-8")
