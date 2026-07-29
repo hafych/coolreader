@@ -1665,10 +1665,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				if (bm != null) {
 					PositionProperties prop = doc.getPositionProps(bm.getStartPos(), true);
 					if (prop.pageMode != 0) {
-						buf.append("" + (prop.pageNumber + 1) + " / " + prop.pageCount + "   ");
+						buf.append(""
+								+ DocumentPositionPolicy.displayPageNumber(
+										prop.pageNumber,
+										prop.pageCount)
+								+ " / "
+								+ prop.pageCount
+								+ "   ");
 					}
-					int percent = (int) (10000 * (long) prop.y / prop.fullHeight);
-					buf.append("" + (percent / 100) + "." + (percent % 100) + "%");
+					buf.append(DocumentPositionPolicy.formatPercent(
+							prop.getPercent()));
 
 					// Show chapter details if book has more than one chapter
 					TOCItem toc = doc.getTOC();
@@ -1874,10 +1880,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					PositionProperties prop = doc.getPositionProps(bm.getStartPos(), true);
 					items.add("section=section.position");
 					if (prop.pageMode != 0) {
-						items.add("position.page=" + (prop.pageNumber + 1) + " / " + prop.pageCount);
+						items.add(
+								"position.page="
+										+ DocumentPositionPolicy
+												.displayPageNumber(
+														prop.pageNumber,
+														prop.pageCount)
+										+ " / "
+										+ prop.pageCount);
 					}
-					int percent = (int) (10000 * (long) prop.y / prop.fullHeight);
-					items.add("position.percent=" + (percent / 100) + "." + (percent % 100) + "%");
+					items.add(
+							"position.percent="
+									+ DocumentPositionPolicy.formatPercent(
+											prop.getPercent()));
 					String chapter = bm.getTitleText();
 					if (chapter != null && chapter.length() > 100)
 						chapter = chapter.substring(0, 100) + "...";
@@ -5861,9 +5876,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BackgroundThread.instance().postBackground(() -> {
 				String posText = null;
 				if (props != null) {
-					int percent = (int) (10000 * (long) props.y / props.fullHeight);
-					String percentText = "" + (percent / 100) + "." + (percent % 10) + "%";
-					posText = "" + props.pageNumber + " / " + props.pageCount + " (" + percentText + ")";
+					String percentText =
+							DocumentPositionPolicy.formatPercent(
+									props.getPercent());
+					posText = ""
+							+ DocumentPositionPolicy.displayPageNumber(
+									props.pageNumber,
+									props.pageCount)
+							+ " / "
+							+ props.pageCount
+							+ " ("
+							+ percentText
+							+ ")";
 				}
 				callback.onPositionProperties(props, posText);
 			});
@@ -6252,8 +6276,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			post(new Task() {
 				public void work() {
 					PositionProperties pos = doc.getPositionProps(null, true);
-					if (pos != null && pos.pageCount > 0) {
-						int pageNumber = pos.pageCount * percent / 100;
+					if (pos != null) {
+						int pageNumber =
+								DocumentPositionPolicy.pageIndexForPercent(
+										pos.pageCount, percent);
+						if (pageNumber < 0)
+							return;
 						doCommandFromBackgroundThread(ReaderCommand.DCMD_GO_PAGE, pageNumber);
 					}
 				}
@@ -6440,10 +6468,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		getCurrentPositionProperties((props, positionText) -> {
 			if (props == null)
 				return;
+			if (props.pageCount <= 0)
+				return;
 			String pos = mActivity.getString(R.string.dlg_goto_current_position) + " " + positionText;
 			String prompt = mActivity.getString(R.string.dlg_goto_input_page_number);
 			showInputDialog(mActivity.getString(R.string.mi_goto_page), pos + "\n" + prompt, true,
-					1, props.pageCount, props.pageNumber,
+					1, props.pageCount,
+					DocumentPositionPolicy.displayPageNumber(
+							props.pageNumber, props.pageCount),
 					new InputHandler() {
 						int pageNumber = 0;
 

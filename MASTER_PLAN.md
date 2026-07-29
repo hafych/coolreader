@@ -189,7 +189,9 @@ DRM или ограничений доступа, подбор/получени�
   значения корректно wrap, magnitude направления нормализуется без overflow.
   `PositionProperties` теперь widened/clamped для scrollable range и 0–10000
   percent; scroll movement использует тот же range, а go-to-percent переиспользует
-  единый контракт без int overflow и division by zero.
+  единый контракт без int overflow и division by zero. Stateless
+  `DocumentPositionPolicy` централизует one-based display page, percent text и
+  0–100 → valid page mapping с точной 100% last-page boundary.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

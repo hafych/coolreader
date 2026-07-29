@@ -402,7 +402,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   an unavailable current face, while preserving next/previous wrap behavior.
 - Large-document position percentages and scroll bounds now use widened,
   clamped arithmetic. Go-to-percent no longer duplicates an overflow- and
-  division-by-zero-prone height calculation.
+  division-by-zero-prone height calculation; 100% selects the actual last page,
+  and page/percentage text is consistently bounded and formatted.
 - Scroll-view animation frames now use fractional progress instead of truncated
   integer division, and autoscroll duration arithmetic widens before multiplying
   character counts. Draw-time averaging is isolated per reader and validates

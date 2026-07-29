@@ -91,6 +91,9 @@ BITMAP_MEMORY_ACCOUNTING = (
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 TAP_ZONE_GEOMETRY = SOURCE / "crengine" / "TapZoneGeometry.java"
 POSITION_PROPERTIES = SOURCE / "crengine" / "PositionProperties.java"
+DOCUMENT_POSITION_POLICY = (
+    SOURCE / "crengine" / "DocumentPositionPolicy.java"
+)
 EINK_REFRESH_LEASE_TRACKER = (
     SOURCE / "crengine" / "EinkRefreshLeaseTracker.java"
 )
@@ -145,6 +148,18 @@ POSITION_PROPERTIES_TEST = (
     / "coolreader"
     / "crengine"
     / "PositionPropertiesTest.java"
+)
+DOCUMENT_POSITION_POLICY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "DocumentPositionPolicyTest.java"
 )
 EINK_REFRESH_LEASE_TRACKER_TEST = (
     ROOT
@@ -1528,6 +1543,25 @@ def main() -> None:
         violations.append(
             f"{relative(READER_VIEW)} retains divide-by-zero-prone "
             "go-to percentage arithmetic")
+    for marker in (
+        "DocumentPositionPolicy.formatPercent(",
+        "DocumentPositionPolicy.displayPageNumber(",
+        "DocumentPositionPolicy.pageIndexForPercent(",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits document position policy "
+                f"marker: {marker}")
+    for legacy in (
+        "10000 * (long) props.y / props.fullHeight",
+        "10000 * (long) prop.y / prop.fullHeight",
+        "pos.pageCount * percent / 100",
+        "prop.pageNumber + 1",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains inline document position "
+                f"arithmetic: {legacy}")
     if "private static final PageCurveTables PAGE_CURVE_TABLES" not in (
             reader_view_text):
         violations.append(
@@ -1868,6 +1902,38 @@ def main() -> None:
             violations.append(
                 f"{relative(POSITION_PROPERTIES_TEST)} omits position "
                 f"regression: {marker}")
+
+    document_position_text = DOCUMENT_POSITION_POLICY.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class DocumentPositionPolicy",
+        "static int displayPageNumber(int pageIndex, int pageCount)",
+        "long display = (long) pageIndex + 1",
+        "static int pageIndexForPercent(int pageCount, int percent)",
+        "if (boundedPercent == 100)",
+        "(long) pageCount * boundedPercent / 100",
+        "static String formatPercent(int percent)",
+        "(bounded / 10 % 10)",
+    ):
+        if marker not in document_position_text:
+            violations.append(
+                f"{relative(DOCUMENT_POSITION_POLICY)} omits document "
+                f"position policy marker: {marker}")
+
+    document_position_test_text = DOCUMENT_POSITION_POLICY_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "displayPageIsOneBasedAndClamped",
+        "percentMapsToValidZeroBasedPage",
+        "percentPageMappingWidensBeforeMultiplication",
+        "percentFormattingUsesOneDecimalAndClamps",
+        "Integer.MAX_VALUE",
+        '"100.0%"',
+    ):
+        if marker not in document_position_test_text:
+            violations.append(
+                f"{relative(DOCUMENT_POSITION_POLICY_TEST)} omits document "
+                f"position policy regression: {marker}")
 
     eink_lease_text = EINK_REFRESH_LEASE_TRACKER.read_text(
         encoding="utf-8")

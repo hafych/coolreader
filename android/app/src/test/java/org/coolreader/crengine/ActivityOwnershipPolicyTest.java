@@ -437,6 +437,16 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void documentPositionPolicyIsAStatelessPureBoundary() {
+		assertTrue(Modifier.isFinal(
+				DocumentPositionPolicy.class.getModifiers()));
+		assertEquals(
+				0,
+				DocumentPositionPolicy.class
+						.getDeclaredFields().length);
+	}
+
+	@Test
 	public void gestureAccelerationIsReaderOwnedAndImmutable()
 			throws Exception {
 		Field acceleration =
