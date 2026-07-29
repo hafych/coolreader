@@ -31,7 +31,10 @@ unused formatter objects are not retained at process scope.
 `BackgroundThread` remains a process-scoped dispatcher. Activity teardown does
 not quit it because a newer Activity generation may already use the same
 dispatcher. Activity-owned work must use `ServiceLifecycle` for cancellation
-instead.
+instead. Its singleton and handler references use explicit cross-thread
+publication. GUI and background tasks submitted before their handler exists
+pass through one atomic deferred-queue handoff that preserves delay and removes
+delivered entries before a later Activity generation can attach.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

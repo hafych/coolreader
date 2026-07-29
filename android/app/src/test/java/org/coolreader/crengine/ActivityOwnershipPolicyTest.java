@@ -11,6 +11,7 @@ package org.coolreader.crengine;
 
 import android.app.Activity;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -47,6 +48,42 @@ public class ActivityOwnershipPolicyTest {
 	public void scannerAndCachedStorePluginRetainNoActivity() {
 		assertRetainsNoActivity(Scanner.class);
 		assertRetainsNoActivity(LitresPlugin.class);
+	}
+
+	@Test
+	public void processDispatcherPublishesHandlerStateSafely()
+			throws Exception {
+		assertVolatileField(BackgroundThread.class, "instance");
+		assertVolatileField(BackgroundThread.class, "handler");
+		assertVolatileField(BackgroundThread.class, "guiHandler");
+		int deferredQueueCount = 0;
+		for (Field field : BackgroundThread.class.getDeclaredFields()) {
+			if (field.getType() == DeferredTaskQueue.class) {
+				deferredQueueCount++;
+				assertTrue(
+						"Deferred queues must belong to one dispatcher: "
+								+ field.getName(),
+						Modifier.isFinal(field.getModifiers()));
+			}
+			assertFalse(
+					"Legacy mutable dispatcher state remains: "
+							+ field.getName(),
+					field.getName().equals("delayedTaskId")
+							|| field.getName().equals("mStopped"));
+		}
+		assertEquals(
+				"GUI and background handoffs need separate queues",
+				2,
+				deferredQueueCount);
+	}
+
+	private static void assertVolatileField(Class<?> type, String name)
+			throws Exception {
+		Field field = type.getDeclaredField(name);
+		assertTrue(
+				type.getSimpleName() + "." + name
+						+ " must be published across threads",
+				Modifier.isVolatile(field.getModifiers()));
 	}
 
 	private static void assertRetainsNoActivity(Class<?> type) {

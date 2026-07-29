@@ -20,6 +20,8 @@ TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
+BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
+DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
 PAGE_FLIP_GEOMETRY_TEST = (
     ROOT
     / "android"
@@ -31,6 +33,18 @@ PAGE_FLIP_GEOMETRY_TEST = (
     / "coolreader"
     / "crengine"
     / "PageFlipGeometryTest.java"
+)
+DEFERRED_TASK_QUEUE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "DeferredTaskQueueTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -179,6 +193,55 @@ def main() -> None:
         violations.append(
             f"{relative(SERVICES)} lets Activity teardown stop the "
             "process-scoped dispatcher")
+
+    background_thread_text = BACKGROUND_THREAD.read_text(encoding="utf-8")
+    for marker in (
+        "private static volatile BackgroundThread instance",
+        "private volatile Handler handler",
+        "private volatile Handler guiHandler",
+        "backgroundTasks.attach(",
+        "backgroundTasks.attach(null)",
+        "guiTasks.attach(",
+    ):
+        if marker not in background_thread_text:
+            violations.append(
+                f"{relative(BACKGROUND_THREAD)} omits dispatcher marker: "
+                f"{marker}")
+    for marker in (
+        "ArrayList<Runnable> posted",
+        "postedGUI",
+        "delayedTaskId",
+        "mStopped",
+    ):
+        if marker in background_thread_text:
+            violations.append(
+                f"{relative(BACKGROUND_THREAD)} retains legacy dispatcher "
+                f"state: {marker}")
+
+    deferred_task_queue_text = DEFERRED_TASK_QUEUE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "synchronized int attach(Dispatcher<T> dispatcher)",
+        "synchronized boolean post(T task, long delay)",
+        "pending.subList(0, delivered).clear()",
+        "Math.max(0, delay)",
+    ):
+        if marker not in deferred_task_queue_text:
+            violations.append(
+                f"{relative(DEFERRED_TASK_QUEUE)} omits handoff marker: "
+                f"{marker}")
+
+    deferred_task_queue_test_text = DEFERRED_TASK_QUEUE_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "queuedTasksKeepDelayAndDrainOnlyOnce",
+        "attachAndPostSerializeWithoutLoss",
+        "rejectedDrainRemainsAvailableForNextTarget",
+    ):
+        if marker not in deferred_task_queue_test_text:
+            violations.append(
+                f"{relative(DEFERRED_TASK_QUEUE_TEST)} omits regression "
+                f"marker: {marker}")
 
     toast_text = TOAST_VIEW.read_text(encoding="utf-8")
     if re.search(

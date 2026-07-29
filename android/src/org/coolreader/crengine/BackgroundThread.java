@@ -20,7 +20,6 @@
 
 package org.coolreader.crengine;
 
-import java.util.ArrayList;
 import java.util.concurrent.Callable;
 
 import org.coolreader.crengine.ReaderView.Sync;
@@ -37,31 +36,31 @@ public class BackgroundThread extends Thread {
 	
 	private final static Object LOCK = new Object(); 
 
-	private static BackgroundThread instance;
+	private static volatile BackgroundThread instance;
 	
 	// singleton
 	public static BackgroundThread instance()
 	{
-		if ( instance==null ) {
+		BackgroundThread current = instance;
+		if (current == null) {
 			synchronized( LOCK ) {
-				if ( instance==null ) {
-					instance = new BackgroundThread();
-					instance.start();
+				current = instance;
+				if (current == null) {
+					current = new BackgroundThread();
+					instance = current;
+					current.start();
 				}
 			}
 		}
-		return instance;
+		return current;
 	}
 	
 	public static Handler getBackgroundHandler() {
-		if (instance == null)
-			return null;
-		return instance.handler;
+		BackgroundThread current = instance;
+		return current == null ? null : current.handler;
 	}
 
 	public static Handler getGUIHandler() {
-		if (instance().guiHandler == null)
-			return null;
 		return instance().guiHandler;
 	}
 
@@ -90,10 +89,12 @@ public class BackgroundThread extends Thread {
 	}
 	
 	// 
-	private Handler handler;
-	private final ArrayList<Runnable> posted = new ArrayList<>();
-	private Handler guiHandler;
-	private final ArrayList<Runnable> postedGUI = new ArrayList<>();
+	private volatile Handler handler;
+	private final DeferredTaskQueue<Runnable> backgroundTasks =
+			new DeferredTaskQueue<>();
+	private volatile Handler guiHandler;
+	private final DeferredTaskQueue<Runnable> guiTasks =
+			new DeferredTaskQueue<>();
 
 	/**
 	 * Set view to post GUI tasks to.
@@ -101,14 +102,14 @@ public class BackgroundThread extends Thread {
 	 */
 	public void setGUIHandler(Handler guiHandler) {
 		this.guiHandler = guiHandler;
-		if (guiHandler != null) {
-			// forward already posted events
-			synchronized(postedGUI) {
-				L.d("Engine.setGUI: " + postedGUI.size() + " posted tasks to copy");
-				for ( Runnable task : postedGUI )
-					guiHandler.post( task );
-			}
-		}
+		int delivered = guiTasks.attach(
+				guiHandler == null
+						? null
+						: (task, delay) -> delay > 0
+								? guiHandler.postDelayed(task, delay)
+								: guiHandler.post(task));
+		if (delivered > 0)
+			L.d("Engine.setGUI: " + delivered + " queued tasks delivered");
 	}
 
 	/**
@@ -124,24 +125,32 @@ public class BackgroundThread extends Thread {
 	public void run() {
 		Log.i("cr3", "Entering background thread");
 		Looper.prepare();
-		handler = new Handler() {
+		Handler currentHandler = new Handler() {
 			public void handleMessage( Message message )
 			{
 				Log.d("cr3", "message: " + message);
 			}
 		};
+		handler = currentHandler;
 		Log.i("cr3", "Background thread handler is created");
-		synchronized(posted) {
-			for ( Runnable task : posted ) {
+		backgroundTasks.attach((task, delay) -> {
+			if (delay > 0) {
 				Log.i("cr3", "Copying posted bg task to handler : " + task);
-				handler.post(task);
+				return currentHandler.postDelayed(task, delay);
 			}
-			posted.clear();
+			return currentHandler.post(task);
+		});
+		try {
+			Looper.loop();
+		} finally {
+			backgroundTasks.attach(null);
+			handler = null;
+			synchronized (LOCK) {
+				if (instance == this)
+					instance = null;
+			}
+			Log.i("cr3", "Exiting background thread");
 		}
-		Looper.loop();
-		handler = null;
-		instance = null;
-		Log.i("cr3", "Exiting background thread");
 	}
 
 	//private final static boolean USE_LOCK = false;
@@ -176,30 +185,19 @@ public class BackgroundThread extends Thread {
 	public void postBackground( Runnable task, long delay )
 	{
 		Engine.suspendLongOperation();
-		if ( mStopped ) {
-			L.i("Posting task " + task + " to GUI queue since background thread is stopped");
-			postGUI( task );
-			return;
-		}
 		task = guard(task);
-		if ( handler==null ) {
-			synchronized(posted) {
-				L.i("Adding task " + task + " to posted list since handler is not yet created");
-				posted.add(task);
-			}
-		} else {
-			if (delay > 0) {
-				Runnable finalTask = task;
-				handler.postDelayed(() -> {
-					try {
-						finalTask.run();
-					} catch (Throwable e) {
-						Log.e("cr3", "Exception while processing task in Background thread: " + finalTask, e);
-					}
-				}, delay);
-			} else
-				handler.post(task);
+		if (delay > 0) {
+			Runnable finalTask = task;
+			task = () -> {
+				try {
+					finalTask.run();
+				} catch (Throwable e) {
+					Log.e("cr3", "Exception while processing task in Background thread: " + finalTask, e);
+				}
+			};
 		}
+		if (!backgroundTasks.post(task, delay))
+			L.i("Queued task until background handler is ready: " + task);
 	}
 
 	/**
@@ -211,7 +209,6 @@ public class BackgroundThread extends Thread {
 		postGUI(task, 0);
 	}
 
-	static int delayedTaskId = 0;
 	/**
 	 * Post runnable to be executed in GUI thread
 	 * @param task is runnable to execute in GUI thread
@@ -220,25 +217,17 @@ public class BackgroundThread extends Thread {
 	public void postGUI(final Runnable task, final long delay)
 	{
 		try {
-			if (guiHandler == null) {
-				synchronized (postedGUI) {
-					postedGUI.add(task);
-				}
-			} else {
-				if (delay > 0) {
-					final int id = ++delayedTaskId;
-					//L.v("posting delayed (" + delay + ") task " + id + " " + task);
-					guiHandler.postDelayed(() -> {
-						try {
-							task.run();
-							//L.v("finished delayed (" + delay + ") task " + id + " " + task);
-						} catch (Throwable e) {
-							Log.e("cr3", "Exception while processing task in GUI thread: " + task, e);
-						}
-					}, delay);
-				} else
-					guiHandler.post(task);
+			Runnable postedTask = task;
+			if (delay > 0) {
+				postedTask = () -> {
+					try {
+						task.run();
+					} catch (Throwable e) {
+						Log.e("cr3", "Exception while processing task in GUI thread: " + task, e);
+					}
+				};
 			}
+			guiTasks.post(postedTask, delay);
 		} catch (Throwable e) {
 			Log.e("cr3", "Exception while posting task to GUI thread: " + task, e);
 		}
@@ -252,7 +241,7 @@ public class BackgroundThread extends Thread {
 	{
 		Engine.suspendLongOperation();
 		task = guard(task);
-		if (isBackgroundThread() || mStopped)
+		if (isBackgroundThread())
 			task.run(); // run in this thread
 		else 
 			postBackground(task); // post
@@ -374,8 +363,6 @@ public class BackgroundThread extends Thread {
     	if(DBG) L.d("callGUI : returned from get " + Thread.currentThread().getName());
     	return res;
     }
-	
-	private boolean mStopped = false;
 	
 	public void waitForBackgroundCompletion() {
 		Engine.suspendLongOperation();
