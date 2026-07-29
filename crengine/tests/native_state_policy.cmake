@@ -7854,7 +7854,7 @@ forbid_source_text(
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
-  "std::unique_ptr<CRMenu> menu(new CRMenu("
+  "std::unique_ptr<CRMenu> menu = std::make_unique<CRMenu>("
   "settings command menus must remain scoped during construction"
 )
 require_source_text(
@@ -7866,6 +7866,36 @@ require_source_text(
   "${SETTINGS_SOURCE}"
   "addItem(std::make_unique<CRControlsMenuItem>"
   "settings control items must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> createCommandsMenu(int key, int flags)"
+  "control-command menu factories must return scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "_controlsMenu->createCommandsMenu(_key, _flags);"
+  "control-command selections must retain factory ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "_menu->getWindowManager()->activateWindow(menu.release());"
+  "control-command menus must transfer explicitly to the legacy activation boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * createCommandsMenu(int key, int flags)"
+  "control-command menu factories must not return raw ownership"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "return menu.release();"
+  "settings menu factories must not release ownership internally"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * menu = _controlsMenu->createCommandsMenu"
+  "control-command factory results must not regress to raw ownership"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
@@ -8139,8 +8169,8 @@ forbid_source_text(
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
-  "return menu.release();"
-  "settings command menus must expose one explicit legacy transfer"
+  "return menu;"
+  "settings command menu factories must return their scoped owner"
 )
 require_source_text(
   "${GUI_HEADER}"

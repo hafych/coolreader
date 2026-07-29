@@ -92,15 +92,15 @@ public:
     {
         return lString32(getKeyName(key, flags));
     }
-    CRMenu * createCommandsMenu(int key, int flags)
+    std::unique_ptr<CRMenu> createCommandsMenu(int key, int flags)
     {
         lString32 label = getSettingLabel(key, flags)
                 + " - "
                 + Utf8ToUnicode(lString8(_("choose command")));
         lString32 keyid = getSettingKey(key, flags);
-        std::unique_ptr<CRMenu> menu(new CRMenu(
+        std::unique_ptr<CRMenu> menu = std::make_unique<CRMenu>(
                 _wm, this, _id, label, LVImageSourceRef(),
-                LVFontRef(), LVFontRef(), _props, LCSTR(keyid), 8));
+                LVFontRef(), LVFontRef(), _props, LCSTR(keyid), 8);
         for ( int i=0; i<_overrideCommands->length(); i++ ) {
             const CRGUIAccelerator * acc = _overrideCommands->get(i);
             lString32 cmdLabel = Utf8ToUnicode(
@@ -108,9 +108,10 @@ public:
                             acc->commandId, acc->commandParam)));
             lString32 cmdValue = lString32::itoa(acc->commandId)
                     << "," << lString32::itoa(acc->commandParam);
-            std::unique_ptr<CRMenuItem> item(new CRMenuItem(
-                    menu.get(), i, cmdLabel, LVImageSourceRef(),
-                    LVFontRef(), cmdValue.c_str()));
+            std::unique_ptr<CRMenuItem> item =
+                    std::make_unique<CRMenuItem>(
+                            menu.get(), i, cmdLabel, LVImageSourceRef(),
+                            LVFontRef(), cmdValue.c_str());
             menu->addItem(std::move(item));
         }
         menu->setAccelerators( getAccelerators() );
@@ -118,7 +119,7 @@ public:
         menu->setValueFont(_valueFont);
         menu->setFullscreen(true);
         menu->reconfigure( 0 );
-        return menu.release();
+        return menu;
     }
     CRControlsMenu(CRMenu * baseMenu, int id, CRPropRef props,
                    lString32 accelTableId, int numItems, lvRect & rc)
@@ -167,8 +168,9 @@ public:
 /// called on item selection
 int CRControlsMenuItem::onSelect()
 {
-    CRMenu * menu = _controlsMenu->createCommandsMenu(_key, _flags);
-    _menu->getWindowManager()->activateWindow(menu);
+    std::unique_ptr<CRMenu> menu =
+            _controlsMenu->createCommandsMenu(_key, _flags);
+    _menu->getWindowManager()->activateWindow(menu.release());
     return 1;
 }
 
