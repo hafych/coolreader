@@ -17,6 +17,8 @@ file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crgui.cpp" GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.h" SETTINGS_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.cpp" SETTINGS_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.cpp" DICTIONARY_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
@@ -227,6 +229,53 @@ forbid_source_text(
   "${LV_TYPES_HEADER}"
   "lvRect * res = new lvRect"
   "rectangle clipping must not allocate an unmanaged result"
+)
+
+# --- legacy GUI T9 encoding width compatibility ---
+require_source_text(
+  "${T9_ENCODING_HEADER}"
+  "lString32Collection keytable_;"
+  "T9 key tables must use the current wide-string collection"
+)
+require_source_text(
+  "${T9_ENCODING_HEADER}"
+  "lString32 normalized = Utf16ToUnicode(s);"
+  "T9 input must cross an explicit UTF-16 to UTF-32 boundary"
+)
+require_source_text(
+  "${T9_ENCODING_HEADER}"
+  "normalized.lowercase();"
+  "T9 input normalization must remain Unicode-aware"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "const lChar32 * defT5encoding[]"
+  "dictionary T9 defaults must use the current character width"
+)
+require_source_text(
+  "${DICTIONARY_DIALOG_SOURCE}"
+  "UnicodeToUtf16(encoding_[i])"
+  "dictionary T9 drawing must cross an explicit UTF-32 to UTF-16 boundary"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testT9EncodingCompatibility()"
+  "T9 width compatibility must retain portable native coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "T9 Unicode lowercase mapping was not preserved"
+  "T9 width compatibility must retain Unicode lowercase coverage"
+)
+forbid_source_text(
+  "${T9_ENCODING_HEADER}"
+  "lString16Collection"
+  "T9 key tables must not depend on the removed UTF-16 collection"
+)
+forbid_source_text(
+  "${T9_ENCODING_HEADER}"
+  "const wchar_t *chars"
+  "T9 definitions must not depend on platform wchar width"
 )
 
 require_source_text(

@@ -347,13 +347,13 @@ public:
 
 };
 
-const lChar16 * defT5encoding[] = {
-    L"",     // 0 STUB
-    L"abcde",  // 1
-    L"fghij",  // 2
-    L"klmno",  // 3
-    L"pqrst",  // 4
-    L"uvwxyz", // 5
+const lChar32 * defT5encoding[] = {
+    U"",     // 0 STUB
+    U"abcde",  // 1
+    U"fghij",  // 2
+    U"klmno",  // 3
+    U"pqrst",  // 4
+    U"uvwxyz", // 5
     NULL
 };
 
@@ -415,7 +415,7 @@ void CRT9Keyboard::draw()
     lvPoint minSizeN = shortcutSkin->getMinSize();
     for ( int i=0; i<encoding_.length(); i++ ) {
         lString16 txtN = lString16::itoa(i);
-        lString16 txt = encoding_[i];
+        lString16 txt = UnicodeToUtf16(encoding_[i]);
         if ( txt.empty() )
             continue;
         // label 0..9
@@ -506,4 +506,3 @@ void showT9Keyboard(CRGUIWindowManager * wm, CRDocViewWindow * mainwin, int id, 
 	CRT9Keyboard * dlg = new CRT9Keyboard( wm, mainwin, id, buffer );
     wm->activateWindow( dlg );
 }
-

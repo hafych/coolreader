@@ -62,6 +62,7 @@
 #include "../src/lvxml/lvtextlinequeue.h"
 #include "../src/pdbfmt_internal.h"
 #include "../src/wolutil_internal.h"
+#include "../../cr3gui/src/t9encoding.h"
 #if (USE_GIF==1)
 #include "../src/lvimg/lvgifimagesource.h"
 #endif
@@ -108,6 +109,32 @@ static int testRectangleClipValue() {
         return fail("rectangle clipping reported a containing clip");
     if (source.clipBy(lvRect(200, 300, 400, 500)).has_value())
         return fail("rectangle clipping reported a disjoint clip");
+    return 0;
+}
+
+static int testT9EncodingCompatibility() {
+    T9ClassicEncoding classic;
+    if (classic.length() != 10
+            || classic.encode_string(
+                    UnicodeToUtf16(U"Quick")) != "78425")
+        return fail("classic T9 mapping changed during UTF-32 migration");
+
+    const lChar32 *unicodeDefinitions[] = {
+        U"", U"абв", U"где", NULL
+    };
+    TEncoding unicodeEncoding(unicodeDefinitions);
+    if (unicodeEncoding.encode_string(
+                UnicodeToUtf16(U"БЕД")) != "122")
+        return fail("T9 Unicode lowercase mapping was not preserved");
+
+    lString32Collection replacement;
+    replacement.add(U"ab");
+    replacement.add(U"cd");
+    unicodeEncoding.set(replacement);
+    if (unicodeEncoding.length() != 2
+            || unicodeEncoding.encode_string(
+                    UnicodeToUtf16(U"Dab")) != "100")
+        return fail("T9 runtime layout replacement changed");
     return 0;
 }
 
@@ -7680,6 +7707,8 @@ int main() {
         return 1;
 #endif
     if (testRectangleClipValue() != 0)
+        return 1;
+    if (testT9EncodingCompatibility() != 0)
         return 1;
     if (testMutex() != 0)
         return 1;
