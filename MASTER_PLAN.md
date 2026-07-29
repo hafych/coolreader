@@ -202,7 +202,8 @@ DRM или ограничений доступа, подбор/получени�
   owner-backed storage/blob borrows, encoding double-character sparse-row и
   output ownership, а также GUI window-manager screen owner/borrow lifecycle,
   transactional canvas-generation resize, modern Qt view
-  PIMPL/document/word-selector и generated-UI helper owners,
+  PIMPL/document/word-selector, generated-UI helper owners и fallback-font
+  row/control graphs,
   GUI window/event queue ownership и
   scoped accelerator/command-event/main-menu/recent/bookmark item
   publication candidates и lifecycle `CRDocViewWindow`, scoped page-image

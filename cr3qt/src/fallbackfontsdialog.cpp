@@ -51,10 +51,7 @@ FallbackFontsDialog::FallbackFontsDialog(QWidget* parent, const QStringList& ava
     setAvailableFaces(availFaces);
 }
 
-FallbackFontsDialog::~FallbackFontsDialog()
-{
-    cleanupFontItems();
-}
+FallbackFontsDialog::~FallbackFontsDialog() = default;
 
 void FallbackFontsDialog::setAvailableFaces(const QStringList& availFaces)
 {
@@ -74,19 +71,16 @@ void FallbackFontsDialog::setFallbackFaces(const QString& faces)
     m_layout->removeItem(m_spacer);
     QStringList::const_iterator it;
     int item_idx = 0;
-    FontControlItem* item;
     for (it = list.begin(); it != list.end(); ++it) {
         QString face = (*it).trimmed();
         int face_idx = m_availableFaces.indexOf(face);
         if (face_idx >= 0) {
-            item = addFontItem(item_idx, face_idx);
-            m_layout->addLayout(item->layout);
+            addFontItem(item_idx, face_idx);
             item_idx++;
         }
     }
     // add empty item
-    item = addFontItem(item_idx, -1);
-    m_layout->addLayout(item->layout);
+    addFontItem(item_idx, -1);
     m_layout->addItem(m_spacer);
 }
 
@@ -103,11 +97,12 @@ void FallbackFontsDialog::slot_delete_clicked()
         if (ok)
             item_idx = tmp;
     }
-    if (item_idx >= 0 && item_idx < m_items.size()) {
+    const int item_count = static_cast<int>(m_items.size());
+    if (item_idx >= 0 && item_idx < item_count) {
         bool res = removeFontItem(item_idx);
         if (res) {
-            if (m_items.size() > 0) {
-                FontControlItem* lastItem = m_items[m_items.size() - 1];
+            if (!m_items.empty()) {
+                FontControlItem* lastItem = m_items.back().get();
                 if (lastItem && lastItem->btnDel)
                     lastItem->btnDel->setEnabled(false);
             }
@@ -129,23 +124,24 @@ void FallbackFontsDialog::slot_currectIndexChanged(int)
         if (ok)
             item_idx = tmp;
     }
-    if (item_idx >= 0 && item_idx < m_items.size()) {
-        FontControlItem* item = m_items[item_idx];
-        if (item_idx == m_items.size() - 1) {
+    const int item_count = static_cast<int>(m_items.size());
+    if (item_idx >= 0 && item_idx < item_count) {
+        FontControlItem* item = m_items[item_idx].get();
+        if (item_idx == item_count - 1) {
             if (item && item->combobox && !item->combobox->currentText().isEmpty()) {
                 item->btnDel->setEnabled(true);
                 // last empty item changed
-                FontControlItem* newItem = addFontItem(m_items.size(), -1);
+                const int new_item_pos = static_cast<int>(m_items.size());
                 m_layout->removeItem(m_spacer);
-                m_layout->addLayout(newItem->layout);
+                addFontItem(new_item_pos, -1);
                 m_layout->addItem(m_spacer);
             }
-        } else if (item_idx == m_items.size() - 2) {
+        } else if (item_idx == item_count - 2) {
             if (item && item->combobox && item->combobox->currentText().isEmpty()) {
-                FontControlItem* lastItem = m_items[m_items.size() - 1];
+                FontControlItem* lastItem = m_items.back().get();
                 if (lastItem && lastItem->combobox && lastItem->combobox->currentText().isEmpty()) {
                     // remove empty last item
-                    removeFontItem(m_items.size() - 1);
+                    removeFontItem(item_count - 1);
                     item->btnDel->setEnabled(false);
                 }
             }
@@ -154,18 +150,20 @@ void FallbackFontsDialog::slot_currectIndexChanged(int)
     }
 }
 
-FallbackFontsDialog::FontControlItem *FallbackFontsDialog::addFontItem(int pos, int face_idx)
+void FallbackFontsDialog::addFontItem(int pos, int face_idx)
 {
-    FontControlItem* item = new FontControlItem;
-    item->pos = pos;
-    item->layout = new QHBoxLayout;
-    item->combobox = new QComboBox(ui->frame);
+    std::unique_ptr<FontControlItem> item =
+            std::make_unique<FontControlItem>();
+    item->row = std::make_unique<QWidget>(ui->frame);
+    item->layout = new QHBoxLayout(item->row.get());
+    item->layout->setContentsMargins(0, 0, 0, 0);
+    item->combobox = new QComboBox(item->row.get());
     item->combobox->setProperty("ITEMIDX", pos);
     item->combobox->addItem("");
     item->combobox->addItems(m_availableFaces);
     if (face_idx >= 0)
         item->combobox->setCurrentIndex(face_idx + 1);
-    item->btnDel = new QToolButton(ui->frame);
+    item->btnDel = new QToolButton(item->row.get());
     item->btnDel->setProperty("ITEMIDX", pos);
     item->btnDel->setEnabled(face_idx >= 0);
     item->btnDel->setIcon(QIcon(":/icons/action/icons/fileclose.png"));
@@ -174,38 +172,24 @@ FallbackFontsDialog::FontControlItem *FallbackFontsDialog::addFontItem(int pos, 
     item->layout->addWidget(item->btnDel, 0);
     connect(item->btnDel, SIGNAL(clicked()), this, SLOT(slot_delete_clicked()));
     connect(item->combobox, SIGNAL(currentIndexChanged(int)), this, SLOT(slot_currectIndexChanged(int)));
-    m_items.append(item);
-    return item;
+    m_items.push_back(std::move(item));
+    m_layout->addWidget(m_items.back()->row.get());
 }
 
 bool FallbackFontsDialog::removeFontItem(int pos)
 {
-    if (pos >= 0 && pos < m_items.size()) {
-        FontControlItem* item = m_items[pos];
-        if (item) {
-            if (item->layout) {
-                m_layout->removeItem(item->layout);
-                if (item->btnDel) {
-                    item->btnDel->disconnect();
-                    item->layout->removeWidget(item->btnDel);
-                    delete item->btnDel;
-                }
-                if (item->combobox) {
-                    item->combobox->disconnect();
-                    item->layout->removeWidget(item->combobox);
-                    delete item->combobox;
-                }
-                delete item->layout;
-            }
-            delete item;
-            m_items.remove(pos);
-            // update item's position
-            for (int i = pos; i < m_items.size(); i++) {
-                FontControlItem* item = m_items[i];
-                item->btnDel->setProperty("ITEMIDX", i);
-                item->combobox->setProperty("ITEMIDX", i);
-                item->pos = i;
-            }
+    const int item_count = static_cast<int>(m_items.size());
+    if (pos >= 0 && pos < item_count) {
+        FontControlItem* item = m_items[pos].get();
+        if (item && item->row)
+            m_layout->removeWidget(item->row.get());
+        m_items.erase(m_items.begin() + pos);
+        // update item's position
+        const int remaining_count = static_cast<int>(m_items.size());
+        for (int i = pos; i < remaining_count; i++) {
+            FontControlItem* remaining_item = m_items[i].get();
+            remaining_item->btnDel->setProperty("ITEMIDX", i);
+            remaining_item->combobox->setProperty("ITEMIDX", i);
         }
         return true;
     }
@@ -214,26 +198,9 @@ bool FallbackFontsDialog::removeFontItem(int pos)
 
 void FallbackFontsDialog::cleanupFontItems()
 {
-    QVector<FontControlItem*>::const_iterator it;
-    for (it = m_items.begin(); it != m_items.end(); ++it) {
-        const FontControlItem* item = *it;
-        if (item) {
-            if (item->layout) {
-                if (item->btnDel) {
-                    item->btnDel->disconnect();
-                    item->layout->removeWidget(item->btnDel);
-                    delete item->btnDel;
-                }
-                if (item->combobox) {
-                    item->combobox->disconnect();
-                    item->layout->removeWidget(item->combobox);
-                    delete item->combobox;
-                }
-                m_layout->removeItem(item->layout);
-                delete item->layout;
-            }
-            delete item;
-        }
+    for (const std::unique_ptr<FontControlItem>& item : m_items) {
+        if (item && item->row)
+            m_layout->removeWidget(item->row.get());
     }
     m_items.clear();
 }
@@ -241,14 +208,15 @@ void FallbackFontsDialog::cleanupFontItems()
 void FallbackFontsDialog::updateFallbackFaces()
 {
     m_fallbackFaces = QString();
-    for (int i = 0; i < m_items.size() - 1; i++) {
-        FontControlItem* item = m_items[i];
+    const int item_count = static_cast<int>(m_items.size());
+    for (int i = 0; i < item_count - 1; i++) {
+        FontControlItem* item = m_items[i].get();
         if (item) {
             if (item->combobox) {
                 QString text = item->combobox->currentText();
                 if (!text.isEmpty()) {
                     m_fallbackFaces.append(text);
-                    if (i < m_items.size() - 2) {
+                    if (i < item_count - 2) {
                         m_fallbackFaces.append("; ");
                     }
                 }

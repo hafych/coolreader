@@ -639,6 +639,36 @@ forbid_source_text(
   "#define SYNTH_WEIGHTS_SZ"
   "modern Qt synthetic-weight bounds must not return to unsigned macros"
 )
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "std::unique_ptr<QWidget> row;"
+  "modern Qt fallback-font rows must retain a single widget owner"
+)
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "std::vector<std::unique_ptr<FontControlItem>> m_items;"
+  "modern Qt fallback-font metadata must retain exclusive ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "QVector<FontControlItem*>"
+  "modern Qt fallback-font metadata must not return to raw ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "delete item->btnDel"
+  "modern Qt fallback-font buttons must remain row-owned"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "delete item->combobox"
+  "modern Qt fallback-font controls must remain row-owned"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "delete item->layout"
+  "modern Qt fallback-font layouts must remain row-owned"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(

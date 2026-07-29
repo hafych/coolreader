@@ -22,9 +22,9 @@
 #define FALLBACKFONTSDIALOG_H
 
 #include <QDialog>
-#include <QVector>
 #include <QStringList>
 #include <memory>
+#include <vector>
 
 namespace Ui {
 	class FallbackFontsDialog;
@@ -41,7 +41,7 @@ class FallbackFontsDialog : public QDialog
 	Q_OBJECT
 private:
 	struct FontControlItem {
-		int pos;
+		std::unique_ptr<QWidget> row;
 		QHBoxLayout* layout;
 		QComboBox* combobox;
 		QToolButton* btnDel;
@@ -59,7 +59,7 @@ protected slots:
 	void slot_delete_clicked();
 	void slot_currectIndexChanged(int);
 protected:
-    FontControlItem* addFontItem(int pos, int face_idx);
+    void addFontItem(int pos, int face_idx);
     bool removeFontItem(int pos);
 	void cleanupFontItems();
 	void updateFallbackFaces();
@@ -70,7 +70,7 @@ private:
 	QVBoxLayout* m_layout;
 	QSpacerItem *m_spacer;
 	// data
-	QVector<FontControlItem*> m_items;
+	std::vector<std::unique_ptr<FontControlItem>> m_items;
 };
 
 #endif // FALLBACKFONTSDIALOG_H
