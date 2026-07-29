@@ -425,7 +425,8 @@ public class ActivityOwnershipPolicyTest {
 				"resizeScheduler",
 				"positionSaveLifecycle",
 				"positionSaveScheduler",
-				"selectionUpdateLifecycle"}) {
+				"selectionUpdateLifecycle",
+				"drawTaskLifecycle"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -473,10 +474,27 @@ public class ActivityOwnershipPolicyTest {
 					"ReaderView retains numeric selection generations",
 					field.getName().equals("nextUpdateId"));
 			assertFalse(
+					"ReaderView retains numeric draw generations",
+					field.getName().equals("lastDrawTaskId"));
+			assertFalse(
 					"ReaderView retains dead animation serial state",
 					field.getName().equals(
 							"updateSerialNumber"));
 		}
+		Class<?> drawPageTask = null;
+		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("DrawPageTask")) {
+				drawPageTask = nested;
+				break;
+			}
+		}
+		assertTrue(drawPageTask != null);
+		Field drawOwner = drawPageTask.getDeclaredField("owner");
+		assertEquals(
+				CloseableTaskGate.Token.class,
+				drawOwner.getType());
+		assertTrue(Modifier.isPrivate(drawOwner.getModifiers()));
+		assertTrue(Modifier.isFinal(drawOwner.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
 		for (Field field :

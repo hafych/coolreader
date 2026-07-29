@@ -1994,6 +1994,7 @@ def main() -> None:
         "private final CloseableTaskGate positionSaveLifecycle",
         "private final DelayedExecutor positionSaveScheduler",
         "private final CloseableTaskGate selectionUpdateLifecycle",
+        "private final CloseableTaskGate drawTaskLifecycle",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -2013,6 +2014,7 @@ def main() -> None:
         "positionSaveScheduler.cancel()",
         "private void closeSelectionUpdates()",
         "selectionUpdateLifecycle.close()",
+        "drawTaskLifecycle.close()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -2044,6 +2046,11 @@ def main() -> None:
         "selectionUpdateLifecycle.replace()",
         "selectionUpdateLifecycle.isActive(owner)",
         "selectionUpdateLifecycle.complete(owner)",
+        "drawTaskLifecycle.replace()",
+        "drawTaskLifecycle.isActive(owner)",
+        "drawTaskLifecycle.complete(owner)",
+        "&& !drawTaskLifecycle.isClosed()",
+        "&& mServiceLifecycle.isActive())",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -2063,6 +2070,7 @@ def main() -> None:
         "requestedHeight",
         "lastSavePositionTaskId",
         "nextUpdateId",
+        "lastDrawTaskId",
         "updateSerialNumber",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",

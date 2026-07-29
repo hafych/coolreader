@@ -401,6 +401,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Selection drag previews and terminal updates now share an exact lifecycle
   token. A stale gesture-end callback cannot complete or clear a newer
   selection, and clear, reload, close or destruction invalidate queued work.
+- Coalesced reader draws now use exact lifecycle tokens instead of a numeric
+  generation. Only the current render can arm GC, command completion still
+  survives a redundant replacement, and destruction rejects late render,
+  callback and GC work before native teardown.
 - Removed ReaderView's unused volatile animation serial, which never
   participated in update ordering or cancellation.
 - Temporary E-Ink full-refresh suppression now uses reader-owned client leases.

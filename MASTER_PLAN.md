@@ -217,6 +217,10 @@ DRM или ограничений доступа, подбор/получени�
   process-wide class monitor, а `destroy()` безусловно отменяет оба executor и
   очищает pending animation state до native teardown; неиспользуемый volatile
   animation serial без readers/writers удалён.
+  Coalesced `DrawPageTask` теперь использует exact closeable token вместо
+  numeric generation: только current render завершает GC lifecycle, replacement
+  не поглощает независимый command completion, reentrant draw отменяет GC
+  predecessor, а destroy закрывает render/callback owner до native teardown.
   Autoscroll теперь принадлежит synchronized identity-owned
   `AutoScrollSessionState` и отдельному cancelable GUI scheduler: background
   init публикует render-ready только точному owner, stop/destroy не допускают

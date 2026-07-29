@@ -3801,13 +3801,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	}
 
-	private int lastDrawTaskId = 0;
+	private final CloseableTaskGate drawTaskLifecycle =
+			new CloseableTaskGate();
 
 	private class DrawPageTask extends Task {
-		final int id;
-		BitmapInfo bi;
-		Runnable doneHandler;
-		boolean isPartially;
+		private final CloseableTaskGate.Token owner;
+		private BitmapInfo bi;
+		private final Runnable doneHandler;
+		private final boolean isPartially;
 
 		DrawPageTask(Runnable doneHandler, boolean isPartially) {
 //			// DEBUG stack trace
@@ -3816,15 +3817,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //			} catch (Exception e) {
 //				Log.d("cr3", "stack trace", e);
 //			}
-			this.id = ++lastDrawTaskId;
+			this.owner = drawTaskLifecycle.replace();
 			this.doneHandler = doneHandler;
 			this.isPartially = isPartially;
-			cancelGc();
+			if (owner != null)
+				cancelGc();
 		}
 
 		public void work() {
 			BackgroundThread.ensureBackground();
-			if (this.id != lastDrawTaskId) {
+			if (!drawTaskLifecycle.isActive(owner)) {
 				log.d("skipping duplicate drawPage request");
 				return;
 			}
@@ -3843,6 +3845,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		@Override
 		public void done() {
 			BackgroundThread.ensureGUI();
+			boolean ownsRenderCompletion =
+					drawTaskLifecycle.complete(owner);
 //			log.d("drawPage : bitmap is ready, invalidating view to draw new bitmap");
 //			if ( bi!=null ) {
 //				setBitmap( bi.bitmap );
@@ -3850,14 +3854,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //			}
 //    		if (mOpened)
 			//hideProgress();
-			if (doneHandler != null)
+			if (ownsRenderCompletion)
+				scheduleGc();
+			if (doneHandler != null
+					&& !drawTaskLifecycle.isClosed()
+					&& mServiceLifecycle.isActive())
 				doneHandler.run();
-			scheduleGc();
 		}
 
 		@Override
 		public void fail(Exception e) {
-			hideProgress();
+			if (drawTaskLifecycle.complete(owner)) {
+				hideProgress();
+				scheduleGc();
+			}
 		}
 	}
 
@@ -6337,6 +6347,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closeTapHighlight();
 		closePositionSave();
 		closeSelectionUpdates();
+		drawTaskLifecycle.close();
 		synchronized (viewportResizeState) {
 			viewportResizeState.close();
 			resizeScheduler.cancel();

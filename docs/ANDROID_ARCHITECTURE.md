@@ -250,6 +250,15 @@ Activities. `destroy()` always cancels both executors and clears pending
 animation state before native document teardown, including repeated or
 partially initialized teardown. The unused volatile animation serial, which
 never participated in ordering or cancellation, has been removed.
+Coalesced `DrawPageTask` work has a separate exact `CloseableTaskGate` owner
+instead of a numeric generation. Only the current token may enter rendering or
+publish its terminal GC schedule; the schedule is armed before a command
+completion callback so a reentrant draw can cancel it. Command completion is
+deliberately independent of latest-render ownership, so replacing a redundant
+draw does not swallow repeat-action or engine-command completion. It still
+requires both an open reader draw gate and the active service generation, while
+`destroy()` closes the gate before native teardown and permanently rejects late
+render, callback and GC work.
 Autoscroll has a separate synchronized `AutoScrollSessionState` and cancelable
 GUI scheduler. A session is renderable only after its exact owner completes
 background initialization; initialization temporarily suppresses drawing and
