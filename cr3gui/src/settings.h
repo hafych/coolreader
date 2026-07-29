@@ -98,14 +98,14 @@ class CRSettingsMenu : public CRFullScreenMenu
         CRPropRef props;
         CRGUIAcceleratorTableRef _menuAccelerators;
         void addMenuItems( CRMenu * menu, item_def_t values[] );
-        lString16 getStatusText();
+        lString32 getStatusText() override;
     public:
         CRMenu * createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * mainMenu, CRPropRef props );
 #if CR_INTERNAL_PAGE_ORIENTATION==1 || defined(CR_POCKETBOOK)
         CRMenu * createOrientationMenu( CRMenu * mainMenu, CRPropRef props );
 #endif
         CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef props, int id, LVFontRef font, CRGUIAcceleratorTableRef menuAccelerators, lvRect & rc );
-        virtual bool onCommand( int command, int params );
+        bool onCommand( int command, int params ) override;
         virtual ~CRSettingsMenu()
         {
             CRLog::trace("Calling fontMan->gc() on Settings menu destroy");

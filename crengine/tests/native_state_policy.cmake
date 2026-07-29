@@ -15,6 +15,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crtest.cpp" CRTEST_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crgui.cpp" GUI_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/settings.h" SETTINGS_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.cpp" SETTINGS_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
@@ -6855,6 +6856,31 @@ require_source_text(
   "${GUI_HEADER}"
   "void addItem( std::unique_ptr<CRMenuItem> item )"
   "GUI menus must expose an owner-aware item boundary"
+)
+require_source_text(
+  "${SETTINGS_HEADER}"
+  "lString32 getStatusText() override;"
+  "settings status text must match the current GUI override contract"
+)
+require_source_text(
+  "${SETTINGS_HEADER}"
+  "bool onCommand( int command, int params ) override;"
+  "settings command dispatch must retain an explicit override contract"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "lString32 CRSettingsMenu::getStatusText()"
+  "settings status text definition must match its override"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "Utf16ToUnicode(getCommandKeyName(MCMD_OK))"
+  "settings key labels must convert explicitly to the current string width"
+)
+forbid_source_text(
+  "${SETTINGS_HEADER}"
+  "lString16 getStatusText();"
+  "settings status text must not retain the obsolete return type"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

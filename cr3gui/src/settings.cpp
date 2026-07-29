@@ -867,7 +867,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 }
 
 /// use to override status text
-lString16 CRSettingsMenu::getStatusText()
+lString32 CRSettingsMenu::getStatusText()
 {
     /// find key by command
     int applyKey = 0;
@@ -877,13 +877,18 @@ lString16 CRSettingsMenu::getStatusText()
     if ( !_acceleratorTable->findCommandKey( MCMD_OK, 0, applyKey, applyFlags )
         || !_acceleratorTable->findCommandKey( MCMD_CANCEL, 0, cancelKey, cancelFlags ) )
         return _statusText;
-    lString16 pattern(_("Press $1 to change option\n$2 to apply, $3 to cancel"));
+    lString32 pattern = Utf16ToUnicode(lString16(
+            _("Press $1 to change option\n$2 to apply, $3 to cancel")));
 #ifdef CR_POCKETBOOK
-	pattern.replaceParam(1, getCommandKeyName(MCMD_SELECT) );
+    pattern.replaceParam(
+            1, Utf16ToUnicode(getCommandKeyName(MCMD_SELECT)));
 #else
-    pattern.replaceParam(1, getItemNumberKeysName());
+    pattern.replaceParam(
+            1, Utf16ToUnicode(getItemNumberKeysName()));
 #endif
-    pattern.replaceParam(2, getCommandKeyName(MCMD_OK) );
-    pattern.replaceParam(3, getCommandKeyName(MCMD_CANCEL) );
+    pattern.replaceParam(
+            2, Utf16ToUnicode(getCommandKeyName(MCMD_OK)));
+    pattern.replaceParam(
+            3, Utf16ToUnicode(getCommandKeyName(MCMD_CANCEL)));
     return pattern;
 }
