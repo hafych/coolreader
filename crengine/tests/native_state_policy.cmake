@@ -3,6 +3,7 @@ if(NOT DEFINED SOURCE_ROOT)
 endif()
 
 file(READ "${SOURCE_ROOT}/crengine/include/crsetup.h" CR_SETUP_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/include/lvtypes.h" LV_TYPES_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm.cpp" FORMATTER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtextfm_internal.h" FORMATTER_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtextfm.h" FORMATTER_HEADER)
@@ -193,6 +194,38 @@ function(forbid_source_text SOURCE_VALUE FORBIDDEN DESCRIPTION)
     message(FATAL_ERROR "${DESCRIPTION}: found '${FORBIDDEN}'")
   endif()
 endfunction()
+
+# --- value-owned rectangle clipping ---
+require_source_text(
+  "${LV_TYPES_HEADER}"
+  "std::optional<lvRect> clipBy(const lvRect &cliprc) const"
+  "rectangle clipping must return value ownership"
+)
+require_source_text(
+  "${LV_TYPES_HEADER}"
+  "return std::nullopt;"
+  "rectangle clipping must represent no-result without a raw sentinel"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "static int testRectangleClipValue()"
+  "value-owned rectangle clipping must retain native coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "rectangle clipping did not return value-owned trims"
+  "rectangle clipping must retain exact trim coverage"
+)
+forbid_source_text(
+  "${LV_TYPES_HEADER}"
+  "lvRect * clipBy"
+  "rectangle clipping must not expose raw heap ownership"
+)
+forbid_source_text(
+  "${LV_TYPES_HEADER}"
+  "lvRect * res = new lvRect"
+  "rectangle clipping must not allocate an unmanaged result"
+)
 
 require_source_text(
   "${FORMATTER_SOURCE}"

@@ -936,3 +936,8 @@ one cache entry. A control-block allocation failure therefore leaves the cache
 empty, while the next attempt can render and publish normally. Nested
 float/inline-box highlight rendering also keeps each translated mark copy in a
 scoped candidate until its owning range list accepts it.
+
+Rectangle clipping returns an `optional<lvRect>` value. The absence of required
+trimming is represented by `nullopt`, so this geometry helper no longer
+allocates an undocumented raw result or requires caller-side deletion. Native
+coverage checks exact four-sided trims plus containing and disjoint clips.

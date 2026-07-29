@@ -95,6 +95,22 @@ static int fail(const char *message) {
     return 1;
 }
 
+static int testRectangleClipValue() {
+    const lvRect source(10, 20, 110, 220);
+    std::optional<lvRect> trim =
+            source.clipBy(lvRect(20, 30, 100, 200));
+    if (!trim.has_value()
+            || trim->left != 10 || trim->top != 10
+            || trim->right != 10 || trim->bottom != 20)
+        return fail("rectangle clipping did not return value-owned trims");
+
+    if (source.clipBy(lvRect(0, 0, 200, 300)).has_value())
+        return fail("rectangle clipping reported a containing clip");
+    if (source.clipBy(lvRect(200, 300, 400, 500)).has_value())
+        return fail("rectangle clipping reported a disjoint clip");
+    return 0;
+}
+
 #ifdef _DEBUG
 static int testCompareStreamScratchOwnership() {
     static lUInt8 equalBytes[] = {1, 2, 3, 4, 5, 6};
@@ -7625,6 +7641,8 @@ int main() {
     if (testCompareStreamScratchOwnership() != 0)
         return 1;
 #endif
+    if (testRectangleClipValue() != 0)
+        return 1;
     if (testMutex() != 0)
         return 1;
     if (testConcurrentRenderBaseWeight() != 0)

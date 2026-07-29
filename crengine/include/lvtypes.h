@@ -30,6 +30,7 @@
 #define LVTYPES_H_INCLUDED
 
 #include <stdlib.h>
+#include <optional>
 #include "crsetup.h"
 
 #ifdef _WIN32
@@ -108,22 +109,20 @@ public:
     {
         return !(rc.left == left && rc.right == right && rc.top == top && rc.bottom == bottom);
     }
-    /// returns non-NULL pointer to trimming values for 4 sides of rc, if clipping is necessary
-    lvRect * clipBy(lvRect & cliprc) {
-    	if (intersects(cliprc) && !cliprc.isRectInside(*this)) {
-    		lvRect * res = new lvRect();
-    		if (cliprc.left > left)
-    			res->left = cliprc.left - left;
-    		if (cliprc.top > top)
-    			res->top = cliprc.top - top;
-    		if (right > cliprc.right)
-    			res->right = right - cliprc.right;
-    		if (bottom > cliprc.bottom)
-    			res->bottom = bottom - cliprc.bottom;
-    		return res;
-    	} else {
-    		return NULL;
-    	}
+    /// returns trimming values for 4 sides of rc, if clipping is necessary
+    std::optional<lvRect> clipBy(const lvRect &cliprc) const {
+        if (!intersects(cliprc) || cliprc.isRectInside(*this))
+            return std::nullopt;
+        lvRect result;
+        if (cliprc.left > left)
+            result.left = cliprc.left - left;
+        if (cliprc.top > top)
+            result.top = cliprc.top - top;
+        if (right > cliprc.right)
+            result.right = right - cliprc.right;
+        if (bottom > cliprc.bottom)
+            result.bottom = bottom - cliprc.bottom;
+        return result;
     }
 
 
