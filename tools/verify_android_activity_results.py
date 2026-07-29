@@ -39,6 +39,24 @@ NOOK_CONTROLLER_BINDINGS = (
     SOURCE / "crengine" / "NookEpdControllerBindings.java"
 )
 ENGINE = SOURCE / "crengine" / "Engine.java"
+BACKGROUND_TEXTURE_INFO = (
+    SOURCE / "crengine" / "BackgroundTextureInfo.java"
+)
+BACKGROUND_TEXTURE_CATALOG = (
+    SOURCE / "crengine" / "BackgroundTextureCatalog.java"
+)
+BACKGROUND_TEXTURE_CATALOG_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "BackgroundTextureCatalogTest.java"
+)
 SERVICES = SOURCE / "crengine" / "Services.java"
 SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
@@ -865,6 +883,11 @@ def main() -> None:
         "public final String language",
         "static synchronized HyphDict[] freezeValues()",
         "initDictionaries(HyphDict.freezeValues())",
+        "private static final BackgroundTextureCatalog BUILT_IN_TEXTURES",
+        "public static final BackgroundTextureInfo NO_TEXTURE",
+        "public List<BackgroundTextureInfo> getAvailableTextures()",
+        "return BUILT_IN_TEXTURES.withExternal(external)",
+        "BUILT_IN_TEXTURES.findById(id)",
     ):
         if marker not in engine_text:
             violations.append(f"{relative(ENGINE)} omits marker: {marker}")
@@ -874,11 +897,69 @@ def main() -> None:
         "private static MountPathCorrector pathCorrector",
         "private static String[] mFonts",
         "private static HyphDict[] values",
+        "BackgroundTextureInfo[] internalTextures",
+        "BackgroundTextureInfo[] getAvailableTextures",
     ):
         if marker in engine_text:
             violations.append(
                 f"{relative(ENGINE)} retains mutable process snapshot "
                 f"state: {marker}")
+
+    background_texture_info_text = BACKGROUND_TEXTURE_INFO.read_text(
+        encoding="utf-8")
+    for marker in (
+        "public final class BackgroundTextureInfo",
+        "private final String id",
+        "private final String name",
+        "private final int resourceId",
+        "private final boolean tiled",
+        "public String getId()",
+        "public int getResourceId()",
+        "public boolean isTiled()",
+    ):
+        if marker not in background_texture_info_text:
+            violations.append(
+                f"{relative(BACKGROUND_TEXTURE_INFO)} omits immutable texture "
+                f"marker: {marker}")
+
+    background_texture_catalog_text = BACKGROUND_TEXTURE_CATALOG.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class BackgroundTextureCatalog",
+        "private final List<BackgroundTextureInfo> entries",
+        "private final Map<String, BackgroundTextureInfo> entriesById",
+        "Collections.unmodifiableList(entryCopy)",
+        "Collections.unmodifiableMap(index)",
+        "static BackgroundTextureCatalog legacy()",
+        "BackgroundTextureInfo findById(String id)",
+        "List<BackgroundTextureInfo> withExternal(",
+        "result.add(none())",
+        "result.addAll(entries.subList(1, entries.size()))",
+        "return Collections.unmodifiableList(result)",
+        '"bg_paper1"',
+        '"tx_stones_dark"',
+    ):
+        if marker not in background_texture_catalog_text:
+            violations.append(
+                f"{relative(BACKGROUND_TEXTURE_CATALOG)} omits immutable "
+                f"texture catalog marker: {marker}")
+
+    background_texture_catalog_test_text = (
+        BACKGROUND_TEXTURE_CATALOG_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "legacyCatalogPreservesOrderLookupAndResources",
+        "catalogAndMetadataHaveImmutablePrivateStorage",
+        "externalTexturesRemainBetweenNoneAndBuiltIns",
+        "invalidCatalogsAndTextureIdsAreRejected",
+        "externalFileRecognitionPreservesLegacyRules",
+        "assertEquals(34, combined.size())",
+        "R.drawable.tx_stones_dark",
+    ):
+        if marker not in background_texture_catalog_test_text:
+            violations.append(
+                f"{relative(BACKGROUND_TEXTURE_CATALOG_TEST)} omits texture "
+                f"regression: {marker}")
 
     freezable_registry_text = FREEZABLE_REGISTRY.read_text(
         encoding="utf-8")

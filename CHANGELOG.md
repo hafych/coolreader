@@ -67,6 +67,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Audio sibling selection and filename transliteration now use private
   immutable catalogs; extension and replacement arrays no longer escape
   process scope or depend on OPDS helper types.
+- Built-in background textures now use immutable metadata and a test-covered
+  catalog; reader and options UI receive an unmodifiable snapshot with external
+  textures inserted in the legacy order.
 - BaseActivity preference/debug configuration is now immutable, while system
   locale resolution uses a snapshot owned by the current Activity generation.
 - The native Engine retains only application context plus a detachable weak UI

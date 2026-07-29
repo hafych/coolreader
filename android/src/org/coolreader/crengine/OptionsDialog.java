@@ -568,10 +568,15 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			ColorPickerDialog dlg = new ColorPickerDialog(mActivity, color -> {
 				mProperties.setColor(property, color);
 				if ( property.equals(PROP_BACKGROUND_COLOR) ) {
-					String texture = mProperties.getProperty(PROP_PAGE_BACKGROUND_IMAGE, Engine.NO_TEXTURE.id);
-					if ( texture!=null && !texture.equals(Engine.NO_TEXTURE.id) ) {
+					String texture = mProperties.getProperty(
+							PROP_PAGE_BACKGROUND_IMAGE,
+							Engine.NO_TEXTURE.getId());
+					if (texture != null
+							&& !texture.equals(Engine.NO_TEXTURE.getId())) {
 						// reset background image
-						mProperties.setProperty(PROP_PAGE_BACKGROUND_IMAGE, Engine.NO_TEXTURE.id);
+						mProperties.setProperty(
+								PROP_PAGE_BACKGROUND_IMAGE,
+								Engine.NO_TEXTURE.getId());
 						// TODO: show notification?
 					}
 				}
@@ -1830,9 +1835,9 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		{
 			super( owner, label, PROP_PAGE_BACKGROUND_IMAGE );
 			setDefaultValue("(NONE)");
-			BackgroundTextureInfo[] textures = mReaderView.getEngine().getAvailableTextures();
-			for ( BackgroundTextureInfo item : textures )
-				add( item.id, item.name );
+			for (BackgroundTextureInfo item :
+					mReaderView.getEngine().getAvailableTextures())
+				add(item.getId(), item.getName());
 		}
 
 		protected void closed() {
@@ -1849,11 +1854,12 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			int cl = mProperties.getColor(PROP_BACKGROUND_COLOR, Color.WHITE);
 			BackgroundTextureInfo texture = mEngine.getTextureInfoById(item.value);
 			img.setBackgroundColor(cl);
-			if ( texture.resourceId!=0 ) {
+			if (texture.getResourceId() != 0) {
 //				img.setImageDrawable(null);
-//				img.setImageResource(texture.resourceId);
+//				img.setImageResource(texture.getResourceId());
 //				img.setBackgroundColor(Color.TRANSPARENT);
-				Drawable drawable = textureSampleCache.getImage(texture.resourceId);
+				Drawable drawable = textureSampleCache.getImage(
+						texture.getResourceId());
 				if ( drawable!=null ) {
 					img.setImageResource(0);
 					img.setImageDrawable(drawable);
@@ -1865,7 +1871,8 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 				}
 			} else {
 				// load image from file
-				Drawable drawable = textureSampleCache.getImage(texture.id);
+				Drawable drawable = textureSampleCache.getImage(
+						texture.getId());
 				if ( drawable!=null ) {
 					img.setImageResource(0);
 					img.setImageDrawable(drawable);

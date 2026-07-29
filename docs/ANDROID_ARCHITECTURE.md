@@ -52,6 +52,11 @@ legacy-root collections, a one-time font initialization candidate and the
 final native DOM version. Each Engine generation owns its own
 `MountPathCorrector`; no potentially mutable path graph is shared between
 Activities.
+Built-in background metadata lives in one immutable
+`BackgroundTextureCatalog`. Texture values have private final fields, external
+files are merged into an unmodifiable `none → external → built-in` snapshot,
+and lookup no longer shares mutable elements or an Engine-owned backing array
+with reader/options UI.
 
 Packaged and pre-init file hyphenation definitions build through one
 synchronized process registry. JNI receives a frozen array snapshot exactly

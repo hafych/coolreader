@@ -157,6 +157,8 @@ DRM или ограничений доступа, подбор/получени�
   catalog `BaseActivity`, с явным E-Ink snapshot и без public static array.
   Profile load/save filtering также вынесен из `SettingsManager` в единый
   immutable matcher без public rule-array и с JVM regression на wildcard rules.
+  Built-in background textures вынесены из `Engine` в immutable catalog;
+  immutable metadata и `none → external → built-in` List snapshot JVM-tested.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

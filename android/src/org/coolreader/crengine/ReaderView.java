@@ -3001,9 +3001,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void setBackgroundTexture(String textureId, int color) {
-		BackgroundTextureInfo[] textures = mEngine.getAvailableTextures();
-		for (BackgroundTextureInfo item : textures) {
-			if (item.id.equals(textureId)) {
+		for (BackgroundTextureInfo item :
+				mEngine.getAvailableTextures()) {
+			if (item.getId().equals(textureId)) {
 				setBackgroundTexture(item, color);
 				return;
 			}
@@ -3018,8 +3018,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			currentBackgroundColor = color;
 			currentBackgroundTexture = texture;
 			byte[] data = mEngine.getImageData(currentBackgroundTexture);
-			doc.setPageBackgroundTexture(data, texture.tiled ? 1 : 0);
-			currentBackgroundTextureTiled = texture.tiled;
+			doc.setPageBackgroundTexture(
+					data,
+					texture.isTiled() ? 1 : 0);
+			currentBackgroundTextureTiled = texture.isTiled();
 			if (data != null && data.length > 0) {
 				if (currentBackgroundTextureBitmap != null)
 					currentBackgroundTextureBitmap.recycle();
@@ -3054,10 +3056,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		public void work() throws Exception {
 			BackgroundThread.ensureBackground();
 			log.d("CreateViewTask - in background thread");
-//			BackgroundTextureInfo[] textures = mEngine.getAvailableTextures();
+//			List<BackgroundTextureInfo> textures =
+//					mEngine.getAvailableTextures();
 //			byte[] data = mEngine.getImageData(textures[3]);
 			byte[] data = mEngine.getImageData(currentBackgroundTexture);
-			doc.setPageBackgroundTexture(data, currentBackgroundTexture.tiled ? 1 : 0);
+			doc.setPageBackgroundTexture(
+					data,
+					currentBackgroundTexture.isTiled() ? 1 : 0);
 
 			//File historyDir = activity.getDir("settings", Context.MODE_PRIVATE);
 			//historyDir.mkdirs();

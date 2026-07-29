@@ -1880,15 +1880,25 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 			props.applyDefault(ReaderView.PROP_NIGHT_MODE, "0");
 			if (DeviceInfo.FORCE_HC_THEME) {
-				props.applyDefault(ReaderView.PROP_PAGE_BACKGROUND_IMAGE, Engine.NO_TEXTURE.id);
+				props.applyDefault(
+						ReaderView.PROP_PAGE_BACKGROUND_IMAGE,
+						Engine.NO_TEXTURE.getId());
 			} else {
 				if (props.getBool(ReaderView.PROP_NIGHT_MODE, false))
 					props.applyDefault(ReaderView.PROP_PAGE_BACKGROUND_IMAGE, Engine.DEF_NIGHT_BACKGROUND_TEXTURE);
 				else
 					props.applyDefault(ReaderView.PROP_PAGE_BACKGROUND_IMAGE, Engine.DEF_DAY_BACKGROUND_TEXTURE);
 			}
-			props.applyDefault(ReaderView.PROP_PAGE_BACKGROUND_IMAGE_DAY, !DeviceInfo.EINK_SCREEN ? Engine.DEF_DAY_BACKGROUND_TEXTURE : Engine.NO_TEXTURE.id);
-			props.applyDefault(ReaderView.PROP_PAGE_BACKGROUND_IMAGE_NIGHT, !DeviceInfo.EINK_SCREEN ? Engine.DEF_NIGHT_BACKGROUND_TEXTURE : Engine.NO_TEXTURE.id);
+			props.applyDefault(
+					ReaderView.PROP_PAGE_BACKGROUND_IMAGE_DAY,
+					!DeviceInfo.EINK_SCREEN
+							? Engine.DEF_DAY_BACKGROUND_TEXTURE
+							: Engine.NO_TEXTURE.getId());
+			props.applyDefault(
+					ReaderView.PROP_PAGE_BACKGROUND_IMAGE_NIGHT,
+					!DeviceInfo.EINK_SCREEN
+							? Engine.DEF_NIGHT_BACKGROUND_TEXTURE
+							: Engine.NO_TEXTURE.getId());
 
 			props.applyDefault(ReaderView.PROP_FONT_GAMMA, DeviceInfo.EINK_SCREEN ? "1.5" : "1.0");
 

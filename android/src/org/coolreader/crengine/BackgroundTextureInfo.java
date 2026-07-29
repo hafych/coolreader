@@ -21,16 +21,35 @@ package org.coolreader.crengine;
 
 import java.io.File;
 
-public class BackgroundTextureInfo {
-	public String id; // filepath for external image or unique symbolic name for resource
-	public String name;
-	public int resourceId;
-	public boolean tiled;
+public final class BackgroundTextureInfo {
+	private final String id;
+	private final String name;
+	private final int resourceId;
+	private final boolean tiled;
+
 	public BackgroundTextureInfo(String id, String name, int resourceId) {
+		if (id == null)
+			throw new IllegalArgumentException("texture id is required");
 		this.id = id;
 		this.name = name;
 		this.resourceId = resourceId;
 		this.tiled = id.startsWith("tx_") || id.indexOf("/textures/")>0;
+	}
+
+	public String getId() {
+		return id;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public int getResourceId() {
+		return resourceId;
+	}
+
+	public boolean isTiled() {
+		return tiled;
 	}
 
 	public static BackgroundTextureInfo fromFile( String filename ) {

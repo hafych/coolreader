@@ -1204,83 +1204,17 @@ public class Engine {
 	/// Current version of DOM parsing engine (See lvtinydom.cpp)
 	public static final int DOM_VERSION_CURRENT;
 
-	public static final BackgroundTextureInfo NO_TEXTURE = new BackgroundTextureInfo(
-			BackgroundTextureInfo.NO_TEXTURE_ID, "(SOLID COLOR)", 0);
-	private static final BackgroundTextureInfo[] internalTextures = {
-			NO_TEXTURE,
-			new BackgroundTextureInfo("bg_paper1", "Paper 1",
-					R.drawable.bg_paper1),
-			new BackgroundTextureInfo("bg_paper1_dark", "Paper 1 (dark)",
-					R.drawable.bg_paper1_dark),
-			new BackgroundTextureInfo("bg_paper2", "Paper 2",
-					R.drawable.bg_paper2),
-			new BackgroundTextureInfo("bg_paper2_dark", "Paper 2 (dark)",
-					R.drawable.bg_paper2_dark),
-			new BackgroundTextureInfo("tx_wood", "Wood",
-					R.drawable.tx_wood),
-			new BackgroundTextureInfo("tx_wood_dark", "Wood (dark)",
-					R.drawable.tx_wood_dark),
-			new BackgroundTextureInfo("tx_fabric", "Fabric",
-					R.drawable.tx_fabric),
-			new BackgroundTextureInfo("tx_fabric_dark", "Fabric (dark)",
-					R.drawable.tx_fabric_dark),
-			new BackgroundTextureInfo("tx_fabric_indigo_fibre", "Fabric fibre",
-					R.drawable.tx_fabric_indigo_fibre),
-			new BackgroundTextureInfo("tx_fabric_indigo_fibre_dark",
-					"Fabric fibre (dark)",
-					R.drawable.tx_fabric_indigo_fibre_dark),
-			new BackgroundTextureInfo("tx_gray_sand", "Gray sand",
-					R.drawable.tx_gray_sand),
-			new BackgroundTextureInfo("tx_gray_sand_dark", "Gray sand (dark)",
-					R.drawable.tx_gray_sand_dark),
-			new BackgroundTextureInfo("tx_green_wall", "Green wall",
-					R.drawable.tx_green_wall),
-			new BackgroundTextureInfo("tx_green_wall_dark",
-					"Green wall (dark)", R.drawable.tx_green_wall_dark),
-			new BackgroundTextureInfo("tx_metal_red_light", "Metall red",
-					R.drawable.tx_metal_red_light),
-			new BackgroundTextureInfo("tx_metal_red_dark", "Metall red (dark)",
-					R.drawable.tx_metal_red_dark),
-			new BackgroundTextureInfo("tx_metall_copper", "Metall copper",
-					R.drawable.tx_metall_copper),
-			new BackgroundTextureInfo("tx_metall_copper_dark",
-					"Metall copper (dark)", R.drawable.tx_metall_copper_dark),
-			new BackgroundTextureInfo("tx_metall_old_blue", "Metall blue",
-					R.drawable.tx_metall_old_blue),
-			new BackgroundTextureInfo("tx_metall_old_blue_dark",
-					"Metall blue (dark)", R.drawable.tx_metall_old_blue_dark),
-			new BackgroundTextureInfo("tx_old_book", "Old book",
-					R.drawable.tx_old_book),
-			new BackgroundTextureInfo("tx_old_book_dark", "Old book (dark)",
-					R.drawable.tx_old_book_dark),
-			new BackgroundTextureInfo("tx_old_paper", "Old paper",
-					R.drawable.tx_old_paper),
-			new BackgroundTextureInfo("tx_old_paper_dark", "Old paper (dark)",
-					R.drawable.tx_old_paper_dark),
-			new BackgroundTextureInfo("tx_paper", "Paper", R.drawable.tx_paper),
-			new BackgroundTextureInfo("tx_paper_dark", "Paper (dark)",
-					R.drawable.tx_paper_dark),
-			new BackgroundTextureInfo("tx_rust", "Rust", R.drawable.tx_rust),
-			new BackgroundTextureInfo("tx_rust_dark", "Rust (dark)",
-					R.drawable.tx_rust_dark),
-			new BackgroundTextureInfo("tx_sand", "Sand", R.drawable.tx_sand),
-			new BackgroundTextureInfo("tx_sand_dark", "Sand (dark)",
-					R.drawable.tx_sand_dark),
-			new BackgroundTextureInfo("tx_stones", "Stones",
-					R.drawable.tx_stones),
-			new BackgroundTextureInfo("tx_stones_dark", "Stones (dark)",
-					R.drawable.tx_stones_dark),};
+	private static final BackgroundTextureCatalog BUILT_IN_TEXTURES =
+			BackgroundTextureCatalog.legacy();
+	public static final BackgroundTextureInfo NO_TEXTURE =
+			BUILT_IN_TEXTURES.none();
 	public static final String DEF_DAY_BACKGROUND_TEXTURE = "bg_paper1";
 	public static final String DEF_NIGHT_BACKGROUND_TEXTURE = "bg_paper1_dark";
 
-	public BackgroundTextureInfo[] getAvailableTextures() {
-		ArrayList<BackgroundTextureInfo> list = new ArrayList<BackgroundTextureInfo>(
-				internalTextures.length);
-		list.add(NO_TEXTURE);
-		findExternalTextures(list);
-		for (int i = 1; i < internalTextures.length; i++)
-			list.add(internalTextures[i]);
-		return list.toArray(new BackgroundTextureInfo[]{});
+	public List<BackgroundTextureInfo> getAvailableTextures() {
+		List<BackgroundTextureInfo> external = new ArrayList<>();
+		findExternalTextures(external);
+		return BUILT_IN_TEXTURES.withExternal(external);
 	}
 
 	public static void findHyphDictionariesFromDirectory(File dir) {
@@ -1378,11 +1312,11 @@ public class Engine {
 	public byte[] getImageData(BackgroundTextureInfo texture) {
 		if (texture.isNone())
 			return null;
-		if (texture.resourceId != 0) {
-			byte[] data = loadResourceBytes(texture.resourceId);
+		if (texture.getResourceId() != 0) {
+			byte[] data = loadResourceBytes(texture.getResourceId());
 			return data;
-		} else if (texture.id != null && texture.id.startsWith("/")) {
-			File f = new File(texture.id);
+		} else if (texture.getId().startsWith("/")) {
+			File f = new File(texture.getId());
 			byte[] data = loadResourceBytes(f);
 			return data;
 		}
@@ -1397,9 +1331,10 @@ public class Engine {
 			if (item != null)
 				return item;
 		} else {
-			for (BackgroundTextureInfo item : internalTextures)
-				if (item.id.equals(id))
-					return item;
+			BackgroundTextureInfo item =
+					BUILT_IN_TEXTURES.findById(id);
+			if (item != null)
+				return item;
 		}
 		return NO_TEXTURE;
 	}

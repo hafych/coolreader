@@ -121,6 +121,39 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void engineTextureCatalogHasImmutableMetadata()
+			throws Exception {
+		Field catalog =
+				Engine.class.getDeclaredField("BUILT_IN_TEXTURES");
+		assertTrue(Modifier.isStatic(catalog.getModifiers()));
+		assertTrue(Modifier.isPrivate(catalog.getModifiers()));
+		assertTrue(Modifier.isFinal(catalog.getModifiers()));
+		assertFinalStaticField(Engine.class, "NO_TEXTURE");
+
+		for (Field field :
+				BackgroundTextureCatalog.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field :
+				BackgroundTextureInfo.class.getDeclaredFields()) {
+			if (Modifier.isStatic(field.getModifiers())) {
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+				assertFalse(field.getType().isArray());
+			} else {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (Field field : Engine.class.getDeclaredFields()) {
+			assertFalse(
+					"Engine retains the mutable texture array",
+					field.getName().equals("internalTextures"));
+		}
+	}
+
+	@Test
 	public void hyphenationRegistryHasOneFinalOwnerAndImmutableItems()
 			throws Exception {
 		Field registry = Engine.HyphDict.class.getDeclaredField("REGISTRY");
