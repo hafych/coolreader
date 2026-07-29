@@ -626,7 +626,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								expectedBook, interaction))
 					return;
 				if (!sel.isEmpty()) {
-					invalidImages = true;
+					pageInvalidationState.invalidate();
 					BitmapInfo bi = preparePageImage(0);
 					if (bi != null) {
 						bookView.draw(true);
@@ -2078,7 +2078,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						expectedBook, interaction))
 					return;
 				doc.clearSelection();
-				invalidImages = true;
+				pageInvalidationState.invalidate();
 			}
 
 			public void done() {
@@ -2112,7 +2112,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						expectedBook, interaction))
 					return;
 				doc.hilightBookmarks(list);
-				invalidImages = true;
+				pageInvalidationState.invalidate();
 			}
 
 			public void done() {
@@ -2426,7 +2426,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		OptionsDialog.toggleDayNightMode(settings);
 		//setSettings(settings, mActivity.settings());
 		mActivity.setSettings(settings, 60000, true);
-		invalidImages = true;
+		pageInvalidationState.invalidate();
 	}
 
 	public boolean isNightMode() {
@@ -2439,7 +2439,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void setSetting(String name, String value, boolean invalidateImages, boolean save, boolean apply) {
 		mActivity.setSetting(name, value, apply);
-		invalidImages = true;
+		pageInvalidationState.invalidate();
 	}
 
 	public void setSetting(String name, String value) {
@@ -2799,7 +2799,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						|| !isDocumentInteractionCurrent(
 								expectedBook, interaction))
 					return;
-				invalidImages = true;
+				pageInvalidationState.invalidate();
 				drawPage();
 			}
 		});
@@ -4146,7 +4146,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						commandScope, renderRequest))
 					return;
 				if (res) {
-					invalidImages = true;
+					pageInvalidationState.invalidate();
 					if (commandScope
 							== ReaderEngineCommandPolicy
 									.Scope.DOCUMENT) {
@@ -5245,7 +5245,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				log.i("The current time has been changed "
 						+ "(minutes), redrawing is scheduled.");
 				surface.invalidate();
-				invalidImages = true;
+				pageInvalidationState.invalidate();
 				drawPage(null, false, renderRequest);
 			}
 
@@ -5357,6 +5357,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private BitmapInfo mCurrentPageInfo;
 	private BitmapInfo mNextPageInfo;
+	private final ReaderPageInvalidationState
+			pageInvalidationState =
+					new ReaderPageInvalidationState();
 
 	/**
 	 * Prepare and cache page image.
@@ -5379,14 +5382,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				&& !isRenderRequestCurrent(renderRequest))
 			return null;
 		log.v("preparePageImage( " + offset + ")");
-		if (invalidImages) {
+		if (pageInvalidationState.claim()) {
 			if (mCurrentPageInfo != null)
 				mCurrentPageInfo.recycle();
 			mCurrentPageInfo = null;
 			if (mNextPageInfo != null)
 				mNextPageInfo.recycle();
 			mNextPageInfo = null;
-			invalidImages = false;
 		}
 
 		if (internalDX == 0 || internalDY == 0) {
@@ -8547,7 +8549,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return;
 		mCurrentPageInfo = null;
 		mNextPageInfo = null;
-		invalidImages = true;
+		pageInvalidationState.invalidate();
 	}
 
 	private void finishPageCacheClose(
@@ -8628,6 +8630,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		settingsSyncLifecycle.close();
 		timeTickLifecycle.close();
 		positionPersistenceState.close();
+		pageInvalidationState.close();
 		documentLoadLifecycle.close();
 		closeGestureTimeouts();
 		synchronized (viewportResizeState) {
@@ -8872,10 +8875,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	}
 
-	private boolean invalidImages = true;
-
 	public void clearImageCache() {
-		BackgroundThread.instance().postBackground(() -> invalidImages = true);
+		pageInvalidationState.invalidate();
 	}
 
 	public void setStyleSheet(final String css) {
@@ -9612,7 +9613,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (readerSurfaceState.isClosed())
 				return;
 			surface.invalidate();
-			invalidImages = true;
+			pageInvalidationState.invalidate();
 			drawPage();
 		});
 	}

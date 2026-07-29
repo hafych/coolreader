@@ -2590,6 +2590,10 @@ def main() -> None:
         "ReaderRenderRequest.capture(",
         "private final ReaderRenderRequest renderRequest",
         "private boolean isRenderRequestCurrent(",
+        "private final ReaderPageInvalidationState",
+        "pageInvalidationState.invalidate()",
+        "pageInvalidationState.claim()",
+        "pageInvalidationState.close()",
         "preparePageImage(0, renderRequest)",
         "&& !drawTaskLifecycle.isClosed()",
         "&& mServiceLifecycle.isActive())",
@@ -2851,6 +2855,7 @@ def main() -> None:
         "public Bookmark saveCurrentPositionBookmarkSync(",
         "public void savePositionBookmark(Bookmark",
         "lastSavedBookmark",
+        "invalidImages",
     ):
         if legacy in reader_view_text:
             violations.append(
@@ -3108,7 +3113,7 @@ def main() -> None:
             "close.finish()",
             "mCurrentPageInfo = null",
             "mNextPageInfo = null",
-            "invalidImages = true",
+            "pageInvalidationState.invalidate()",
             "resources.initialCurrent()",
             "resources.initialNext()",
             "resources.serializedCurrent()",
@@ -3273,7 +3278,7 @@ def main() -> None:
             "isEngineCommandRequestCurrent(",
             done_index)
         invalidation_index = command_post_text.find(
-            "invalidImages = true", done_index)
+            "pageInvalidationState.invalidate()", done_index)
         for marker in (
             "drawPage(doneHandler, false)",
             "doneHandler,\n"

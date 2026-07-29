@@ -641,6 +641,14 @@ completion for the same document. Replacement and close cancel the draw gate;
 stale completion or failure cannot call the handler, schedule GC, or hide the
 next load's progress. `destroy()` closes the gate before native teardown and
 permanently rejects late render, callback and GC work.
+Page-cache invalidation is a separate synchronized
+`ReaderPageInvalidationState`, replacing the cross-thread `invalidImages`
+boolean. GUI settings, native callbacks and Engine operations install a fresh
+identity; page preparation claims exactly the identity it is about to apply.
+Repeated requests coalesce, while an invalidation arriving during slot
+recycling remains distinct and pending for the next preparation instead of
+being overwritten by a trailing boolean reset. Reader destruction closes this
+owner after the render gate.
 Asynchronous native commands use one `ReaderEngineCommandPolicy`. Every
 document command, including zoom and render configuration, validates its
 captured book and interaction before and after native mutation and again before

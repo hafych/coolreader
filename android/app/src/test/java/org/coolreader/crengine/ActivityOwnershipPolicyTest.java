@@ -429,6 +429,7 @@ public class ActivityOwnershipPolicyTest {
 				"positionSaveLifecycle",
 				"positionSaveScheduler",
 				"positionPersistenceState",
+				"pageInvalidationState",
 				"imageViewerState",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
@@ -506,6 +507,25 @@ public class ActivityOwnershipPolicyTest {
 							Modifier.isSynchronized(
 									method.getModifiers()));
 			}
+		}
+		for (Field field :
+				ReaderPageInvalidationState.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+		for (String methodName : new String[]{
+				"invalidate",
+				"claim",
+				"close"}) {
+			Method method =
+					ReaderPageInvalidationState.class
+							.getDeclaredMethod(methodName);
+			assertTrue(
+					methodName
+							+ " must serialize page invalidation",
+					Modifier.isSynchronized(
+							method.getModifiers()));
 		}
 		Class<?> viewAnimationBase = null;
 		Class<?> animationUpdate = null;

@@ -257,6 +257,11 @@ DRM или ограничений доступа, подбор/получени�
   completion той же книги, но replacement/close отменяют gate, а stale
   completion/failure не вызывает handler и не скрывает progress новой загрузки.
   Destroy закрывает render/callback owner до native teardown.
+  Page-cache invalidation вынесена из cross-thread `invalidImages` в
+  synchronized `ReaderPageInvalidationState`: GUI/native/Engine requests
+  устанавливают identity, preparation claim-ит точное поколение, повторные
+  requests coalesce, а invalidation во время recycle остаётся pending вместо
+  потери при boolean reset; destroy закрывает owner после render gate.
   Асинхронные native commands теперь классифицируются единым
   `ReaderEngineCommandPolicy`: все document commands, включая zoom/render,
   проверяют captured book+interaction до и после native mutation и ещё раз
