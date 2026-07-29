@@ -91,6 +91,13 @@ instances are method-scoped, UTC and locale handling are explicit, parsing is
 strict, and both compact and colon timezone offsets are normalized without
 shared `SimpleDateFormat` state.
 
+Each Nook screen-controller generation owns an immutable
+`NookEpdControllerBindings` reflection graph. Disabled devices do not resolve
+proprietary classes, legacy devices preserve their static vendor call, and
+Nook 1.2 creates its controller only from the current View host. Vendor
+methods, constructors, enum arrays and failure diagnostics are not retained in
+mutable process-wide fields.
+
 ## Migration rule
 
 New Android components should:

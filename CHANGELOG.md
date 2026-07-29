@@ -44,6 +44,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   pending document-tree state restored after Activity recreation.
 - Nook E-Ink controller setup now resolves the current view host on demand
   instead of retaining the Activity in a static field.
+- Nook E-Ink vendor reflection bindings are now immutable and owned by one
+  screen-controller generation; disabled devices skip proprietary class
+  loading, while legacy and Nook 1.2 invocation paths have local JVM coverage.
 - The native Engine retains only application context plus a detachable weak UI
   host, and stale Activity shutdown can no longer tear down a newer generation.
 - ReaderView receives scanner, history, document cache and a per-generation

@@ -219,6 +219,45 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void nookEpdReflectionGraphBelongsToControllerGeneration()
+			throws Exception {
+		Field bindings =
+				N2EpdController.class.getDeclaredField("bindings");
+		assertFalse(Modifier.isStatic(bindings.getModifiers()));
+		assertTrue(Modifier.isFinal(bindings.getModifiers()));
+		Field controller =
+				N2EpdController.class.getDeclaredField("mEpdController");
+		assertFalse(Modifier.isStatic(controller.getModifiers()));
+		for (Field field : N2EpdController.class.getDeclaredFields()) {
+			if (!Modifier.isStatic(field.getModifiers()))
+				continue;
+			assertTrue(
+					"Nook EPD static fields must be immutable constants: "
+							+ field.getName(),
+					Modifier.isFinal(field.getModifiers()));
+			assertTrue(
+					"Nook EPD reflection state must not be process-wide: "
+							+ field.getName(),
+					field.getType().isPrimitive());
+		}
+		for (Field field :
+				NookEpdControllerBindings.class.getDeclaredFields()) {
+			assertFalse(
+					"Nook EPD binding state must be instance-owned: "
+							+ field.getName(),
+					Modifier.isStatic(field.getModifiers()));
+			assertTrue(
+					"Nook EPD bindings must be immutable: "
+							+ field.getName(),
+					Modifier.isFinal(field.getModifiers()));
+			assertTrue(
+					"Nook EPD bindings must remain encapsulated: "
+							+ field.getName(),
+					Modifier.isPrivate(field.getModifiers()));
+		}
+	}
+
+	@Test
 	public void opdsTimestampParsingRetainsNoSharedFormatter() {
 		for (Field field : OPDSUtil.OPDSHandler.class.getDeclaredFields()) {
 			assertFalse(

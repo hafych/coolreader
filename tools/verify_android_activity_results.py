@@ -13,6 +13,9 @@ COOL_READER = SOURCE / "CoolReader.java"
 DICTIONARIES = SOURCE / "Dictionaries.java"
 BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
 NOOK_CONTROLLER = SOURCE / "crengine" / "N2EpdController.java"
+NOOK_CONTROLLER_BINDINGS = (
+    SOURCE / "crengine" / "NookEpdControllerBindings.java"
+)
 ENGINE = SOURCE / "crengine" / "Engine.java"
 SERVICES = SOURCE / "crengine" / "Services.java"
 SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
@@ -139,6 +142,18 @@ FEED_TIMESTAMP_PARSER_TEST = (
     / "coolreader"
     / "crengine"
     / "FeedTimestampParserTest.java"
+)
+NOOK_CONTROLLER_BINDINGS_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "NookEpdControllerBindingsTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -290,6 +305,52 @@ def main() -> None:
         violations.append(
             f"{relative(NOOK_CONTROLLER)} retains the vendor controller "
             "statically")
+    for marker in (
+        "private final NookEpdControllerBindings bindings",
+        "bindings.createController(activity)",
+        "bindings.setMode(mEpdController, region, wave, mode)",
+    ):
+        if marker not in nook_controller_text:
+            violations.append(
+                f"{relative(NOOK_CONTROLLER)} omits instance-owned EPD "
+                f"marker: {marker}")
+    if re.search(
+            r"\bstatic\s+(?:final\s+)?"
+            r"(?:Method|Constructor<\?>|Object\[\]|String)\s+\w+",
+            nook_controller_text):
+        violations.append(
+            f"{relative(NOOK_CONTROLLER)} retains mutable vendor reflection "
+            "state")
+
+    nook_bindings_text = NOOK_CONTROLLER_BINDINGS.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class NookEpdControllerBindings",
+        "private final Method setRegion",
+        "private final Constructor<?> regionParamsConstructor",
+        "private final Constructor<?> controllerConstructor",
+        "private final Object[] waves",
+        "private final Object[] regions",
+        "private final Object[] modes",
+        "if (!enabled)",
+        "return values.clone()",
+    ):
+        if marker not in nook_bindings_text:
+            violations.append(
+                f"{relative(NOOK_CONTROLLER_BINDINGS)} omits immutable EPD "
+                f"marker: {marker}")
+
+    nook_bindings_test_text = NOOK_CONTROLLER_BINDINGS_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "disabledBindingDoesNotResolveVendorClasses",
+        "legacyControllerInvokesStaticVendorMethod",
+        "nook120ControllerKeepsHostAndInvokesInstanceMethod",
+    ):
+        if marker not in nook_bindings_test_text:
+            violations.append(
+                f"{relative(NOOK_CONTROLLER_BINDINGS_TEST)} omits EPD "
+                f"regression: {marker}")
 
     engine_text = ENGINE.read_text(encoding="utf-8")
     if re.search(r"\bBaseActivity\s+mActivity\s*[=;]", engine_text):
