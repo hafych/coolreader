@@ -1761,6 +1761,24 @@ public:
     }
 };
 
+class CountingMenu : public CRMenu {
+private:
+    std::atomic<int> &_destroyed;
+
+public:
+    CountingMenu(CRGUIWindowManager *manager, CRMenu *parent, int id,
+                 std::atomic<int> &destroyed)
+        : CRMenu(
+                manager, parent, id, U"counted",
+                LVImageSourceRef(), LVFontRef(), LVFontRef()),
+          _destroyed(destroyed) {
+    }
+
+    ~CountingMenu() override {
+        _destroyed.fetch_add(1, std::memory_order_relaxed);
+    }
+};
+
 class CountingGuiDocView : public LVDocView {
 private:
     std::atomic<int> &_destroyed;
@@ -1885,6 +1903,30 @@ static int testGuiRuntimeOwnership() {
     if (!menuBuildFailed
             || menuItemDestroyed.load(std::memory_order_relaxed) != 2)
         return fail("GUI menu build rollback leaked scoped items");
+
+    std::atomic<int> nestedMenuDestroyed(0);
+    {
+        GuiScreenOwnershipWindowManager manager(screen.get());
+        std::unique_ptr<CountingMenu> root =
+                std::make_unique<CountingMenu>(
+                        &manager, nullptr, 910, nestedMenuDestroyed);
+        std::unique_ptr<CountingMenu> shownChild =
+                std::make_unique<CountingMenu>(
+                        &manager, root.get(), 911, nestedMenuDestroyed);
+        CountingMenu *shownChildView = shownChild.get();
+        root->addItem(std::move(shownChild));
+        root->addItem(std::make_unique<CountingMenu>(
+                &manager, root.get(), 912, nestedMenuDestroyed));
+        CountingMenu *rootView = root.get();
+        manager.activateWindow(std::move(root));
+        manager.activateBorrowedWindow(shownChildView);
+        rootView->destroyMenu();
+        if (manager.getWindowCount() != 0
+                || nestedMenuDestroyed.load(
+                        std::memory_order_relaxed) != 3)
+            return fail(
+                    "GUI nested menu teardown duplicated or leaked owners");
+    }
 
     const int acceleratorQuads[] = {
         41, KEY_FLAG_LONG_PRESS, 701, 11,

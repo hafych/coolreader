@@ -479,10 +479,32 @@ class CRGUIWindow
 class CRGUIWindowManager : public CRGUIStringTranslator
 {
     protected:
+        class WindowEntry {
+            std::unique_ptr<CRGUIWindow> _owner;
+            CRGUIWindow * _window;
+        public:
+            explicit WindowEntry(std::unique_ptr<CRGUIWindow> owner)
+                : _owner(std::move(owner)), _window(_owner.get()) {}
+            explicit WindowEntry(CRGUIWindow * borrowed)
+                : _owner(), _window(borrowed) {}
+            WindowEntry(WindowEntry &&) noexcept = default;
+            WindowEntry & operator=(WindowEntry &&) noexcept = default;
+            WindowEntry(const WindowEntry &) = delete;
+            WindowEntry & operator=(const WindowEntry &) = delete;
+
+            CRGUIWindow * get() const { return _window; }
+            CRGUIWindow * operator->() const { return _window; }
+            bool ownsWindow() const { return static_cast<bool>(_owner); }
+            std::unique_ptr<CRGUIWindow> takeOwner()
+            {
+                return std::move(_owner);
+            }
+        };
+
         /// Exclusive screen owner, when the manager creates its screen.
         /// Declared before dependent GUI state so it is destroyed last.
         std::unique_ptr<CRGUIScreen> _ownedScreen;
-        std::vector<std::unique_ptr<CRGUIWindow> > _windows;
+        std::vector<WindowEntry> _windows;
         std::vector<std::unique_ptr<CRGUIEvent> > _events;
         /// Borrowed compatibility view, backed by _ownedScreen when non-null.
         CRGUIScreen * _screen;
@@ -654,6 +676,10 @@ class CRGUIWindowManager : public CRGUIStringTranslator
         void activateWindow( std::unique_ptr<CRGUIWindow> window );
         /// compatibility overload for new raw candidates and managed windows
         void activateWindow( CRGUIWindow * window );
+        /// activates a window whose lifetime is managed by another object
+        void activateBorrowedWindow( CRGUIWindow * window );
+        /// removes a borrowed window from the stack without destroying it
+        void closeBorrowedWindow( CRGUIWindow * window );
         /// closes window, removes from stack, destroys object
         void closeWindow( CRGUIWindow * window );
         /// redraw one window

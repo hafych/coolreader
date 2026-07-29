@@ -6768,7 +6768,7 @@ require_source_text(
 require_source_text(
   "${GUI_HEADER}"
   "std::unique_ptr<CRGUIScreen> _ownedScreen;
-        std::vector<std::unique_ptr<CRGUIWindow> > _windows;"
+        std::vector<WindowEntry> _windows;"
   "the GUI screen owner must outlive dependent window state"
 )
 require_source_text(
@@ -6974,8 +6974,13 @@ forbid_source_text(
 
 require_source_text(
   "${GUI_HEADER}"
-  "std::vector<std::unique_ptr<CRGUIWindow> > _windows"
-  "GUI window managers must own window stack entries explicitly"
+  "std::vector<WindowEntry> _windows"
+  "GUI window managers must track explicit owned or borrowed entries"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "std::unique_ptr<CRGUIWindow> _owner;"
+  "GUI window entries must retain explicit optional ownership"
 )
 require_source_text(
   "${GUI_HEADER}"
@@ -8354,7 +8359,7 @@ require_source_text(
 )
 require_source_text(
   "${GUI_SOURCE}"
-  "_windows.push_back( std::move( owner ) );"
+  "_windows.emplace_back( std::move( owner ) );"
   "GUI window activation must publish scoped owners"
 )
 require_source_text(
@@ -8364,14 +8369,39 @@ require_source_text(
 )
 require_source_text(
   "${GUI_SOURCE}"
-  "owner = std::move( _windows[static_cast<size_t>( index )] );"
+  "owner = _windows[static_cast<size_t>( index )].takeOwner();"
   "GUI window close must retain ownership through lifecycle callbacks"
 )
 require_source_text(
   "${GUI_SOURCE}"
-  "owner->closing();
+  "window->closing();
     owner.reset();"
   "GUI window close must destroy its scoped owner before refocusing"
+)
+require_source_text(
+  "${GUI_HEADER}"
+  "void activateBorrowedWindow( CRGUIWindow * window );"
+  "GUI window managers must expose an explicit borrowed activation boundary"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "_wm->activateBorrowedWindow( menu );"
+  "submenus must use borrowed window activation"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "_wm->closeBorrowedWindow( this );"
+  "submenus must leave the window stack without transferring ownership"
+)
+require_source_text(
+  "${GUI_SOURCE}"
+  "_items.erase( i, 1 );"
+  "parent menus must destroy detached submenu owners exactly once"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "GUI nested menu teardown duplicated or leaked owners"
+  "nested menu ownership teardown must retain sanitizer coverage"
 )
 require_source_text(
   "${GUI_SOURCE}"

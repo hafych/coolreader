@@ -330,12 +330,12 @@ void CRGUIWindowManager::closeWindow( CRGUIWindow * window )
     if ( index >= 0 ) {
         if ( window == _windows.back().get() )
             window->covered(); // send cover before close
-        owner = std::move( _windows[static_cast<size_t>( index )] );
+        owner = _windows[static_cast<size_t>( index )].takeOwner();
         _windows.erase( _windows.begin() + index );
     } else {
         owner.reset( window );
     }
-    owner->closing();
+    window->closing();
     owner.reset();
     for ( int i=0; i<static_cast<int>( _windows.size() )
             && (index<0 || i<index); i++ )
@@ -362,7 +362,7 @@ void CRGUIWindowManager::activateWindow(
     }
     CRGUIWindow * lostFocus = getTopVisibleWindow();
     window->setVisible( true );
-    _windows.push_back( std::move( owner ) );
+    _windows.emplace_back( std::move( owner ) );
     if ( window != lostFocus )
     {
         if ( lostFocus )
@@ -382,10 +382,10 @@ void CRGUIWindowManager::activateWindow( CRGUIWindow * window )
     CRGUIWindow * lostFocus = getTopVisibleWindow();
     window->setVisible( true );
     if ( index < static_cast<int>( _windows.size() ) - 1 ) {
-        std::unique_ptr<CRGUIWindow> owner =
+        WindowEntry entry =
                 std::move( _windows[static_cast<size_t>( index )] );
         _windows.erase( _windows.begin() + index );
-        _windows.push_back( std::move( owner ) );
+        _windows.push_back( std::move( entry ) );
     }
     if ( window != lostFocus )
     {
@@ -393,6 +393,37 @@ void CRGUIWindowManager::activateWindow( CRGUIWindow * window )
             lostFocus->covered();
         window->activated();
     }
+}
+
+/// activates a window whose lifetime is managed by another object
+void CRGUIWindowManager::activateBorrowedWindow( CRGUIWindow * window )
+{
+    if ( !window )
+        return;
+    int index = findWindowIndex( window );
+    if ( index >= 0 ) {
+        activateWindow( window );
+        return;
+    }
+    CRGUIWindow * lostFocus = getTopVisibleWindow();
+    window->setVisible( true );
+    _windows.emplace_back( window );
+    if ( window != lostFocus )
+    {
+        if ( lostFocus )
+            lostFocus->covered();
+        window->activated();
+    }
+}
+
+/// removes a borrowed window from the stack without destroying it
+void CRGUIWindowManager::closeBorrowedWindow( CRGUIWindow * window )
+{
+    int index = findWindowIndex( window );
+    if ( index < 0
+            || _windows[static_cast<size_t>( index )].ownsWindow() )
+        return;
+    closeWindow( window );
 }
 
 /// runs event loop
@@ -1512,9 +1543,12 @@ void CRMenu::destroyMenu()
     for ( int i=_items.length()-1; i>=0; i-- )
         if ( _items[i]->isSubmenu() ) {
             ((CRMenu*)_items[i])->destroyMenu();
-            _items.remove( i );
+            _items.erase( i, 1 );
         }
-    _wm->closeWindow( this ); // close, for root menu
+    if ( _menu != NULL )
+        _wm->closeBorrowedWindow( this );
+    else
+        _wm->closeWindow( this );
 }
 
 /// closes menu and its submenus
@@ -1705,7 +1739,7 @@ bool CRMenu::onItemSelect(int itemId, int param)
             setDirty();
         } else {
             // show menu
-            _wm->activateWindow( menu );
+            _wm->activateBorrowedWindow( menu );
         }
         return true;
     } else {
