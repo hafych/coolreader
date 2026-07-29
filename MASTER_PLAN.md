@@ -84,6 +84,8 @@ DRM или ограничений доступа, подбор/получени�
   selection/search-result navigation text, dictionary/T9 word selection,
   on-screen keyboard layouts и T9 layout storage приведены к текущим
   `lString32`/UTF-32 контрактам.
+  Неиспользуемые UTF-16 overloads number/TOC dialogs удалены после
+  миграции всех внутренних consumers.
   Link-selection invalidation переведён с удалённого range geometry API
   на текущую геометрию экрана без device-specific размеров.
   Logo converter использует UTF-32 image/output paths, RAII stream и

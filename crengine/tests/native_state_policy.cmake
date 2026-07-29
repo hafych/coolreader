@@ -7382,15 +7382,20 @@ forbid_source_text(
   "getMenuSkin(L\"#toc\")"
   "number-editor skin identifiers must use the current character width"
 )
+forbid_source_text(
+  "${NUMBER_EDIT_HEADER}"
+  "lString16"
+  "number-editor interfaces must not retain unused UTF-16 overloads"
+)
 require_source_text(
   "${TOC_DIALOG_HEADER}"
   "CRGUIWindowManager * wm, lString32 title,"
   "TOC dialogs must accept current-width titles"
 )
-require_source_text(
+forbid_source_text(
   "${TOC_DIALOG_HEADER}"
-  "wm, Utf16ToUnicode(title),"
-  "legacy TOC titles must cross an explicit compatibility boundary"
+  "lString16"
+  "TOC dialog interfaces must not retain unused UTF-16 overloads"
 )
 require_source_text(
   "${TOC_DIALOG_SOURCE}"
@@ -7406,6 +7411,16 @@ forbid_source_text(
   "${TOC_DIALOG_SOURCE}"
   "lString16"
   "TOC dialog implementations must not narrow text to UTF-16"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "Utf8ToUnicode(lString8(_(\"Enter position percent\")))"
+  "go-to-percent dialogs must use current-width titles"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "lString16( _(\"Enter page number\") )"
+  "go-to-page dialogs must not select the removed UTF-16 overload"
 )
 require_source_text(
   "${RECENT_DIALOG_SOURCE}"

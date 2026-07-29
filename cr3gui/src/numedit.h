@@ -43,16 +43,6 @@ class CRNumberEditDialog : public CRGUIWindowBase
                 CRGUIWindowManager * wm, lString32 title,
                 lString32 initialValue, int resultCmd,
                 int minvalue, int maxvalue);
-        CRNumberEditDialog(
-                CRGUIWindowManager * wm, lString16 title,
-                lString16 initialValue, int resultCmd,
-                int minvalue, int maxvalue)
-            : CRNumberEditDialog(
-                    wm, Utf16ToUnicode(title),
-                    Utf16ToUnicode(initialValue), resultCmd,
-                    minvalue, maxvalue)
-        {
-        }
         ~CRNumberEditDialog() override
         {
         }

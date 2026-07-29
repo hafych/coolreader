@@ -43,14 +43,6 @@ class CRTOCDialog : public CRNumberEditDialog
         CRTOCDialog(
                 CRGUIWindowManager * wm, lString32 title,
                 int resultCmd, int pageCount, LVDocView * docview);
-        CRTOCDialog(
-                CRGUIWindowManager * wm, lString16 title,
-                int resultCmd, int pageCount, LVDocView * docview)
-            : CRTOCDialog(
-                    wm, Utf16ToUnicode(title),
-                    resultCmd, pageCount, docview)
-        {
-        }
         ~CRTOCDialog() override
         {
         }
