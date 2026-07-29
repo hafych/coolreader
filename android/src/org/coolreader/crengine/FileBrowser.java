@@ -46,6 +46,7 @@ import org.coolreader.crengine.OPDSUtil.DocInfo;
 import org.coolreader.crengine.OPDSUtil.DownloadCallback;
 import org.coolreader.crengine.OPDSUtil.EntryInfo;
 import org.coolreader.db.CRDBService;
+import org.coolreader.plugins.AsyncOperationControl;
 import org.coolreader.plugins.AuthenticationCallback;
 import org.coolreader.plugins.BookInfoCallback;
 import org.coolreader.plugins.FileInfoCallback;
@@ -74,6 +75,8 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	ServiceLifecycle mServiceLifecycle;
 	FileSystemFolders mFileSystemFolders;
 	private OPDSUtil.DownloadTask mDownloadTask;
+	private final OnlineStoreDialogSession onlineStoreSession =
+			new OnlineStoreDialogSession();
 	ListView mListView;
 	boolean mHideEmptyGenres;
 
@@ -261,12 +264,15 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 
 	public void onClose() {
 		mScanControl.stop();
+		onlineStoreSession.close();
 		if (mDownloadTask != null) {
 			mDownloadTask.cancel();
 			mDownloadTask = null;
 		}
 		this.mCoverpageManager.removeCoverpageReadyListener(coverpageListener);
 		coverpageListener = null;
+		if (progress != null)
+			progress.hide();
 		super.onDetachedFromWindow();
 	}
 
@@ -523,23 +529,80 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	}
 
 	private void openPluginDirectory(OnlineStoreWrapper plugin, FileInfo dir) {
+		OnlineStoreDialogSession.Request request =
+				onlineStoreSession.replace(
+						OnlineStoreDialogSession.Channel.BROWSER);
+		if (request == null)
+			return;
 		progress.show();
-		plugin.openDirectory(dir, new FileInfoCallback() {
-			@Override
-			public void onFileInfoReady(FileInfo fileInfo) {
-				progress.hide();
-				showDirectoryInternal(fileInfo, null);
-			}
-			@Override
-			public void onError(int errorCode, String description) {
-				progress.hide();
-				mActivity.showToast("Cannot read from server");
-			}
+		try {
+			AsyncOperationControl control =
+					plugin.openDirectory(
+							dir,
+							new FileInfoCallback() {
+								@Override
+								public void onFileInfoReady(
+										FileInfo fileInfo) {
+									postOnlineDirectoryReady(
+											request,
+											fileInfo);
+								}
+
+								@Override
+								public void onError(
+										int errorCode,
+										String description) {
+									postOnlineDirectoryError(
+											request);
+								}
+							});
+			onlineStoreSession.attachCancellation(
+					request, control::cancel);
+		} catch (RuntimeException e) {
+			log.e("Cannot open online-store directory", e);
+			postOnlineDirectoryError(request);
+		}
+	}
+
+	private void postOnlineDirectoryReady(
+			OnlineStoreDialogSession.Request request,
+			FileInfo fileInfo) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !onlineStoreSession.complete(request))
+				return;
+			progress.hide();
+			showDirectoryInternal(fileInfo, null);
+		});
+	}
+
+	private void postOnlineDirectoryError(
+			OnlineStoreDialogSession.Request request) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !onlineStoreSession.complete(request))
+				return;
+			progress.hide();
+			mActivity.showToast("Cannot read from server");
 		});
 	}
 	
 	private void openPluginDirectoryWithLoginDialog(final OnlineStoreWrapper plugin, final FileInfo dir) {
-		OnlineStoreLoginDialog dlg = new OnlineStoreLoginDialog(mActivity, plugin, () -> openPluginDirectory(plugin, dir));
+		OnlineStoreDialogSession.Request request =
+				onlineStoreSession.replace(
+						OnlineStoreDialogSession.Channel.BROWSER);
+		if (request == null)
+			return;
+		OnlineStoreLoginDialog dlg =
+				new OnlineStoreLoginDialog(
+						mActivity,
+						plugin,
+						() -> {
+							if (mServiceLifecycle.isActive()
+									&& onlineStoreSession.complete(
+											request))
+								openPluginDirectory(plugin, dir);
+						});
 		dlg.show();
 	}
 
@@ -558,20 +621,45 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 				String login = plugin.getLogin();
 				String password = plugin.getPassword();
 				if (login != null && password != null) {
+					OnlineStoreDialogSession.Request request =
+							onlineStoreSession.replace(
+									OnlineStoreDialogSession.Channel.BROWSER);
+					if (request == null)
+						return;
 					progress.show();
-					plugin.authenticate(login, password, new AuthenticationCallback() {
-						@Override
-						public void onError(int errorCode, String errorMessage) {
-							// ignore error 
-							progress.hide();
-							openPluginDirectoryWithLoginDialog(plugin, dir);
-						}
-						@Override
-						public void onSuccess() {
-							progress.hide();
-							openPluginDirectory(plugin, dir);
-						}
-					});
+					try {
+						AsyncOperationControl control =
+								plugin.authenticate(
+										login,
+										password,
+										new AuthenticationCallback() {
+											@Override
+											public void onError(
+													int errorCode,
+													String errorMessage) {
+												postOnlineAuthentication(
+														request,
+														plugin,
+														dir,
+														false);
+											}
+
+											@Override
+											public void onSuccess() {
+												postOnlineAuthentication(
+														request,
+														plugin,
+														dir,
+														true);
+											}
+										});
+						onlineStoreSession.attachCancellation(
+								request, control::cancel);
+					} catch (RuntimeException e) {
+						log.e("Cannot authenticate online store", e);
+						postOnlineAuthentication(
+								request, plugin, dir, false);
+					}
 					return;
 				} else {
 					openPluginDirectoryWithLoginDialog(plugin, dir);
@@ -581,6 +669,23 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 				openPluginDirectory(plugin, dir);
 			}
 		}
+	}
+
+	private void postOnlineAuthentication(
+			OnlineStoreDialogSession.Request request,
+			OnlineStoreWrapper plugin,
+			FileInfo dir,
+			boolean authenticated) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !onlineStoreSession.complete(request))
+				return;
+			progress.hide();
+			if (authenticated)
+				openPluginDirectory(plugin, dir);
+			else
+				openPluginDirectoryWithLoginDialog(plugin, dir);
+		});
 	}
 
 	public void showOPDSRootDirectory()
@@ -864,36 +969,18 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	public void showDirectory(FileInfo fileOrDir, FileInfo itemToSelect)
 	{
 		BackgroundThread.ensureGUI();
+		onlineStoreSession.cancel(
+				OnlineStoreDialogSession.Channel.BROWSER);
+		onlineStoreSession.cancel(
+				OnlineStoreDialogSession.Channel.BOOK_INFO);
+		if (progress != null)
+			progress.hide();
 		if (fileOrDir != null) {
 			if (fileOrDir.isRootDir()) {
 				mActivity.showRootWindow();
 				return;
 			}
 			if (fileOrDir.isOnlineCatalogPluginDir()) {
-				if (fileOrDir.getOnlineCatalogPluginPath() == null) {
-					// root
-					OnlineStoreWrapper plugin = OnlineStorePluginManager.getPlugin(mActivity, fileOrDir.getOnlineCatalogPluginPackage());
-					if (plugin != null) {
-						String login = plugin.getLogin();
-						String password = plugin.getPassword();
-						if (login != null && password != null) {
-							final FileInfo dir = fileOrDir;
-							// just do authentication in background
-							plugin.authenticate(login, password, new AuthenticationCallback() {
-								@Override
-								public void onError(int errorCode, String errorMessage) {
-									// ignore error 
-								}
-								@Override
-								public void onSuccess() {
-									// ignore result
-								}
-							});
-							showOnlineStoreDirectory(dir);
-							return;
-						}
-					}
-				}
 				showOnlineStoreDirectory(fileOrDir);
 				return;
 			}
@@ -1558,25 +1645,75 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			return;
 		}
 		String bookId = book.getOnlineCatalogPluginId();
+		OnlineStoreDialogSession.Request request =
+				onlineStoreSession.replace(
+						OnlineStoreDialogSession.Channel.BOOK_INFO);
+		if (request == null)
+			return;
 		progress.show();
-		plugin.loadBookInfo(bookId, new BookInfoCallback() {
-			@Override
-			public void onError(int errorCode, String errorMessage) {
-				progress.hide();
-				mActivity.showToast("Error while loading book info");
+		try {
+			AsyncOperationControl control =
+					plugin.loadBookInfo(
+							bookId,
+							new BookInfoCallback() {
+								@Override
+								public void onError(
+										int errorCode,
+										String errorMessage) {
+									postOnlineBookInfoError(
+											request);
+								}
+
+								@Override
+								public void onBookInfoReady(
+										OnlineStoreBookInfo bookInfo) {
+									postOnlineBookInfoReady(
+											request,
+											book,
+											bookInfo);
+								}
+							});
+			onlineStoreSession.attachCancellation(
+					request, control::cancel);
+		} catch (RuntimeException e) {
+			log.e("Cannot load online-store book info", e);
+			postOnlineBookInfoError(request);
+		}
+	}
+
+	private void postOnlineBookInfoError(
+			OnlineStoreDialogSession.Request request) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !onlineStoreSession.complete(request))
+				return;
+			progress.hide();
+			mActivity.showToast("Error while loading book info");
+		});
+	}
+
+	private void postOnlineBookInfoReady(
+			OnlineStoreDialogSession.Request request,
+			FileInfo book,
+			OnlineStoreBookInfo bookInfo) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !onlineStoreSession.complete(request))
+				return;
+			progress.hide();
+			if (bookInfo == null) {
+				mActivity.showToast(
+						"Error while loading book info");
+				return;
 			}
-			
-			@Override
-			public void onBookInfoReady(OnlineStoreBookInfo bookInfo) {
-				progress.hide();
-				OnlineStoreBookInfoDialog dlg = new OnlineStoreBookInfoDialog(
-						mActivity,
-						mScanner,
-						mCoverpageManager,
-						bookInfo,
-						book);
-				dlg.show();
-			}
+			OnlineStoreBookInfoDialog dlg =
+					new OnlineStoreBookInfoDialog(
+							mActivity,
+							mScanner,
+							mCoverpageManager,
+							bookInfo,
+							book);
+			dlg.show();
 		});
 	}
 

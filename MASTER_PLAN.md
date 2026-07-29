@@ -369,6 +369,16 @@ DRM или ограничений доступа, подбор/получени�
   инвалидирует зависимые списки, failure/timeout всегда возвращаются на GUI, а
   dismiss permanently закрывает все четыре канала и отклоняет late service
   callbacks.
+  Online-store browser, book-info, cover, download и authentication теперь
+  принадлежат независимым exact-request каналам `OnlineStoreDialogSession`:
+  replacement/navigation/dismiss/teardown инвалидируют прежнего owner,
+  физически вызывают `cancel()` его `AsyncOperationControl`, а wrapper не
+  выпускает поздний plugin callback после cancellation. Login остаётся открытым на время
+  authentication, progress и controls завершаются только exact GUI callback;
+  parent/browser reload, cover и download повторно проверяют service generation
+  и свой token. `BaseActivity` хранит вложенные `BaseDialog` в owner stack:
+  закрытие child восстанавливает parent, а Activity teardown dismisses все
+  диалоги children-first.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

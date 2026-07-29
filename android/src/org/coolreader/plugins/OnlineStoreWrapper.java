@@ -45,84 +45,137 @@ public class OnlineStoreWrapper {
 	}
 	public AsyncOperationControl openDirectory(final FileInfo dir, final FileInfoCallback callback) {
 		AsyncOperationControl control = new AsyncOperationControl();
+		FileInfoCallback guardedCallback = new FileInfoCallback() {
+			@Override
+			public void onFileInfoReady(FileInfo fileInfo) {
+				if (!control.isCancelled())
+					callback.onFileInfoReady(fileInfo);
+			}
+
+			@Override
+			public void onError(
+					int errorCode, String errorMessage) {
+				if (!control.isCancelled())
+					callback.onError(errorCode, errorMessage);
+			}
+		};
 		if (!plugin.getPackageName().equals(dir.getOnlineCatalogPluginPackage())) {
 			control.finished();
-			callback.onError(0, "wrong plugin");
+			guardedCallback.onError(0, "wrong plugin");
 			return control;
 		}
 		String path = dir.getOnlineCatalogPluginPath();
 		if (path == null) {
 			control.finished();
-			callback.onError(0, "wrong path");
+			guardedCallback.onError(0, "wrong path");
 			return control;
 		}
 		if ("genres".equals(path)) {
-			plugin.fillGenres(control, dir, callback);
+			plugin.fillGenres(control, dir, guardedCallback);
 			control.finished();
 			return control;
 		} else if (path.startsWith("genre=")) {
 			String genre = dir.getOnlineCatalogPluginId();
-			plugin.getBooksForGenre(control, dir, genre, callback);
+			plugin.getBooksForGenre(
+					control, dir, genre, guardedCallback);
 			control.finished();
 			return control;
 		} else if (path.startsWith("authors=")) {
 			String prefix = dir.getOnlineCatalogPluginId();
-			plugin.getAuthorsByPrefix(control, dir, prefix, callback);
+			plugin.getAuthorsByPrefix(
+					control, dir, prefix, guardedCallback);
 			control.finished();
 			return control;
 		} else if (path.startsWith("author=")) {
 			String authorId = dir.getOnlineCatalogPluginId();
-			plugin.getBooksByAuthor(control, dir, authorId, callback);
+			plugin.getBooksByAuthor(
+					control, dir, authorId, guardedCallback);
 			control.finished();
 			return control;
 		} else if ("my".equals(path)) {
-			plugin.getPurchasedBooks(control, dir, callback);
+			plugin.getPurchasedBooks(
+					control, dir, guardedCallback);
 			return control;
 		} else if ("new".equals(path)) {
-			plugin.getNewBooks(control, dir, callback);
+			plugin.getNewBooks(control, dir, guardedCallback);
 			return control;
 		} else if ("popular".equals(path)) {
-			plugin.getPopularBooks(control, dir, callback);
+			plugin.getPopularBooks(
+					control, dir, guardedCallback);
 			return control;
 		} else {
 			
 		}
 			
 		control.finished();
-		callback.onFileInfoReady(dir);
+		guardedCallback.onFileInfoReady(dir);
 		return control;
 	}
 	public AsyncOperationControl authenticate(String login, String password, AuthenticationCallback callback) {
 		AsyncOperationControl control = new AsyncOperationControl();
-		plugin.authenticate(control, login, password, callback);
+		plugin.authenticate(
+				control,
+				login,
+				password,
+				new AuthenticationCallback() {
+					@Override
+					public void onError(
+							int errorCode,
+							String errorMessage) {
+						if (!control.isCancelled())
+							callback.onError(
+									errorCode, errorMessage);
+					}
+
+					@Override
+					public void onSuccess() {
+						if (!control.isCancelled())
+							callback.onSuccess();
+					}
+				});
 		return control;
 	}
 	private void loadBookInfoContinue(final AsyncOperationControl control, final String bookId, final boolean isBought, final BookInfoCallback callback) {
 		plugin.getBookInfo(control, bookId, false, new BookInfoCallback() {
 			@Override
 			public void onError(int errorCode, String errorMessage) {
-				callback.onError(errorCode, errorMessage);
+				if (!control.isCancelled())
+					callback.onError(errorCode, errorMessage);
 			}
 			@Override
 			public void onBookInfoReady(OnlineStoreBookInfo bookInfo) {
+				if (control.isCancelled())
+					return;
 				bookInfo.isPurchased = isBought;
 				callback.onBookInfoReady(bookInfo);
 			}
 		});
 	}
 	private void loadBookInfoSkipAuth(final AsyncOperationControl control, final String bookId, final BookInfoCallback callback) {
+		if (control.isCancelled())
+			return;
 		if (plugin.getLogin() == null)
 			loadBookInfoContinue(control, bookId, false, callback);
 		else
 			plugin.getBookInfo(control, bookId, true, new BookInfoCallback() {
 				@Override
 				public void onError(int errorCode, String errorMessage) {
-					loadBookInfoContinue(control, bookId, false, callback);
+					if (!control.isCancelled())
+						loadBookInfoContinue(
+								control,
+								bookId,
+								false,
+								callback);
 				}
 				
 				@Override
 				public void onBookInfoReady(OnlineStoreBookInfo bookInfo) {
-					loadBookInfoContinue(control, bookId, true, callback);
+					if (!control.isCancelled())
+						loadBookInfoContinue(
+								control,
+								bookId,
+								true,
+								callback);
 				}
 			});
 	}
@@ -134,12 +187,16 @@ public class OnlineStoreWrapper {
 			plugin.authenticate(control, login, password, new AuthenticationCallback() {
 				@Override
 				public void onError(int errorCode, String errorMessage) {
-					loadBookInfoSkipAuth(control, bookId, callback);
+					if (!control.isCancelled())
+						loadBookInfoSkipAuth(
+								control, bookId, callback);
 				}
 				
 				@Override
 				public void onSuccess() {
-					loadBookInfoSkipAuth(control, bookId, callback);
+					if (!control.isCancelled())
+						loadBookInfoSkipAuth(
+								control, bookId, callback);
 				}
 			});
 		} else
@@ -149,7 +206,33 @@ public class OnlineStoreWrapper {
 
 	public AsyncOperationControl downloadBook(OnlineStoreBook book, boolean trial, File fileToSave, DownloadBookCallback callback) {
 		final AsyncOperationControl control = new AsyncOperationControl();
-		plugin.downloadBook(control, book, trial, fileToSave, callback);
+		plugin.downloadBook(
+				control,
+				book,
+				trial,
+				fileToSave,
+				new DownloadBookCallback() {
+					@Override
+					public void onError(
+							int errorCode,
+							String errorMessage) {
+						if (!control.isCancelled())
+							callback.onError(
+									errorCode, errorMessage);
+					}
+
+					@Override
+					public void onBookDownloaded(
+							OnlineStoreBook downloadedBook,
+							boolean downloadedTrial,
+							File savedFileName) {
+						if (!control.isCancelled())
+							callback.onBookDownloaded(
+									downloadedBook,
+									downloadedTrial,
+									savedFileName);
+					}
+				});
 		return control;
 	}
 

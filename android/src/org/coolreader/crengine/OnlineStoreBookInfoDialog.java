@@ -36,6 +36,7 @@ import android.widget.TextView;
 
 import org.coolreader.CoolReader;
 import org.coolreader.R;
+import org.coolreader.plugins.AsyncOperationControl;
 import org.coolreader.plugins.BookInfoCallback;
 import org.coolreader.plugins.DownloadBookCallback;
 import org.coolreader.plugins.OnlineStoreBook;
@@ -48,6 +49,9 @@ import java.io.File;
 public class OnlineStoreBookInfoDialog extends BaseDialog {
 	private CoolReader mActivity;
 	private final CoverpageManager mCoverpageManager;
+	private final ServiceLifecycle mServiceLifecycle;
+	private final OnlineStoreDialogSession session =
+			new OnlineStoreDialogSession();
 	private OnlineStoreBookInfo mBookInfo;
 	private FileInfo mFileInfo;
 	private LayoutInflater mInflater;
@@ -69,6 +73,8 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 	{
 		super(activity, null, false, false);
 		this.mCoverpageManager = coverpageManager;
+		this.mServiceLifecycle =
+				activity.getServiceDependencies().getLifecycle();
 		DisplayMetrics outMetrics = new DisplayMetrics();
 		activity.getWindowManager().getDefaultDisplay().getMetrics(outMetrics);
 		this.mWindowSize = Math.min(outMetrics.widthPixels, outMetrics.heightPixels);
@@ -137,10 +143,22 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
         image.setMinimumWidth(w);
         image.setMaxWidth(w);
         Bitmap bmp = Bitmap.createBitmap(w, h, Config.RGB_565);
-        mCoverpageManager.drawCoverpageFor(mActivity.getDB(), mFileInfo, bmp, false, (file, bitmap) -> {
-			BitmapDrawable drawable = new BitmapDrawable(bitmap);
-			image.setImageDrawable(drawable);
-		});
+		OnlineStoreDialogSession.Request coverRequest =
+				session.replace(
+						OnlineStoreDialogSession.Channel.COVER);
+        mCoverpageManager.drawCoverpageFor(
+				mActivity.getDB(),
+				mFileInfo,
+				bmp,
+				false,
+				(file, bitmap) -> {
+					if (mServiceLifecycle.isActive()
+							&& session.complete(coverRequest)) {
+						BitmapDrawable drawable =
+								new BitmapDrawable(bitmap);
+						image.setImageDrawable(drawable);
+					}
+				});
 
         if (mBookInfo.book.rating > 0)
         	rbBookRating.setRating(mBookInfo.book.rating / 2.0f);
@@ -204,7 +222,20 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 			download(false);
 		} else if (!mBookInfo.isLoggedIn) {
 			// LOGIN
-			OnlineStoreLoginDialog dlg = new OnlineStoreLoginDialog(mActivity, mPlugin, this::reloadBookInfo);
+			OnlineStoreDialogSession.Request request =
+					session.replace(
+							OnlineStoreDialogSession.Channel.BOOK_INFO);
+			if (request == null)
+				return;
+			OnlineStoreLoginDialog dlg =
+					new OnlineStoreLoginDialog(
+							mActivity,
+							mPlugin,
+							() -> {
+								if (mServiceLifecycle.isActive()
+										&& session.complete(request))
+									reloadBookInfo();
+							});
 			dlg.show();
 		}
 	}
@@ -212,18 +243,64 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 	private ProgressPopup progress;
 	
 	private void reloadBookInfo() {
+		if (!mServiceLifecycle.isActive())
+			return;
 		String bookId = mFileInfo.getOnlineCatalogPluginId();
+		OnlineStoreDialogSession.Request request =
+				session.replace(
+						OnlineStoreDialogSession.Channel.BOOK_INFO);
+		if (request == null)
+			return;
+		setActionsEnabled(false);
 		progress.show();
-		mPlugin.loadBookInfo(bookId, new BookInfoCallback() {
-			@Override
-			public void onError(int errorCode, String errorMessage) {
-				progress.hide();
-				mActivity.showToast("Error while loading book info");
-			}
-			
-			@Override
-			public void onBookInfoReady(OnlineStoreBookInfo bookInfo) {
-				progress.hide();
+		try {
+			AsyncOperationControl control =
+					mPlugin.loadBookInfo(
+							bookId,
+							new BookInfoCallback() {
+								@Override
+								public void onError(
+										int errorCode,
+										String errorMessage) {
+									postBookInfoError(request);
+								}
+
+								@Override
+								public void onBookInfoReady(
+										OnlineStoreBookInfo bookInfo) {
+									postBookInfoReady(
+											request, bookInfo);
+								}
+							});
+			session.attachCancellation(request, control::cancel);
+		} catch (RuntimeException e) {
+			L.e("Cannot reload online-store book info", e);
+			postBookInfoError(request);
+		}
+	}
+
+	private void postBookInfoError(
+			OnlineStoreDialogSession.Request request) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !session.complete(request))
+				return;
+			progress.hide();
+			setActionsEnabled(true);
+			mActivity.showToast("Error while loading book info");
+		});
+	}
+
+	private void postBookInfoReady(
+			OnlineStoreDialogSession.Request request,
+			OnlineStoreBookInfo bookInfo) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !session.complete(request))
+				return;
+			progress.hide();
+			setActionsEnabled(true);
+			if (bookInfo != null) {
 				mBookInfo = bookInfo;
 				updateInfo();
 			}
@@ -258,21 +335,79 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 			mActivity.showToast("Cannot create download directory " + f.getAbsolutePath());
 			return;
 		}
+		OnlineStoreDialogSession.Request request =
+				session.replace(
+						OnlineStoreDialogSession.Channel.DOWNLOAD);
+		if (request == null)
+			return;
+		setActionsEnabled(false);
 		progress.show();
-		mPlugin.downloadBook(mBookInfo.book, trial, f, new DownloadBookCallback() {
-			@Override
-			public void onError(int errorCode, String errorMessage) {
-				progress.hide();
-				mActivity.showToast("Error while downloading book: " + errorMessage);
-			}
-			
-			@Override
-			public void onBookDownloaded(OnlineStoreBook book, boolean trial,
-					File savedFileName) {
-				progress.hide();
-				openBook(trial);
-			}
+		try {
+			AsyncOperationControl control =
+					mPlugin.downloadBook(
+							mBookInfo.book,
+							trial,
+							f,
+							new DownloadBookCallback() {
+								@Override
+								public void onError(
+										int errorCode,
+										String errorMessage) {
+									postDownloadError(
+											request,
+											errorMessage);
+								}
+
+								@Override
+								public void onBookDownloaded(
+										OnlineStoreBook book,
+										boolean downloadedTrial,
+										File savedFileName) {
+									postDownloadReady(
+											request,
+											trial);
+								}
+							});
+			session.attachCancellation(request, control::cancel);
+		} catch (RuntimeException e) {
+			L.e("Cannot start online-store download", e);
+			postDownloadError(request, e.getMessage());
+		}
+	}
+
+	private void postDownloadError(
+			OnlineStoreDialogSession.Request request,
+			String errorMessage) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !session.complete(request))
+				return;
+			progress.hide();
+			setActionsEnabled(true);
+			mActivity.showToast(
+					"Error while downloading book"
+							+ (errorMessage != null
+									? ": " + errorMessage
+									: ""));
 		});
+	}
+
+	private void postDownloadReady(
+			OnlineStoreDialogSession.Request request,
+			boolean trial) {
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mServiceLifecycle.isActive()
+					|| !session.complete(request))
+				return;
+			progress.hide();
+			setActionsEnabled(true);
+			openBook(trial);
+		});
+	}
+
+	private void setActionsEnabled(boolean enabled) {
+		btnBuyOrDownload.setEnabled(enabled);
+		btnPreview.setEnabled(enabled);
 	}
 	
 	private void openBook(boolean trial) {
@@ -281,5 +416,13 @@ public class OnlineStoreBookInfoDialog extends BaseDialog {
 		mActivity.loadDocument(
 				DocumentSource.file(book.getAbsolutePath()),
 				null, null, true);
+	}
+
+	@Override
+	protected void onClose() {
+		session.close();
+		if (progress != null)
+			progress.hide();
+		super.onClose();
 	}
 }

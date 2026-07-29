@@ -283,24 +283,31 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		bindCRDBService();
 	}
 
-	protected BaseDialog currentDialog;
+	private final OwnedDialogStack<BaseDialog> dialogs =
+			new OwnedDialogStack<>();
+
 	public void onDialogCreated(BaseDialog dlg) {
-		currentDialog = dlg;
+		dialogs.opened(dlg);
 	}
+
 	public void onDialogClosed(BaseDialog dlg) {
-    	if (currentDialog == dlg) {
-    		currentDialog = null;
-		}
+		dialogs.closed(dlg);
 	}
+
 	public BaseDialog getCurrentDialog() {
-    	return currentDialog;
+		return dialogs.current();
 	}
+
 	public boolean isDialogActive() {
-    	return currentDialog != null;
+		return dialogs.isActive();
 	}
 
 	@Override
 	protected void onDestroy() {
+		for (BaseDialog dialog : dialogs.takeAllForClose()) {
+			if (dialog.isShowing())
+				dialog.dismiss();
+		}
 		mToastView.close();
 		super.onDestroy();
 		unbindCRDBService();

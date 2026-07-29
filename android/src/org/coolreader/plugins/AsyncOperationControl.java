@@ -20,8 +20,8 @@
 package org.coolreader.plugins;
 
 public class AsyncOperationControl {
-	boolean finished;
-	boolean cancelled;
+	private volatile boolean finished;
+	private volatile boolean cancelled;
 	public void cancel() {
 		cancelled = true;
 	}

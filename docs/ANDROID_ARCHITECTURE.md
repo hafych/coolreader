@@ -310,6 +310,23 @@ engines, locales, voices and engine initialization. A newer locale rejects a
 late voice list from its predecessor, engine replacement invalidates both
 dependent catalogs, and every service outcome returns to the GUI owner before
 touching option Views. Closing the dialog permanently invalidates all channels.
+Online-store UI uses an equivalent multi-channel
+`OnlineStoreDialogSession`. Browser directory loads, book-info loads, cover
+publication, downloads and authentication each own an exact request. Replacing
+a request, navigating elsewhere, dismissing its dialog or tearing down the
+browser closes that owner and invokes the attached `AsyncOperationControl`
+cancellation. `OnlineStoreWrapper` guards its public callback boundary as well,
+so a plugin that delivers after cancellation cannot reach Activity UI.
+Login stays visible and disables its action while authentication is pending;
+only the exact GUI completion may restore controls, dismiss on success and
+notify its parent. Book-info reload, cover and download callbacks, and browser
+directory/detail callbacks additionally require the captured service
+generation before touching Views or opening another dialog.
+`BaseActivity` owns nested `BaseDialog` instances as a stack instead of one
+replaceable pointer. Closing a child restores its parent as the current dialog,
+and Activity destruction takes the stack children-first and dismisses every
+showing dialog. Each dialog's normal `onClose()` path therefore cancels its
+owned work during teardown without losing the parent's bookkeeping.
 Reader-mode options additionally capture the exact `BookInfo` and document
 interaction before fetching the native font catalog. The dialog receives an
 immutable `ReaderDocumentOptions` snapshot plus a narrow generation-aware
