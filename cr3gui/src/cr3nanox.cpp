@@ -371,12 +371,10 @@ int GrBitmapEx_Apollo_NEW(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int 
     BMPHEADER_256 lpHeader;
     GR_IMAGE_ID ImageId;
     int HeaderLen;
-    int i;
     int Lines;
     int BmpBufBytsPerLine=0,BytesPerLine=0;
 
 
-    unsigned char char1,char2,char3,char4,BmpChar1;
     unsigned char *Screen_Buf=NULL,*BufPtr=NULL,*HeaderBuf=NULL,*pimg = NULL;
     int GrayLevel=8;//256 gray level
     int BmpWidth=0,BmpHeight=0,PixesPerByte=0,BmpPanelNumbers=0,Bmpheadersize=0;
@@ -392,7 +390,6 @@ int GrBitmapEx_Apollo_NEW(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int 
     BmpBufBytsPerLine=(((src_width*GrayLevel+7)/8+3)/4)*4;
 
 
-    i=sizeof(BMPHEADER_256);
     HeaderLen=BITMAPFILEHEADER_SIZE+sizeof(BITMAPINFOHEADER)+sizeof(MWPALENTRY)*BmpPanelNumbers;
     memcpy((unsigned char *)&lpHeader.FileHeader.bfType,"BM",2);//
     lpHeader.FileHeader.bfSize=(BmpHeight*BytesPerLine)/PixesPerByte+HeaderLen; //
@@ -476,8 +473,10 @@ public:
     void create_led_thread();
 private:
     //class MainViewer *m_app;
+#if LEDTHREAD==1
     pthread_t m_idled;
     bool m_threadCreated;
+#endif
     
 };
 
@@ -503,7 +502,9 @@ static sem_t g_semled;
 void vTellLed(void *vptr);
 
 LedThreadApp::LedThreadApp()
+#if LEDTHREAD==1
     : m_idled(), m_threadCreated(false)
+#endif
 {
 //    m_app=ProcApp;
     init_led_sem();
@@ -575,7 +576,6 @@ void LedThreadApp::create_led_thread()
 void vTellLed(void *vptr)
 {
     //int start = 0;
-    int locked;
     g_iOpenLed = 1;
     g_iLedOpened = 0;
 //    g_iProcessingTipValue = 0;
@@ -823,8 +823,6 @@ public:
     CRJinkeWindowManager( int dx, int dy )
     : CRGUIWindowManager(NULL)
     {
-        int bus_fd;
-        
         if ( CRJinkeScreen::instance==NULL ) {
             setOwnedScreen( std::unique_ptr<CRGUIScreen>(
                     new CRJinkeScreen( dx, dy ) ) );
@@ -836,6 +834,7 @@ public:
             instance = this;
 
 #if ENABLE_DBUS_VIEWER_EVENTS==1
+            int bus_fd;
             //dbus, nanox
             m_bus = dbus_bus_get (DBUS_BUS_SESSION, NULL);
             if (!m_bus)
@@ -1216,7 +1215,7 @@ static const char * getLang( )
     int langId = -1;
     if ( getenv("WOLLANG") )
         langId = atoi( getenv("WOLLANG") );
-    static char * langs[] = {
+    static const char * const langs[] = {
         "zh_CN",
         "en_US",
         "zh_TW",

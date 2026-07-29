@@ -7372,6 +7372,31 @@ forbid_source_text(
   "NanoX plugin source must not retain unbounded formatting examples"
 )
 require_source_text(
+  "${NANOX_SOURCE}"
+  "static const char * const langs[] ="
+  "NanoX language identifiers must preserve immutable storage"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "#if LEDTHREAD==1\n    pthread_t m_idled;"
+  "NanoX LED-only state must remain feature-gated"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "#if ENABLE_DBUS_VIEWER_EVENTS==1\n            int bus_fd;"
+  "NanoX DBus-only state must remain feature-gated"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "static char * langs[]"
+  "NanoX language identifiers must not expose writable literals"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "int locked;"
+  "NanoX LED workers must not retain unused lock state"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testGuiScreenOwnership()"
   "GUI screen ownership must retain native lifecycle coverage"
