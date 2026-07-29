@@ -7563,6 +7563,16 @@ forbid_source_text(
   "citation dialog implementations must not narrow text to UTF-16"
 )
 require_source_text(
+  "${CITE_DIALOG_SOURCE}"
+  "wm->activateWindow(std::make_unique<CiteWindow>(wm, mainwin));"
+  "citation windows must transfer through owner-aware activation"
+)
+forbid_source_text(
+  "${CITE_DIALOG_SOURCE}"
+  "activateWindow(new CiteWindow"
+  "citation window candidates must not begin as raw owners"
+)
+require_source_text(
   "${LINKS_DIALOG_SOURCE}"
   "_invalidateRect = _wm->getScreen()->getRect();"
   "link selection invalidation must use current screen geometry"

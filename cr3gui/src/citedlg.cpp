@@ -277,5 +277,5 @@ protected:
 void activate_cite( CRGUIWindowManager *wm, V3DocViewWin * mainwin)
 {
     CRLog::info("Entering cite mode\n");
-    wm->activateWindow(new CiteWindow(wm, mainwin));
+    wm->activateWindow(std::make_unique<CiteWindow>(wm, mainwin));
 }
