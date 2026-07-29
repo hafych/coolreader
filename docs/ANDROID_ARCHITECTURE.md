@@ -475,15 +475,18 @@ Activity destruction closes all refresh channels, while a delayed initial
 database bind checks service and Activity ownership before constructing home
 UI.
 Reader-mode options additionally capture the exact `BookInfo` and document
-interaction before fetching the native font catalog. The dialog receives an
-immutable `ReaderDocumentOptions` snapshot plus a narrow generation-aware
-handler, never a mutable `ReaderView`. Applying the dialog batches reflow,
-document styles, embedded fonts, DOM version and block-rendering flags against
-that exact book, persists the book once, and schedules at most one reload or
-render. A reload consumes all five captured per-book settings, including the
-embedded-font command. If the interaction has been replaced, the handler
-rejects every document/native/DB effect; unrelated Activity settings selected
-in the same dialog may still be applied normally.
+interaction before fetching the native font catalog. The lookup belongs to a
+latest-only `CloseableTaskGate`: a repeated request replaces its predecessor,
+document replacement or close cancels it, and destruction permanently closes
+the owner. The native font array is cloned before the background-to-GUI
+handoff. The dialog receives an immutable `ReaderDocumentOptions` snapshot
+plus a narrow generation-aware handler, never a mutable `ReaderView`. Applying
+the dialog batches reflow, document styles, embedded fonts, DOM version and
+block-rendering flags against that exact book, persists the book once, and
+schedules at most one reload or render. A reload consumes all five captured
+per-book settings, including the embedded-font command. If the interaction has
+been replaced, the handler rejects every document/native/DB effect; unrelated
+Activity settings selected in the same dialog may still be applied normally.
 Activity-level dictionary lookup is owned by `DictionaryLookupSession` and a
 cancelable GUI scheduler. A newer lookup, `showDictionary()` or Activity
 destruction physically removes its predecessor, and only the exact active

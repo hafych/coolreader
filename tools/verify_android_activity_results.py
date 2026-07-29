@@ -2763,6 +2763,7 @@ def main() -> None:
         '"applyPositionSave"',
         "ReaderOptionsHandler.class.isInterface()",
         "OptionsDialog.class, \"readerOptionsHandler\"",
+        '"readerOptionsDialogLifecycle"',
         '"applyReaderDocumentOptions"',
         "ProfileSwitchHandler.class.isInterface()",
         "SwitchProfileDialog.class,",
@@ -4075,6 +4076,35 @@ def main() -> None:
         if marker not in reader_view_text:
             violations.append(
                 f"{relative(READER_VIEW)} omits exact reader-options "
+                f"marker: {marker}")
+    reader_options_start = reader_view_text.find(
+        "\n\tpublic void showOptionsDialog()")
+    reader_options_end = reader_view_text.find(
+        "\n\tprivate ReaderOptionsHandler readerOptionsHandler(",
+        reader_options_start)
+    reader_options_async_text = reader_view_text[
+        reader_options_start:reader_options_end
+    ]
+    for marker in (
+        "readerOptionsDialogLifecycle.replace()",
+        "readerOptionsDialogLifecycle.isActive(owner)",
+        "readerOptionsDialogLifecycle.complete(owner)",
+        "fontFaces.clone()",
+        "fontSnapshot",
+        "optionsHandler.isActive()",
+    ):
+        if marker not in reader_options_async_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits latest reader-options "
+                f"request marker: {marker}")
+    for marker in (
+        "private final CloseableTaskGate readerOptionsDialogLifecycle",
+        "readerOptionsDialogLifecycle.cancel()",
+        "readerOptionsDialogLifecycle.close()",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits reader-options teardown "
                 f"marker: {marker}")
 
     profile_switch_handler_text = PROFILE_SWITCH_HANDLER.read_text(

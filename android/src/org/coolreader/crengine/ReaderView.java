@@ -2437,6 +2437,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		mActivity.setSetting(PROP_STATUS_LINE, newValue, true);
 	}
 
+	private final CloseableTaskGate readerOptionsDialogLifecycle =
+			new CloseableTaskGate();
+
 	public void showOptionsDialog() {
 		BackgroundThread.ensureGUI();
 		final BookInfo expectedBook = mBookInfo;
@@ -2448,18 +2451,45 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		final ReaderOptionsHandler optionsHandler =
 				readerOptionsHandler(
 						expectedBook, interaction);
+		final CloseableTaskGate.Token owner =
+				readerOptionsDialogLifecycle.replace();
+		if (owner == null)
+			return;
 		BackgroundThread.instance().postBackground(() -> {
-			final String[] fontFaces =
-					Engine.getFontFaceList();
+			BackgroundThread.ensureBackground();
+			if (!readerOptionsDialogLifecycle.isActive(owner)
+					|| !optionsHandler.isActive()) {
+				readerOptionsDialogLifecycle.complete(owner);
+				return;
+			}
+			final String[] fontSnapshot;
+			try {
+				String[] fontFaces = Engine.getFontFaceList();
+				fontSnapshot =
+						fontFaces != null
+								? fontFaces.clone()
+								: null;
+			} catch (Exception e) {
+				if (readerOptionsDialogLifecycle.complete(owner)
+						&& optionsHandler.isActive())
+					log.e("Cannot load reader font catalog", e);
+				return;
+			}
+			if (!readerOptionsDialogLifecycle.isActive(owner)
+					|| !optionsHandler.isActive()) {
+				readerOptionsDialogLifecycle.complete(owner);
+				return;
+			}
 			BackgroundThread.instance().executeGUI(() -> {
-				if (!optionsHandler.isActive())
+				if (!readerOptionsDialogLifecycle.complete(owner)
+						|| !optionsHandler.isActive())
 					return;
 				OptionsDialog dlg = new OptionsDialog(
 						mActivity,
 						mEngine,
 						OptionsDialog.Mode.READER,
 						optionsHandler,
-						fontFaces,
+						fontSnapshot,
 						null);
 				dlg.show();
 			});
@@ -4199,6 +4229,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BackgroundThread.ensureGUI();
 		stopTts();
 		bookInfoDialogLifecycle.cancel();
+		readerOptionsDialogLifecycle.cancel();
 		settingsSyncLifecycle.cancel();
 		return documentLoadLifecycle.replace();
 	}
@@ -8013,6 +8044,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (cancelDocumentLoad)
 			documentLoadLifecycle.cancel();
 		bookInfoDialogLifecycle.cancel();
+		readerOptionsDialogLifecycle.cancel();
 		settingsSyncLifecycle.cancel();
 		stopTracking();
 		cancelDocumentAnimation();
@@ -8095,6 +8127,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		drawTaskLifecycle.close();
 		ttsInitializationLifecycle.close();
 		bookInfoDialogLifecycle.close();
+		readerOptionsDialogLifecycle.close();
 		settingsSyncLifecycle.close();
 		documentLoadLifecycle.close();
 		closeGestureTimeouts();

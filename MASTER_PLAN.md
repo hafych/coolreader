@@ -428,10 +428,13 @@ DRM или ограничений доступа, подбор/получени�
   позиции захватывает эту пару до GUI-hop и переносит её до exact apply, поэтому
   stale диалог или timer не может изменить либо сохранить replacement-книгу.
   Reader-mode options теперь открываются через captured book+interaction даже
-  при асинхронном получении каталога шрифтов. `OptionsDialog` хранит только
-  immutable document snapshot и узкий generation-aware handler вместо
-  `ReaderView`; все пять per-book опций применяются одним batch к exact книге,
-  сохраняются одним DB effect и приводят максимум к одному reload/render.
+  при асинхронном получении каталога шрифтов. Сам lookup принадлежит
+  latest-only `CloseableTaskGate`: повторный запрос заменяет predecessor,
+  replacement/close отменяют его, destroy permanently закрывает owner, а
+  native font array клонируется до background→GUI handoff. `OptionsDialog`
+  хранит только immutable document snapshot и узкий generation-aware handler
+  вместо `ReaderView`; все пять per-book опций применяются одним batch к exact
+  книге, сохраняются одним DB effect и приводят максимум к одному reload/render.
   Reload явно переносит embedded-font flag вместе со styles/reflow/DOM/block
   flags, а stale диалог не может изменить native document или metadata книги,
   которая заменила исходную.

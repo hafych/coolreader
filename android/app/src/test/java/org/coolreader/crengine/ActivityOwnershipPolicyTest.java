@@ -2505,6 +2505,10 @@ public class ActivityOwnershipPolicyTest {
 		assertPrivateFinalField(
 				OptionsDialog.class, "readerDocumentOptions",
 				ReaderDocumentOptions.class);
+		assertPrivateFinalField(
+				ReaderView.class,
+				"readerOptionsDialogLifecycle",
+				CloseableTaskGate.class);
 		for (Field field : OptionsDialog.class.getDeclaredFields()) {
 			assertFalse(
 					"OptionsDialog must retain only a narrow "
