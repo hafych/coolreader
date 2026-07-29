@@ -8054,6 +8054,26 @@ require_source_text(
 )
 require_source_text(
   "${POCKETBOOK_SOURCE}"
+  "class PocketBookToc"
+  "PocketBook contents entries must share a dedicated lifecycle owner"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::vector<std::unique_ptr<char[]> > _texts;"
+  "PocketBook contents labels must use scoped array ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "PocketBookToc &_toc;"
+  "PocketBook contents windows must borrow their document-owned TOC"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "PocketBookToc _toc;"
+  "PocketBook document windows must own their current TOC snapshot"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
   "std::unique_ptr<CRPbDictionaryView> _dictView;"
   "PocketBook dictionary dialogs must own their dictionary views"
 )
@@ -8111,6 +8131,26 @@ forbid_source_text(
   "${POCKETBOOK_SOURCE}"
   "CRPbDictionaryDialog * _dictDlg;"
   "PocketBook document windows must not retain raw dictionary-dialog ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "tocentry *_toc;"
+  "PocketBook contents windows must not expose raw TOC ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "_toc = (tocentry *) malloc"
+  "PocketBook TOC snapshots must not use raw allocation"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "_toc[j].text = strdup"
+  "PocketBook TOC labels must not use raw duplicated strings"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "freeContents()"
+  "PocketBook TOC teardown must remain automatic"
 )
 forbid_source_text(
   "${POCKETBOOK_SOURCE}"

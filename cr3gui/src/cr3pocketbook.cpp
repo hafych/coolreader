@@ -26,6 +26,7 @@
 #include <crengine.h>
 #include <crgui.h>
 #include <memory>
+#include <vector>
 #include "viewdlg.h"
 #include "cr3main.h"
 #include "numedit.h"
@@ -596,18 +597,87 @@ public:
     }
 };
 
+class PocketBookToc
+{
+    std::vector<std::unique_ptr<char[]> > _texts;
+    std::vector<tocentry> _entries;
+
+public:
+    bool build(LVPtrVector<LVTocItem, false> &items)
+    {
+        std::vector<std::unique_ptr<char[]> > textCandidates;
+        std::vector<tocentry> entryCandidates;
+        textCandidates.reserve(static_cast<size_t>(items.length()));
+        entryCandidates.reserve(static_cast<size_t>(items.length()));
+
+        for (int i = 0; i < items.length(); i++) {
+            LVTocItem *item = items[i];
+            if (item->getName().empty())
+                continue;
+
+            lString8 encoded =
+                    UnicodeToUtf8(item->getName());
+            std::unique_ptr<char[]> text =
+                    std::make_unique<char[]>(
+                            static_cast<size_t>(
+                                    encoded.length()) + 1);
+            memcpy(
+                    text.get(), encoded.c_str(),
+                    static_cast<size_t>(encoded.length()) + 1);
+            for (char *p = text.get(); *p; p++) {
+                if (*p == '\r' || *p == '\n')
+                    *p = ' ';
+            }
+
+            tocentry entry = {};
+            entry.level = item->getLevel();
+            entry.position = item->getPage() + 1;
+            entry.page = entry.position;
+            entry.text = text.get();
+            textCandidates.push_back(std::move(text));
+            entryCandidates.push_back(entry);
+        }
+
+        _texts.swap(textCandidates);
+        _entries.swap(entryCandidates);
+        return !_entries.empty();
+    }
+
+    void clear()
+    {
+        _entries.clear();
+        _texts.clear();
+    }
+
+    tocentry *data()
+    {
+        return _entries.empty() ? NULL : _entries.data();
+    }
+
+    int length() const
+    {
+        return static_cast<int>(_entries.size());
+    }
+};
+
 class CRPocketBookContentsWindow : public CRPocketBookInkViewWindow
 {
 private:
     int _curPage;
-    tocentry *_toc;
-    int _tocLength;
+    PocketBookToc &_toc;
 public:
-    CRPocketBookContentsWindow( CRGUIWindowManager * wm, tocentry *toc, int toc_length, int cur_page)
-        : CRPocketBookInkViewWindow( wm ), _curPage(cur_page), _toc(toc), _tocLength(toc_length) {}
+    CRPocketBookContentsWindow(
+            CRGUIWindowManager *wm, PocketBookToc &toc,
+            int curPage)
+        : CRPocketBookInkViewWindow(wm),
+          _curPage(curPage), _toc(toc)
+    {
+    }
     virtual void showWindow()
     {
-        OpenContents(_toc, _tocLength, _curPage, tocHandler);
+        OpenContents(
+                _toc.data(), _toc.length(),
+                _curPage, tocHandler);
     }
 };
 
@@ -872,8 +942,7 @@ private:
     ibitmap *_bm3x3;
     char *_strings3x3[9];
     int _quick_menuactions[9];
-    tocentry *_toc;
-    int _tocLength;
+    PocketBookToc _toc;
     std::unique_ptr<CRPbDictionaryDialog> _dictDlg;
     bool _rotatetimerset;
     bool _lastturn;
@@ -882,15 +951,6 @@ private:
     int  m_goToPage;
     bool _restore_globOrientation;
     bool m_skipEvent;
-    void freeContents()
-    {
-        for (int i = 0; i < _tocLength; i++) {
-            if (_toc[i].text)
-                free(_toc[i].text);
-        }
-        free(_toc);
-        _toc = NULL;
-    }
     void switchToRecentBook(int index)
     {
         LVPtrVector<CRFileHistRecord> & files = _docview->getHistory()->getRecords();
@@ -1022,7 +1082,7 @@ protected:
 public:
     static CRPocketBookDocView * instance;
     explicit CRPocketBookDocView( CRGUIWindowManager * wm )
-        : V3DocViewWin( wm ), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(), _rotatetimerset(false),
+        : V3DocViewWin( wm ), _bm3x3(NULL), _toc(), _dictDlg(), _rotatetimerset(false),
         _lastturn(true), _pauseRotationTimer(false), m_goToPage(-1), _restore_globOrientation(false), m_skipEvent(false)
     {
         instance = this;
@@ -1116,8 +1176,7 @@ public:
                 params = _docview->getPageCount();
             if (V3DocViewWin::onCommand( command, params ))
                 _wm->update(true);
-            if (_toc)
-                freeContents() ;
+            _toc.clear();
             return true;
         case MCMD_DICT:
             showDictDialog();
@@ -1203,44 +1262,16 @@ public:
     }
 
     void showContents() {
-        if (_toc != NULL)
-            freeContents();
         LVPtrVector<LVTocItem, false> tocItems;
         _docview->getFlatToc(tocItems);
-        _tocLength = tocItems.length();
-
-        if (_tocLength) {
-            int tocSize = (_tocLength + 1) * sizeof(tocentry);
-            _toc = (tocentry *) malloc(tocSize);
-            int j = 0;
-            for (int i = 0; i < tocItems.length(); i++) {
-                LVTocItem * item = tocItems[i];
-                if (item->getName().empty())
-                    continue;
-                _toc[j].level = item->getLevel();
-                _toc[j].position = item->getPage() + 1;
-                _toc[j].page = _toc[j].position;
-                _toc[j].text = strdup(UnicodeToUtf8(item->getName()).c_str());
-                char *p = _toc[j++].text;
-                while (*p) {
-                    if (*p == '\r' || *p == '\n') *p = ' ';
-                    p++;
-                }
-            }
-            _tocLength = j;
-            if (j == 0) {
-                free(_toc);
-                _toc = NULL;
-            }
-        }
-        if (!_tocLength) {
+        if (!_toc.build(tocItems)) {
             Message(ICON_INFORMATION, const_cast<char*>("CoolReader"),
                     const_cast<char*>("@No_contents"), 2000);
             return;
         }
         _wm->activateWindow(
                 std::make_unique<CRPocketBookContentsWindow>(
-                        _wm, _toc, _tocLength,
+                        _wm, _toc,
                         _docview->getCurPage() + 1));
     }
 
