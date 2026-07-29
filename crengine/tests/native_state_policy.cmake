@@ -7002,8 +7002,8 @@ require_source_text(
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
-  "Utf16ToUnicode(getCommandKeyName(MCMD_OK))"
-  "settings key labels must convert explicitly to the current string width"
+  "2, getCommandKeyName(MCMD_OK)"
+  "settings key labels must consume the current string width directly"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
@@ -7623,6 +7623,46 @@ if(NOT GUI_PLATFORM_FONT_DIR_DECLARATION_COUNT EQUAL 6)
     "all six GUI platform startup paths must declare current-width font directories"
   )
 endif()
+require_source_text(
+  "${FULLSCREEN_MENU_HEADER}"
+  "virtual lString32 getItemNumberKeysName();"
+  "fullscreen menu number-key labels must use the current string width"
+)
+require_source_text(
+  "${FULLSCREEN_MENU_HEADER}"
+  "virtual lString32 getCommandKeyName( int cmd, int param=0 );"
+  "fullscreen menu command-key labels must use the current string width"
+)
+require_source_text(
+  "${FULLSCREEN_MENU_SOURCE}"
+  "return Utf8ToUnicode(lString8(getKeyName(k, f)));"
+  "fullscreen menu key names must cross the UTF-8 translation boundary"
+)
+string(CONCAT FULLSCREEN_MENU_KEY_LABEL_CONSUMERS
+  "${SETTINGS_SOURCE}"
+  "${RECENT_DIALOG_SOURCE}"
+  "${BOOKMARK_DIALOG_SOURCE}"
+)
+forbid_source_text(
+  "${FULLSCREEN_MENU_KEY_LABEL_CONSUMERS}"
+  "Utf16ToUnicode(getCommandKeyName"
+  "fullscreen menu consumers must not retain obsolete key-label conversions"
+)
+forbid_source_text(
+  "${FULLSCREEN_MENU_KEY_LABEL_CONSUMERS}"
+  "Utf16ToUnicode(getItemNumberKeysName"
+  "fullscreen menu consumers must not retain obsolete number-label conversions"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "Utf16ToUnicode(menu_win->getCommandKeyName"
+  "main menus must consume current-width key labels directly"
+)
+forbid_source_text(
+  "${MAIN_WINDOW_SOURCE}"
+  "Utf16ToUnicode(menu_win->getItemNumberKeysName"
+  "main menus must consume current-width number labels directly"
+)
 require_source_text(
   "${SETTINGS_SOURCE}"
   "lString32Collection list;"

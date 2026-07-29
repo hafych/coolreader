@@ -83,14 +83,11 @@ void CRBookmarkMenu::setMode( bool goToMode )
     //    return;
     CRLog::trace("CRBookmarkMenu::setMode");
 #ifdef CR_POCKETBOOK
-    lString32 selKeyName =
-            Utf16ToUnicode(getCommandKeyName(MCMD_SELECT));
+    lString32 selKeyName = getCommandKeyName(MCMD_SELECT);
 #else
-    lString32 selKeyName =
-            Utf16ToUnicode(getItemNumberKeysName());
+    lString32 selKeyName = getItemNumberKeysName();
 #endif
-    lString32 modeKeyName =
-            Utf16ToUnicode(getCommandKeyName(MCMD_NEXT_MODE));
+    lString32 modeKeyName = getCommandKeyName(MCMD_NEXT_MODE);
     bool hasModeSwitch = !modeKeyName.empty();
     _goToMode = goToMode;
     if ( _goToMode ) {

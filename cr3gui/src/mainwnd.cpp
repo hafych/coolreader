@@ -942,15 +942,15 @@ VIEWER_MENU_4ABOUT=About...
             lString8(_("$1 - choose command\n$2, $3 - close")));
 #ifdef CR_POCKETBOOK
 	s.replaceParam(
-            1, Utf16ToUnicode(menu_win->getCommandKeyName(MCMD_SELECT)));
+            1, menu_win->getCommandKeyName(MCMD_SELECT));
 #else
     s.replaceParam(
-            1, Utf16ToUnicode(menu_win->getItemNumberKeysName()));
+            1, menu_win->getItemNumberKeysName());
 #endif
     s.replaceParam(
-            2, Utf16ToUnicode(menu_win->getCommandKeyName(MCMD_OK)));
+            2, menu_win->getCommandKeyName(MCMD_OK));
     s.replaceParam(
-            3, Utf16ToUnicode(menu_win->getCommandKeyName(MCMD_CANCEL)));
+            3, menu_win->getCommandKeyName(MCMD_CANCEL));
     menu_win->setStatusText( s );
     menu_win->setFullscreen( true );
 

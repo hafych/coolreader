@@ -36,15 +36,15 @@ public:
     CRFullScreenMenu(CRGUIWindowManager *wm, int id,
                      const lString16 &caption, int numItems, lvRect &rc);
 
-    virtual const lvRect & getRect();
+    const lvRect & getRect() override;
 
-    virtual lvPoint getMaxItemSize();
+    lvPoint getMaxItemSize() override;
 
-    virtual lvPoint getSize();
+    lvPoint getSize() override;
 
-    virtual lString16 getItemNumberKeysName();
+    virtual lString32 getItemNumberKeysName();
 
-    virtual lString16 getCommandKeyName( int cmd, int param=0 );
+    virtual lString32 getCommandKeyName( int cmd, int param=0 );
 
     //virtual void Draw( LVDrawBuf & buf, int x, int y );
 

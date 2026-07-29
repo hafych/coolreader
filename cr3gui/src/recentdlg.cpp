@@ -152,15 +152,15 @@ CRRecentBooksMenu::CRRecentBooksMenu(CRGUIWindowManager * wm, LVDocView * docvie
             Utf8ToUnicode(lString8(_("$1 - open book\n$2, $3 - close")));
 #ifdef CR_POCKETBOOK
     pattern.replaceParam(
-            1, Utf16ToUnicode(getCommandKeyName(MCMD_SELECT)));
+            1, getCommandKeyName(MCMD_SELECT));
 #else    
     pattern.replaceParam(
-            1, Utf16ToUnicode(getItemNumberKeysName()));
+            1, getItemNumberKeysName());
 #endif
     pattern.replaceParam(
-            2, Utf16ToUnicode(getCommandKeyName(MCMD_OK)));
+            2, getCommandKeyName(MCMD_OK));
     pattern.replaceParam(
-            3, Utf16ToUnicode(getCommandKeyName(MCMD_CANCEL)));
+            3, getCommandKeyName(MCMD_CANCEL));
     _statusText = pattern;
 #ifdef CR_POCKETBOOK
     bmkDialog = this;

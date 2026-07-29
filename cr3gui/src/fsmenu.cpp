@@ -47,25 +47,20 @@ CRFullScreenMenu::CRFullScreenMenu(
 {
 }
 
-lString16 CRFullScreenMenu::getCommandKeyName( int cmd, int param )
+lString32 CRFullScreenMenu::getCommandKeyName( int cmd, int param )
 {
     int k, f;
     bool found = _acceleratorTable->findCommandKey( cmd, param, k, f );
     if ( !found )
-        return lString16::empty_str;
-    return lString16(getKeyName( k, f ));
+        return lString32::empty_str;
+    return Utf8ToUnicode(lString8(getKeyName(k, f)));
 }
 
-lString16 CRFullScreenMenu::getItemNumberKeysName()
+lString32 CRFullScreenMenu::getItemNumberKeysName()
 {
     int k9, f9;
-    lString16 selKeyName;
     bool hasKey9 = _acceleratorTable->findCommandKey( MCMD_SELECT_9, 0, k9, f9 );
-    if ( hasKey9 )
-        selKeyName = lString16(_("1..9"));
-    else
-        selKeyName = lString16(_("1..8"));
-    return selKeyName;
+    return Utf8ToUnicode(lString8(hasKey9 ? _("1..9") : _("1..8")));
 }
 
 const lvRect & CRFullScreenMenu::getRect()
