@@ -134,6 +134,11 @@ nullable previous URI, so an add request survives Bundle restore, an
 overlapping launch cannot replace a reselect target, an ownerless result is
 ignored, and launch failure or Activity destruction clears only the exact
 request.
+`ACTION_OPEN_DOCUMENT` launched from a library root has an independent
+`LibraryDocumentRequestState`. Its initial root survives Bundle restore,
+overlapping pickers cannot replace the owner, cancel or launch failure clears
+the request atomically, and only an owned result from an active generation may
+hand its URI to the shared `DocumentLoadLifecycle`.
 The shared `OPEN_DOCUMENT_TREE` launcher owns one typed
 `DocumentTreeRequestState` instead of parallel command and argument fields.
 Delete-file, delete-folder and save-logcat launches atomically capture their

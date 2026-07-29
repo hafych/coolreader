@@ -88,6 +88,7 @@ import org.coolreader.crengine.FileSystemFolders;
 import org.coolreader.crengine.History;
 import org.coolreader.crengine.InterfaceTheme;
 import org.coolreader.crengine.L;
+import org.coolreader.crengine.LibraryDocumentRequestState;
 import org.coolreader.crengine.LibraryRootRequestState;
 import org.coolreader.crengine.LibraryRootStore;
 import org.coolreader.crengine.LogcatExportSession;
@@ -178,6 +179,9 @@ public class CoolReader extends BaseActivity {
 	private LibraryRootStore mLibraryRootStore;
 	private final LibraryRootRequestState<String> libraryRootRequests =
 			new LibraryRootRequestState<>();
+	private final LibraryDocumentRequestState<String>
+			libraryDocumentRequests =
+					new LibraryDocumentRequestState<>();
 	private final DocumentTreeRequestState<FileInfo>
 			openDocumentTreeRequests =
 					new DocumentTreeRequestState<>();
@@ -212,6 +216,8 @@ public class CoolReader extends BaseActivity {
 			"libraryRootRequestPending";
 	private static final String STATE_LIBRARY_ROOT_REQUEST_PREVIOUS =
 			"pendingLibraryRoot";
+	private static final String STATE_LIBRARY_DOCUMENT_REQUEST_ROOT =
+			"libraryDocumentRequestRoot";
 	private static final String STATE_OPEN_DOCUMENT_TREE_COMMAND =
 			"openDocumentTreeCommand";
 	private static final String STATE_OPEN_DOCUMENT_TREE_ARG =
@@ -291,6 +297,11 @@ public class CoolReader extends BaseActivity {
 						savedInstanceState.getString(
 								STATE_LIBRARY_ROOT_REQUEST_PREVIOUS));
 			}
+			String documentRoot =
+					savedInstanceState.getString(
+							STATE_LIBRARY_DOCUMENT_REQUEST_ROOT);
+			if (documentRoot != null)
+				libraryDocumentRequests.begin(documentRoot);
 			DocumentTreeRequestState.Command command =
 					DocumentTreeRequestState.Command.fromCode(
 							savedInstanceState.getInt(
@@ -366,6 +377,7 @@ public class CoolReader extends BaseActivity {
 		bookInfoDialogRequests.close();
 		logcatExportRequests.close();
 		libraryRootRequests.close();
+		libraryDocumentRequests.close();
 
 		// Shutdown TTS service if running
 		if (null != ttsControlServiceAccessor) {
@@ -1114,6 +1126,14 @@ public class CoolReader extends BaseActivity {
 						STATE_LIBRARY_ROOT_REQUEST_PREVIOUS,
 						previousRoot);
 			}
+		}
+		LibraryDocumentRequestState.Request<String>
+				documentRequest =
+						libraryDocumentRequests.peek();
+		if (documentRequest != null) {
+			outState.putString(
+					STATE_LIBRARY_DOCUMENT_REQUEST_ROOT,
+					documentRequest.getInitialRoot());
 		}
 		DocumentTreeRequestState.Request<FileInfo> treeRequest =
 				openDocumentTreeRequests.peek();
@@ -2047,10 +2067,20 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void openLibraryRoot(LibraryRootStore.Entry root) {
-		if (root == null)
+		if (root == null || !mServiceLifecycle.isActive())
 			return;
 		if (!root.isAccessGranted()) {
 			reselectLibraryRoot(root);
+			return;
+		}
+		Uri initialRoot = root.getUri();
+		if (initialRoot == null)
+			return;
+		LibraryDocumentRequestState.Request<String> request =
+				libraryDocumentRequests.begin(
+						initialRoot.toString());
+		if (request == null) {
+			log.w("Library document picker request is already pending");
 			return;
 		}
 		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -2060,8 +2090,16 @@ public class CoolReader extends BaseActivity {
 				Intent.FLAG_GRANT_READ_URI_PERMISSION
 						| Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-			intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, root.getUri());
-		mOpenLibraryDocumentLauncher.launch(intent);
+			intent.putExtra(
+					DocumentsContract.EXTRA_INITIAL_URI,
+					initialRoot);
+		try {
+			mOpenLibraryDocumentLauncher.launch(intent);
+		} catch (RuntimeException e) {
+			libraryDocumentRequests.cancel(request);
+			log.e("Cannot launch library document picker", e);
+			showToast(R.string.library_root_grant_failed);
+		}
 	}
 
 	public void showLibraryRootActions(LibraryRootStore.Entry root) {
@@ -2179,6 +2217,14 @@ public class CoolReader extends BaseActivity {
 
 	private void handleOpenLibraryDocumentResult(
 			int resultCode, Intent intent) {
+		LibraryDocumentRequestState.Request<String> request =
+				libraryDocumentRequests.take();
+		if (request == null) {
+			log.w("Ignoring library document result without an owner");
+			return;
+		}
+		if (!mServiceLifecycle.isActive())
+			return;
 		if (resultCode == Activity.RESULT_OK
 				&& intent != null && intent.getData() != null) {
 			Uri uri = intent.getData();

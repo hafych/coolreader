@@ -1250,6 +1250,46 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void libraryDocumentPickerOwnsRestorableRequest()
+			throws Exception {
+		Field requests =
+				CoolReader.class.getDeclaredField(
+						"libraryDocumentRequests");
+		assertTrue(Modifier.isPrivate(
+				requests.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				requests.getModifiers()));
+		assertEquals(
+				LibraryDocumentRequestState.class,
+				requests.getType());
+		for (Field field :
+				LibraryDocumentRequestState.Request.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		assertSynchronizedMethod(
+				LibraryDocumentRequestState.class,
+				"begin",
+				Object.class);
+		assertSynchronizedMethod(
+				LibraryDocumentRequestState.class,
+				"peek");
+		assertSynchronizedMethod(
+				LibraryDocumentRequestState.class,
+				"take");
+		assertSynchronizedMethod(
+				LibraryDocumentRequestState.class,
+				"cancel",
+				LibraryDocumentRequestState.Request.class);
+		assertSynchronizedMethod(
+				LibraryDocumentRequestState.class,
+				"close");
+	}
+
+	@Test
 	public void documentTreePickerOwnsAtomicRestorableRequest()
 			throws Exception {
 		Field requests =

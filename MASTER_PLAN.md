@@ -316,6 +316,11 @@ DRM или ограничений доступа, подбор/получени�
   previous URI, поэтому add-request корректно переживает Bundle restore,
   overlapping launch не заменяет reselect target, result без owner игнорируется,
   а launch failure и destroy очищают только exact request.
+  `ACTION_OPEN_DOCUMENT` из library root также имеет отдельный
+  `LibraryDocumentRequestState`: initial root сохраняется через Bundle,
+  overlapping picker не заменяет owner, cancel/launch failure атомарно очищают
+  request, а только owned result активной generation может передать URI в общий
+  `DocumentLoadLifecycle`.
   Общий `OPEN_DOCUMENT_TREE` picker больше не хранит command/argument в двух
   parallel полях: `DocumentTreeRequestState` атомарно захватывает delete-file,
   delete-folder или save-logcat request, не допускает overlapping launch,
