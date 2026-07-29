@@ -410,12 +410,18 @@ create/configure work. Closing before create suppresses creation, while
 closing during create records the completed native object, rejects late
 configuration/publication and destroys it exactly once. Activity teardown
 therefore cannot resurrect or leak a `DocView`.
-Delayed current-position persistence is owned by a `CloseableTaskGate` and a
-dedicated GUI scheduler rather than a numeric generation left in the global
-Handler. Replacement, synchronous save, pause and book reload remove the exact
-pending callback; destroy closes the gate. The callback claims its token once
-and verifies the captured `BookInfo` is still the current book before saving,
-so a bookmark from an older document cannot be written into its replacement.
+Delayed current-position persistence is owned by a `CloseableTaskGate`, a
+dedicated GUI scheduler and an immutable `ReaderPositionSnapshot` rather than a
+numeric generation left in the global Handler. The exact token owns both the
+native capture and its delayed apply. `DocView` position is read only on the
+shared serialized background FIFO; the GUI receives an independent bookmark
+copy only after the captured `BookInfo` and interaction have been revalidated.
+Document replacement cancels the token before rotating the interaction, and
+destroy closes the gate. Pause, close, reload and TTS save synchronously obtain
+their final exact snapshot through the same FIFO before persistence, preserving
+fresh-position semantics without a GUI-to-`DocView` call. A stale capture can
+therefore neither publish into the model nor save a bookmark into its
+replacement.
 Interactive selection previews and their terminal update share one
 `CloseableTaskGate`. Every drag sample replaces the prior identity token, and
 both native work and GUI completion must still own that token. A stale

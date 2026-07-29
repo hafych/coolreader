@@ -199,10 +199,14 @@ DRM или ограничений доступа, подбор/получени�
   ровно один раз, поэтому teardown Activity не может воскресить или потерять
   `DocView`.
   Delayed current-position save переведён с numeric generation/global Handler
-  на exact `CloseableTaskGate` token и owned GUI scheduler: replacement,
-  sync/pause/reload отменяют pending callback, destroy закрывает gate, а
-  one-shot apply проверяет captured `BookInfo` identity и не может записать
-  bookmark старой книги в текущую.
+  на exact `CloseableTaskGate` token, owned GUI scheduler и immutable
+  `ReaderPositionSnapshot`. Gate теперь владеет и native capture, и delayed
+  apply: `DocView` читается только в общей serialized background FIFO, а GUI
+  публикует независимую копию лишь после повторной проверки captured
+  `BookInfo + interaction`. Replacement отменяет owner до смены document
+  generation, destroy закрывает gate, а pause/close/reload/TTS save синхронно
+  получают свежий snapshot через ту же FIFO перед persistence; прямого
+  GUI → `DocView` чтения текущей позиции больше нет.
   Selection preview/end также используют один exact `CloseableTaskGate` token:
   каждый drag sample заменяет owner, stale terminal callback не открывает
   toolbar и не очищает selection нового жеста, clear/reload/close отменяют

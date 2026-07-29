@@ -811,6 +811,9 @@ READER_SETTINGS_SYNC_SNAPSHOT = (
 READER_RENDER_REQUEST = (
     SOURCE / "crengine" / "ReaderRenderRequest.java"
 )
+READER_POSITION_SNAPSHOT = (
+    SOURCE / "crengine" / "ReaderPositionSnapshot.java"
+)
 READER_ENGINE_COMMAND_POLICY = (
     SOURCE / "crengine" / "ReaderEngineCommandPolicy.java"
 )
@@ -867,6 +870,18 @@ READER_RENDER_REQUEST_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderRenderRequestTest.java"
+)
+READER_POSITION_SNAPSHOT_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderPositionSnapshotTest.java"
 )
 READER_ENGINE_COMMAND_POLICY_TEST = (
     ROOT
@@ -2543,9 +2558,16 @@ def main() -> None:
         "viewportResizeState.complete(request)",
         "resizeScheduler.postDelayed(task, delay)",
         "positionSaveLifecycle.replace()",
+        "positionSaveLifecycle.isActive(owner)",
         "positionSaveLifecycle.complete(owner)",
         "positionSaveScheduler.postDelayed(",
         "private void applyPositionSave(",
+        "private ReaderPositionSnapshot "
+        "capturePositionSnapshotBackground(",
+        "private Bookmark captureCurrentPositionBookmarkSync(",
+        "private Bookmark publishPositionSnapshot(",
+        "ReaderPositionSnapshot.capture(",
+        "snapshot.copyBookmark()",
         "delayMillis, mBookInfo,",
         "final BookInfo expectedBook,",
         "Bookmark bookmark,\n"
@@ -2671,6 +2693,154 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits reader-owned delayed work "
                 f"marker: {marker}")
+
+    position_schedule_start = reader_view_text.find(
+        "\n\tprivate void scheduleSaveCurrentPositionBookmark(\n"
+        "\t\t\tfinal int delayMillis,")
+    position_schedule_end = reader_view_text.find(
+        "\n\tprivate CloseableTaskGate.Token replacePositionSave()",
+        position_schedule_start,
+    )
+    if position_schedule_start < 0 or position_schedule_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits exact asynchronous position "
+            "capture")
+    else:
+        position_schedule_text = reader_view_text[
+            position_schedule_start:position_schedule_end
+        ]
+        for marker in (
+            "post(new Task()",
+            "positionSaveLifecycle.isActive(owner)",
+            "capturePositionSnapshotBackground(",
+            "publishPositionSnapshot(",
+        ):
+            if marker not in position_schedule_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} omits position capture "
+                    f"ownership marker: {marker}")
+        if "doc.getCurrentPageBookmark" in position_schedule_text:
+            violations.append(
+                f"{relative(READER_VIEW)} reads native position from the "
+                "GUI scheduling phase")
+
+    position_background_start = reader_view_text.find(
+        "\n\tprivate ReaderPositionSnapshot "
+        "capturePositionSnapshotBackground(")
+    position_background_end = reader_view_text.find(
+        "\n\tprivate Bookmark captureCurrentPositionBookmarkSync(",
+        position_background_start,
+    )
+    if position_background_start < 0 or position_background_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits background-only native "
+            "position capture")
+    else:
+        position_background_text = reader_view_text[
+            position_background_start:position_background_end
+        ]
+        for marker in (
+            "BackgroundThread.ensureBackground()",
+            "readerNativeLifecycle.isInitialized()",
+            "isDocumentInteractionCurrent(",
+            "doc.getCurrentPageBookmarkNoRender()",
+            "ReaderPositionSnapshot.capture(",
+        ):
+            if marker not in position_background_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} omits background position "
+                    f"capture marker: {marker}")
+
+    position_sync_start = reader_view_text.find(
+        "\n\tprivate Bookmark captureCurrentPositionBookmarkSync(")
+    position_sync_end = reader_view_text.find(
+        "\n\tprivate Bookmark publishPositionSnapshot(",
+        position_sync_start,
+    )
+    if position_sync_start < 0 or position_sync_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits serialized synchronous "
+            "position boundary")
+    else:
+        position_sync_text = reader_view_text[
+            position_sync_start:position_sync_end
+        ]
+        for marker in (
+            "BackgroundThread.ensureGUI()",
+            "BackgroundThread.instance().callBackground(",
+            "capturePositionSnapshotBackground(",
+            "publishPositionSnapshot(",
+        ):
+            if marker not in position_sync_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} omits synchronous position "
+                    f"boundary marker: {marker}")
+        if "doc.getCurrentPageBookmark" in position_sync_text:
+            violations.append(
+                f"{relative(READER_VIEW)} bypasses serialized position "
+                "capture during synchronous save")
+
+    for method_start, method_end, method_name in (
+        (
+            "\n\tpublic void onAppPause()",
+            "\n\tpublic void onAppResume()",
+            "onAppPause",
+        ),
+        (
+            "\n\tpublic void save()",
+            "\n\tpublic void close()",
+            "save",
+        ),
+    ):
+        start = reader_view_text.find(method_start)
+        end = reader_view_text.find(method_end, start)
+        if start < 0 or end < 0:
+            violations.append(
+                f"{relative(READER_VIEW)} omits {method_name} position "
+                "boundary")
+            continue
+        method_text = reader_view_text[start:end]
+        if "captureCurrentPositionBookmarkSync(" not in method_text:
+            violations.append(
+                f"{relative(READER_VIEW)} {method_name} does not capture "
+                "an exact final position")
+        if "doc.getCurrentPageBookmark" in method_text:
+            violations.append(
+                f"{relative(READER_VIEW)} {method_name} reads native "
+                "position on the GUI thread")
+
+    replace_load_start = reader_view_text.find(
+        "\n\tprivate DocumentLoadLifecycle.Request "
+        "replaceDocumentLoad()")
+    replace_load_end = reader_view_text.find(
+        "\n\tpublic boolean showManual()",
+        replace_load_start,
+    )
+    if replace_load_start < 0 or replace_load_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits document replacement owner")
+    else:
+        replace_load_text = reader_view_text[
+            replace_load_start:replace_load_end
+        ]
+        cancel_index = replace_load_text.find(
+            "cancelPositionSave()")
+        replace_index = replace_load_text.find(
+            "documentLoadLifecycle.replace()")
+        if cancel_index < 0 or replace_index <= cancel_index:
+            violations.append(
+                f"{relative(READER_VIEW)} does not cancel position "
+                "capture before document replacement")
+
+    for legacy in (
+        "public Bookmark getCurrentPositionBookmark()",
+        "public Bookmark saveCurrentPositionBookmarkSync(",
+        "public void savePositionBookmark(Bookmark",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains GUI/native position "
+                f"escape: {legacy}")
 
     page_prepare_start = reader_view_text.find(
         "\n\tprivate BitmapInfo preparePageImage(\n"
@@ -3435,6 +3605,10 @@ def main() -> None:
         "BookmarkEditDialog.class,",
         '"scheduleSaveCurrentPositionBookmark"',
         '"applyPositionSave"',
+        "ReaderPositionSnapshot.class.getModifiers()",
+        '"capturePositionSnapshotBackground"',
+        '"captureCurrentPositionBookmarkSync"',
+        '"publishPositionSnapshot"',
         "ReaderOptionsHandler.class.isInterface()",
         "OptionsDialog.class, \"readerOptionsHandler\"",
         '"readerOptionsDialogLifecycle"',
@@ -3678,6 +3852,38 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_RENDER_REQUEST_TEST)} omits render "
                 f"ownership regression: {marker}")
+
+    reader_position_snapshot_text = (
+        READER_POSITION_SNAPSHOT.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderPositionSnapshot",
+        "private final Bookmark bookmark",
+        "private ReaderPositionSnapshot(Bookmark bookmark)",
+        "static ReaderPositionSnapshot capture(",
+        "Bookmark bookmark = new Bookmark(source)",
+        "bookmark.setTimeStamp(timestamp)",
+        "bookmark.setType(Bookmark.TYPE_LAST_POSITION)",
+        "Bookmark copyBookmark()",
+        "return new Bookmark(bookmark)",
+    ):
+        if marker not in reader_position_snapshot_text:
+            violations.append(
+                f"{relative(READER_POSITION_SNAPSHOT)} omits immutable "
+                f"position snapshot marker: {marker}")
+
+    reader_position_snapshot_test_text = (
+        READER_POSITION_SNAPSHOT_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "missingBookmarkCannotProduceSnapshot",
+        "captureOwnsAndNormalizesNativeBookmark",
+        "callersReceiveIndependentBookmarkCopies",
+    ):
+        if marker not in reader_position_snapshot_test_text:
+            violations.append(
+                f"{relative(READER_POSITION_SNAPSHOT_TEST)} omits "
+                f"position snapshot regression: {marker}")
 
     reader_engine_command_policy_text = (
         READER_ENGINE_COMMAND_POLICY.read_text(encoding="utf-8")

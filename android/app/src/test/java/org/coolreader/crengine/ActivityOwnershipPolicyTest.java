@@ -605,6 +605,35 @@ public class ActivityOwnershipPolicyTest {
 					field.getModifiers()));
 		}
 		assertTrue(Modifier.isFinal(
+				ReaderPositionSnapshot.class.getModifiers()));
+		assertTrue(Modifier.isPrivate(
+				ReaderPositionSnapshot.class
+						.getDeclaredConstructors()[0]
+						.getModifiers()));
+		for (Field field :
+				ReaderPositionSnapshot.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		Method capturePositionSnapshot =
+				ReaderPositionSnapshot.class.getDeclaredMethod(
+						"capture",
+						Bookmark.class,
+						long.class);
+		assertTrue(Modifier.isStatic(
+				capturePositionSnapshot.getModifiers()));
+		assertFalse(Modifier.isPublic(
+				capturePositionSnapshot.getModifiers()));
+		Method copyPositionBookmark =
+				ReaderPositionSnapshot.class.getDeclaredMethod(
+						"copyBookmark");
+		assertFalse(Modifier.isPublic(
+				copyPositionBookmark.getModifiers()));
+		assertTrue(Modifier.isFinal(
 				ReaderPageCacheClose.class.getModifiers()));
 		for (Field field :
 				ReaderPageCacheClose.class.getDeclaredFields()) {
@@ -999,6 +1028,28 @@ public class ActivityOwnershipPolicyTest {
 						DocumentLoadLifecycle.Interaction.class);
 		assertTrue(Modifier.isPrivate(
 				exactPositionSaveApply.getModifiers()));
+		Method backgroundPositionCapture =
+				ReaderView.class.getDeclaredMethod(
+						"capturePositionSnapshotBackground",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				backgroundPositionCapture.getModifiers()));
+		Method synchronousPositionCapture =
+				ReaderView.class.getDeclaredMethod(
+						"captureCurrentPositionBookmarkSync",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				synchronousPositionCapture.getModifiers()));
+		Method publishPositionSnapshot =
+				ReaderView.class.getDeclaredMethod(
+						"publishPositionSnapshot",
+						ReaderPositionSnapshot.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				publishPositionSnapshot.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
 		for (Field field :

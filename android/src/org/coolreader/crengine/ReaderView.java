@@ -72,7 +72,6 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 
 public class ReaderView implements android.view.SurfaceHolder.Callback, Settings, DocProperties, OnKeyListener, OnTouchListener, OnFocusChangeListener {
 
@@ -477,10 +476,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (isAutoScrollActive())
 			stopAutoScroll();
 		timeTickLifecycle.cancel();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
 		cancelPositionSave();
-		Bookmark bmk = getCurrentPositionBookmark();
-		if (bmk != null)
-			savePositionBookmark(bmk);
+		Bookmark bookmark =
+				captureCurrentPositionBookmarkSync(
+						expectedBook, interaction);
+		if (bookmark != null)
+			savePositionBookmark(
+					expectedBook, bookmark);
 		if (animationTiming.hasSamples()) {
 			setSetting(
 					PROP_APP_VIEW_ANIM_DURATION,
@@ -4361,6 +4366,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		stopTts();
 		resetTemporaryViewMode();
 		timeTickLifecycle.cancel();
+		cancelPositionSave();
 		bookInfoDialogLifecycle.cancel();
 		readerOptionsDialogLifecycle.cancel();
 		settingsSyncLifecycle.cancel();
@@ -8021,36 +8027,75 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				positionSaveLifecycle.complete(owner);
 				return;
 			}
-			final Bookmark bookmark =
-					getCurrentPositionBookmark();
-			if (bookmark == null) {
-				positionSaveLifecycle.complete(owner);
-				return;
-			}
-			final BookInfo bookInfo = expectedBook;
-			if (delayMillis <= 1) {
-				if (mActivity.getDB() != null
-						&& positionSaveLifecycle.complete(owner)
-						&& isDocumentInteractionCurrent(
-								bookInfo, interaction)) {
-					log.v("saving last position immediately");
-					savePositionBookmark(bookInfo, bookmark);
-					mHistory.updateBookAccess(
-							bookInfo, getTimeElapsed());
+			post(new Task() {
+				private ReaderPositionSnapshot snapshot;
+
+				@Override
+				public void work() {
+					BackgroundThread.ensureBackground();
+					if (!positionSaveLifecycle.isActive(owner))
+						return;
+					snapshot =
+							capturePositionSnapshotBackground(
+									expectedBook,
+									interaction);
+					if (!positionSaveLifecycle.isActive(owner))
+						snapshot = null;
 				}
-				return;
-			}
-			synchronized (positionSaveLifecycle) {
-				if (positionSaveLifecycle.isActive(owner)) {
-					positionSaveScheduler.postDelayed(
-							() -> applyPositionSave(
-									owner,
-									bookInfo,
-									bookmark,
-									interaction),
-							delayMillis);
+
+				@Override
+				public void done() {
+					BackgroundThread.ensureGUI();
+					if (!positionSaveLifecycle.isActive(owner))
+						return;
+					Bookmark bookmark =
+							publishPositionSnapshot(
+									snapshot,
+									expectedBook,
+									interaction);
+					if (bookmark == null) {
+						positionSaveLifecycle.complete(owner);
+						return;
+					}
+					if (delayMillis <= 1) {
+						if (mActivity.getDB() != null
+								&& positionSaveLifecycle.complete(owner)
+								&& isDocumentInteractionCurrent(
+										expectedBook,
+										interaction)) {
+							log.v(
+									"saving last position immediately");
+							savePositionBookmark(
+									expectedBook,
+									bookmark);
+							mHistory.updateBookAccess(
+									expectedBook,
+									getTimeElapsed());
+						}
+						return;
+					}
+					synchronized (positionSaveLifecycle) {
+						if (positionSaveLifecycle.isActive(owner)) {
+							positionSaveScheduler.postDelayed(
+									() -> applyPositionSave(
+											owner,
+											expectedBook,
+											bookmark,
+											interaction),
+									delayMillis);
+						}
+					}
 				}
-			}
+
+				@Override
+				public void fail(Exception e) {
+					BackgroundThread.ensureGUI();
+					if (positionSaveLifecycle.complete(owner))
+						log.e(
+								"Cannot capture current reader position",
+								e);
+				}
+			});
 		});
 
 //    	if (DeviceInfo.EINK_SONY && isBookLoaded()) {
@@ -8108,6 +8153,60 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			positionSaveLifecycle.close();
 			positionSaveScheduler.cancel();
 		}
+	}
+
+	private ReaderPositionSnapshot capturePositionSnapshotBackground(
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureBackground();
+		if (!readerNativeLifecycle.isInitialized()
+				|| !mOpened
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return null;
+		Bookmark bookmark =
+				doc.getCurrentPageBookmarkNoRender();
+		if (!readerNativeLifecycle.isInitialized()
+				|| !mOpened
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return null;
+		return ReaderPositionSnapshot.capture(
+				bookmark, System.currentTimeMillis());
+	}
+
+	private Bookmark captureCurrentPositionBookmarkSync(
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (!readerNativeLifecycle.isInitialized()
+				|| !mOpened
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return null;
+		ReaderPositionSnapshot snapshot =
+				BackgroundThread.instance().callBackground(
+						() -> capturePositionSnapshotBackground(
+								expectedBook,
+								interaction));
+		return publishPositionSnapshot(
+				snapshot, expectedBook, interaction);
+	}
+
+	private Bookmark publishPositionSnapshot(
+			ReaderPositionSnapshot snapshot,
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (snapshot == null
+				|| !readerNativeLifecycle.isInitialized()
+				|| !mOpened
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return null;
+		Bookmark bookmark = snapshot.copyBookmark();
+		expectedBook.setLastPosition(bookmark);
+		return bookmark;
 	}
 
 	// Sony T2 update position method - by Jotas
@@ -8198,25 +8297,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 
-	public Bookmark getCurrentPositionBookmark() {
-		if (!mOpened)
-			return null;
-		Bookmark bmk = doc.getCurrentPageBookmarkNoRender();
-		if (bmk != null) {
-			bmk.setTimeStamp(System.currentTimeMillis());
-			bmk.setType(Bookmark.TYPE_LAST_POSITION);
-			if (mBookInfo != null)
-				mBookInfo.setLastPosition(bmk);
-		}
-		return bmk;
-	}
-
 	Bookmark lastSavedBookmark = null;
-
-	public void savePositionBookmark(Bookmark bmk) {
-		cancelPositionSave();
-		savePositionBookmark(mBookInfo, bmk);
-	}
 
 	private void savePositionBookmark(
 			BookInfo bookInfo,
@@ -8240,42 +8321,28 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	public Bookmark saveCurrentPositionBookmarkSync(final boolean saveToDB) {
-		cancelPositionSave();
-		Bookmark bmk = BackgroundThread.instance().callBackground(new Callable<Bookmark>() {
-			@Override
-			public Bookmark call() throws Exception {
-				if (!mOpened)
-					return null;
-				return doc.getCurrentPageBookmark();
-			}
-		});
-		if (bmk != null) {
-			//setBookPosition();
-			bmk.setTimeStamp(System.currentTimeMillis());
-			bmk.setType(Bookmark.TYPE_LAST_POSITION);
-			if (mBookInfo != null)
-				mBookInfo.setLastPosition(bmk);
-			if (saveToDB) {
-				mHistory.updateRecentDir();
-				mActivity.getDB().saveBookInfo(mBookInfo);
-				mActivity.getDB().flush();
-			}
-		}
-		return bmk;
-	}
-
 	public void save() {
 		BackgroundThread.ensureGUI();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
 		cancelPositionSave();
-		if (isBookLoaded() && mBookInfo != null) {
-			if (mServiceLifecycle.isActive()) {
+		if (isBookLoaded() && expectedBook != null) {
+			captureCurrentPositionBookmarkSync(
+					expectedBook, interaction);
+			if (isDocumentInteractionCurrent(
+						expectedBook, interaction)
+					&& isBookLoaded()) {
 				log.v("saving last immediately");
-				log.d("bookmark count 1 = " + mBookInfo.getBookmarkCount());
-				mHistory.updateBookAccess(mBookInfo, getTimeElapsed());
-				log.d("bookmark count 2 = " + mBookInfo.getBookmarkCount());
-				mActivity.getDB().saveBookInfo(mBookInfo);
-				log.d("bookmark count 3 = " + mBookInfo.getBookmarkCount());
+				log.d("bookmark count 1 = "
+						+ expectedBook.getBookmarkCount());
+				mHistory.updateBookAccess(
+						expectedBook, getTimeElapsed());
+				log.d("bookmark count 2 = "
+						+ expectedBook.getBookmarkCount());
+				mActivity.getDB().saveBookInfo(expectedBook);
+				log.d("bookmark count 3 = "
+						+ expectedBook.getBookmarkCount());
 				mActivity.getDB().flush();
 			}
 		}
