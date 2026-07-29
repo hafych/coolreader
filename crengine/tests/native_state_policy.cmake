@@ -4023,6 +4023,26 @@ require_source_text(
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
+  "static_cast<lInt64>(i)"
+  "scaled-image coordinate products must widen before evaluation"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "static_cast<lInt64>(frame1)"
+  "nine-patch frame arithmetic must use widened intermediates"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "i * src_len / dst_len"
+  "scaled-image maps must not use signed coordinate multiplication"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "(i - frame1) * srcm / dstm"
+  "nine-patch maps must not use signed coordinate multiplication"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
   "if ( errors || !smoothscale )"
   "failed image decodes must not render partial smooth-scale snapshots"
 )
@@ -4060,6 +4080,16 @@ forbid_source_text(
   "${SCALED_IMAGE_SOURCE}"
   "free(sdata)"
   "smooth-scale result cleanup must remain scope-bound"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "scaled-image coordinate map overflowed"
+  "large scaled-image maps must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "nine-patch frame scaling overflowed"
+  "large nine-patch frames must retain native regression coverage"
 )
 
 # --- color/gray draw-buffer pixel backing ---

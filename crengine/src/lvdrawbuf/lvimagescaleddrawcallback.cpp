@@ -100,7 +100,10 @@ std::vector<int> LVImageScaledDrawCallback::GenMap(
     std::vector<int> map(dst_len);
     for (int i=0; i<dst_len; i++)
     {
-        map[ i ] = i * src_len / dst_len;
+        map[i] = static_cast<int>(
+                static_cast<lInt64>(i)
+                * static_cast<lInt64>(src_len)
+                / static_cast<lInt64>(dst_len));
     }
     return map;
 }
@@ -111,11 +114,18 @@ std::vector<int> LVImageScaledDrawCallback::GenNinePatchMap(
     if ( dst_len<=0 )
         return std::vector<int>();
     std::vector<int> map(dst_len);
-    if (frame1 + frame2 > dst_len) {
-        int total = frame1 + frame2;
-        int extra = total - dst_len;
-        int extra1 = frame1 * extra / total;
-        int extra2 = frame2 * extra / total;
+    const lInt64 total =
+            static_cast<lInt64>(frame1)
+            + static_cast<lInt64>(frame2);
+    if (total > static_cast<lInt64>(dst_len)) {
+        const lInt64 extra =
+                total - static_cast<lInt64>(dst_len);
+        const int extra1 = static_cast<int>(
+                static_cast<lInt64>(frame1)
+                * extra / total);
+        const int extra2 = static_cast<int>(
+                static_cast<lInt64>(frame2)
+                * extra / total);
         frame1 -= extra1;
         frame2 -= extra2;
     }
@@ -134,7 +144,11 @@ std::vector<int> LVImageScaledDrawCallback::GenNinePatchMap(
             map[ i ] = src_len - frame2 + rx - 1;
         } else {
             // middle
-            map[ i ] = 1 + frame1 + (i - frame1) * srcm / dstm;
+            map[i] = static_cast<int>(
+                    1 + static_cast<lInt64>(frame1)
+                    + static_cast<lInt64>(i - frame1)
+                            * static_cast<lInt64>(srcm)
+                            / static_cast<lInt64>(dstm));
         }
         //            CRLog::trace("frame[%d, %d] src=%d dst=%d %d -> %d", frame1, frame2, src_len, dst_len, i, map[i]);
         //            if (map[i] >= src_len) {

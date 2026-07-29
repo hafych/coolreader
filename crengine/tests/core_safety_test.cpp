@@ -6508,6 +6508,43 @@ static int testImageSourceOwnership() {
             || ninePatchMap.back() != 4)
         return fail("nine-patch scaling map changed during RAII migration");
 
+    const std::vector<int> largeScaleMap =
+            LVImageScaledDrawCallback::GenMap(50000, 50001);
+    if (largeScaleMap.size() != 50001
+            || largeScaleMap.front() != 0
+            || largeScaleMap.back() != 49999)
+        return fail("scaled-image coordinate map overflowed");
+    for (std::size_t i = 1; i < largeScaleMap.size(); ++i) {
+        if (largeScaleMap[i] < largeScaleMap[i - 1]
+                || largeScaleMap[i] < 0
+                || largeScaleMap[i] >= 50000)
+            return fail("scaled-image coordinate map overflowed");
+    }
+
+    const std::vector<int> largeNinePatchMap =
+            LVImageScaledDrawCallback::GenNinePatchMap(
+                    50002, 50003, 1, 1);
+    if (largeNinePatchMap.size() != 50003
+            || largeNinePatchMap.front() != 1
+            || largeNinePatchMap.back() != 50000)
+        return fail("nine-patch coordinate map overflowed");
+    for (std::size_t i = 1;
+            i < largeNinePatchMap.size(); ++i) {
+        if (largeNinePatchMap[i]
+                    < largeNinePatchMap[i - 1]
+                || largeNinePatchMap[i] < 1
+                || largeNinePatchMap[i] > 50000)
+            return fail("nine-patch coordinate map overflowed");
+    }
+
+    const std::vector<int> largeFrameMap =
+            LVImageScaledDrawCallback::GenNinePatchMap(
+                    100002, 50001, 50000, 50000);
+    if (largeFrameMap.size() != 50001
+            || largeFrameMap.front() != 1
+            || largeFrameMap.back() != 100000)
+        return fail("nine-patch frame scaling overflowed");
+
     static const lUInt32 scaledSentinel = 0x00123456;
     for (bool smooth : {false, true}) {
         LVColorDrawBuf scaled(4, 4, 32);
