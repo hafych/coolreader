@@ -2775,7 +2775,9 @@ const char * getEventName(int evt)
     case EVT_OPENDIC:
         return "EVT_OPENDIC";
     default:
-        sprintf(buffer, "%d", evt);
+        snprintf(
+                buffer, sizeof(buffer),
+                "%d", evt);
         return buffer;
     }
     return "";

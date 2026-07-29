@@ -7226,6 +7226,11 @@ forbid_source_text(
   "par1 == KEY_POWER"
   "PocketBook key filtering must not use the retired SDK identifier"
 )
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "sprintf("
+  "PocketBook GUI formatting must remain bounded"
+)
 require_source_text(
   "${NANOX_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
