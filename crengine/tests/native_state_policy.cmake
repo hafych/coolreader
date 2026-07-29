@@ -6966,6 +6966,51 @@ require_source_text(
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "XCB window managers must adopt their created screen"
 )
+foreach(
+    GUI_STARTUP_SOURCE
+    "${QT_GUI_SOURCE}"
+    "${XCB_GUI_SOURCE}")
+  require_source_text(
+    "${GUI_STARTUP_SOURCE}"
+    "lString32 filename = LocalToUnicode(fn8);"
+    "desktop GUI document paths must retain current-width storage"
+  )
+  forbid_source_text(
+    "${GUI_STARTUP_SOURCE}"
+    "lString16 fn16"
+    "desktop GUI document paths must not regress to legacy Unicode width"
+  )
+  forbid_source_text(
+    "${GUI_STARTUP_SOURCE}"
+    "ldomDocCache::init( lString16"
+    "desktop GUI cache paths must not regress to legacy Unicode width"
+  )
+  forbid_source_text(
+    "${GUI_STARTUP_SOURCE}"
+    "loadSkin( lString16"
+    "desktop GUI skin paths must not regress to legacy Unicode width"
+  )
+  forbid_source_text(
+    "${GUI_STARTUP_SOURCE}"
+    "HyphMan::initDictionaries( lString16"
+    "desktop GUI hyphenation paths must not regress to legacy Unicode width"
+  )
+endforeach()
+forbid_source_text(
+  "${QT_GUI_SOURCE}"
+  "loadSkin(lString16"
+  "Qt skin paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "lString16 filename("
+  "XCB FIFO document paths must not regress to legacy Unicode width"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "lString16 "
+  "XCB GUI internals must retain current Unicode-width storage"
+)
 require_source_text(
   "${POCKETBOOK_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("

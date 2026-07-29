@@ -344,13 +344,6 @@ int main(int argc, char **argv)
     CRLog::info("Trying to translate: 'About...'='%s'", gettext("About..."));
 
     lString32Collection fontDirs;
-    //fontDirs.add( lString16(L"/usr/local/share/cr3/fonts") );
-    //fontDirs.add( lString16(L"/usr/local/share/fonts/truetype/freefont") );
-    //fontDirs.add( lString16(L"/mnt/fonts") );
-    //fontDirs.add( lString16(L"/usr/share/fonts/truetype") );
-    //fontDirs.add( lString16(L"/usr/share/fonts/truetype/liberation") );
-    //fontDirs.add( lString16(L"/usr/share/fonts/truetype/freefont") );
-    //fontDirs.add( lString16(L"/root/fonts/truetype") );
     if ( !InitCREngine( argv[0], fontDirs ) ) {
         printf("Cannot init CREngine - exiting\n");
         return 2;
@@ -370,8 +363,10 @@ int main(int argc, char **argv)
     }
 
     lString8 fn8( fname );
-    lString16 fn16 = LocalToUnicode( fn8 );
-    CRLog::info("Filename to open=\"%s\"", LCSTR(fn16) );
+    lString32 filename = LocalToUnicode(fn8);
+    CRLog::info(
+            "Filename to open=\"%s\"",
+            LCSTR(filename));
     if ( fn8.startsWith( lString8("/media/sd/") ) )
         bmkdir = "/media/sd/bookmarks/";
 
@@ -384,8 +379,12 @@ int main(int argc, char **argv)
 #else
         CRQtWindowManager winman( 600, 800, bitDepth );
 #endif
-    if ( !ldomDocCache::init( lString16("/media/sd/.cr3/cache"), 0x100000 * 64 ))
-        ldomDocCache::init( lString16("/tmp/.cr3/cache"), 0x100000 * 64 ); /*64Mb*/
+    if ( !ldomDocCache::init(
+                U"/media/sd/.cr3/cache",
+                0x100000 * 64 ))
+        ldomDocCache::init(
+                U"/tmp/.cr3/cache",
+                0x100000 * 64 ); /*64Mb*/
 
     {
 
@@ -403,17 +402,22 @@ int main(int argc, char **argv)
         loadKeymaps( winman, keymap_locations );
 
         if (!winman.loadSkin(homecrengine + U"skin"))
-            if (!winman.loadSkin(lString16("/media/sd/crengine/skin")))
-                winman.loadSkin(lString16("/usr/share/cr3/skins/default"));
+            if (!winman.loadSkin(
+                        U"/media/sd/crengine/skin"))
+                winman.loadSkin(
+                        U"/usr/share/cr3/skins/default");
         {
-            const lChar16 * imgname =
-                ( winman.getScreenOrientation()&1 ) ? L"cr3_logo_screen_landscape.png" : L"cr3_logo_screen.png";
+            const lChar32 * imgname =
+                ( winman.getScreenOrientation()&1 )
+                    ? U"cr3_logo_screen_landscape.png"
+                    : U"cr3_logo_screen.png";
             LVImageSourceRef img = winman.getSkin()->getImage(imgname);
             if ( !img.isNull() ) {
                 winman.getScreen()->getCanvas()->Draw(img, 0, 0, winman.getScreen()->getWidth(), winman.getScreen()->getHeight(),  false );
             }
         }
-        HyphMan::initDictionaries(lString16("/usr/share/cr3/hyph/"));
+        HyphMan::initDictionaries(
+                U"/usr/share/cr3/hyph/");
         //LVExtractPath(LocalToUnicode(lString8(fname)))
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
                 std::make_unique<QtDocViewWin>(&winman);
