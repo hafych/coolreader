@@ -860,6 +860,9 @@ REQUIRED_COOL_READER_MARKERS = (
     "logcatExportRequests.close()",
     "startLogcatExport(",
     "finishLogcatExport(",
+    "private final OptionsDialogRequestSession<OptionsDialog.Mode>",
+    "optionsDialogRequests.complete(request)",
+    "optionsDialogRequests.close()",
     "private final DocumentLoadLifecycle documentLoadLifecycle",
     "documentLoadLifecycle.replace()",
     "runInReader(loadOwner,",
@@ -3747,6 +3750,8 @@ def main() -> None:
     options_text = OPTIONS_DIALOG.read_text(encoding="utf-8")
     for marker in (
         "private final Engine mEngine",
+        "private final String[] mFontFaces",
+        "fontFaces.clone()",
         "public OptionsDialog(",
         "private final ReaderOptionsHandler readerOptionsHandler",
         "private final ReaderDocumentOptions readerDocumentOptions",

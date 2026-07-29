@@ -83,7 +83,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			new TtsOptionsSession();
 	BaseActivity mActivity;
 	private final Engine mEngine;
-	String[] mFontFaces;
+	private final String[] mFontFaces;
 
 	TTSControlBinder mTTSBinder;
 
@@ -2018,7 +2018,10 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 						"reader document options are required");
 		}
 		readerDocumentOptions = capturedOptions;
-		mFontFaces = fontFaces;
+		mFontFaces =
+				fontFaces != null
+						? fontFaces.clone()
+						: null;
 		mTTSBinder = ttsbinder;
 		mBacklightLevels = BacklightOptions.values();
 		mBacklightLevelsTitles = BacklightOptions.titles(

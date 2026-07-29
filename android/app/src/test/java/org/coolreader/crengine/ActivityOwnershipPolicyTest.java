@@ -1206,6 +1206,50 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void nonReaderOptionsPreparationIsLatestOwned()
+			throws Exception {
+		Field requests =
+				CoolReader.class.getDeclaredField(
+						"optionsDialogRequests");
+		assertTrue(Modifier.isPrivate(
+				requests.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				requests.getModifiers()));
+		assertEquals(
+				OptionsDialogRequestSession.class,
+				requests.getType());
+		for (Field field :
+				OptionsDialogRequestSession.Request.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		assertSynchronizedMethod(
+				OptionsDialogRequestSession.class,
+				"replace",
+				Object.class);
+		assertSynchronizedMethod(
+				OptionsDialogRequestSession.class,
+				"cancel");
+		assertSynchronizedMethod(
+				OptionsDialogRequestSession.class,
+				"complete",
+				OptionsDialogRequestSession.Request.class);
+		assertSynchronizedMethod(
+				OptionsDialogRequestSession.class,
+				"close");
+		Field fontFaces =
+				OptionsDialog.class.getDeclaredField(
+						"mFontFaces");
+		assertTrue(Modifier.isPrivate(
+				fontFaces.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				fontFaces.getModifiers()));
+	}
+
+	@Test
 	public void libraryRootPickerOwnsNullableRestorableRequest()
 			throws Exception {
 		Field requests =

@@ -345,6 +345,12 @@ DRM или ограничений доступа, подбор/получени�
   выполняются вне UI thread, output всегда закрывается owner-ом, а prefs и
   completion UI публикуются только exact request активного service generation.
   Destroy закрывает session и отклоняет late process completion.
+  Фоновая подготовка non-reader `OptionsDialog` теперь latest-only через
+  Activity-owned `OptionsDialogRequestSession`: replacement и reader-mode
+  invalidation отклоняют старый font result, destroy закрывает owner, а dialog
+  создаётся только exact request активной service generation. Каталог шрифтов
+  копируется на background/UI boundary и ещё раз принимается clone-on-boundary
+  самим dialog без backing-array escape.
   `LoadDocumentTask` хранит свой `BookInfo` вместо чтения mutable global book
   во время engine work; только current generation публикует UI, failure
   recovery и позднее stream-to-cache/fingerprint reconciliation. Закрытие

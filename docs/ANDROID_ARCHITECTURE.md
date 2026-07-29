@@ -167,6 +167,12 @@ run off the UI thread. The output owner is always closed, while preferences and
 completion UI are published only by the exact request of an active service
 generation. Activity destruction closes the session and rejects late process
 completion.
+Asynchronous preparation of a non-reader `OptionsDialog` is latest-only through
+an Activity-owned `OptionsDialogRequestSession`. Replacement or switching to
+reader mode invalidates an older font result, destruction closes the owner, and
+only the exact request of an active service generation may create a dialog. The
+font catalog is copied across the background/UI boundary and cloned again by
+the dialog, so no caller-owned array escapes into its generation.
 Each `LoadDocumentTask` retains its own `BookInfo`, settings and completion
 state rather than consulting a book pointer that another request can replace
 while native parsing is running. The old book is saved and marked closed before

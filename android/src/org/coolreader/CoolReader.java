@@ -96,6 +96,7 @@ import org.coolreader.crengine.LogcatSaver;
 import org.coolreader.crengine.Logger;
 import org.coolreader.crengine.OPDSCatalogEditDialog;
 import org.coolreader.crengine.OptionsDialog;
+import org.coolreader.crengine.OptionsDialogRequestSession;
 import org.coolreader.crengine.ParseBudget;
 import org.coolreader.crengine.PositionProperties;
 import org.coolreader.crengine.Properties;
@@ -153,6 +154,9 @@ public class CoolReader extends BaseActivity {
 			new BookInfoDialogSession();
 	private final LogcatExportSession logcatExportRequests =
 			new LogcatExportSession();
+	private final OptionsDialogRequestSession<OptionsDialog.Mode>
+			optionsDialogRequests =
+					new OptionsDialogRequestSession<>();
 	private final ExternalDocumentValidator mExternalDocumentValidator =
 			new ExternalDocumentValidator();
 	//View startupView;
@@ -378,6 +382,7 @@ public class CoolReader extends BaseActivity {
 		logcatExportRequests.close();
 		libraryRootRequests.close();
 		libraryDocumentRequests.close();
+		optionsDialogRequests.close();
 
 		// Shutdown TTS service if running
 		if (null != ttsControlServiceAccessor) {
@@ -2513,18 +2518,37 @@ public class CoolReader extends BaseActivity {
 
 	public void showOptionsDialog(final OptionsDialog.Mode mode) {
 		if (mode == OptionsDialog.Mode.READER) {
+			optionsDialogRequests.cancel();
 			if (mReaderView != null)
 				mReaderView.showOptionsDialog();
 			return;
 		}
+		if (mode == null || !mServiceLifecycle.isActive())
+			return;
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		Engine engine = mEngine;
+		OptionsDialogRequestSession.Request<OptionsDialog.Mode>
+				request = optionsDialogRequests.replace(mode);
+		if (request == null)
+			return;
 		BackgroundThread.instance().postBackground(() -> {
-			final String[] mFontFaces = Engine.getFontFaceList();
+			if (!lifecycle.isActive()
+					|| !optionsDialogRequests.isActive(request))
+				return;
+			String[] fontFaces = Engine.getFontFaceList();
+			String[] fontSnapshot =
+					fontFaces != null
+							? fontFaces.clone()
+							: null;
 			BackgroundThread.instance().executeGUI(() -> {
+				if (!lifecycle.isActive()
+						|| !optionsDialogRequests.complete(request))
+					return;
 				OptionsDialog dlg = new OptionsDialog(
 						CoolReader.this,
-						mEngine,
-						mode,
-						mFontFaces,
+						engine,
+						request.getMode(),
+						fontSnapshot,
 						null);
 				dlg.show();
 			});
