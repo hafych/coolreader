@@ -1058,6 +1058,50 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void documentTreePickerOwnsAtomicRestorableRequest()
+			throws Exception {
+		Field requests =
+				CoolReader.class.getDeclaredField(
+						"openDocumentTreeRequests");
+		assertTrue(Modifier.isPrivate(
+				requests.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				requests.getModifiers()));
+		assertFalse(Modifier.isStatic(
+				requests.getModifiers()));
+		for (String legacy : new String[]{
+				"mOpenDocumentTreeCommand",
+				"mOpenDocumentTreeArg"}) {
+			for (Field field :
+					CoolReader.class.getDeclaredFields()) {
+				assertFalse(field.getName().equals(legacy));
+			}
+		}
+
+		assertSynchronizedMethod(
+				DocumentTreeRequestState.class,
+				"begin",
+				DocumentTreeRequestState.Command.class,
+				Object.class);
+		assertSynchronizedMethod(
+				DocumentTreeRequestState.class,
+				"peek");
+		assertSynchronizedMethod(
+				DocumentTreeRequestState.class,
+				"take");
+		assertSynchronizedMethod(
+				DocumentTreeRequestState.class,
+				"cancel",
+				DocumentTreeRequestState.Request.class);
+		for (Field field :
+				DocumentTreeRequestState.Request.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+	}
+
+	@Test
 	public void opdsEditorOwnsConfirmationAndTerminalAction()
 			throws Exception {
 		for (String name : new String[]{

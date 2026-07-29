@@ -311,6 +311,12 @@ DRM или ограничений доступа, подбор/получени�
   сразу инвалидируют всю старую цепочку; переход в browser/root отменяет
   pending open, но не обрывает reconciliation уже опубликованной книги. Stale
   SAF result не открывает Reader и закрывает ещё не переданный descriptor.
+  Общий `OPEN_DOCUMENT_TREE` picker больше не хранит command/argument в двух
+  parallel полях: `DocumentTreeRequestState` атомарно захватывает delete-file,
+  delete-folder или save-logcat request, не допускает overlapping launch,
+  сохраняет typed snapshot через Bundle и `take()`-ит owner до dispatch
+  результата. Invalid restore, result без owner и launch failure безопасно
+  очищаются без подмены цели другой операции.
   `LoadDocumentTask` хранит свой `BookInfo` вместо чтения mutable global book
   во время engine work; только current generation публикует UI, failure
   recovery и позднее stream-to-cache/fingerprint reconciliation. Закрытие

@@ -76,6 +76,7 @@ import org.coolreader.crengine.DocumentsContractWrapper;
 import org.coolreader.crengine.DocumentFormat;
 import org.coolreader.crengine.DocumentFormatDetector;
 import org.coolreader.crengine.DocumentSource;
+import org.coolreader.crengine.DocumentTreeRequestState;
 import org.coolreader.crengine.Engine;
 import org.coolreader.crengine.ErrorDialog;
 import org.coolreader.crengine.ExternalDocumentValidator;
@@ -170,9 +171,9 @@ public class CoolReader extends BaseActivity {
 	private DocumentSource mExternalDocumentSource = null;
 	private LibraryRootStore mLibraryRootStore;
 	private Uri mPendingLibraryRootUri;
-
-	private int mOpenDocumentTreeCommand = ODT_CMD_NO_SPEC;
-	private FileInfo mOpenDocumentTreeArg = null;
+	private final DocumentTreeRequestState<FileInfo>
+			openDocumentTreeRequests =
+					new DocumentTreeRequestState<>();
 	private final ActivityResultLauncher<Intent> mSelectLibraryRootLauncher =
 			registerForActivityResult(
 					new ActivityResultContracts.StartActivityForResult(),
@@ -206,12 +207,6 @@ public class CoolReader extends BaseActivity {
 			"openDocumentTreeCommand";
 	private static final String STATE_OPEN_DOCUMENT_TREE_ARG =
 			"openDocumentTreeArg";
-
-	// open document tree activity commands
-	private static final int ODT_CMD_NO_SPEC = -1;
-	private static final int ODT_CMD_DEL_FILE = 1;
-	private static final int ODT_CMD_DEL_FOLDER = 2;
-	private static final int ODT_CMD_SAVE_LOGCAT = 3;
 
 	private final BroadcastReceiver batteryChangeReceiver = new BroadcastReceiver() {
 		@Override
@@ -281,10 +276,17 @@ public class CoolReader extends BaseActivity {
 					STATE_PENDING_LIBRARY_ROOT);
 			if (pendingRoot != null)
 				mPendingLibraryRootUri = Uri.parse(pendingRoot);
-			mOpenDocumentTreeCommand = savedInstanceState.getInt(
-					STATE_OPEN_DOCUMENT_TREE_COMMAND, ODT_CMD_NO_SPEC);
-			mOpenDocumentTreeArg = savedInstanceState.getParcelable(
-					STATE_OPEN_DOCUMENT_TREE_ARG);
+			DocumentTreeRequestState.Command command =
+					DocumentTreeRequestState.Command.fromCode(
+							savedInstanceState.getInt(
+									STATE_OPEN_DOCUMENT_TREE_COMMAND,
+									-1));
+			FileInfo argument =
+					savedInstanceState.getParcelable(
+							STATE_OPEN_DOCUMENT_TREE_ARG);
+			openDocumentTreeRequests.begin(
+					command,
+					argument);
 		}
 
 		isFirstStart = true;
@@ -1082,13 +1084,15 @@ public class CoolReader extends BaseActivity {
 					STATE_PENDING_LIBRARY_ROOT,
 					mPendingLibraryRootUri.toString());
 		}
-		if (mOpenDocumentTreeCommand != ODT_CMD_NO_SPEC) {
+		DocumentTreeRequestState.Request<FileInfo> treeRequest =
+				openDocumentTreeRequests.peek();
+		if (treeRequest != null) {
 			outState.putInt(
 					STATE_OPEN_DOCUMENT_TREE_COMMAND,
-					mOpenDocumentTreeCommand);
+					treeRequest.getCommand().getCode());
 			outState.putParcelable(
 					STATE_OPEN_DOCUMENT_TREE_ARG,
-					mOpenDocumentTreeArg);
+					treeRequest.getArgument());
 		}
 		super.onSaveInstanceState(outState);
 	}
@@ -2121,79 +2125,105 @@ public class CoolReader extends BaseActivity {
 
 	private void handleOpenDocumentTreeResult(
 			int resultCode, Intent intent) {
-		try {
-			if (resultCode != Activity.RESULT_OK || intent == null)
-				return;
-			switch (mOpenDocumentTreeCommand) {
-				case ODT_CMD_DEL_FILE:
-					handleDeleteFileTreeResult(intent.getData());
-					break;
-				case ODT_CMD_DEL_FOLDER:
-					handleDeleteFolderTreeResult(intent.getData());
-					break;
-				case ODT_CMD_SAVE_LOGCAT:
-					handleSaveLogcatTreeResult(intent.getData());
-					break;
-				default:
-					log.w("Unexpected document tree result");
-					break;
-			}
-		} finally {
-			mOpenDocumentTreeCommand = ODT_CMD_NO_SPEC;
-			mOpenDocumentTreeArg = null;
+		DocumentTreeRequestState.Request<FileInfo> request =
+				openDocumentTreeRequests.take();
+		if (request == null) {
+			log.w("Ignoring document tree result without an owner");
+			return;
+		}
+		if (resultCode != Activity.RESULT_OK || intent == null)
+			return;
+		switch (request.getCommand()) {
+			case DELETE_FILE:
+				handleDeleteFileTreeResult(
+						intent.getData(),
+						request.getArgument());
+				break;
+			case DELETE_FOLDER:
+				handleDeleteFolderTreeResult(
+						intent.getData(),
+						request.getArgument());
+				break;
+			case SAVE_LOGCAT:
+				handleSaveLogcatTreeResult(
+						intent.getData(),
+						request.getArgument());
+				break;
 		}
 	}
 
-	private void launchOpenDocumentTree() {
-		mOpenDocumentTreeLauncher.launch(
-				new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE));
+	private boolean launchOpenDocumentTree(
+			DocumentTreeRequestState.Command command,
+			FileInfo argument) {
+		DocumentTreeRequestState.Request<FileInfo> request =
+				openDocumentTreeRequests.begin(
+						command,
+						argument);
+		if (request == null) {
+			log.w("Document tree request is already pending");
+			return false;
+		}
+		try {
+			mOpenDocumentTreeLauncher.launch(
+					new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE));
+			return true;
+		} catch (RuntimeException e) {
+			openDocumentTreeRequests.cancel(request);
+			log.e("Cannot launch document tree picker", e);
+			return false;
+		}
 	}
 
-	private void handleDeleteFileTreeResult(Uri sdCardUri) {
-		if (mOpenDocumentTreeArg == null
-				|| mOpenDocumentTreeArg.isDirectory
+	private void handleDeleteFileTreeResult(
+			Uri sdCardUri,
+			FileInfo target) {
+		if (target == null
+				|| target.isDirectory
 				|| sdCardUri == null)
 			return;
 		Uri docUri = DocumentsContractWrapper.getDocumentUri(
-				mOpenDocumentTreeArg, this, sdCardUri);
+				target, this, sdCardUri);
 		if (docUri == null) {
 			showToast(R.string.could_not_delete_on_sd);
 			return;
 		}
 		if (!DocumentsContractWrapper.deleteFile(this, docUri)) {
-			showToast(R.string.could_not_delete_file, mOpenDocumentTreeArg);
+			showToast(R.string.could_not_delete_file, target);
 			return;
 		}
 		mHistory.removeBookInfo(
-				getDB(), mOpenDocumentTreeArg, true, true);
-		FileInfo dirToUpdate = mOpenDocumentTreeArg.parent;
+				getDB(), target, true, true);
+		FileInfo dirToUpdate = target.parent;
 		if (dirToUpdate != null) {
 			BackgroundThread.instance().postGUI(
 					() -> directoryUpdated(dirToUpdate), 700);
 		}
-		updateExtSDURI(mOpenDocumentTreeArg, sdCardUri);
+		updateExtSDURI(target, sdCardUri);
 	}
 
-	private void handleDeleteFolderTreeResult(Uri sdCardUri) {
-		if (mOpenDocumentTreeArg == null
-				|| !mOpenDocumentTreeArg.isDirectory)
+	private void handleDeleteFolderTreeResult(
+			Uri sdCardUri,
+			FileInfo target) {
+		if (target == null || !target.isDirectory)
 			return;
 		Uri documentUri = sdCardUri != null
 				? DocumentsContractWrapper.getDocumentUri(
-						mOpenDocumentTreeArg, this, sdCardUri)
+						target, this, sdCardUri)
 				: null;
 		if (documentUri == null) {
 			showToast(R.string.could_not_delete_on_sd);
 			return;
 		}
 		if (DocumentsContractWrapper.fileExists(this, documentUri)) {
-			updateExtSDURI(mOpenDocumentTreeArg, sdCardUri);
-			deleteFolder(mOpenDocumentTreeArg);
+			updateExtSDURI(target, sdCardUri);
+			deleteFolder(target);
 		}
 	}
 
-	private void handleSaveLogcatTreeResult(Uri uri) {
-		if (mOpenDocumentTreeArg == null || uri == null)
+	private void handleSaveLogcatTreeResult(
+			Uri uri,
+			FileInfo target) {
+		if (target == null || uri == null)
 			return;
 		Uri docFolderUri =
 				DocumentsContractWrapper.buildDocumentUriUsingTree(uri);
@@ -2201,7 +2231,7 @@ public class CoolReader extends BaseActivity {
 			return;
 		Uri fileUri = DocumentsContractWrapper.createFile(
 				this, docFolderUri, "text/x-log",
-				mOpenDocumentTreeArg.filename);
+				target.filename);
 		if (fileUri == null) {
 			log.e("logcat: can't create file!");
 			return;
@@ -2209,7 +2239,7 @@ public class CoolReader extends BaseActivity {
 		try (OutputStream ostream =
 					 getContentResolver().openOutputStream(fileUri)) {
 			if (ostream != null) {
-				saveLogcat(mOpenDocumentTreeArg.filename, ostream);
+				saveLogcat(target.filename, ostream);
 			} else {
 				log.e("logcat: failed to open stream!");
 			}
@@ -2432,9 +2462,10 @@ public class CoolReader extends BaseActivity {
 						}
 					} else {
 						showToast(R.string.choose_root_sd);
-						mOpenDocumentTreeArg = file;
-						mOpenDocumentTreeCommand = ODT_CMD_DEL_FILE;
-						launchOpenDocumentTree();
+						launchOpenDocumentTree(
+								DocumentTreeRequestState.Command
+										.DELETE_FILE,
+								file);
 					}
 				} else {
 					showToast(R.string.could_not_delete_file, file);
@@ -2509,9 +2540,10 @@ public class CoolReader extends BaseActivity {
 									} else {
 										showToast(R.string.choose_root_sd);
 										mFolderDeleteRetryCount++;
-										mOpenDocumentTreeCommand = ODT_CMD_DEL_FOLDER;
-										mOpenDocumentTreeArg = item;
-										launchOpenDocumentTree();
+										launchOpenDocumentTree(
+												DocumentTreeRequestState.Command
+														.DELETE_FOLDER,
+												item);
 									}
 								});
 							});
@@ -2519,9 +2551,10 @@ public class CoolReader extends BaseActivity {
 							BackgroundThread.instance().executeGUI(() -> {
 								showToast(R.string.choose_root_sd);
 								mFolderDeleteRetryCount++;
-								mOpenDocumentTreeCommand = ODT_CMD_DEL_FOLDER;
-								mOpenDocumentTreeArg = item;
-								launchOpenDocumentTree();
+								launchOpenDocumentTree(
+										DocumentTreeRequestState.Command
+												.DELETE_FOLDER,
+										item);
 							});
 						}
 					}
@@ -2537,9 +2570,12 @@ public class CoolReader extends BaseActivity {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 				log.d("logcat: no access to download directory, opening document tree...");
 				askConfirmation(R.string.confirmation_select_folder_for_log, () -> {
-					mOpenDocumentTreeCommand = ODT_CMD_SAVE_LOGCAT;
-					mOpenDocumentTreeArg = new FileInfo(format.format(new Date()));
-					launchOpenDocumentTree();
+					launchOpenDocumentTree(
+							DocumentTreeRequestState.Command
+									.SAVE_LOGCAT,
+							new FileInfo(
+									format.format(
+											new Date())));
 				});
 			} else {
 				log.e("Can't create logcat file: no access to download directory!");
