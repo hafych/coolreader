@@ -121,6 +121,12 @@ TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 TOC_DIALOG = SOURCE / "crengine" / "TOCDlg.java"
+SEARCH_DIALOG = SOURCE / "crengine" / "SearchDlg.java"
+FIND_NEXT_DIALOG = SOURCE / "crengine" / "FindNextDlg.java"
+DICTS_DIALOG = SOURCE / "crengine" / "DictsDlg.java"
+SELECTION_TOOLBAR_DIALOG = (
+    SOURCE / "crengine" / "SelectionToolbarDlg.java"
+)
 ACTIVITY_OWNERSHIP_POLICY_TEST = (
     ROOT
     / "android"
@@ -2195,9 +2201,15 @@ def main() -> None:
         "private final DocumentLoadLifecycle.Interaction",
         "private boolean isDocumentInteractionCurrent(",
         "private boolean isOwnedDocumentLoadCurrent(",
+        "boolean ownsDocumentInteraction(",
         "private static boolean isDocumentPositionCommand(",
         "private void cancelDocumentAnimation()",
         "private void getCurrentPositionProperties(",
+        "void showSearchDialog(",
+        "private void findText(",
+        "private void findNext(",
+        "void clearSelection(",
+        "private void highlightBookmarks(",
         "scheduleAnimation(this)",
         "currentAnimation == animation",
         "private BookInfo bookInfo",
@@ -2273,6 +2285,59 @@ def main() -> None:
         violations.append(
             f"{relative(TOC_DIALOG)} retains a mutable ReaderView")
 
+    for path, markers in (
+        (
+            SEARCH_DIALOG,
+            (
+                "public interface SearchHandler",
+                "private final SearchHandler searchHandler",
+                "private final BookInfo mBookInfo",
+                "searchHandler.isActive()",
+                "searchHandler.find(",
+            ),
+        ),
+        (
+            FIND_NEXT_DIALOG,
+            (
+                "public interface SearchNavigationHandler",
+                "private final SearchNavigationHandler searchHandler",
+                "searchHandler.isActive()",
+                "searchHandler.findNext(reverse)",
+                "searchHandler.clearSelection()",
+            ),
+        ),
+        (
+            DICTS_DIALOG,
+            (
+                "public interface SelectionHandler",
+                "private final SelectionHandler selectionHandler",
+                "selectionHandler.isActive()",
+                "selectionHandler.shouldPersistSelection()",
+                "selectionHandler.clearSelection()",
+            ),
+        ),
+        (
+            SELECTION_TOOLBAR_DIALOG,
+            (
+                "private final BookInfo expectedBook",
+                "private final DocumentLoadLifecycle.Interaction interaction",
+                "mReaderView.ownsDocumentInteraction(",
+                "expectedBook, interaction",
+            ),
+        ),
+    ):
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in text:
+                violations.append(
+                    f"{relative(path)} omits exact selection/search "
+                    f"marker: {marker}")
+        if path in (
+                SEARCH_DIALOG, FIND_NEXT_DIALOG, DICTS_DIALOG
+        ) and re.search(r"\bReaderView\s+\w+", text):
+            violations.append(
+                f"{relative(path)} retains a mutable ReaderView")
+
     activity_ownership_policy_test_text = (
         ACTIVITY_OWNERSHIP_POLICY_TEST.read_text(encoding="utf-8")
     )
@@ -2283,6 +2348,11 @@ def main() -> None:
         '"isDocumentPositionCommand"',
         '"isDocumentInteractionCurrent"',
         '"isOwnedDocumentLoadCurrent"',
+        '"ownsDocumentInteraction"',
+        "SearchDlg.SearchHandler.class",
+        "FindNextDlg.SearchNavigationHandler.class",
+        "DictsDlg.SelectionHandler.class",
+        "SelectionToolbarDlg.class, \"expectedBook\"",
         "TOCDlg.PageSelectionHandler.class",
         '"TOC dialog must not retain a mutable reader"',
     ):

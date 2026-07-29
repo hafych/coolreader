@@ -132,6 +132,16 @@ that same animation instance, and document teardown clears queued updates
 before native close. A callback or page flip from an older book therefore
 cannot move, draw, report, or persist a position for its replacement.
 
+Selection and search preserve the same captured book/interaction pair from a
+native gesture update through selection-toolbar actions, asynchronous search
+history, both forward/backward native search passes, the find-next popup,
+selection clearing and bookmark-highlight rendering. Every native phase and
+GUI completion revalidates that pair. A stale toolbar cannot restore view mode
+or clear selection on a replacement document. `SearchDlg`, `FindNextDlg` and
+the dictionary picker retain narrow generation-aware handlers instead of
+`ReaderView`, so a delayed dialog callback cannot recapture the new document
+as though it owned the original selection.
+
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.

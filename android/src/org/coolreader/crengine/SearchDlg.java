@@ -38,14 +38,21 @@ import android.widget.TextView;
 import java.util.ArrayList;
 
 public class SearchDlg extends BaseDialog {
-	BaseActivity mCoolReader;
-	ReaderView mReaderView;
+	public interface SearchHandler {
+		boolean isActive();
+		void find(
+				String pattern, boolean reverse,
+				boolean caseInsensitive);
+	}
+
+	private final BaseActivity mCoolReader;
+	private final SearchHandler searchHandler;
 	private LayoutInflater mInflater;
 	View mDialogView;
 	EditText mEditView;
 	CheckBox mCaseSensitive;
 	CheckBox mReverse;
-	BookInfo mBookInfo;
+	private final BookInfo mBookInfo;
 	ArrayList<String> mSearches;
 	private SearchList mList;
 
@@ -59,10 +66,15 @@ public class SearchDlg extends BaseDialog {
     		mCoolReader.showToast("No pattern specified");
     	else if ( mBookInfo == null )
     		Log.e("search", "No opened book!");
+		else if (!searchHandler.isActive())
+			Log.d("search", "Ignoring stale search dialog");
     	else {
 		    activity.getDB().saveSearchHistory(mBookInfo,
 				    mEditView.getText().toString());
-		    mReaderView.findText(mEditView.getText().toString(), mReverse.isChecked(), !mCaseSensitive.isChecked());
+		    searchHandler.find(
+					mEditView.getText().toString(),
+					mReverse.isChecked(),
+					!mCaseSensitive.isChecked());
 	    }
         cancel();
 	}
@@ -165,13 +177,15 @@ public class SearchDlg extends BaseDialog {
 		}
 	}
 	
-	public SearchDlg(BaseActivity coolReader, ReaderView readerView, String initialText)
+	public SearchDlg(
+			BaseActivity coolReader, BookInfo bookInfo,
+			String initialText, SearchHandler searchHandler)
 	{
 		super(coolReader, coolReader.getResources().getString(R.string.win_title_search), true, false);
         setCancelable(true);
 		this.mCoolReader = coolReader;
-		this.mReaderView = readerView;
-		this.mBookInfo = mReaderView.getBookInfo();
+		this.mBookInfo = bookInfo;
+		this.searchHandler = searchHandler;
 		setPositiveButtonImage(R.drawable.cr3_button_find, R.string.action_search);
         mInflater = LayoutInflater.from(getContext());
         mDialogView = mInflater.inflate(R.layout.search_dialog, null);
@@ -181,6 +195,8 @@ public class SearchDlg extends BaseDialog {
     	mCaseSensitive = mDialogView.findViewById(R.id.search_case_sensitive);
     	mReverse = mDialogView.findViewById(R.id.search_reverse);
 		activity.getDB().loadSearchHistory(this.mBookInfo, searches -> {
+			if (!this.searchHandler.isActive())
+				return;
 			mSearches = searches;
 			ViewGroup body = mDialogView.findViewById(R.id.history_list);
 			mList = new SearchList(activity);

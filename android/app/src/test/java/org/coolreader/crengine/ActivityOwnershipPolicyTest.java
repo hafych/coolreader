@@ -653,6 +653,68 @@ public class ActivityOwnershipPolicyTest {
 					"TOC dialog must not retain a mutable reader",
 					field.getType() == ReaderView.class);
 		}
+		for (Class<?> dialog : new Class<?>[]{
+				SearchDlg.class, FindNextDlg.class,
+				DictsDlg.class}) {
+			for (Field field : dialog.getDeclaredFields()) {
+				assertFalse(
+						dialog.getSimpleName()
+								+ " must retain only narrow callbacks",
+						field.getType() == ReaderView.class);
+			}
+		}
+		assertPrivateFinalField(
+				SearchDlg.class, "searchHandler",
+				SearchDlg.SearchHandler.class);
+		assertPrivateFinalField(
+				SearchDlg.class, "mBookInfo",
+				BookInfo.class);
+		assertPrivateFinalField(
+				FindNextDlg.class, "searchHandler",
+				FindNextDlg.SearchNavigationHandler.class);
+		assertPrivateFinalField(
+				DictsDlg.class, "selectionHandler",
+				DictsDlg.SelectionHandler.class);
+		assertPrivateFinalField(
+				SelectionToolbarDlg.class, "expectedBook",
+				BookInfo.class);
+		assertPrivateFinalField(
+				SelectionToolbarDlg.class, "interaction",
+				DocumentLoadLifecycle.Interaction.class);
+		Method ownsDocumentInteraction =
+				ReaderView.class.getDeclaredMethod(
+						"ownsDocumentInteraction",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertFalse(Modifier.isPublic(
+				ownsDocumentInteraction.getModifiers()));
+		assertFalse(Modifier.isStatic(
+				ownsDocumentInteraction.getModifiers()));
+		Method exactSearchDialog =
+				ReaderView.class.getDeclaredMethod(
+						"showSearchDialog",
+						String.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertFalse(Modifier.isPublic(
+				exactSearchDialog.getModifiers()));
+		Method exactSelectionClear =
+				ReaderView.class.getDeclaredMethod(
+						"clearSelection",
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertFalse(Modifier.isPublic(
+				exactSelectionClear.getModifiers()));
+		Method exactSelectionMove =
+				ReaderView.class.getDeclaredMethod(
+						"moveSelection",
+						ReaderCommand.class,
+						int.class,
+						ReaderView.MoveSelectionCallback.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertFalse(Modifier.isPublic(
+				exactSelectionMove.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
 		for (Field field :
@@ -1646,6 +1708,15 @@ public class ActivityOwnershipPolicyTest {
 				type.getDeclaredMethod(name, parameterTypes);
 		assertTrue(Modifier.isSynchronized(
 				method.getModifiers()));
+	}
+
+	private static void assertPrivateFinalField(
+			Class<?> owner, String name, Class<?> fieldType)
+			throws Exception {
+		Field field = owner.getDeclaredField(name);
+		assertEquals(fieldType, field.getType());
+		assertTrue(Modifier.isPrivate(field.getModifiers()));
+		assertTrue(Modifier.isFinal(field.getModifiers()));
 	}
 
 	private static void assertFinalStaticField(Class<?> type, String name)

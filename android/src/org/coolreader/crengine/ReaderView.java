@@ -553,6 +553,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			new CloseableTaskGate();
 
 	private void updateSelection(int startX, int startY, int endX, int endY, final boolean isUpdateEnd) {
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		final Selection sel = new Selection();
 		final CloseableTaskGate.Token owner =
 				selectionUpdateLifecycle.replace();
@@ -565,9 +571,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		mEngine.execute(new Task() {
 			@Override
 			public void work() throws Exception {
-				if (!selectionUpdateLifecycle.isActive(owner))
+				if (!selectionUpdateLifecycle.isActive(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
 					return;
 				doc.updateSelection(sel);
+				if (!selectionUpdateLifecycle.isActive(owner)
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
 				if (!sel.isEmpty()) {
 					invalidImages = true;
 					BitmapInfo bi = preparePageImage(0);
@@ -581,12 +593,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			public void done() {
 				if (!selectionUpdateLifecycle.complete(owner))
 					return;
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				if (isUpdateEnd) {
 					String text = sel.text;
 					if (text != null && text.length() > 0) {
-						onSelectionComplete(sel);
+						onSelectionComplete(
+								sel, expectedBook, interaction);
 					} else {
-						clearSelection();
+						clearSelection(
+								expectedBook, interaction);
 					}
 				}
 			}
@@ -622,33 +639,41 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private int mSelectionAction = SELECTION_ACTION_TOOLBAR;
 	private int mMultiSelectionAction = SELECTION_ACTION_TOOLBAR;
 
-	private void onSelectionComplete(Selection sel) {
+	private void onSelectionComplete(
+			Selection sel, BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		int iSelectionAction;
 		iSelectionAction = isMultiSelection(sel) ? mMultiSelectionAction : mSelectionAction;
 
 		switch (iSelectionAction) {
 			case SELECTION_ACTION_TOOLBAR:
-				SelectionToolbarDlg.showDialog(mActivity, ReaderView.this, sel);
+				SelectionToolbarDlg.showDialog(
+						mActivity, ReaderView.this, sel,
+						expectedBook, interaction);
 				break;
 			case SELECTION_ACTION_COPY:
 				copyToClipboard(sel.text);
-				clearSelection();
+				clearSelection(expectedBook, interaction);
 				break;
 			case SELECTION_ACTION_DICTIONARY:
 				mActivity.findInDictionary(sel.text);
 				if (!getSettings().getBool(PROP_APP_SELECTION_PERSIST, false))
-					clearSelection();
+					clearSelection(expectedBook, interaction);
 				break;
 			case SELECTION_ACTION_BOOKMARK:
-				clearSelection();
+				clearSelection(expectedBook, interaction);
 				showNewBookmarkDialog(sel);
 				break;
 			case SELECTION_ACTION_FIND:
-				clearSelection();
-				showSearchDialog(sel.text);
+				clearSelection(expectedBook, interaction);
+				showSearchDialog(
+						sel.text, expectedBook, interaction);
 				break;
 			default:
-				clearSelection();
+				clearSelection(expectedBook, interaction);
 				break;
 		}
 
@@ -1507,58 +1532,166 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void showSearchDialog(String initialText) {
+		showSearchDialog(
+				initialText, mBookInfo,
+				documentLoadLifecycle.interaction());
+	}
+
+	void showSearchDialog(
+			String initialText, BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		if (initialText != null && initialText.length() > 40)
 			initialText = initialText.substring(0, 40);
-		BackgroundThread.ensureGUI();
-		SearchDlg dlg = new SearchDlg(mActivity, this, initialText);
+		SearchDlg dlg = new SearchDlg(
+				mActivity, expectedBook, initialText,
+				new SearchDlg.SearchHandler() {
+					@Override
+					public boolean isActive() {
+						return isDocumentInteractionCurrent(
+								expectedBook, interaction);
+					}
+
+					@Override
+					public void find(
+							String pattern, boolean reverse,
+							boolean caseInsensitive) {
+						findText(
+								pattern, reverse, caseInsensitive,
+								expectedBook, interaction);
+					}
+				});
 		dlg.show();
 	}
 
 	public void findText(final String pattern, final boolean reverse, final boolean caseInsensitive) {
+		findText(
+				pattern, reverse, caseInsensitive,
+				mBookInfo, documentLoadLifecycle.interaction());
+	}
+
+	private void findText(
+			final String pattern, final boolean reverse,
+			final boolean caseInsensitive,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.ensureGUI();
-		final ReaderView view = this;
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		mEngine.execute(new Task() {
+			private boolean found;
+
 			public void work() throws Exception {
 				BackgroundThread.ensureBackground();
-				boolean res = doc.findText(pattern, 1, reverse ? 1 : 0, caseInsensitive ? 1 : 0);
-				if (!res)
-					res = doc.findText(pattern, -1, reverse ? 1 : 0, caseInsensitive ? 1 : 0);
-				if (!res) {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				found = doc.findText(
+						pattern, 1, reverse ? 1 : 0,
+						caseInsensitive ? 1 : 0);
+				if (!found && isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					found = doc.findText(
+							pattern, -1, reverse ? 1 : 0,
+							caseInsensitive ? 1 : 0);
+				if (!found && isDocumentInteractionCurrent(
+						expectedBook, interaction)) {
 					doc.clearSelection();
-					throw new Exception("pattern not found");
 				}
 			}
 
 			public void done() {
 				BackgroundThread.ensureGUI();
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				if (!found) {
+					mActivity.showToast("Pattern not found");
+					return;
+				}
 				drawPage();
-				FindNextDlg.showDialog(mActivity, view, pattern, caseInsensitive);
+				FindNextDlg.showDialog(
+						mActivity, surface,
+						new FindNextDlg.SearchNavigationHandler() {
+							@Override
+							public boolean isActive() {
+								return isDocumentInteractionCurrent(
+										expectedBook, interaction);
+							}
+
+							@Override
+							public void findNext(boolean reverse) {
+								ReaderView.this.findNext(
+										pattern, reverse,
+										caseInsensitive,
+										expectedBook, interaction);
+							}
+
+							@Override
+							public void clearSelection() {
+								ReaderView.this.clearSelection(
+										expectedBook, interaction);
+							}
+						});
 			}
 
 			public void fail(Exception e) {
 				BackgroundThread.ensureGUI();
-				mActivity.showToast("Pattern not found");
+				if (isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					mActivity.showToast("Pattern not found");
 			}
 
 		});
 	}
 
 	public void findNext(final String pattern, final boolean reverse, final boolean caseInsensitive) {
+		findNext(
+				pattern, reverse, caseInsensitive,
+				mBookInfo, documentLoadLifecycle.interaction());
+	}
+
+	private void findNext(
+			final String pattern, final boolean reverse,
+			final boolean caseInsensitive,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.ensureGUI();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		mEngine.execute(new Task() {
+			private boolean found;
+
 			public void work() throws Exception {
 				BackgroundThread.ensureBackground();
-				boolean res = doc.findText(pattern, 1, reverse ? 1 : 0, caseInsensitive ? 1 : 0);
-				if (!res)
-					res = doc.findText(pattern, -1, reverse ? 1 : 0, caseInsensitive ? 1 : 0);
-				if (!res) {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				found = doc.findText(
+						pattern, 1, reverse ? 1 : 0,
+						caseInsensitive ? 1 : 0);
+				if (!found && isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					found = doc.findText(
+							pattern, -1, reverse ? 1 : 0,
+							caseInsensitive ? 1 : 0);
+				if (!found && isDocumentInteractionCurrent(
+						expectedBook, interaction)) {
 					doc.clearSelection();
-					throw new Exception("pattern not found");
 				}
 			}
 
 			public void done() {
 				BackgroundThread.ensureGUI();
+				if (!found
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
 //				drawPage();
 				drawPage(true);
 			}
@@ -1568,39 +1701,65 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private boolean flgHighlightBookmarks = false;
 
 	public void clearSelection() {
+		clearSelection(
+				mBookInfo, documentLoadLifecycle.interaction());
+	}
+
+	void clearSelection(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.ensureGUI();
-		cancelSelectionUpdates();
-		if (mBookInfo == null || !isBookLoaded())
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
 			return;
+		cancelSelectionUpdates();
 		mEngine.post(new Task() {
 			public void work() throws Exception {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				doc.clearSelection();
 				invalidImages = true;
 			}
 
 			public void done() {
-				if (surface.isShown())
+				if (isDocumentInteractionCurrent(
+						expectedBook, interaction)
+						&& surface.isShown())
 					drawPage(true);
 			}
 		});
 	}
 
 	public void highlightBookmarks() {
+		highlightBookmarks(
+				mBookInfo, documentLoadLifecycle.interaction());
+	}
+
+	private void highlightBookmarks(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.ensureGUI();
-		if (mBookInfo == null || !isBookLoaded())
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
 			return;
-		int count = mBookInfo.getBookmarkCount();
+		int count = expectedBook.getBookmarkCount();
 		final Bookmark[] list = (count > 0 && flgHighlightBookmarks) ? new Bookmark[count] : null;
 		for (int i = 0; i < count && flgHighlightBookmarks; i++)
-			list[i] = mBookInfo.getBookmark(i);
+			list[i] = expectedBook.getBookmark(i);
 		mEngine.post(new Task() {
 			public void work() throws Exception {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				doc.hilightBookmarks(list);
 				invalidImages = true;
 			}
 
 			public void done() {
-				if (surface.isShown())
+				if (isDocumentInteractionCurrent(
+						expectedBook, interaction)
+						&& surface.isShown())
 					drawPage(true);
 			}
 		});
@@ -2989,6 +3148,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				&& mBookInfo == expectedBook
 				&& documentLoadLifecycle.isInteractionActive(
 						interaction);
+	}
+
+	boolean ownsDocumentInteraction(
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		return isDocumentInteractionCurrent(
+				expectedBook, interaction);
 	}
 
 	private void applySettings(Properties props) {
@@ -7378,17 +7544,36 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void moveSelection(final ReaderCommand command, final int param, final MoveSelectionCallback callback) {
+		moveSelection(
+				command, param, callback,
+				mBookInfo, documentLoadLifecycle.interaction());
+	}
+
+	void moveSelection(
+			final ReaderCommand command, final int param,
+			final MoveSelectionCallback callback,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		post(new Task() {
 			private boolean res;
 			private Selection selection = new Selection();
 
 			@Override
 			public void work() throws Exception {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				res = doc.moveSelection(selection, command.nativeId, param);
 			}
 
 			@Override
 			public void done() {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
 				if (callback != null) {
 					clearImageCache();
 					surface.invalidate();
@@ -7402,7 +7587,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 			@Override
 			public void fail(Exception e) {
-				if (callback != null)
+				if (callback != null
+						&& isDocumentInteractionCurrent(
+								expectedBook, interaction))
 					callback.onFail();
 			}
 

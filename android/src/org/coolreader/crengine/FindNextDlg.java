@@ -32,16 +32,23 @@ import android.widget.PopupWindow;
 import org.coolreader.R;
 
 public class FindNextDlg {
-	PopupWindow mWindow;
-	View mAnchor;
-	//CoolReader mCoolReader;
-	ReaderView mReaderView;
-	View mPanel;
-	final String pattern;
-	final boolean caseInsensitive;
-	static public void showDialog( BaseActivity coolReader, ReaderView readerView, final String pattern, final boolean caseInsensitive )
+	public interface SearchNavigationHandler {
+		boolean isActive();
+		void findNext(boolean reverse);
+		void clearSelection();
+	}
+
+	private final PopupWindow mWindow;
+	private final View mAnchor;
+	private final View mPanel;
+	private final SearchNavigationHandler searchHandler;
+
+	static public void showDialog(
+			BaseActivity coolReader, View anchor,
+			SearchNavigationHandler searchHandler)
 	{
-		FindNextDlg dlg = new FindNextDlg(coolReader, readerView, pattern, caseInsensitive);
+		FindNextDlg dlg = new FindNextDlg(
+				coolReader, anchor, searchHandler);
 		//dlg.mWindow.update(dlg.mAnchor, width, height)
 		Log.d("cr3", "popup: " + dlg.mWindow.getWidth() + "x" + dlg.mWindow.getHeight());
 		//dlg.update();
@@ -49,13 +56,12 @@ public class FindNextDlg {
 		//dlg.showAsDropDown(readerView);
 		//dlg.update();
 	}
-	public FindNextDlg( BaseActivity coolReader, ReaderView readerView, final String pattern, final boolean caseInsensitive )
+	public FindNextDlg(
+			BaseActivity coolReader, View anchor,
+			SearchNavigationHandler searchHandler)
 	{
-		this.pattern = pattern;
-		this.caseInsensitive = caseInsensitive;
-		//mCoolReader = coolReader;
-		mReaderView = readerView;
-		mAnchor = readerView.getSurface();
+		this.searchHandler = searchHandler;
+		mAnchor = anchor;
 
 		View panel = (LayoutInflater.from(coolReader.getApplicationContext()).inflate(R.layout.search_popup, null));
 		panel.measure(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -65,7 +71,7 @@ public class FindNextDlg {
 		mWindow = new PopupWindow( mAnchor.getContext() );
 		mWindow.setTouchInterceptor((v, event) -> {
 			if ( event.getAction()==MotionEvent.ACTION_OUTSIDE ) {
-				mReaderView.clearSelection();
+				clearSelection();
 				mWindow.dismiss();
 				return true;
 			}
@@ -73,10 +79,12 @@ public class FindNextDlg {
 		});
 		//super(panel);
 		mPanel = panel;
-		mPanel.findViewById(R.id.search_btn_prev).setOnClickListener(v -> mReaderView.findNext(pattern, true, caseInsensitive));
-		mPanel.findViewById(R.id.search_btn_next).setOnClickListener(v -> mReaderView.findNext(pattern, false, caseInsensitive));
+		mPanel.findViewById(R.id.search_btn_prev).setOnClickListener(
+				v -> findNext(true));
+		mPanel.findViewById(R.id.search_btn_next).setOnClickListener(
+				v -> findNext(false));
 		mPanel.findViewById(R.id.search_btn_close).setOnClickListener(v -> {
-			mReaderView.clearSelection();
+			clearSelection();
 			mWindow.dismiss();
 		});
 		mPanel.setFocusable(true);
@@ -84,16 +92,16 @@ public class FindNextDlg {
 			if ( event.getAction()==KeyEvent.ACTION_UP ) {
 				switch ( keyCode ) {
 				case KeyEvent.KEYCODE_BACK:
-					mReaderView.clearSelection();
+					clearSelection();
 					mWindow.dismiss();
 					return true;
 				case KeyEvent.KEYCODE_DPAD_LEFT:
 				case KeyEvent.KEYCODE_DPAD_UP:
-					mReaderView.findNext(pattern, true, caseInsensitive);
+					findNext(true);
 					return true;
 				case KeyEvent.KEYCODE_DPAD_RIGHT:
 				case KeyEvent.KEYCODE_DPAD_DOWN:
-					mReaderView.findNext(pattern, false, caseInsensitive);
+					findNext(false);
 					return true;
 				}
 			} else if ( event.getAction()==KeyEvent.ACTION_DOWN ) {
@@ -109,7 +117,8 @@ public class FindNextDlg {
 			return keyCode == KeyEvent.KEYCODE_BACK;
 		});
 
-		mWindow.setOnDismissListener(() -> mReaderView.clearSelection());
+		mWindow.setOnDismissListener(
+				this::clearSelection);
 		
 		mWindow.setBackgroundDrawable(new BitmapDrawable());
 		//mWindow.setAnimationStyle(android.R.style.Animation_Toast);
@@ -135,6 +144,18 @@ public class FindNextDlg {
 //			mWindow.update(mAnchor, 50, 50);
 		//dlg.mWindow.showAsDropDown(dlg.mAnchor);
 	
+	}
+
+	private void findNext(boolean reverse) {
+		if (!searchHandler.isActive()) {
+			mWindow.dismiss();
+			return;
+		}
+		searchHandler.findNext(reverse);
+	}
+
+	private void clearSelection() {
+		searchHandler.clearSelection();
 	}
 	
 }

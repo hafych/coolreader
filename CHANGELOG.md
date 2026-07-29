@@ -476,6 +476,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   status queries, TOC/dialog callbacks and page-flip animations reject stale
   native or UI work after document replacement or navigation away; TOC no
   longer retains `ReaderView`, and scheduled frames target one exact animation.
+- Selection and search now preserve that exact document identity through
+  gesture completion, selection-toolbar actions, search-history callbacks,
+  native find/find-next, clear and bookmark highlighting. Search, find-next and
+  dictionary dialogs use narrow handlers instead of retaining `ReaderView`, so
+  stale dialog actions cannot clear or search within a replacement book.
 - Reader animation and GC schedulers are now generation-owned and canceled
   during every teardown. Animation updates no longer coordinate unrelated
   Activities through a class monitor or retain active state after destruction.

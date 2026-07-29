@@ -36,8 +36,14 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 public class DictsDlg extends BaseDialog {
+	public interface SelectionHandler {
+		boolean isActive();
+		boolean shouldPersistSelection();
+		void clearSelection();
+	}
+
 	private CoolReader mCoolReader;
-	private ReaderView mReaderView;
+	private final SelectionHandler selectionHandler;
 	private LayoutInflater mInflater;
 	private DictList mList;
 	private String mSearchText;
@@ -133,6 +139,10 @@ public class DictsDlg extends BaseDialog {
 
 		@Override
 		public boolean performItemClick(View view, int position, long id) {
+			if (!selectionHandler.isActive()) {
+				dismiss();
+				return true;
+			}
 			//Dict b = mBookInfo.findShortcutDict(position+1);
 			//if ( b==null ) {
 			//	mThis.dismiss();
@@ -140,8 +150,8 @@ public class DictsDlg extends BaseDialog {
 			//selectedItem = position;
 			mCoolReader.mDictionaries.setAdHocDict(Dictionaries.getDictListExt(mCoolReader,true).get(position));
 			mCoolReader.findInDictionary(mSearchText);
-			if (!mReaderView.getSettings().getBool(mReaderView.PROP_APP_SELECTION_PERSIST, false))
-				mReaderView.clearSelection();
+			if (!selectionHandler.shouldPersistSelection())
+				selectionHandler.clearSelection();
 			dismiss();
 			return true;
 		}
@@ -149,14 +159,16 @@ public class DictsDlg extends BaseDialog {
 		
 	}
 
-	public DictsDlg( CoolReader activity, ReaderView readerView, String search_text )
+	public DictsDlg(
+			CoolReader activity, String search_text,
+			SelectionHandler selectionHandler)
 	{
 		super(activity, activity.getResources().getString(R.string.win_title_dicts), false, true);
 		//mThis = this; // for inner classes
 		mInflater = LayoutInflater.from(getContext());
 		mSearchText = search_text;
 		mCoolReader = activity;
-		mReaderView = readerView;
+		this.selectionHandler = selectionHandler;
 		//setPositiveButtonImage(R.drawable.cr3_button_add, R.string.mi_Dict_add);
 		View frame = mInflater.inflate(R.layout.dict_list_dialog, null);
 		ViewGroup body = frame.findViewById(R.id.dict_list);

@@ -302,6 +302,13 @@ DRM или ограничений доступа, подбор/получени�
   очищает pending update до закрытия native document. Поэтому старый callback,
   dialog или page-flip не может переместить, отрисовать или сохранить позицию
   книги, которая его заменила.
+  Selection/search chain также сохраняет captured book+interaction от native
+  gesture update до toolbar, search-history callback, двухпроходного
+  forward/backward find, find-next popup, clear и bookmark highlight. Native
+  work и GUI completion повторно проверяют обе identity; stale toolbar
+  dismiss/click не очищает selection и не меняет view mode новой книги.
+  `SearchDlg`, `FindNextDlg` и dictionary picker больше не хранят
+  `ReaderView`, получая только узкие generation-aware callbacks.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
