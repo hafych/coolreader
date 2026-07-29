@@ -34,28 +34,30 @@ protected:
     lString16 & _buffer;
     lString16 _value;
     CRMenuSkinRef _skin;
-    lString16 _title;
+    lString32 _title;
     int _resultCmd;
-    lChar16 _lastDigit;
+    lChar32 _lastDigit;
     int _rows;
     int _cols;
-    lString16Collection _keymap;
-    virtual void draw();
-    virtual lChar16 digitsToChar( lChar16 digit1, lChar16 digit2 );
-    bool digitEntered( lChar16 c );
+    lString32Collection _keymap;
+    void draw() override;
+    virtual lChar32 digitsToChar( lChar32 digit1, lChar32 digit2 );
+    bool digitEntered( lChar32 c );
 public:
 	void setDefaultLayout();
 	void setLayout( CRKeyboardLayoutRef layout );
-    CRScreenKeyboard(CRGUIWindowManager * wm, int id, const lString16 & caption, lString16 & buffer, lvRect & rc);
+    CRScreenKeyboard(CRGUIWindowManager * wm, int id,
+                     const lString32 & caption, lString16 & buffer,
+                     lvRect & rc);
 
-    virtual ~CRScreenKeyboard() { }
+    ~CRScreenKeyboard() override { }
 
     //virtual const lvRect & getRect();
 
     //virtual lvPoint getSize();
 
     /// returns true if command is processed
-    virtual bool onCommand( int command, int params );
+    bool onCommand( int command, int params ) override;
 
 };
 

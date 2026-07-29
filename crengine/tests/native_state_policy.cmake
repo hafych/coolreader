@@ -19,6 +19,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/settings.h" SETTINGS_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/settings.cpp" SETTINGS_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/mainwnd.h" MAIN_WINDOW_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/mainwnd.cpp" MAIN_WINDOW_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/scrkbd.h" SCREEN_KEYBOARD_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/scrkbd.cpp" SCREEN_KEYBOARD_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7024,6 +7026,41 @@ forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "showProgress(lString16"
   "document progress icons must use the current string width"
+)
+require_source_text(
+  "${SCREEN_KEYBOARD_HEADER}"
+  "lString32Collection _keymap;"
+  "screen keyboard layouts must use the current string collection"
+)
+require_source_text(
+  "${SCREEN_KEYBOARD_HEADER}"
+  "virtual lChar32 digitsToChar( lChar32 digit1, lChar32 digit2 );"
+  "screen keyboard layout selection must preserve Unicode scalars"
+)
+require_source_text(
+  "${SCREEN_KEYBOARD_SOURCE}"
+  "_value << UnicodeToUtf16(&ch, 1);"
+  "screen keyboard UTF-16 consumers must cross an explicit boundary"
+)
+require_source_text(
+  "${SCREEN_KEYBOARD_SOURCE}"
+  "_value.erase(eraseStart, _value.length() - eraseStart);"
+  "screen keyboard backspace must erase complete UTF-16 scalars"
+)
+require_source_text(
+  "${SCREEN_KEYBOARD_SOURCE}"
+  "_cols = 10;"
+  "screen keyboard fallback layouts must restore their column count"
+)
+forbid_source_text(
+  "${SCREEN_KEYBOARD_HEADER}"
+  "lString16Collection"
+  "screen keyboard layouts must not use the removed UTF-16 collection"
+)
+forbid_source_text(
+  "${SCREEN_KEYBOARD_SOURCE}"
+  "lString16 s = _keymap"
+  "screen keyboard rows must preserve the current character width"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

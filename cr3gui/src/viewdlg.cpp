@@ -237,7 +237,9 @@ void CRViewDialog::showSearchDialog()
     rc.bottom -= v_margin;
     rc.top += rc.height() / 2;
     _searchPattern.clear();
-    CRScreenKeyboard * dlg = new CRScreenKeyboard( _wm, MCMD_SEARCH_FINDFIRST, lString16(_("Search")), _searchPattern, rc );
+    CRScreenKeyboard * dlg = new CRScreenKeyboard(
+            _wm, MCMD_SEARCH_FINDFIRST,
+            Utf8ToUnicode(lString8(_("Search"))), _searchPattern, rc);
     _wm->activateWindow( dlg );
 }
 
@@ -371,7 +373,10 @@ void CRViewDialog::showDictWithVKeyboard()
     rc.bottom -= v_margin;
     rc.top += rc.height() / 2;
     _searchPattern.clear();
-    CRScreenKeyboard * dlg = new CRScreenKeyboard( _wm, MCMD_DICT_FIND, lString16(_("Find in dictionary")), _searchPattern, rc );
+    CRScreenKeyboard * dlg = new CRScreenKeyboard(
+            _wm, MCMD_DICT_FIND,
+            Utf8ToUnicode(lString8(_("Find in dictionary"))),
+            _searchPattern, rc);
     _wm->activateWindow( dlg );
 }
 
