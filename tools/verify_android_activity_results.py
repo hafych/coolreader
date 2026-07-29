@@ -14,6 +14,22 @@ DICTIONARIES = SOURCE / "Dictionaries.java"
 DICTIONARY_CATALOG = SOURCE / "DictionaryCatalog.java"
 BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
 APP_LOCALE_SELECTION = SOURCE / "crengine" / "AppLocaleSelection.java"
+SETTINGS = SOURCE / "crengine" / "Settings.java"
+PROFILE_SETTINGS_FILTER = (
+    SOURCE / "crengine" / "ProfileSettingsFilter.java"
+)
+PROFILE_SETTINGS_FILTER_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ProfileSettingsFilterTest.java"
+)
 READER_ACTION = SOURCE / "crengine" / "ReaderAction.java"
 ACTION_ICON_SET = SOURCE / "crengine" / "ActionIconSet.java"
 DEFAULT_INPUT_ACTIONS = SOURCE / "crengine" / "DefaultInputActions.java"
@@ -513,6 +529,63 @@ def main() -> None:
             violations.append(
                 f"{relative(BASE_ACTIVITY)} omits Activity-owned theme "
                 f"marker: {marker}")
+    for marker in (
+        "private final ProfileSettingsFilter profileSettingsFilter",
+        "ProfileSettingsFilter.legacy()",
+        "res = profileSettingsFilter.filter(res)",
+        "settings = profileSettingsFilter.filter(settings)",
+    ):
+        if marker not in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} omits profile filter marker: "
+                f"{marker}")
+    for legacy in (
+        "filterProfileSettings(",
+        "Settings.PROFILE_SETTINGS",
+    ):
+        if legacy in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} retains inline profile rules: "
+                f"{legacy}")
+
+    settings_text = SETTINGS.read_text(encoding="utf-8")
+    if "PROFILE_SETTINGS" in settings_text:
+        violations.append(
+            f"{relative(SETTINGS)} exposes mutable profile rule storage")
+
+    profile_settings_filter_text = PROFILE_SETTINGS_FILTER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ProfileSettingsFilter",
+        "private final List<String> patterns",
+        "Collections.unmodifiableList(copy)",
+        "static ProfileSettingsFilter legacy()",
+        "boolean includes(String key)",
+        'key.startsWith("styles.")',
+        "pattern.equalsIgnoreCase(key)",
+        "Properties filter(Properties settings)",
+        "synchronized (settings)",
+    ):
+        if marker not in profile_settings_filter_text:
+            violations.append(
+                f"{relative(PROFILE_SETTINGS_FILTER)} omits immutable profile "
+                f"filter marker: {marker}")
+
+    profile_settings_filter_test_text = (
+        PROFILE_SETTINGS_FILTER_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "legacyPatternsPreserveOrderAndValues",
+        "exactAndPrefixMatchingPreserveLegacyCaseRules",
+        "filteringCopiesOnlyProfileSettings",
+        "patternStorageIsCopiedAndUnmodifiable",
+        "invalidDefinitionsAndInputAreRejected",
+        '"app.ui.theme*"',
+    ):
+        if marker not in profile_settings_filter_test_text:
+            violations.append(
+                f"{relative(PROFILE_SETTINGS_FILTER_TEST)} omits profile "
+                f"filter regression: {marker}")
 
     app_locale_text = APP_LOCALE_SELECTION.read_text(encoding="utf-8")
     for marker in (

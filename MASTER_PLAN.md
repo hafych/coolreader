@@ -155,6 +155,8 @@ DRM или ограничений доступа, подбор/получени�
   immutable owners без process-wide array escape и зависимости от OPDS types.
   Interface theme definitions теперь immutable values в generation-owned
   catalog `BaseActivity`, с явным E-Ink snapshot и без public static array.
+  Profile load/save filtering также вынесен из `SettingsManager` в единый
+  immutable matcher без public rule-array и с JVM regression на wildcard rules.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

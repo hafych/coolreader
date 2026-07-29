@@ -107,6 +107,10 @@ Interface themes follow the same boundary: each `BaseActivity` owns an
 immutable `InterfaceThemeCatalog` built from its E-Ink snapshot. Theme visual
 metadata is final, the ordered catalog is unmodifiable, and `OptionsDialog`
 enumerates that Activity-owned view instead of a public process-wide array.
+Numbered-profile selection is delegated by `SettingsManager` to one immutable
+`ProfileSettingsFilter`. Exact, wildcard-prefix and `styles.` rules are
+pure JVM-tested, both load and save use the same matcher, and `Settings` no
+longer exposes the rule backing array.
 
 Screen-backlight user-activity timestamps and scheduled timer tasks belong to
 the `ScreenBacklightControl` of one `BaseActivity` generation. Threshold and

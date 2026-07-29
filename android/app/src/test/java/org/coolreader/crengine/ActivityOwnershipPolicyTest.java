@@ -505,6 +505,34 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void profileSettingsFilteringIsImmutableAndSettingsOwned()
+			throws Exception {
+		Class<?> settingsManager = null;
+		for (Class<?> nested : BaseActivity.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("SettingsManager"))
+				settingsManager = nested;
+		}
+		assertTrue(settingsManager != null);
+		Field filter =
+				settingsManager.getDeclaredField("profileSettingsFilter");
+		assertFalse(Modifier.isStatic(filter.getModifiers()));
+		assertTrue(Modifier.isPrivate(filter.getModifiers()));
+		assertTrue(Modifier.isFinal(filter.getModifiers()));
+
+		for (Field field :
+				ProfileSettingsFilter.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field : Settings.class.getDeclaredFields()) {
+			assertFalse(
+					"Settings exposes the mutable profile rule array",
+					field.getName().equals("PROFILE_SETTINGS"));
+		}
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

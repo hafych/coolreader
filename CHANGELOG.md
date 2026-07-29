@@ -60,6 +60,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Interface theme definitions and their E-Ink visual choices now belong to an
   immutable catalog owned by each Activity; the legacy public theme array has
   been removed.
+- Numbered profile load/save now shares one immutable, test-covered settings
+  filter; its exact and wildcard rules no longer escape through a public array.
 - External dictionary definitions, including intent data keys, now live in one
   immutable catalog; legacy array callers receive independent snapshots.
 - Audio sibling selection and filename transliteration now use private

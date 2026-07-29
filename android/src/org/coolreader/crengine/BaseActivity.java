@@ -1588,6 +1588,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		private Properties mSettings;
 		private final File defaultSettingsDir;
 		private final DefaultInputActions defaultInputActions;
+		private final ProfileSettingsFilter profileSettingsFilter =
+				ProfileSettingsFilter.legacy();
 
 		public SettingsManager(BaseActivity activity) {
 			this.mActivity = activity;
@@ -1977,36 +1979,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				f = getSettingsFile(0);
 			Properties res = loadSettings(mActivity, f);
 			if (profile != 0) {
-				res = filterProfileSettings(res);
+				res = profileSettingsFilter.filter(res);
 				res.setInt(Settings.PROP_PROFILE_NUMBER, profile);
-			}
-			return res;
-		}
-
-		public static Properties filterProfileSettings(Properties settings) {
-			Properties res = new Properties();
-			res.entrySet();
-			for (Object k : settings.keySet()) {
-				String key = (String) k;
-				String value = settings.getProperty(key);
-				boolean found = false;
-				for (String pattern : Settings.PROFILE_SETTINGS) {
-					if (pattern.endsWith("*")) {
-						if (key.startsWith(pattern.substring(0, pattern.length() - 1))) {
-							found = true;
-							break;
-						}
-					} else if (pattern.equalsIgnoreCase(key)) {
-						found = true;
-						break;
-					} else if (key.startsWith("styles.")) {
-						found = true;
-						break;
-					}
-				}
-				if (found) {
-					res.setProperty(key, value);
-				}
 			}
 			return res;
 		}
@@ -2016,7 +1990,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				settings = mSettings;
 			File f = getSettingsFile(profile);
 			if (profile != 0) {
-				settings = filterProfileSettings(settings);
+				settings = profileSettingsFilter.filter(settings);
 				settings.setInt(Settings.PROP_PROFILE_NUMBER, profile);
 			}
 			saveSettings(f, settings);
