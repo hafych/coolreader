@@ -195,6 +195,8 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvcolortransformimgsource.h" COLOR_
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvcolortransformimgsource.cpp" COLOR_TRANSFORM_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvalphatransformimgsource.h" ALPHA_TRANSFORM_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvalphatransformimgsource.cpp" ALPHA_TRANSFORM_IMAGE_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvstretchimgsource.h" STRETCH_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvstretchimgsource.cpp" STRETCH_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvsvgimagesource.cpp" SVG_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.cpp" GIF_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvgifimagesource.h" GIF_IMAGE_HEADER)
@@ -3632,6 +3634,56 @@ require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "alpha-transform borrow survived callback exception"
   "alpha-transform exception cleanup must retain native regression coverage"
+)
+require_source_text(
+  "${STRETCH_IMAGE_HEADER}"
+  "std::vector<lUInt32> _line"
+  "stretch-transform rows must have standard container ownership"
+)
+require_source_text(
+  "${STRETCH_IMAGE_HEADER}"
+  "non-owning view valid only during Decode()"
+  "stretch-transform callback borrowing must stay explicit"
+)
+require_source_text(
+  "${STRETCH_IMAGE_SOURCE}"
+  "std::vector<lUInt32> candidate"
+  "stretch-transform rows must publish transactionally"
+)
+require_source_text(
+  "${STRETCH_IMAGE_SOURCE}"
+  "if (_decodeStarted)"
+  "aborted stretch transforms must close their callback lifecycle"
+)
+require_source_text(
+  "${STRETCH_IMAGE_SOURCE}"
+  "_callback = NULL;"
+  "stretch-transform callback borrows must clear after decode"
+)
+forbid_source_text(
+  "${STRETCH_IMAGE_HEADER}"
+  "LVArray<lUInt32> _line"
+  "stretch-transform rows must not return to legacy storage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "vertical shrink stopped before its output row"
+  "stretch-transform downscaling must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "split shrink did not mirror horizontal mapping"
+  "split-transform downscaling must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "stretch transform ignored callback cancellation"
+  "stretch-transform cancellation must retain native regression coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "aborted stretch transform retained its row workspace"
+  "stretch-transform abort cleanup must retain native regression coverage"
 )
 require_source_text(
   "${DRAWBUF_IMAGE_HEADER}"

@@ -280,6 +280,16 @@ is released, while null callbacks and null source factories are rejected.
 Native coverage verifies success, reuse, source failure, aborted lifecycle and
 exception recovery.
 
+`LVStretchImgSource` owns its transformed row in `std::vector` storage and
+keeps the downstream callback as a synchronous borrow. Construction rejects
+empty source or destination dimensions before tile/stretch arithmetic. Decode
+publishes a complete row workspace before callback start, releases it on every
+completion or exception and synthesizes an error completion for an aborted
+source. Vertical downscaling treats source rows that do not yet map to output
+as successful progress, while downstream cancellation stops at the first
+rejected output row. Native coverage verifies pixel mapping, downscaling,
+cancellation, reuse, source failure, abort and exception recovery.
+
 `LVImageScaledDrawCallback` owns nearest-neighbor and nine-patch coordinate
 maps plus its full smooth-scaling RGBA snapshot through `std::vector`. The
 allocator-specific result returned by `qSmoothScaleImage()` is held by a

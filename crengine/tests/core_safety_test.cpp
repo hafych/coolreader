@@ -5172,6 +5172,30 @@ public:
     }
 };
 
+class RejectingImageDecodeCallback : public LVImageDecoderCallback {
+public:
+    int starts = 0;
+    int lines = 0;
+    int errorEnds = 0;
+
+    void OnStartDecode(LVImageSource *) override
+    {
+        ++starts;
+    }
+
+    bool OnLineDecoded(LVImageSource *, int, lUInt32 *) override
+    {
+        ++lines;
+        return false;
+    }
+
+    void OnEndDecode(LVImageSource *, bool errors) override
+    {
+        if (errors)
+            ++errorEnds;
+    }
+};
+
 class FailingImageSource : public LVImageSource {
 private:
     int &_decodeCalls;
@@ -6083,6 +6107,92 @@ static int testImageSourceOwnership() {
                 LVImageSourceRef(), 1).isNull())
         return fail("alpha-transform factory wrapped a null source");
 
+    LVImageSourceRef stretchTransform =
+            LVCreateStretchFilledTransform(
+                    xpm, 4, 4,
+                    IMG_TRANSFORM_STRETCH,
+                    IMG_TRANSFORM_STRETCH);
+    CapturingImageDecodeCallback stretchCapture(
+            stretchTransform.get(), xpm.get(), 4);
+    if (stretchTransform.isNull()
+            || !stretchTransform->Decode(&stretchCapture)
+            || !stretchTransform->Decode(&stretchCapture)
+            || stretchCapture.sourceMismatch
+            || stretchCapture.starts != 2
+            || stretchCapture.lines != 8
+            || stretchCapture.ends != 2
+            || stretchCapture.errorEnds != 0)
+        return fail("stretch-transform row workspace could not be reused");
+    static const std::vector<lUInt32> expectedStretchPixels = {
+        0x000000, 0x000000, 0xffffff, 0xffffff,
+        0x000000, 0x000000, 0xffffff, 0xffffff,
+        0xffffff, 0xffffff, 0x000000, 0x000000,
+        0xffffff, 0xffffff, 0x000000, 0x000000,
+        0x000000, 0x000000, 0xffffff, 0xffffff,
+        0x000000, 0x000000, 0xffffff, 0xffffff,
+        0xffffff, 0xffffff, 0x000000, 0x000000,
+        0xffffff, 0xffffff, 0x000000, 0x000000
+    };
+    if (stretchCapture.pixels != expectedStretchPixels)
+        return fail("stretch-transform pixel mapping changed");
+    LVImageSourceRef shrinkTransform =
+            LVCreateStretchFilledTransform(
+                    xpm, 1, 1,
+                    IMG_TRANSFORM_STRETCH,
+                    IMG_TRANSFORM_STRETCH);
+    CapturingImageDecodeCallback shrinkCapture(
+            shrinkTransform.get(), xpm.get(), 1);
+    if (shrinkTransform.isNull()
+            || !shrinkTransform->Decode(&shrinkCapture)
+            || shrinkCapture.sourceMismatch
+            || shrinkCapture.starts != 1
+            || shrinkCapture.lines != 1
+            || shrinkCapture.ends != 1
+            || shrinkCapture.pixels
+                    != std::vector<lUInt32>{0xffffff})
+        return fail("vertical shrink stopped before its output row");
+    LVImageSourceRef splitShrinkTransform =
+            LVCreateStretchFilledTransform(xpm, 1, 1);
+    CapturingImageDecodeCallback splitShrinkCapture(
+            splitShrinkTransform.get(), xpm.get(), 1);
+    if (splitShrinkTransform.isNull()
+            || !splitShrinkTransform->Decode(&splitShrinkCapture)
+            || splitShrinkCapture.sourceMismatch
+            || splitShrinkCapture.starts != 1
+            || splitShrinkCapture.lines != 1
+            || splitShrinkCapture.ends != 1
+            || splitShrinkCapture.pixels
+                    != std::vector<lUInt32>{0x000000})
+        return fail("split shrink did not mirror horizontal mapping");
+    RejectingImageDecodeCallback rejectingStretchCallback;
+    if (stretchTransform->Decode(&rejectingStretchCallback)
+            || rejectingStretchCallback.starts != 1
+            || rejectingStretchCallback.lines != 1
+            || rejectingStretchCallback.errorEnds != 1)
+        return fail("stretch transform ignored callback cancellation");
+    ThrowingImageDecodeCallback throwingStretchCallback;
+    bool stretchCallbackThrew = false;
+    try {
+        stretchTransform->Decode(&throwingStretchCallback);
+    } catch (const std::runtime_error &) {
+        stretchCallbackThrew = true;
+    }
+    CountingImageDecodeCallback recoveredStretchCallback;
+    if (!stretchCallbackThrew
+            || !stretchTransform->Decode(&recoveredStretchCallback)
+            || recoveredStretchCallback.starts != 1
+            || recoveredStretchCallback.lines != 4
+            || recoveredStretchCallback.ends != 1
+            || stretchTransform->Decode(NULL))
+        return fail("stretch-transform borrow survived callback exception");
+    if (!LVCreateStretchFilledTransform(
+                LVImageSourceRef(), 1, 1).isNull()
+            || !LVCreateStretchFilledTransform(
+                    xpm, 0, 1).isNull()
+            || !LVCreateTileTransform(
+                    xpm, 1, 0, 0, 0).isNull())
+        return fail("stretch-transform factory accepted invalid dimensions");
+
     int failedTransformCalls = 0;
     LVImageSourceRef failedTransform =
             LVCreateColorTransformImageSource(
@@ -6113,6 +6223,23 @@ static int testImageSourceOwnership() {
             || failedAlphaCallback.ends != 0
             || failedAlphaCallback.errorEnds != 2)
         return fail("failed alpha transform retained its callback borrow");
+    int failedStretchCalls = 0;
+    LVImageSourceRef failedStretch =
+            LVCreateStretchFilledTransform(
+                    LVImageSourceRef(
+                            new FailingImageSource(failedStretchCalls)),
+                    4, 4,
+                    IMG_TRANSFORM_STRETCH,
+                    IMG_TRANSFORM_STRETCH);
+    CountingImageDecodeCallback failedStretchCallback;
+    if (failedStretch->Decode(&failedStretchCallback)
+            || failedStretch->Decode(&failedStretchCallback)
+            || failedStretchCalls != 2
+            || failedStretchCallback.starts != 2
+            || failedStretchCallback.lines != 4
+            || failedStretchCallback.ends != 0
+            || failedStretchCallback.errorEnds != 2)
+        return fail("failed stretch transform retained its row workspace");
     LVImageSourceRef abortedTransform =
             LVCreateColorTransformImageSource(
                     LVImageSourceRef(new AbortedImageSource()),
@@ -6134,6 +6261,19 @@ static int testImageSourceOwnership() {
             || abortedAlphaCallback.ends != 0
             || abortedAlphaCallback.errorEnds != 1)
         return fail("aborted alpha transform retained its callback borrow");
+    LVImageSourceRef abortedStretch =
+            LVCreateStretchFilledTransform(
+                    LVImageSourceRef(new AbortedImageSource()),
+                    4, 4,
+                    IMG_TRANSFORM_STRETCH,
+                    IMG_TRANSFORM_STRETCH);
+    CountingImageDecodeCallback abortedStretchCallback;
+    if (abortedStretch->Decode(&abortedStretchCallback)
+            || abortedStretchCallback.starts != 1
+            || abortedStretchCallback.lines != 2
+            || abortedStretchCallback.ends != 0
+            || abortedStretchCallback.errorEnds != 1)
+        return fail("aborted stretch transform retained its row workspace");
 
     const std::vector<int> ninePatchMap =
             LVImageScaledDrawCallback::GenNinePatchMap(6, 8, 1, 1);

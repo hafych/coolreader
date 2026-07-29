@@ -24,8 +24,9 @@
 
 #include "lvimagesource.h"
 #include "lvimagedecodercallback.h"
-#include "lvarray.h"
 #include "lvimg.h"
+
+#include <vector>
 
 class LVStretchImgSource : public LVImageSource, public LVImageDecoderCallback
 {
@@ -39,8 +40,10 @@ protected:
     ImageTransform _vTransform;
     int _split_x;
     int _split_y;
-    LVArray<lUInt32> _line;
+    std::vector<lUInt32> _line;
+    /// non-owning view valid only during Decode()
     LVImageDecoderCallback * _callback;
+    bool _decodeStarted;
 public:
     LVStretchImgSource( LVImageSourceRef src, int newWidth, int newHeight, ImageTransform hTransform, ImageTransform vTransform, int splitX, int splitY );
     virtual ~LVStretchImgSource();

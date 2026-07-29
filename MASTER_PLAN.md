@@ -141,7 +141,8 @@ DRM или ограничений доступа, подбор/получени�
   cache-file, SVG/GIF/XPM/image rows, bounded XPM header/palette/raster
   parsing и bounded GIF record/sub-block/LZW
   bitstream/table/output parsing, palette validation и interlaced-frame row
-  mapping, alpha-transform callback borrow/lifecycle,
+  mapping, alpha/stretch-transform callback borrow/lifecycle и stretch row
+  storage/downscaling,
   encoding autodetect/offline
   statistic input и parser format detection; parser selection, draw-buffer
   source и owned/borrowed

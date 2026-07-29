@@ -156,7 +156,8 @@ LVImageSourceRef LVCreateStreamCopyImageSource( LVStreamRef stream )
 /// creates image which stretches source image by filling center with pixels at splitX, splitY
 LVImageSourceRef LVCreateStretchFilledTransform( LVImageSourceRef src, int newWidth, int newHeight, ImageTransform hTransform, ImageTransform vTransform, int splitX, int splitY )
 {
-	if ( src.isNull() )
+	if ( src.isNull() || src->GetWidth() <= 0 || src->GetHeight() <= 0
+            || newWidth <= 0 || newHeight <= 0 )
 		return LVImageSourceRef();
     return LVImageSourceRef( new LVStretchImgSource( src, newWidth, newHeight, hTransform, vTransform, splitX, splitY ) );
 }
@@ -164,7 +165,8 @@ LVImageSourceRef LVCreateStretchFilledTransform( LVImageSourceRef src, int newWi
 /// creates image which fills area with tiled copy
 LVImageSourceRef LVCreateTileTransform( LVImageSourceRef src, int newWidth, int newHeight, int offsetX, int offsetY )
 {
-    if ( src.isNull() )
+    if ( src.isNull() || src->GetWidth() <= 0 || src->GetHeight() <= 0
+            || newWidth <= 0 || newHeight <= 0 )
         return LVImageSourceRef();
     return LVImageSourceRef( new LVStretchImgSource( src, newWidth, newHeight, IMG_TRANSFORM_TILE, IMG_TRANSFORM_TILE,
                                                      offsetX, offsetY ) );
