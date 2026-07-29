@@ -472,6 +472,10 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains numeric selection generations",
 					field.getName().equals("nextUpdateId"));
+			assertFalse(
+					"ReaderView retains dead animation serial state",
+					field.getName().equals(
+							"updateSerialNumber"));
 		}
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));

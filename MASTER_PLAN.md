@@ -215,7 +215,8 @@ DRM или ограничений доступа, подбор/получени�
   Animation/GC delayed executors теперь private final у одного `ReaderView`;
   animation handoff использует instance lock и volatile active reference вместо
   process-wide class monitor, а `destroy()` безусловно отменяет оба executor и
-  очищает pending animation state до native teardown.
+  очищает pending animation state до native teardown; неиспользуемый volatile
+  animation serial без readers/writers удалён.
   Autoscroll теперь принадлежит synchronized identity-owned
   `AutoScrollSessionState` и отдельному cancelable GUI scheduler: background
   init публикует render-ready только точному owner, stop/destroy не допускают

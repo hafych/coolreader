@@ -2063,6 +2063,7 @@ def main() -> None:
         "requestedHeight",
         "lastSavePositionTaskId",
         "nextUpdateId",
+        "updateSerialNumber",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",
     ):

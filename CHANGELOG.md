@@ -401,6 +401,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Selection drag previews and terminal updates now share an exact lifecycle
   token. A stale gesture-end callback cannot complete or clear a newer
   selection, and clear, reload, close or destruction invalidate queued work.
+- Removed ReaderView's unused volatile animation serial, which never
+  participated in update ordering or cancellation.
 - Temporary E-Ink full-refresh suppression now uses reader-owned client leases.
   Overlapping clients restore the saved interval exactly once, while duplicate
   or unmatched releases no longer restore an invalid sentinel interval.

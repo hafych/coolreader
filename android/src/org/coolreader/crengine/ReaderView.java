@@ -4541,8 +4541,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	private volatile int updateSerialNumber = 0;
-
 	private class AnimationUpdate {
 		private int x;
 		private int y;

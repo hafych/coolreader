@@ -248,7 +248,8 @@ Animation and GC delayed executors are private final members of one
 active-animation reference rather than the nested class monitor shared by all
 Activities. `destroy()` always cancels both executors and clears pending
 animation state before native document teardown, including repeated or
-partially initialized teardown.
+partially initialized teardown. The unused volatile animation serial, which
+never participated in ordering or cancellation, has been removed.
 Autoscroll has a separate synchronized `AutoScrollSessionState` and cancelable
 GUI scheduler. A session is renderable only after its exact owner completes
 background initialization; initialization temporarily suppresses drawing and
