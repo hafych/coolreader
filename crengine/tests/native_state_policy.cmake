@@ -6953,6 +6953,31 @@ require_source_text(
   "wm, id, Utf16ToUnicode(caption), numItems, rc"
   "legacy fullscreen captions must cross an explicit compatibility boundary"
 )
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "lString32Collection list;"
+  "settings font menus must use the current string collection"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "lString32 getSubmenuValue() override"
+  "font-size values must match the current menu string contract"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "LVImageSourceRef image, const lChar32 * propValue"
+  "on-demand font property values must use the current character width"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "snprintf("
+  "settings sample labels must use a bounded formatter"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "sprintf( defvalue"
+  "settings sample labels must not use an unbounded formatter"
+)
 forbid_source_text(
   "${SETTINGS_SOURCE}"
   "virtual lString16 getSubmenuValue()

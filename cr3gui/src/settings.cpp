@@ -233,7 +233,7 @@ CRMenu * CRSettingsMenu::createOrientationMenu( CRMenu * mainMenu, CRPropRef pro
 	const char * propName = PROP_ROTATE_ANGLE;
 #endif
     CRMenu * orientationMenu = new CRMenu(_wm, mainMenu, mm_Orientation,
-            lString16(_("Page orientation")),
+            Utf8ToUnicode(lString8(_("Page orientation"))),
                             LVImageSourceRef(), LVFontRef(), valueFont, props,  propName);
     addMenuItems( orientationMenu, page_orientations );
     orientationMenu->reconfigure( 0 );
@@ -249,14 +249,15 @@ class FontSizeMenu : public CRMenu
 public:
     FontSizeMenu(  CRGUIWindowManager * wm, CRMenu * parentMenu, LVFontRef valueFont, CRPropRef props  )
     : CRMenu( wm, parentMenu, mm_FontSize,
-                                _("Default font size"),
+                                Utf8ToUnicode(
+                                        lString8(_("Default font size"))),
                                         LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_FONT_SIZE, 10 )
     {
         _fullscreen = true;
     }
 
     /// submenu for options dialog support
-    virtual lString16 getSubmenuValue()
+    lString32 getSubmenuValue() override
     { 
         return getProps()->getStringDef(
             UnicodeToUtf8(getPropName()).c_str(), "32");
@@ -272,9 +273,10 @@ class OnDemandFontMenuItem : public CRMenuItem
     lString8 _typeface;
     lString8 _deftypeface;
     public:
-    OnDemandFontMenuItem( CRMenu * menu, int id, lString16 label, LVImageSourceRef image, const lChar16 * propValue,
+    OnDemandFontMenuItem( CRMenu * menu, int id, lString32 label,
+                          LVImageSourceRef image, const lChar32 * propValue,
                           int size, int weight, bool italic, css_font_family_t family, lString8 typeface, lString8 deftypeface )
-    : CRMenuItem(menu, id, LCSTR(label), image, LVFontRef(), propValue)
+    : CRMenuItem(menu, id, label, image, LVFontRef(), propValue)
     , _size(size), _weight(weight), _italic(italic), _family(family), _typeface(typeface), _deftypeface(deftypeface)
     {
     }
@@ -295,11 +297,11 @@ class OnDemandFontMenuItem : public CRMenuItem
 
 CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * mainMenu, CRPropRef props )
 {
-    lString16Collection list;
+    lString32Collection list;
     fontMan->getFaceList( list );
     lString8 fontFace = UnicodeToUtf8(props->getStringDef( PROP_FONT_FACE, UnicodeToUtf8(list[0]).c_str() ));
     //LVFontRef menuFont( fontMan->GetFont( MENU_FONT_SIZE, 600, false, css_ff_sans_serif, lString8("Arial")) );
-    CRMenuSkinRef skin = wm->getSkin()->getMenuSkin(L"#settings");
+    CRMenuSkinRef skin = wm->getSkin()->getMenuSkin(U"#settings");
     LVFontRef valueFont = skin->getValueSkin()->getFont();//( fontMan->GetFont( VALUE_FONT_SIZE, 400, true, css_ff_sans_serif, lString8("Arial")) );
     CRMenu * fontSizeMenu;
     fontSizeMenu = new FontSizeMenu(_wm, mainMenu, valueFont, props );
@@ -307,15 +309,19 @@ CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * m
         //char name[32];
         char defvalue[400];
         //sprintf( name, "VIEWER_DLG_FONT_SIZE_%d", cr_font_sizes[i] );
-        sprintf( defvalue, "%d %s", cr_font_sizes[i], _("The quick brown fox jumps over lazy dog") );
+        snprintf(
+                defvalue, sizeof(defvalue), "%d %s",
+                cr_font_sizes[i],
+                _("The quick brown fox jumps over lazy dog"));
         fontSizeMenu->addItem( new OnDemandFontMenuItem( fontSizeMenu, 0,
-                        lString16(defvalue),
-                        LVImageSourceRef(), lString16::itoa(cr_font_sizes[i]).c_str(),
+                        Utf8ToUnicode(lString8(defvalue)),
+                        LVImageSourceRef(),
+                        lString32::itoa(cr_font_sizes[i]).c_str(),
                         cr_font_sizes[i], 400, false, css_ff_sans_serif, fontFace, UnicodeToUtf8(skin->getItemSkin()->getFontFace())) );
     }
     fontSizeMenu->setAccelerators( _wm->getAccTables().get("menu") );
     //fontSizeMenu->setAccelerators( _menuAccelerators );
-    fontSizeMenu->setSkinName(lString16("#settings"));
+    fontSizeMenu->setSkinName(cs32("#settings"));
     //fontSizeMenu->setSkinName(lString16("#main"));
     fontSizeMenu->reconfigure( 0 );
     return fontSizeMenu;
@@ -325,21 +331,22 @@ void CRSettingsMenu::addMenuItems( CRMenu * menu, item_def_t values[] )
 {
     for ( int i=0; values[i].translate_default; i++)
         menu->addItem( new CRMenuItem( menu, i,
-            lString16(values[i].translate_default),
+            Utf8ToUnicode(lString8(values[i].translate_default)),
             LVImageSourceRef(),
             LVFontRef(), Utf8ToUnicode(lString8(values[i].value)).c_str() ) );
     menu->setAccelerators( _menuAccelerators );
-    menu->setSkinName(lString16("#settings"));
+    menu->setSkinName(cs32("#settings"));
     menu->reconfigure( 0 );
 }
 
 
 CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int id, LVFontRef font, CRGUIAcceleratorTableRef menuAccelerators, lvRect &rc )
-: CRFullScreenMenu( wm, id, lString16(_("Settings")), 8, rc ),
+: CRFullScreenMenu(
+        wm, id, Utf8ToUnicode(lString8(_("Settings"))), 8, rc),
   props( newProps ),
   _menuAccelerators( menuAccelerators )
 {
-    setSkinName(lString16("#settings"));
+    setSkinName(cs32("#settings"));
 
     _fullscreen = true;
 
