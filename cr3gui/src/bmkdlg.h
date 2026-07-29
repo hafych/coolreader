@@ -35,7 +35,9 @@ private:
     int _page;
 public:
     CRBookmarkMenuItem( CRMenu * menu, int shortcut, CRBookmark * bookmark, int page );
-    virtual void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected );
+    void Draw(
+            LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin,
+            CRRectSkinRef valueSkin, bool selected) override;
     CRBookmark * getBookmark() { return _bookmark; }
     void setBookmark(CRBookmark *bookmark) { _bookmark = bookmark; _itemDirty = true; }
     int getPage() { return _page; }
@@ -48,15 +50,15 @@ protected:
     LVDocView * _docview;
 public:
     /// returns index of selected item, -1 if no item selected
-    virtual int getSelectedItemIndex();
+    int getSelectedItemIndex() override;
     void setMode( bool goToMode );
     CRBookmarkMenu(CRGUIWindowManager * wm, LVDocView * docview, int numItems, lvRect & rc, bool goToMode=false);
 #ifdef CR_POCKETBOOK
-    virtual int getDefaultSelectionIndex();
+    int getDefaultSelectionIndex() override;
     void showContextMenu();
     void handleContextMenu(int index);
 #endif
-    virtual bool onCommand( int command, int params );
+    bool onCommand( int command, int params ) override;
 };
 
 class CRCitesMenu : public CRFullScreenMenu
@@ -67,13 +69,13 @@ protected:
     void createDefaultItem();
 public:
     /// returns index of selected item, -1 if no item selected
-    virtual int getSelectedItemIndex();
+    int getSelectedItemIndex() override;
     CRCitesMenu(CRGUIWindowManager * wm, LVDocView * docview, int numItems, lvRect & rc);
 #ifdef CR_POCKETBOOK
     void showContextMenu();
     void handleContextMenu(int index);
 #endif
-    virtual bool onCommand( int command, int params );
+    bool onCommand( int command, int params ) override;
 };
 
 #endif

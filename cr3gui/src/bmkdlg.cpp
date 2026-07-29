@@ -32,7 +32,9 @@
 
 
 CRBookmarkMenuItem::CRBookmarkMenuItem( CRMenu * menu, int shortcut, CRBookmark * bookmark, int page )
-: CRMenuItem(menu, shortcut, lString16(_("Empty slot")), LVImageSourceRef(), LVFontRef() ), _bookmark( bookmark ), _page(page)
+: CRMenuItem(
+        menu, shortcut, Utf8ToUnicode(lString8(_("Empty slot"))),
+        LVImageSourceRef(), LVFontRef()), _bookmark(bookmark), _page(page)
 {
 
 }
@@ -59,15 +61,17 @@ void CRBookmarkMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin,
     lvRect textRect = rc;
     textRect.left += imgWidth;
     lvRect posRect = textRect;
-    lString16 text = _bookmark->getPosText();
+    lString32 text = _bookmark->getPosText();
     if ( !text.empty() ) {
         posRect.bottom = posRect.top + skin->getFont()->getHeight() + itemBorders.top + itemBorders.bottom;
         textRect.top = posRect.bottom - itemBorders.bottom;
     }
-    lString16 postext(_("Page $1 ($2%)"));
+    lString32 postext = Utf8ToUnicode(lString8(_("Page $1 ($2%)")));
     postext.replaceIntParam(1, _page+1);
-    postext.replaceParam(2, lString16::itoa( _bookmark->getPercent()/100 ) << "." << fmt::decimal(_bookmark->getPercent()%100));
-    postext << "  " << _bookmark->getTitleText();
+    postext.replaceParam(
+            2, lString32::itoa(_bookmark->getPercent()/100)
+                    << U"." << fmt::decimal(_bookmark->getPercent()%100));
+    postext << U"  " << _bookmark->getTitleText();
     skin->drawText( buf, posRect, postext );
     if ( !text.empty() )
         valueSkin->drawText( buf, textRect, text );
@@ -78,31 +82,33 @@ void CRBookmarkMenu::setMode( bool goToMode )
     //if ( _goToMode==goToMode )
     //    return;
     CRLog::trace("CRBookmarkMenu::setMode");
-    int k, f;
 #ifdef CR_POCKETBOOK
-	lString16 selKeyName = getCommandKeyName( MCMD_SELECT );
+    lString32 selKeyName =
+            Utf16ToUnicode(getCommandKeyName(MCMD_SELECT));
 #else
-    lString16 selKeyName = getItemNumberKeysName();
+    lString32 selKeyName =
+            Utf16ToUnicode(getItemNumberKeysName());
 #endif
-    lString16 modeKeyName = getCommandKeyName( MCMD_NEXT_MODE );
+    lString32 modeKeyName =
+            Utf16ToUnicode(getCommandKeyName(MCMD_NEXT_MODE));
     bool hasModeSwitch = !modeKeyName.empty();
     _goToMode = goToMode;
     if ( _goToMode ) {
-        _caption = lString16(_("Go to bookmark"));
+        _caption = Utf8ToUnicode(lString8(_("Go to bookmark")));
         _label = _caption;
-        _statusText = lString16(
+        _statusText = Utf8ToUnicode(lString8(
                 hasModeSwitch
                 ? _("Short press $1 - go to bookmark,\n$2 - switch to SET mode")
                 : _("Short press $1 - go to bookmark,\nlong press - set bookmark")
-                );
+                ));
     } else {
-        _caption = lString16(_("Set bookmark"));
+        _caption = Utf8ToUnicode(lString8(_("Set bookmark")));
         _label = _caption;
-        _statusText = lString16(
+        _statusText = Utf8ToUnicode(lString8(
                 hasModeSwitch
                 ? _("$1 - set bookmark,\n$2 - switch to GO mode")
                 : _("Short press $1 - set bookmark,\nlong press - go to bookmark")
-                );
+                ));
     }
     _statusText.replaceParam(1, selKeyName);
     _statusText.replaceParam(2, modeKeyName);
@@ -201,15 +207,17 @@ void CRBookmarkMenu::handleContextMenu(int index)
 
 #define MIN_BOOKMARK_ITEMS 32
 CRBookmarkMenu::CRBookmarkMenu(CRGUIWindowManager * wm, LVDocView * docview, int numItems, lvRect & rc, bool goToMode)
-    : CRFullScreenMenu( wm, MCMD_BOOKMARK_LIST, lString16(_("Bookmarks")), numItems, rc )
+    : CRFullScreenMenu(
+            wm, MCMD_BOOKMARK_LIST,
+            Utf8ToUnicode(lString8(_("Bookmarks"))), numItems, rc)
     , _docview(docview)
 {
     CRFileHistRecord * bookmarks = docview->getCurrentFileHistRecord();
-    CRGUIAcceleratorTableRef acc = _wm->getAccTables().get("bookmarks");
+    CRGUIAcceleratorTableRef acc = _wm->getAccTables().get(U"bookmarks");
     if ( acc.isNull() )
-        acc = _wm->getAccTables().get("menu");
+        acc = _wm->getAccTables().get(U"menu");
     setAccelerators( acc );
-    setSkinName(lString16("#bookmarks"));
+    setSkinName(U"#bookmarks");
     int mc = getSkin()->getMinItemCount();
     if ( _pageItems < mc )
         _pageItems = mc;
@@ -345,14 +353,16 @@ void CRCitesMenu::handleContextMenu(int index)
 #endif
 
 CRCitesMenu::CRCitesMenu(CRGUIWindowManager * wm, LVDocView * docview, int numItems, lvRect & rc)
-    : CRFullScreenMenu( wm, MCMD_CITES_LIST, lString16(_("Citations")), numItems, rc )
+    : CRFullScreenMenu(
+            wm, MCMD_CITES_LIST,
+            Utf8ToUnicode(lString8(_("Citations"))), numItems, rc)
     , _docview(docview)
 {
-    CRGUIAcceleratorTableRef acc = _wm->getAccTables().get("bookmarks");
+    CRGUIAcceleratorTableRef acc = _wm->getAccTables().get(U"bookmarks");
     if ( acc.isNull() )
-        acc = _wm->getAccTables().get("menu");
+        acc = _wm->getAccTables().get(U"menu");
     setAccelerators( acc );
-    setSkinName(lString16("#bookmarks"));
+    setSkinName(U"#bookmarks");
     int mc = getSkin()->getMinItemCount();
     if ( _pageItems < mc )
         _pageItems = mc;
@@ -434,7 +444,8 @@ bool CRCitesMenu::onCommand( int command, int params )
 void CRCitesMenu::goToCitePage(int selecteditem)
 {
     if (selecteditem >= 0 && selecteditem < _items.length()) {
-        CRBookmarkMenuItem *item = static_cast<CRBookmarkMenuItem *>(_items[_selectedItem]);
+        CRBookmarkMenuItem *item =
+                static_cast<CRBookmarkMenuItem *>(_items[selecteditem]);
         if (item->getBookmark() == NULL)
             closeMenu(MCMD_CITE);
         else
@@ -444,7 +455,6 @@ void CRCitesMenu::goToCitePage(int selecteditem)
 
 int CRCitesMenu::getSelectedItemIndex()
 {
-    CRFileHistRecord * bookmarks = _docview->getCurrentFileHistRecord();
     int curPage = _docview->getCurPage();
     for (int i = 0; i < _items.length(); i++) {
         CRBookmarkMenuItem *item = static_cast<CRBookmarkMenuItem *>(_items[i]);
@@ -457,6 +467,7 @@ int CRCitesMenu::getSelectedItemIndex()
 void CRCitesMenu::createDefaultItem()
 {
     CRBookmarkMenuItem * item = new CRBookmarkMenuItem( this, 0, NULL, 0 );
-    item->setLabel(lString16(_("Cite selection dialog")));
+    item->setLabel(
+            Utf8ToUnicode(lString8(_("Cite selection dialog"))));
     addItem( item );
 }

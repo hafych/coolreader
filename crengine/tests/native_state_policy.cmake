@@ -29,6 +29,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/tocdlg.h" TOC_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/tocdlg.cpp" TOC_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/recentdlg.h" RECENT_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/recentdlg.cpp" RECENT_DIALOG_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/bmkdlg.h" BOOKMARK_DIALOG_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/bmkdlg.cpp" BOOKMARK_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7369,6 +7371,36 @@ forbid_source_text(
   "${RECENT_DIALOG_HEADER}"
   "_helpText"
   "recent-book menus must not retain unused help-text state"
+)
+require_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "lString32 text = _bookmark->getPosText();"
+  "bookmark position text must preserve the history string width"
+)
+require_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "lString32 postext = Utf8ToUnicode"
+  "bookmark page labels must use the current string width"
+)
+require_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "_wm->getAccTables().get(U\"bookmarks\")"
+  "bookmark accelerator identifiers must use the current width"
+)
+require_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "static_cast<CRBookmarkMenuItem *>(_items[selecteditem])"
+  "citation navigation must use its validated requested index"
+)
+forbid_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "lString16"
+  "bookmark dialog implementations must not narrow text to UTF-16"
+)
+forbid_source_text(
+  "${BOOKMARK_DIALOG_SOURCE}"
+  "int k, f;"
+  "bookmark mode changes must not retain unused key state"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
