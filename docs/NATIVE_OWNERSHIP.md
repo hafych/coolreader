@@ -123,6 +123,14 @@ non-owning `data()` views; they do not manage either allocation. A seek exposes
 only the number of bytes actually read, even when the retained vector capacity
 is larger than the short window available near end of file.
 
+The debug-only compare stream also keeps its secondary read buffer in a local
+`vector`. Matching reads preserve the wrapped stream contract, while a
+deliberate byte mismatch throws through `MYASSERT` with the scratch buffer
+still released automatically. Sanitizer coverage exercises both paths in a
+build where `_DEBUG` is enabled. The adjacent legacy tinyDOM and block-stream
+diagnostics likewise scope their document fixture and generated file bytes,
+so an assertion cannot bypass their cleanup.
+
 The RTF importer also owns its accumulated text through `std::vector`. It
 flushes pending text before closing the generated document and calls
 `LVXMLParserCallback::OnStop()` only after all text and structural callbacks

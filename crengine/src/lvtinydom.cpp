@@ -21622,7 +21622,8 @@ void runBasicTinyDomUnitTests()
 {
     CRLog::info("==========================");
     CRLog::info("Starting tinyDOM unit test");
-    ldomDocument * doc = new ldomDocument();
+    std::unique_ptr<ldomDocument> doc =
+            std::make_unique<ldomDocument>();
     ldomNode * root = doc->getRootNode();//doc->allocTinyElement( NULL, 0, 0 );
     MYASSERT(root!=NULL,"root != NULL");
 
@@ -21918,9 +21919,6 @@ void runBasicTinyDomUnitTests()
     doc->dumpStatistics();
 #endif
 
-    delete doc;
-
-
     CRLog::info("Finished tinyDOM unit test");
 
     CRLog::info("==========================");
@@ -21961,14 +21959,16 @@ static void makeTestFile( const char * fname, int size )
 {
     LVStreamRef s = LVOpenFileStream( fname, LVOM_WRITE );
     MYASSERT( !s.isNull(), "makeTestFile create" );
+    MYASSERT(size >= 0, "makeTestFile size");
     int seed = 0;
-    lUInt8 * buf = new lUInt8[size];
+    std::vector<lUInt8> buf(static_cast<size_t>(size));
     for ( int i=0; i<size; i++ ) {
-        buf[i] = (seed >> 9) & 255;
+        buf[static_cast<size_t>(i)] = (seed >> 9) & 255;
         seed = seed * 31 + 14323;
     }
-    MYASSERT( s->Write(buf, size, NULL)==LVERR_OK, "makeTestFile write" );
-    delete[] buf;
+    MYASSERT(
+            s->Write(buf.data(), size, NULL) == LVERR_OK,
+            "makeTestFile write");
 }
 
 void runBlockWriteCacheTest()

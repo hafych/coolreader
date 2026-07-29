@@ -24,6 +24,7 @@
 #include "lvstreambuffer.h"
 #include "lvstyles.h"
 #include "crgui.h"
+#include "crtest.h"
 #include "crskin.h"
 #include "hist.h"
 #include "lvhtmlparser.h"
@@ -93,6 +94,42 @@ static int fail(const char *message) {
     std::fprintf(stderr, "%s\n", message);
     return 1;
 }
+
+#ifdef _DEBUG
+static int testCompareStreamScratchOwnership() {
+    static lUInt8 equalBytes[] = {1, 2, 3, 4, 5, 6};
+    LVStreamRef equalLeft = LVCreateMemoryStream(
+            equalBytes, sizeof(equalBytes), true, LVOM_READ);
+    LVStreamRef equalRight = LVCreateMemoryStream(
+            equalBytes, sizeof(equalBytes), true, LVOM_READ);
+    LVStreamRef equal =
+            LVCreateCompareTestStream(equalLeft, equalRight);
+    lUInt8 output[sizeof(equalBytes)] = {};
+    lvsize_t bytesRead = 0;
+    if (equal.isNull()
+            || equal->Read(output, sizeof(output), &bytesRead) != LVERR_OK
+            || bytesRead != sizeof(output)
+            || std::memcmp(output, equalBytes, sizeof(output)) != 0)
+        return fail("compare stream changed matching read output");
+
+    static lUInt8 differentBytes[] = {1, 2, 9, 4, 5, 6};
+    LVStreamRef mismatchLeft = LVCreateMemoryStream(
+            equalBytes, sizeof(equalBytes), true, LVOM_READ);
+    LVStreamRef mismatchRight = LVCreateMemoryStream(
+            differentBytes, sizeof(differentBytes), true, LVOM_READ);
+    LVStreamRef mismatch =
+            LVCreateCompareTestStream(mismatchLeft, mismatchRight);
+    bool rejected = false;
+    try {
+        mismatch->Read(output, sizeof(output), &bytesRead);
+    } catch (const std::runtime_error &) {
+        rejected = true;
+    }
+    if (!rejected)
+        return fail("compare stream mismatch did not unwind scratch ownership");
+    return 0;
+}
+#endif
 
 class CountingHyphDataLoader : public HyphDataLoader {
 private:
@@ -7439,6 +7476,10 @@ static int testRecursiveContainerBudget() {
 }
 
 int main() {
+#ifdef _DEBUG
+    if (testCompareStreamScratchOwnership() != 0)
+        return 1;
+#endif
     if (testMutex() != 0)
         return 1;
     if (testConcurrentRenderBaseWeight() != 0)

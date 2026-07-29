@@ -24,6 +24,8 @@
 #include "../include/chmfmt.h"
 #include "../include/lvnamedstream.h"
 
+#include <vector>
+
 #ifdef _DEBUG
 
 class LVCompareTestStream : public LVNamedStream
@@ -120,10 +122,13 @@ public:
                 lvsize_t bw1 = 0;
                 lvsize_t bw2 = 0;
                 lUInt8 * buf1 = (lUInt8 *)buf;
-                lUInt8 * buf2 = new lUInt8[count];
-                memcpy( buf2, buf, count );
+                std::vector<lUInt8> comparisonBuffer(
+                        static_cast<size_t>(count));
+                if (count > 0)
+                    memcpy(comparisonBuffer.data(), buf, count);
                 lverror_t res1 = m_base_stream1->Read(buf, count, &bw1);
-                lverror_t res2 = m_base_stream2->Read(buf2, count, &bw2);
+                lverror_t res2 = m_base_stream2->Read(
+                        comparisonBuffer.data(), count, &bw2);
                 MYASSERT( res1==res2, "read, res");
                 if ( bw1!=bw2 ) {
                     CRLog::error("BytesRead after Read(%d) don't match: %x / %x   getpos1=%x, getpos2=%x   getsize1=%x, getsize2=%x",
@@ -146,15 +151,17 @@ public:
                                  );
                 }
                 MYASSERT( eof1==eof2, "read, eof");
-                for ( unsigned i=0; i<count; i++ ) {
-                    if ( buf1[i]!=buf2[i] ) {
-                        CRLog::error("read, different data by offset %x", i);
+                for ( lvsize_t i=0; i<count; i++ ) {
+                    if ( buf1[i]!=comparisonBuffer[
+                                static_cast<size_t>(i)] ) {
+                        CRLog::error(
+                                "read, different data by offset %x",
+                                static_cast<unsigned>(i));
                         MYASSERT( 0, "read, equal data");
                     }
                 }
                 if ( nBytesRead )
                     *nBytesRead = bw1;
-                delete[] buf2;
                 return res1;
             }
     virtual lverror_t Write( const void * buf, lvsize_t count, lvsize_t * nBytesWritten )

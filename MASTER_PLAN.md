@@ -120,7 +120,8 @@ DRM или ограничений доступа, подбор/получени�
   source и owned/borrowed
   color/gray pixel backing, ZIP decoder/entry
   factories and bounded stream fragments, cached-stream slots, parser
-  read/charset buffers, RTF text/destination
+  read/charset buffers, debug compare-stream/tinyDOM fixture scratch, RTF
+  text/destination
   ownership, TCR dictionary/index/decoded buffers, unpacked 8/16/32-bit pixel
   storage, scaled-image maps/RGBA snapshots, nine-patch metadata cache and
   color-transform workspaces, WOL TOC/image/LZSS buffers and
