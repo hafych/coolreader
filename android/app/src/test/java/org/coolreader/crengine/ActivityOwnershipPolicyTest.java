@@ -1680,6 +1680,55 @@ public class ActivityOwnershipPolicyTest {
 	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
+		assertTrue(ReaderOptionsHandler.class.isInterface());
+		assertTrue(Modifier.isFinal(
+				ReaderDocumentOptions.class.getModifiers()));
+		for (Field field :
+				ReaderDocumentOptions.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		assertPrivateFinalField(
+				OptionsDialog.class, "readerOptionsHandler",
+				ReaderOptionsHandler.class);
+		assertPrivateFinalField(
+				OptionsDialog.class, "readerDocumentOptions",
+				ReaderDocumentOptions.class);
+		for (Field field : OptionsDialog.class.getDeclaredFields()) {
+			assertFalse(
+					"OptionsDialog must retain only a narrow "
+							+ "reader-options handler",
+					field.getType() == ReaderView.class);
+		}
+		Method showOptionsDialog =
+				ReaderView.class.getDeclaredMethod(
+						"showOptionsDialog");
+		assertTrue(Modifier.isPublic(
+				showOptionsDialog.getModifiers()));
+		Method applyDocumentOptions =
+				ReaderView.class.getDeclaredMethod(
+						"applyReaderDocumentOptions",
+						boolean.class,
+						boolean.class,
+						boolean.class,
+						int.class,
+						int.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				applyDocumentOptions.getModifiers()));
+		Method applyRenderingOptions =
+				ReaderView.class.getDeclaredMethod(
+						"applyReaderRenderingOptions",
+						boolean.class,
+						boolean.class,
+						boolean.class,
+						boolean.class,
+						BookInfo.class,
+						DocumentLoadLifecycle.Interaction.class);
+		assertTrue(Modifier.isPrivate(
+				applyRenderingOptions.getModifiers()));
 		for (String name : new String[]{
 				"mBacklightLevels",
 				"mBacklightLevelsTitles",

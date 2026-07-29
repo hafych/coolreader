@@ -1537,7 +1537,6 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				getServiceDependencies().getEngine(),
 				OptionsDialog.Mode.BROWSER,
 				null,
-				null,
 				null);
 		dlg.show();
 	}

@@ -2292,6 +2292,11 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showOptionsDialog(final OptionsDialog.Mode mode) {
+		if (mode == OptionsDialog.Mode.READER) {
+			if (mReaderView != null)
+				mReaderView.showOptionsDialog();
+			return;
+		}
 		BackgroundThread.instance().postBackground(() -> {
 			final String[] mFontFaces = Engine.getFontFaceList();
 			BackgroundThread.instance().executeGUI(() -> {
@@ -2299,7 +2304,6 @@ public class CoolReader extends BaseActivity {
 						CoolReader.this,
 						mEngine,
 						mode,
-						mReaderView,
 						mFontFaces,
 						null);
 				dlg.show();

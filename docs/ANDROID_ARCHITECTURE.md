@@ -265,6 +265,16 @@ through the pure `BacklightOptions` owner; callers receive copies and localized
 titles are built per Activity instead of mutating a global array. Document
 style codes and label resources are paired in one immutable
 `StyleOptionCatalog`, preventing the former parallel arrays from drifting.
+Reader-mode options additionally capture the exact `BookInfo` and document
+interaction before fetching the native font catalog. The dialog receives an
+immutable `ReaderDocumentOptions` snapshot plus a narrow generation-aware
+handler, never a mutable `ReaderView`. Applying the dialog batches reflow,
+document styles, embedded fonts, DOM version and block-rendering flags against
+that exact book, persists the book once, and schedules at most one reload or
+render. A reload consumes all five captured per-book settings, including the
+embedded-font command. If the interaction has been replaced, the handler
+rejects every document/native/DB effect; unrelated Activity settings selected
+in the same dialog may still be applied normally.
 Interface themes follow the same boundary: each `BaseActivity` owns an
 immutable `InterfaceThemeCatalog` built from its E-Ink snapshot. Theme visual
 metadata is final, the ordered catalog is unmodifiable, and `OptionsDialog`

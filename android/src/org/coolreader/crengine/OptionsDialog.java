@@ -77,7 +77,8 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 	private static final StyleOptionCatalog STYLE_OPTION_CATALOG =
 			StyleOptionCatalog.legacy();
 
-	ReaderView mReaderView;
+	private final ReaderOptionsHandler readerOptionsHandler;
+	private final ReaderDocumentOptions readerDocumentOptions;
 	BaseActivity mActivity;
 	private final Engine mEngine;
 	String[] mFontFaces;
@@ -1421,13 +1422,11 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			super(owner, label, property);
 			langTag = null;
 			langDescr = null;
-			BookInfo bookInfo = mReaderView.getBookInfo();
-			if (null != bookInfo) {
-				FileInfo fileInfo = bookInfo.getFileInfo();
-				if (null != fileInfo) {
-					langTag = fileInfo.language;
-					langDescr = Engine.getHumanReadableLocaleName(langTag);
-				}
+			if (readerDocumentOptions != null) {
+				langTag = readerDocumentOptions.getLanguage();
+				langDescr =
+						Engine.getHumanReadableLocaleName(
+								langTag);
 			}
 		}
 
@@ -1778,7 +1777,6 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		}
 		private Drawable createDrawable( int resourceId ) {
 			try { 
-				//Drawable drawable = mReaderView.getActivity().getResources().getDrawable(resourceId);
 				InputStream is = getContext().getResources().openRawResource(resourceId);
 				if ( is==null )
 					return null;
@@ -1836,7 +1834,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			super( owner, label, PROP_PAGE_BACKGROUND_IMAGE );
 			setDefaultValue("(NONE)");
 			for (BackgroundTextureInfo item :
-					mReaderView.getEngine().getAvailableTextures())
+					mEngine.getAvailableTextures())
 				add(item.getId(), item.getName());
 		}
 
@@ -1941,13 +1939,36 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		BROWSER,
 		TTS,
 	}
-	public OptionsDialog(BaseActivity activity, Engine engine, Mode mode, ReaderView readerView, String[] fontFaces, TTSControlBinder ttsbinder)
+	public OptionsDialog(
+			BaseActivity activity, Engine engine, Mode mode,
+			String[] fontFaces, TTSControlBinder ttsbinder) {
+		this(
+				activity, engine, mode, null,
+				fontFaces, ttsbinder);
+	}
+
+	OptionsDialog(
+			BaseActivity activity, Engine engine, Mode mode,
+			ReaderOptionsHandler readerOptionsHandler,
+			String[] fontFaces, TTSControlBinder ttsbinder)
 	{
 		super(activity, null, false, false);
 		
 		mActivity = activity;
 		mEngine = engine;
-		mReaderView = readerView;
+		this.readerOptionsHandler = readerOptionsHandler;
+		ReaderDocumentOptions capturedOptions = null;
+		if (mode == Mode.READER) {
+			if (readerOptionsHandler == null
+					|| !readerOptionsHandler.isActive())
+				throw new IllegalArgumentException(
+						"active reader options handler is required");
+			capturedOptions = readerOptionsHandler.snapshot();
+			if (capturedOptions == null)
+				throw new IllegalArgumentException(
+						"reader document options are required");
+		}
+		readerDocumentOptions = capturedOptions;
 		mFontFaces = fontFaces;
 		mTTSBinder = ttsbinder;
 		mBacklightLevels = BacklightOptions.values();
@@ -1963,17 +1984,35 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 						R.array.pages_per_full_swipe_titles);
 		mPagesPerFullSwipe = activity.getResources().getIntArray(
 				R.array.pages_per_full_swipe_values);
-		mProperties = new Properties(mActivity.settings()); //  readerView.getSettings();
+		mProperties = new Properties(mActivity.settings());
 		mOldProperties = new Properties(mProperties);
 		if (mode == Mode.READER) {
-			mProperties.setBool(PROP_TXT_OPTION_PREFORMATTED, mReaderView.isTextAutoformatEnabled());
-			mProperties.setBool(PROP_EMBEDDED_STYLES, mReaderView.getDocumentStylesEnabled());
-			mProperties.setBool(PROP_EMBEDDED_FONTS, mReaderView.getDocumentFontsEnabled());
-			mProperties.setInt(PROP_REQUESTED_DOM_VERSION, mReaderView.getDOMVersion());
-			mProperties.setInt(PROP_RENDER_BLOCK_RENDERING_FLAGS, mReaderView.getBlockRenderingFlags());
-			isTextFormat = readerView.isTextFormat();
-			isEpubFormat = readerView.isFormatWithEmbeddedFonts();
-			isFormatWithEmbeddedStyle = readerView.isFormatWithEmbeddedStyles();
+			mProperties.setBool(
+					PROP_TXT_OPTION_PREFORMATTED,
+					readerDocumentOptions
+							.isTextAutoformatEnabled());
+			mProperties.setBool(
+					PROP_EMBEDDED_STYLES,
+					readerDocumentOptions
+							.isDocumentStylesEnabled());
+			mProperties.setBool(
+					PROP_EMBEDDED_FONTS,
+					readerDocumentOptions
+							.isDocumentFontsEnabled());
+			mProperties.setInt(
+					PROP_REQUESTED_DOM_VERSION,
+					readerDocumentOptions.getDomVersion());
+			mProperties.setInt(
+					PROP_RENDER_BLOCK_RENDERING_FLAGS,
+					readerDocumentOptions
+							.getBlockRenderingFlags());
+			isTextFormat =
+					readerDocumentOptions.isTextFormat();
+			isEpubFormat =
+					readerDocumentOptions.isEpubFormat();
+			isFormatWithEmbeddedStyle =
+					readerDocumentOptions
+							.isFormatWithEmbeddedStyles();
 		}
 		mSynthWeights = Engine.getAvailableSynthFontWeight();
 		if (null == mSynthWeights)
@@ -2405,8 +2444,6 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 
 	private void fillStyleEditorOptions() {
 		mOptionsCSS = new OptionsListView(getContext());
-		//mProperties.setBool(PROP_TXT_OPTION_PREFORMATTED, mReaderView.isTextAutoformatEnabled());
-		//mProperties.setBool(PROP_EMBEDDED_STYLES, mReaderView.getDocumentStylesEnabled());
 		mOptionsCSS.add(new BoolOption(this, getString(R.string.mi_book_styles_enable), PROP_EMBEDDED_STYLES).setDefaultValue("1").noIcon()
 				.setOnChangeHandler(() -> {
 					boolean value = mProperties.getBool(PROP_EMBEDDED_STYLES, false);
@@ -3069,26 +3106,22 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 	
 	protected void apply() {
 		if (mode == Mode.READER) {
-			if (mProperties.getBool(PROP_TXT_OPTION_PREFORMATTED, true) != mReaderView.isTextAutoformatEnabled()) {
-				mReaderView.toggleTextFormat();
-			}
-			if (mProperties.getBool(PROP_EMBEDDED_STYLES, true) != mReaderView.getDocumentStylesEnabled()) {
-				mReaderView.toggleDocumentStyles();
-			}
-			if (mProperties.getBool(PROP_EMBEDDED_FONTS, true) != mReaderView.getDocumentFontsEnabled()) {
-				mReaderView.toggleEmbeddedFonts();
-			}
-			int domVersion = mProperties.getInt(PROP_REQUESTED_DOM_VERSION, Engine.DOM_VERSION_CURRENT);
-			if (domVersion != mReaderView.getDOMVersion()) {
-				mReaderView.setDOMVersion(domVersion);
-			}
-			int rendFlags = mProperties.getInt(PROP_RENDER_BLOCK_RENDERING_FLAGS, Engine.BLOCK_RENDERING_FLAGS_WEB);
-			if (rendFlags != mReaderView.getBlockRenderingFlags()) {
-				mReaderView.setBlockRenderingFlags(rendFlags);
-			}
+			readerOptionsHandler.applyDocumentOptions(
+					mProperties.getBool(
+							PROP_TXT_OPTION_PREFORMATTED,
+							true),
+					mProperties.getBool(
+							PROP_EMBEDDED_STYLES, true),
+					mProperties.getBool(
+							PROP_EMBEDDED_FONTS, true),
+					mProperties.getInt(
+							PROP_REQUESTED_DOM_VERSION,
+							Engine.DOM_VERSION_CURRENT),
+					mProperties.getInt(
+							PROP_RENDER_BLOCK_RENDERING_FLAGS,
+							Engine.BLOCK_RENDERING_FLAGS_WEB));
 		}
 		mActivity.setSettings(mProperties, 0, true);
-        //mReaderView.setSettings(mProperties, mOldProperties);
 	}
 	
 	@Override

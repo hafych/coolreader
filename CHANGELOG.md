@@ -489,6 +489,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   effects, current-page bookmark lookup, and delayed position persistence keep
   the captured book/interaction pair, preventing stale UI or timers from
   mutating or saving a replacement book.
+- Reader options now keep an immutable snapshot and a narrow handler for the
+  exact book/document generation across asynchronous font discovery. Per-book
+  reflow, styles, embedded fonts, DOM and block-rendering choices are persisted
+  as one batch and cause at most one reload or render; stale dialogs cannot
+  mutate the replacement document.
 - Reader animation and GC schedulers are now generation-owned and canceled
   during every teardown. Animation updates no longer coordinate unrelated
   Activities through a class monitor or retain active state after destruction.

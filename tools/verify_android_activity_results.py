@@ -726,6 +726,24 @@ WORD_TIMING_AUDIOBOOK_MATCHER = (
 TTS_CONTROL_SERVICE = SOURCE / "tts" / "TTSControlService.java"
 ABOUT_DIALOG = SOURCE / "crengine" / "AboutDialog.java"
 OPTIONS_DIALOG = SOURCE / "crengine" / "OptionsDialog.java"
+READER_OPTIONS_HANDLER = (
+    SOURCE / "crengine" / "ReaderOptionsHandler.java"
+)
+READER_DOCUMENT_OPTIONS = (
+    SOURCE / "crengine" / "ReaderDocumentOptions.java"
+)
+READER_DOCUMENT_OPTIONS_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderDocumentOptionsTest.java"
+)
 INTERFACE_THEME = SOURCE / "crengine" / "InterfaceTheme.java"
 INTERFACE_THEME_CATALOG = (
     SOURCE / "crengine" / "InterfaceThemeCatalog.java"
@@ -2445,6 +2463,9 @@ def main() -> None:
         "BookmarkEditDialog.class,",
         '"scheduleSaveCurrentPositionBookmark"',
         '"applyPositionSave"',
+        "ReaderOptionsHandler.class.isInterface()",
+        "OptionsDialog.class, \"readerOptionsHandler\"",
+        '"applyReaderDocumentOptions"',
         "SelectionToolbarDlg.class, \"expectedBook\"",
         "TOCDlg.PageSelectionHandler.class",
         '"TOC dialog must not retain a mutable reader"',
@@ -3543,7 +3564,10 @@ def main() -> None:
     options_text = OPTIONS_DIALOG.read_text(encoding="utf-8")
     for marker in (
         "private final Engine mEngine",
-        "OptionsDialog(BaseActivity activity, Engine engine",
+        "public OptionsDialog(",
+        "private final ReaderOptionsHandler readerOptionsHandler",
+        "private final ReaderDocumentOptions readerDocumentOptions",
+        "readerOptionsHandler.applyDocumentOptions(",
         "private final int[] mBacklightLevels",
         "private final String[] mBacklightLevelsTitles",
         "private final int[] mMotionTimeouts",
@@ -3562,6 +3586,9 @@ def main() -> None:
         if marker not in options_text:
             violations.append(
                 f"{relative(OPTIONS_DIALOG)} omits marker: {marker}")
+    if re.search(r"\bReaderView\s+\w+", options_text):
+        violations.append(
+            f"{relative(OPTIONS_DIALOG)} retains a mutable ReaderView")
     for marker in (
         "private static boolean showIcons",
         "private static boolean isTextFormat",
@@ -3582,6 +3609,70 @@ def main() -> None:
             violations.append(
                 f"{relative(OPTIONS_DIALOG)} retains process UI state: "
                 f"{marker}")
+
+    reader_options_handler_text = READER_OPTIONS_HANDLER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "interface ReaderOptionsHandler",
+        "boolean isActive()",
+        "ReaderDocumentOptions snapshot()",
+        "boolean applyDocumentOptions(",
+    ):
+        if marker not in reader_options_handler_text:
+            violations.append(
+                f"{relative(READER_OPTIONS_HANDLER)} omits narrow "
+                f"reader-options marker: {marker}")
+
+    reader_document_options_text = READER_DOCUMENT_OPTIONS.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class ReaderDocumentOptions",
+        "private final boolean textAutoformatEnabled",
+        "private final boolean documentStylesEnabled",
+        "private final boolean documentFontsEnabled",
+        "private final int domVersion",
+        "private final int blockRenderingFlags",
+        "private final boolean textFormat",
+        "private final boolean epubFormat",
+        "private final boolean formatWithEmbeddedStyles",
+        "private final String language",
+        "static ReaderDocumentOptions capture(BookInfo bookInfo)",
+    ):
+        if marker not in reader_document_options_text:
+            violations.append(
+                f"{relative(READER_DOCUMENT_OPTIONS)} omits immutable "
+                f"reader-options marker: {marker}")
+
+    for marker in (
+        "public void showOptionsDialog()",
+        "private ReaderOptionsHandler readerOptionsHandler(",
+        "private boolean applyReaderDocumentOptions(",
+        "private void applyReaderRenderingOptions(",
+        "OptionsDialog.Mode.READER",
+        "expectedBook, interaction",
+        "private final boolean enableInternalFonts",
+        "ReaderCommand.DCMD_SET_DOC_FONTS.nativeId",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits exact reader-options "
+                f"marker: {marker}")
+
+    reader_document_options_test_text = (
+        READER_DOCUMENT_OPTIONS_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "missingBookCannotProduceDocumentOptions",
+        "snapshotOwnsFlagsMetadataAndFormatCapabilities",
+        "textAndStyleCapabilitiesFollowDocumentFormat",
+        "DocumentFormat.EPUB",
+        "DocumentFormat.PDB",
+        "DocumentFormat.HTML",
+    ):
+        if marker not in reader_document_options_test_text:
+            violations.append(
+                f"{relative(READER_DOCUMENT_OPTIONS_TEST)} omits "
+                f"reader-options regression: {marker}")
 
     interface_theme_text = INTERFACE_THEME.read_text(encoding="utf-8")
     for marker in (

@@ -320,6 +320,14 @@ DRM или ограничений доступа, подбор/получени�
   identity перед mutation, DB effect и highlight. Отложенное сохранение
   позиции захватывает эту пару до GUI-hop и переносит её до exact apply, поэтому
   stale диалог или timer не может изменить либо сохранить replacement-книгу.
+  Reader-mode options теперь открываются через captured book+interaction даже
+  при асинхронном получении каталога шрифтов. `OptionsDialog` хранит только
+  immutable document snapshot и узкий generation-aware handler вместо
+  `ReaderView`; все пять per-book опций применяются одним batch к exact книге,
+  сохраняются одним DB effect и приводят максимум к одному reload/render.
+  Reload явно переносит embedded-font flag вместе со styles/reflow/DOM/block
+  flags, а stale диалог не может изменить native document или metadata книги,
+  которая заменила исходную.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

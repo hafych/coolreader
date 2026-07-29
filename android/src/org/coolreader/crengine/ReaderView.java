@@ -2288,28 +2288,237 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		mActivity.setSetting(PROP_STATUS_LINE, newValue, true);
 	}
 
-	public void toggleDocumentStyles() {
-		if (mOpened && mBookInfo != null) {
-			log.d("toggleDocumentStyles()");
-			boolean disableInternalStyles = mBookInfo.getFileInfo().getFlag(FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG);
-			disableInternalStyles = !disableInternalStyles;
-			mBookInfo.getFileInfo().setFlag(FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG, disableInternalStyles);
-			doEngineCommand(ReaderCommand.DCMD_SET_INTERNAL_STYLES, disableInternalStyles ? 0 : 1);
-			doEngineCommand(ReaderCommand.DCMD_REQUEST_RENDER, 1);
-			mActivity.getDB().saveBookInfo(mBookInfo);
+	public void showOptionsDialog() {
+		BackgroundThread.ensureGUI();
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
+		final ReaderOptionsHandler optionsHandler =
+				readerOptionsHandler(
+						expectedBook, interaction);
+		BackgroundThread.instance().postBackground(() -> {
+			final String[] fontFaces =
+					Engine.getFontFaceList();
+			BackgroundThread.instance().executeGUI(() -> {
+				if (!optionsHandler.isActive())
+					return;
+				OptionsDialog dlg = new OptionsDialog(
+						mActivity,
+						mEngine,
+						OptionsDialog.Mode.READER,
+						optionsHandler,
+						fontFaces,
+						null);
+				dlg.show();
+			});
+		});
+	}
+
+	private ReaderOptionsHandler readerOptionsHandler(
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		return new ReaderOptionsHandler() {
+			@Override
+			public boolean isActive() {
+				return isDocumentInteractionCurrent(
+						expectedBook, interaction);
+			}
+
+			@Override
+			public ReaderDocumentOptions snapshot() {
+				if (!isActive())
+					return null;
+				return ReaderDocumentOptions.capture(
+						expectedBook);
+			}
+
+			@Override
+			public boolean applyDocumentOptions(
+					boolean textAutoformatEnabled,
+					boolean documentStylesEnabled,
+					boolean documentFontsEnabled,
+					int domVersion,
+					int blockRenderingFlags) {
+				return applyReaderDocumentOptions(
+						textAutoformatEnabled,
+						documentStylesEnabled,
+						documentFontsEnabled,
+						domVersion,
+						blockRenderingFlags,
+						expectedBook,
+						interaction);
+			}
+		};
+	}
+
+	private boolean applyReaderDocumentOptions(
+			boolean textAutoformatEnabled,
+			boolean documentStylesEnabled,
+			boolean documentFontsEnabled,
+			int domVersion,
+			int blockRenderingFlags,
+			BookInfo expectedBook,
+			DocumentLoadLifecycle.Interaction interaction) {
+		BackgroundThread.ensureGUI();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction)
+				|| expectedBook.getFileInfo() == null)
+			return false;
+		FileInfo fileInfo = expectedBook.getFileInfo();
+		boolean textAutoformatChanged =
+				textAutoformatEnabled
+						== fileInfo.getFlag(
+								FileInfo.DONT_REFLOW_TXT_FILES_FLAG);
+		boolean documentStylesChanged =
+				documentStylesEnabled
+						== fileInfo.getFlag(
+								FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG);
+		boolean documentFontsChanged =
+				documentFontsEnabled
+						!= fileInfo.getFlag(
+								FileInfo.USE_DOCUMENT_FONTS_FLAG);
+		boolean domVersionChanged =
+				domVersion != fileInfo.domVersion;
+		boolean blockRenderingChanged =
+				blockRenderingFlags
+						!= fileInfo.blockRenderingFlags;
+		if (!textAutoformatChanged
+				&& !documentStylesChanged
+				&& !documentFontsChanged
+				&& !domVersionChanged
+				&& !blockRenderingChanged)
+			return true;
+		if (textAutoformatChanged)
+			fileInfo.setFlag(
+					FileInfo.DONT_REFLOW_TXT_FILES_FLAG,
+					!textAutoformatEnabled);
+		if (documentStylesChanged)
+			fileInfo.setFlag(
+					FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG,
+					!documentStylesEnabled);
+		if (documentFontsChanged)
+			fileInfo.setFlag(
+					FileInfo.USE_DOCUMENT_FONTS_FLAG,
+					documentFontsEnabled);
+		if (domVersionChanged)
+			fileInfo.domVersion = domVersion;
+		if (blockRenderingChanged)
+			fileInfo.blockRenderingFlags =
+					blockRenderingFlags;
+		if (mActivity.getDB() != null)
+			mActivity.getDB().saveBookInfo(expectedBook);
+		if (textAutoformatChanged
+				|| domVersionChanged
+				|| blockRenderingChanged) {
+			if (isBookLoaded())
+				reloadDocument();
+		} else if (isBookLoaded()) {
+			applyReaderRenderingOptions(
+					documentStylesChanged,
+					documentStylesEnabled,
+					documentFontsChanged,
+					documentFontsEnabled,
+					expectedBook,
+					interaction);
 		}
+		return true;
+	}
+
+	private void applyReaderRenderingOptions(
+			final boolean documentStylesChanged,
+			final boolean documentStylesEnabled,
+			final boolean documentFontsChanged,
+			final boolean documentFontsEnabled,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction) {
+		mEngine.execute(new Task() {
+			private boolean rendered;
+
+			@Override
+			public void work() {
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				if (documentStylesChanged)
+					doc.doCommand(
+							ReaderCommand.DCMD_SET_INTERNAL_STYLES
+									.nativeId,
+							documentStylesEnabled ? 1 : 0);
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				if (documentFontsChanged)
+					doc.doCommand(
+							ReaderCommand.DCMD_SET_DOC_FONTS
+									.nativeId,
+							documentFontsEnabled ? 1 : 0);
+				if (!isDocumentInteractionCurrent(
+						expectedBook, interaction))
+					return;
+				rendered = doc.doCommand(
+						ReaderCommand.DCMD_REQUEST_RENDER.nativeId,
+						1);
+			}
+
+			@Override
+			public void done() {
+				if (!rendered
+						|| !isDocumentInteractionCurrent(
+								expectedBook, interaction))
+					return;
+				invalidImages = true;
+				drawPage();
+			}
+		});
+	}
+
+	public void toggleDocumentStyles() {
+		BackgroundThread.ensureGUI();
+		BookInfo expectedBook = mBookInfo;
+		DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isBookLoaded()
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return;
+		ReaderDocumentOptions options =
+				ReaderDocumentOptions.capture(expectedBook);
+		if (options == null)
+			return;
+		log.d("toggleDocumentStyles()");
+		applyReaderDocumentOptions(
+				options.isTextAutoformatEnabled(),
+				!options.isDocumentStylesEnabled(),
+				options.isDocumentFontsEnabled(),
+				options.getDomVersion(),
+				options.getBlockRenderingFlags(),
+				expectedBook, interaction);
 	}
 
 	public void toggleEmbeddedFonts() {
-		if (mOpened && mBookInfo != null) {
-			log.d("toggleEmbeddedFonts()");
-			boolean enableInternalFonts = mBookInfo.getFileInfo().getFlag(FileInfo.USE_DOCUMENT_FONTS_FLAG);
-			enableInternalFonts = !enableInternalFonts;
-			mBookInfo.getFileInfo().setFlag(FileInfo.USE_DOCUMENT_FONTS_FLAG, enableInternalFonts);
-			doEngineCommand(ReaderCommand.DCMD_SET_DOC_FONTS, enableInternalFonts ? 1 : 0);
-			doEngineCommand(ReaderCommand.DCMD_REQUEST_RENDER, 1);
-			mActivity.getDB().saveBookInfo(mBookInfo);
-		}
+		BackgroundThread.ensureGUI();
+		BookInfo expectedBook = mBookInfo;
+		DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isBookLoaded()
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return;
+		ReaderDocumentOptions options =
+				ReaderDocumentOptions.capture(expectedBook);
+		if (options == null)
+			return;
+		log.d("toggleEmbeddedFonts()");
+		applyReaderDocumentOptions(
+				options.isTextAutoformatEnabled(),
+				options.isDocumentStylesEnabled(),
+				!options.isDocumentFontsEnabled(),
+				options.getDomVersion(),
+				options.getBlockRenderingFlags(),
+				expectedBook, interaction);
 	}
 
 	public boolean isTextAutoformatEnabled() {
@@ -2360,13 +2569,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void setDOMVersion(int version) {
-		if (null != mBookInfo) {
-			mBookInfo.getFileInfo().domVersion = version;
-			doEngineCommand(ReaderCommand.DCMD_SET_REQUESTED_DOM_VERSION, version);
-			mActivity.getDB().saveBookInfo(mBookInfo);
-			if (mOpened)
-				reloadDocument();
-		}
+		BackgroundThread.ensureGUI();
+		BookInfo expectedBook = mBookInfo;
+		DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
+		ReaderDocumentOptions options =
+				ReaderDocumentOptions.capture(expectedBook);
+		if (options == null)
+			return;
+		applyReaderDocumentOptions(
+				options.isTextAutoformatEnabled(),
+				options.isDocumentStylesEnabled(),
+				options.isDocumentFontsEnabled(),
+				version,
+				options.getBlockRenderingFlags(),
+				expectedBook, interaction);
 	}
 
 	public int getBlockRenderingFlags() {
@@ -2377,26 +2597,47 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void setBlockRenderingFlags(int flags) {
-		if (null != mBookInfo) {
-			mBookInfo.getFileInfo().blockRenderingFlags = flags;
-			doEngineCommand(ReaderCommand.DCMD_SET_RENDER_BLOCK_RENDERING_FLAGS, flags);
-			mActivity.getDB().saveBookInfo(mBookInfo);
-			if (mOpened)
-				reloadDocument();
-		}
+		BackgroundThread.ensureGUI();
+		BookInfo expectedBook = mBookInfo;
+		DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
+		ReaderDocumentOptions options =
+				ReaderDocumentOptions.capture(expectedBook);
+		if (options == null)
+			return;
+		applyReaderDocumentOptions(
+				options.isTextAutoformatEnabled(),
+				options.isDocumentStylesEnabled(),
+				options.isDocumentFontsEnabled(),
+				options.getDomVersion(),
+				flags,
+				expectedBook, interaction);
 	}
 
 	public void toggleTextFormat() {
-		if (mOpened && mBookInfo != null) {
-			log.d("toggleDocumentStyles()");
-			if (!isTextFormat())
-				return;
-			boolean disableTextReflow = mBookInfo.getFileInfo().getFlag(FileInfo.DONT_REFLOW_TXT_FILES_FLAG);
-			disableTextReflow = !disableTextReflow;
-			mBookInfo.getFileInfo().setFlag(FileInfo.DONT_REFLOW_TXT_FILES_FLAG, disableTextReflow);
-			mActivity.getDB().saveBookInfo(mBookInfo);
-			reloadDocument();
-		}
+		BackgroundThread.ensureGUI();
+		BookInfo expectedBook = mBookInfo;
+		DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isBookLoaded()
+				|| !isDocumentInteractionCurrent(
+						expectedBook, interaction))
+			return;
+		ReaderDocumentOptions options =
+				ReaderDocumentOptions.capture(expectedBook);
+		if (options == null || !options.isTextFormat())
+			return;
+		log.d("toggleTextFormat()");
+		applyReaderDocumentOptions(
+				!options.isTextAutoformatEnabled(),
+				options.isDocumentStylesEnabled(),
+				options.isDocumentFontsEnabled(),
+				options.getDomVersion(),
+				options.getBlockRenderingFlags(),
+				expectedBook, interaction);
 	}
 
 	public boolean getDocumentStylesEnabled() {
@@ -3233,7 +3474,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				mActivity.showBrowser(getOpenedFileInfo());
 				break;
 			case DCMD_OPTIONS_DIALOG:
-				mActivity.showOptionsDialog(OptionsDialog.Mode.READER);
+				showOptionsDialog();
 				break;
 			case DCMD_READER_MENU:
 				mActivity.showReaderMenu();
@@ -6471,6 +6712,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private final int profileNumber;
 		private final boolean disableInternalStyles;
 		private final boolean disableTextAutoformat;
+		private final boolean enableInternalFonts;
 		private final Properties settings;
 		private byte[] coverPageBytes;
 		private boolean loadSucceeded;
@@ -6519,8 +6761,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			this.doneHandler = doneHandler;
 			this.errorHandler = errorHandler;
 			//FileInfo fileInfo = new FileInfo(filename);
-			disableInternalStyles = bookInfo.getFileInfo().getFlag(FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG);
-			disableTextAutoformat = bookInfo.getFileInfo().getFlag(FileInfo.DONT_REFLOW_TXT_FILES_FLAG);
+			disableInternalStyles =
+					fileInfo.getFlag(
+							FileInfo.DONT_USE_DOCUMENT_STYLES_FLAG);
+			disableTextAutoformat =
+					fileInfo.getFlag(
+							FileInfo.DONT_REFLOW_TXT_FILES_FLAG);
+			enableInternalFonts =
+					fileInfo.getFlag(
+							FileInfo.USE_DOCUMENT_FONTS_FLAG);
 			profileNumber = bookInfo.getFileInfo().getProfileId();
 			closeCurrentDocument(false);
 			mBookInfo = bookInfo;
@@ -6569,6 +6818,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			log.i("Loading document " + safeDocumentPathForLog(filename));
 			doc.doCommand(ReaderCommand.DCMD_SET_INTERNAL_STYLES.nativeId, disableInternalStyles ? 0 : 1);
 			doc.doCommand(ReaderCommand.DCMD_SET_TEXT_FORMAT.nativeId, disableTextAutoformat ? 0 : 1);
+			doc.doCommand(
+					ReaderCommand.DCMD_SET_DOC_FONTS.nativeId,
+					enableInternalFonts ? 1 : 0);
 			doc.doCommand(ReaderCommand.DCMD_SET_REQUESTED_DOM_VERSION.nativeId, bookInfo.getFileInfo().domVersion);
 			if (0 == bookInfo.getFileInfo().domVersion) {
 				doc.doCommand(ReaderCommand.DCMD_SET_RENDER_BLOCK_RENDERING_FLAGS.nativeId, 0);

@@ -673,7 +673,6 @@ public class TTSToolbarDlg implements Settings {
 					mReaderView.getEngine(),
 					OptionsDialog.Mode.TTS,
 					null,
-					null,
 					ttsbinder);
 			dlg.show();
 		}));
