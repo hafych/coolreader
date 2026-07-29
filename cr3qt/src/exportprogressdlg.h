@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <memory>
 
 namespace Ui {
     class ExportProgressDlg;
@@ -44,7 +45,7 @@ protected:
     void changeEvent(QEvent *e);
 
 private:
-    Ui::ExportProgressDlg *m_ui;
+    std::unique_ptr<Ui::ExportProgressDlg> m_ui;
 };
 
 #endif // EXPORTPROGRESSDLG_H

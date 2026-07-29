@@ -168,10 +168,7 @@ void MainWindow::closeEvent ( QCloseEvent * event )
     ui->view->saveWindowPos( this, "main." );
 }
 
-MainWindow::~MainWindow()
-{
-    delete ui;
-}
+MainWindow::~MainWindow() = default;
 
 void MainWindow::on_view_destroyed()
 {

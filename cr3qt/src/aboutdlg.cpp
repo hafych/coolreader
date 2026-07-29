@@ -83,10 +83,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
     m_ui->plainTextEdit_2->setPlainText(sourceCode);
 }
 
-AboutDialog::~AboutDialog()
-{
-    delete m_ui;
-}
+AboutDialog::~AboutDialog() = default;
 
 void AboutDialog::changeEvent(QEvent *e)
 {

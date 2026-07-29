@@ -36,6 +36,7 @@
 #endif
 
 #include "crqtutil.h"
+#include <memory>
 
 namespace Ui {
     class SettingsDlg;
@@ -165,7 +166,7 @@ protected:
     void updateStyleSample();
 
 private:
-    Ui::SettingsDlg *m_ui;
+    std::unique_ptr<Ui::SettingsDlg> m_ui;
     CR3View * m_docview;
     PropsRef m_props;
     QString m_oldHyph;

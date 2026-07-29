@@ -32,10 +32,7 @@ WolExportDlg::WolExportDlg(QWidget *parent) :
     m_ui->cbTocLevels->setCurrentIndex(2);
 }
 
-WolExportDlg::~WolExportDlg()
-{
-    delete m_ui;
-}
+WolExportDlg::~WolExportDlg() = default;
 
 void WolExportDlg::changeEvent(QEvent *e)
 {

@@ -57,10 +57,7 @@ SearchDialog::SearchDialog(QWidget *parent, CR3View * docView) :
     ui->rbForward->toggle();
 }
 
-SearchDialog::~SearchDialog()
-{
-    delete ui;
-}
+SearchDialog::~SearchDialog() = default;
 
 void SearchDialog::changeEvent(QEvent *e)
 {

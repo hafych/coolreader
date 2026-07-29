@@ -55,6 +55,29 @@ file(READ "${SOURCE_ROOT}/cr3gui/CMakeLists.txt" LEGACY_GUI_CMAKE_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.h" MODERN_QT_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/cr3qt/src/cr3widget.cpp" MODERN_QT_VIEW_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3qt/CMakeLists.txt" MODERN_QT_CMAKE_SOURCE)
+set(MODERN_QT_UI_FILES
+  aboutdlg
+  addbookmarkdlg
+  bookmarklistdlg
+  exportprogressdlg
+  fallbackfontsdialog
+  filepropsdlg
+  mainwindow
+  recentdlg
+  searchdlg
+  settings
+  tocdlg
+  wolexportdlg
+)
+set(MODERN_QT_UI_SOURCE "")
+foreach(MODERN_QT_UI_FILE IN LISTS MODERN_QT_UI_FILES)
+  file(READ "${SOURCE_ROOT}/cr3qt/src/${MODERN_QT_UI_FILE}.h"
+    MODERN_QT_UI_HEADER_PART)
+  file(READ "${SOURCE_ROOT}/cr3qt/src/${MODERN_QT_UI_FILE}.cpp"
+    MODERN_QT_UI_SOURCE_PART)
+  string(APPEND MODERN_QT_UI_SOURCE
+    "${MODERN_QT_UI_HEADER_PART}\n${MODERN_QT_UI_SOURCE_PART}\n")
+endforeach()
 file(READ "${SOURCE_ROOT}/tinydict/tinydict.h" TINYDICT_HEADER)
 file(READ "${SOURCE_ROOT}/tinydict/tinydict.cpp" TINYDICT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
@@ -533,6 +556,23 @@ forbid_source_text(
   "${MODERN_QT_CMAKE_SOURCE}"
   "-DUSE_FONTCONFIG=0"
   "modern Qt targets must not override the detected fontconfig contract"
+)
+string(REGEX MATCHALL "std::unique_ptr<Ui::[A-Za-z]+>"
+  MODERN_QT_UI_OWNERS "${MODERN_QT_UI_SOURCE}")
+list(LENGTH MODERN_QT_UI_OWNERS MODERN_QT_UI_OWNER_COUNT)
+if(NOT MODERN_QT_UI_OWNER_COUNT EQUAL 12)
+  message(FATAL_ERROR
+    "all modern Qt generated-UI helpers must retain exclusive ownership")
+endif()
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "delete m_ui"
+  "modern Qt generated-UI helper teardown must remain automatic"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "delete ui"
+  "modern Qt generated-UI helper teardown must remain automatic"
 )
 
 # --- value-owned rectangle clipping ---

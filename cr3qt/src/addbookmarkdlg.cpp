@@ -76,10 +76,7 @@ void AddBookmarkDialog::closeEvent ( QCloseEvent * event )
 }
 
 
-AddBookmarkDialog::~AddBookmarkDialog()
-{
-    delete m_ui;
-}
+AddBookmarkDialog::~AddBookmarkDialog() = default;
 
 bool AddBookmarkDialog::showDlg( QWidget * parent, CR3View * docView )
 {

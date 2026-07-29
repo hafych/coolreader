@@ -29,10 +29,7 @@ ExportProgressDlg::ExportProgressDlg(QWidget *parent) :
     m_ui->progressBar->setRange(0, 100);
 }
 
-ExportProgressDlg::~ExportProgressDlg()
-{
-    delete m_ui;
-}
+ExportProgressDlg::~ExportProgressDlg() = default;
 
 void ExportProgressDlg::setPercent( int n )
 {

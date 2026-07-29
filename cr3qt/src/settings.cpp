@@ -426,10 +426,7 @@ SettingsDlg::SettingsDlg(QWidget *parent, CR3View * docView ) :
     //m_ui->cbPageSkin->addItem(QString("[None]"), QVariant());
 }
 
-SettingsDlg::~SettingsDlg()
-{
-    delete m_ui;
-}
+SettingsDlg::~SettingsDlg() = default;
 
 bool SettingsDlg::showDlg(  QWidget * parent, CR3View * docView )
 {

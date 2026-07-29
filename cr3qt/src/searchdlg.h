@@ -25,6 +25,7 @@
 
 #include <lvstring.h>
 #include <QDialog>
+#include <memory>
 
 namespace Ui {
     class SearchDialog;
@@ -44,7 +45,7 @@ protected:
     void closeEvent(QCloseEvent* e);
 
 private:
-    Ui::SearchDialog *ui;
+    std::unique_ptr<Ui::SearchDialog> ui;
     CR3View * _docview;
     lString32 _lastPattern;
     static SearchDialog* _instance;

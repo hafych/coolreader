@@ -29,6 +29,7 @@
 #endif
 #include "settings.h"
 #include "cr3widget.h"
+#include <memory>
 
 namespace Ui
 {
@@ -45,7 +46,7 @@ public:
     ~MainWindow();
 
 private:
-    Ui::MainWindowClass *ui;
+    std::unique_ptr<Ui::MainWindowClass> ui;
     QString _filenameToOpen;
     void toggleProperty( const char * name );
 protected:

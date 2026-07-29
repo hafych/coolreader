@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <memory>
 #include <QModelIndex>
 
 namespace Ui {
@@ -49,7 +50,7 @@ protected:
     virtual void closeEvent ( QCloseEvent * event );
 
 private:
-    Ui::BookmarkListDialog *m_ui;
+    std::unique_ptr<Ui::BookmarkListDialog> m_ui;
     CR3View * _docview;
     QList<CRBookmark*> _list;
     CRBookmark * selectedBookmark();

@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <memory>
 
 namespace Ui {
     class AddBookmarkDialog;
@@ -49,7 +50,7 @@ protected:
     virtual void closeEvent ( QCloseEvent * event );
 
 private:
-    Ui::AddBookmarkDialog *m_ui;
+    std::unique_ptr<Ui::AddBookmarkDialog> m_ui;
     CR3View * _docview;
     CRBookmark * _bm;
     bool _edit;

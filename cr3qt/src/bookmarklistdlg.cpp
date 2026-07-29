@@ -121,10 +121,7 @@ void BookmarkListDialog::closeEvent ( QCloseEvent * event )
     _docview->saveWindowPos( this, "bookmarklist." );
 }
 
-BookmarkListDialog::~BookmarkListDialog()
-{
-    delete m_ui;
-}
+BookmarkListDialog::~BookmarkListDialog() = default;
 
 bool BookmarkListDialog::showDlg( QWidget * parent, CR3View * docView )
 {

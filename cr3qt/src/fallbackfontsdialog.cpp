@@ -54,7 +54,6 @@ FallbackFontsDialog::FallbackFontsDialog(QWidget* parent, const QStringList& ava
 FallbackFontsDialog::~FallbackFontsDialog()
 {
     cleanupFontItems();
-    delete ui;
 }
 
 void FallbackFontsDialog::setAvailableFaces(const QStringList& availFaces)

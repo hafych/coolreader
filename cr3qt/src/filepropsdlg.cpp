@@ -65,10 +65,7 @@ void FilePropsDialog::closeEvent ( QCloseEvent * event )
     _cr3v->saveWindowPos( this, "fileprops." );
 }
 
-FilePropsDialog::~FilePropsDialog()
-{
-    delete m_ui;
-}
+FilePropsDialog::~FilePropsDialog() = default;
 
 bool FilePropsDialog::showDlg( QWidget * parent, CR3View * docView )
 {

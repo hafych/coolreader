@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <memory>
 #include <QModelIndex>
 
 namespace Ui {
@@ -48,7 +49,7 @@ protected:
     virtual void closeEvent ( QCloseEvent * event );
 
 private:
-    Ui::RecentBooksDlg *m_ui;
+    std::unique_ptr<Ui::RecentBooksDlg> m_ui;
     CR3View * m_docview;
     void openBook( int index );
 private slots:

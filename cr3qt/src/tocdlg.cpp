@@ -100,10 +100,7 @@ void TocDlg::closeEvent ( QCloseEvent * event )
     m_docview->saveWindowPos( this, "toc." );
 }
 
-TocDlg::~TocDlg()
-{
-    delete m_ui;
-}
+TocDlg::~TocDlg() = default;
 
 void TocDlg::changeEvent(QEvent *e)
 {

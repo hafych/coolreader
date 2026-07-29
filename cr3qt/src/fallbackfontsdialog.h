@@ -24,6 +24,7 @@
 #include <QDialog>
 #include <QVector>
 #include <QStringList>
+#include <memory>
 
 namespace Ui {
 	class FallbackFontsDialog;
@@ -65,7 +66,7 @@ protected:
 private:
 	QStringList m_availableFaces;
 	QString m_fallbackFaces;
-	Ui::FallbackFontsDialog *ui;
+	std::unique_ptr<Ui::FallbackFontsDialog> ui;
 	QVBoxLayout* m_layout;
 	QSpacerItem *m_spacer;
 	// data

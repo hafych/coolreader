@@ -96,10 +96,7 @@ void RecentBooksDlg::closeEvent ( QCloseEvent * event )
     m_docview->saveWindowPos( this, "recentlist." );
 }
 
-RecentBooksDlg::~RecentBooksDlg()
-{
-    delete m_ui;
-}
+RecentBooksDlg::~RecentBooksDlg() = default;
 
 bool RecentBooksDlg::showDlg( QWidget * parent,  CR3View * docView )
 {

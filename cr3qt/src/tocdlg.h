@@ -28,6 +28,7 @@
 #include <QtGui/QDialog>
 #endif
 #include <QModelIndex>
+#include <memory>
 
 namespace Ui {
     class TocDlg;
@@ -49,7 +50,7 @@ protected:
     virtual void closeEvent ( QCloseEvent * event );
 
 private:
-    Ui::TocDlg *m_ui;
+    std::unique_ptr<Ui::TocDlg> m_ui;
     CR3View * m_docview;
 
 private slots:

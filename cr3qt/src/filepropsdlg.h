@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <memory>
 
 namespace Ui {
     class FilePropsDialog;
@@ -55,7 +56,7 @@ protected:
     QStringList value;
 
 private:
-    Ui::FilePropsDialog *m_ui;
+    std::unique_ptr<Ui::FilePropsDialog> m_ui;
     CR3View * _cr3v;
     LVDocView * _docview;
 };

@@ -28,6 +28,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <memory>
 
 namespace Ui {
     class AboutDialog;
@@ -46,7 +47,7 @@ protected:
     virtual void changeEvent(QEvent *e);
 
 private:
-    Ui::AboutDialog *m_ui;
+    std::unique_ptr<Ui::AboutDialog> m_ui;
 
 private slots:
 //    void on_btnSite_clicked();

@@ -27,6 +27,7 @@
 #else
 #include <QtGui/QDialog>
 #endif
+#include <memory>
 
 namespace Ui {
     class WolExportDlg;
@@ -44,7 +45,7 @@ protected:
     void changeEvent(QEvent *e);
 
 private:
-    Ui::WolExportDlg *m_ui;
+    std::unique_ptr<Ui::WolExportDlg> m_ui;
     int m_tocLevels;
     int m_bpp;
 
