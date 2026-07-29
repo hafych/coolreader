@@ -81,8 +81,9 @@ DRM или ограничений доступа, подбор/получени�
   controls/property/font-menu/fullscreen key-label helpers, font property keys,
   CSS/image/document/history/settings/help/dictionary paths,
   dialog/menu/about/search/number-input/TOC/recent-book/bookmark/citation
-  selection text, dictionary/T9 word selection, on-screen keyboard layouts
-  и T9 layout storage приведены к текущим `lString32`/UTF-32 контрактам.
+  selection/search-result navigation text, dictionary/T9 word selection,
+  on-screen keyboard layouts и T9 layout storage приведены к текущим
+  `lString32`/UTF-32 контрактам.
   Link-selection invalidation переведён с удалённого range geometry API
   на текущую геометрию экрана без device-specific размеров.
   Logo converter использует UTF-32 image/output paths, RAII stream и

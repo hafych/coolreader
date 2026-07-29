@@ -28,17 +28,14 @@
 void CRSelNavigationDialog::moveBy( int delta )
 {
 #if CR_POCKETBOOK==1
-    int pageIndex = -1;
     if ( delta==1 ) {
         // forward
-        pageIndex = _mainwin->findPagesText(_pattern, 1, 1);
-        if (pageIndex == -1)
-            pageIndex = _mainwin->findPagesText(_pattern, -1, 1);
+        if (_mainwin->findPagesText(_pattern, 1, 1) == -1)
+            _mainwin->findPagesText(_pattern, -1, 1);
     } else if ( delta==-1 ) {
         // backward
-        pageIndex = _mainwin->findPagesText(_pattern, 1, -1);
-        if (pageIndex == -1)
-            pageIndex = _mainwin->findPagesText(_pattern, -1, -1);
+        if (_mainwin->findPagesText(_pattern, 1, -1) == -1)
+            _mainwin->findPagesText(_pattern, -1, -1);
     }
 #else
     if ( delta==1 ) {
@@ -62,12 +59,14 @@ void CRSelNavigationDialog::moveBy( int delta )
     _mainwin->setDirty();
 }
 
-CRSelNavigationDialog::CRSelNavigationDialog(  CRGUIWindowManager * wm, CRViewDialog * mainwin, lString16 pattern )
+CRSelNavigationDialog::CRSelNavigationDialog(
+        CRGUIWindowManager * wm, CRViewDialog * mainwin,
+        lString32 pattern)
 : BackgroundFitWindow(  wm, mainwin ), _mainwin(mainwin), _pattern(pattern)
 {
     _rect = _wm->getScreen()->getRect();
     _rect.top = _rect.bottom; // null height
-    setAccelerators( _wm->getAccTables().get("dialog") );
+    setAccelerators( _wm->getAccTables().get(U"dialog") );
     moveBy(0);
 }
 
@@ -96,4 +95,3 @@ bool CRSelNavigationDialog::onCommand( int command, int params )
     }
     return true;
 }
-

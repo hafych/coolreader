@@ -32,13 +32,22 @@ class CRSelNavigationDialog : public BackgroundFitWindow
 {
 protected:
     CRViewDialog * _mainwin;
-    lString16 _pattern;
+    lString32 _pattern;
     void moveBy( int delta );
 public:
-    CRSelNavigationDialog(  CRGUIWindowManager * wm, CRViewDialog * mainwin, lString16 pattern );
+    CRSelNavigationDialog(
+            CRGUIWindowManager * wm, CRViewDialog * mainwin,
+            lString32 pattern);
+    CRSelNavigationDialog(
+            CRGUIWindowManager * wm, CRViewDialog * mainwin,
+            lString16 pattern)
+        : CRSelNavigationDialog(
+                wm, mainwin, Utf16ToUnicode(pattern))
+    {
+    }
 
     /// returns true if command is processed
-    virtual bool onCommand( int command, int params );
+    bool onCommand( int command, int params ) override;
 };
 
 #endif

@@ -414,7 +414,10 @@ bool CRViewDialog::onCommand( int command, int params )
 		case MCMD_SEARCH_FINDFIRST:
 			if ( !_searchPattern.empty() && params ) {
                 if ( findText( _searchPattern, 0, 1 ) || findText( _searchPattern, -1, 1 )) {
-                    CRSelNavigationDialog * dlg = new CRSelNavigationDialog( _wm, this, _searchPattern );
+                    CRSelNavigationDialog * dlg =
+                            new CRSelNavigationDialog(
+                                    _wm, this,
+                                    Utf16ToUnicode(_searchPattern));
                     _wm->activateWindow( dlg );
                 }
             }

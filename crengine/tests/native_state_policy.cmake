@@ -35,6 +35,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/citecore.h" CITE_SELECTION_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/citedlg.cpp" CITE_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.h" LINKS_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.cpp" LINKS_DIALOG_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/selnavig.h" SELECTION_NAV_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/selnavig.cpp" SELECTION_NAV_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/logoconv.cpp" LOGO_CONVERTER_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3main.h" GUI_STARTUP_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3main.cpp" GUI_STARTUP_SOURCE)
@@ -7662,6 +7664,36 @@ forbid_source_text(
   "${MAIN_WINDOW_SOURCE}"
   "Utf16ToUnicode(menu_win->getItemNumberKeysName"
   "main menus must consume current-width number labels directly"
+)
+require_source_text(
+  "${SELECTION_NAV_HEADER}"
+  "lString32 _pattern;"
+  "search-result navigation must store the current string width"
+)
+require_source_text(
+  "${SELECTION_NAV_HEADER}"
+  "wm, mainwin, Utf16ToUnicode(pattern)"
+  "legacy search-result patterns must cross an explicit boundary"
+)
+require_source_text(
+  "${SELECTION_NAV_SOURCE}"
+  "_wm->getAccTables().get(U\"dialog\")"
+  "search-result accelerator identifiers must use the current width"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "Utf16ToUnicode(_searchPattern)"
+  "legacy keyboard search text must cross the navigation boundary explicitly"
+)
+forbid_source_text(
+  "${SELECTION_NAV_SOURCE}"
+  "lString16"
+  "search-result navigation implementations must not narrow text to UTF-16"
+)
+forbid_source_text(
+  "${SELECTION_NAV_SOURCE}"
+  "int pageIndex"
+  "search-result navigation must not retain unused page-result state"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"
