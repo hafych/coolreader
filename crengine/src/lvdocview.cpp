@@ -405,6 +405,7 @@ lvRect LVDocView::rotateRect(lvRect & rc, bool winToDoc) const {
 	}
 	return rc2;
 #else
+	(void)winToDoc;
 	return rc;
 #endif
 }
@@ -457,6 +458,7 @@ lvPoint LVDocView::rotatePoint(lvPoint & pt, bool winToDoc) const {
 	}
 	return pt2;
 #else
+	(void)winToDoc;
 	return pt;
 #endif
 }
@@ -2469,6 +2471,9 @@ void LVDocView::drawPageBackground( LVDrawBuf & drawbuf, int offsetX, int offset
 
 /// draw to specified buffer
 void LVDocView::Draw(LVDrawBuf & drawbuf, int position, int page, bool rotate, bool autoresize) {
+#if CR_INTERNAL_PAGE_ORIENTATION!=1
+	(void)rotate;
+#endif
 	LVLock lock(getMutex());
 	//CRLog::trace("Draw() : calling checkPos()");
 	checkPos();

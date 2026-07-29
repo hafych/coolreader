@@ -1270,6 +1270,24 @@ require_source_text(
   "disabled page orientation must not reference excluded rotation state"
 )
 require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "#if CR_INTERNAL_PAGE_ORIENTATION!=1
+	(void)rotate;"
+  "disabled page orientation must consume the excluded draw rotation argument"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "(void)winToDoc;
+	return rc;"
+  "disabled page orientation must consume the rectangle rotation argument"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "(void)winToDoc;
+	return pt;"
+  "disabled page orientation must consume the point rotation argument"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "page image cache published a rejected buffer candidate"
   "page image cache must retain failed-adoption rollback coverage"
