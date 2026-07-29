@@ -38,6 +38,8 @@
 #include FT_LCD_FILTER_H
 #include FT_CONFIG_OPTIONS_H
 
+#include <memory>
+
 #if (USE_FONTCONFIG == 1)
 #include <fontconfig/fontconfig.h>
 #endif
@@ -46,6 +48,40 @@
 #if USE_LOCALE_DATA==1
 #include "fc-lang-data.h"
 #endif
+
+namespace {
+
+struct FreeTypeFaceDeleter {
+    void operator()(FT_Face face) const {
+        if (face)
+            FT_Done_Face(face);
+    }
+};
+
+using FreeTypeFaceOwner =
+        std::unique_ptr<FT_FaceRec_, FreeTypeFaceDeleter>;
+
+FreeTypeFaceOwner openFreeTypeFace(FT_Library library,
+                                   const char *path,
+                                   int index,
+                                   int &error) {
+    FT_Face candidate = nullptr;
+    error = FT_New_Face(library, path, index, &candidate);
+    return FreeTypeFaceOwner(candidate);
+}
+
+FreeTypeFaceOwner openFreeTypeMemoryFace(FT_Library library,
+                                         const FT_Byte *buffer,
+                                         FT_Long length,
+                                         int index,
+                                         int &error) {
+    FT_Face candidate = nullptr;
+    error = FT_New_Memory_Face(
+            library, buffer, length, index, &candidate);
+    return FreeTypeFaceOwner(candidate);
+}
+
+}
 
 inline int myabs(int n) { return n < 0 ? -n : n; }
 
@@ -806,11 +842,11 @@ bool LVFreeTypeFontManager::SetAlias(lString8 alias, lString8 facename, int id, 
 
     int index = 0;
 
-    FT_Face face = NULL;
-
     // for all faces in file
     for ( ;; index++ ) {
-        int error = FT_New_Face( _library, item->getDef()->getName().c_str(), index, &face ); /* create face object */
+        int error = FT_Err_Ok;
+        FreeTypeFaceOwner face = openFreeTypeFace(
+                _library, item->getDef()->getName().c_str(), index, error);
         if ( error ) {
             if (index == 0) {
                 CRLog::error("FT_New_Face returned error %d", error);
@@ -834,7 +870,8 @@ bool LVFreeTypeFontManager::SetAlias(lString8 alias, lString8 facename, int id, 
             fontFamily = css_ff_serif;
         */
 
-        int weight = !facename.empty() ? (bold ? 700 : 400) : getFontWeight(face);
+        int weight = !facename.empty()
+                ? (bold ? 700 : 400) : getFontWeight(face.get());
         bool italicFlag = !facename.empty() ? italic : (face->style_flags & FT_STYLE_FLAG_ITALIC) != 0;
 
         LVFontDef def2(
@@ -848,11 +885,6 @@ bool LVFreeTypeFontManager::SetAlias(lString8 alias, lString8 facename, int id, 
                 index,
                 id
         );
-
-        if ( face ) {
-            FT_Done_Face( face );
-            face = NULL;
-        }
 
         if ( _cache.findDuplicate( &def2 ) ) {
             CRLog::trace("font definition is duplicate");
@@ -1192,45 +1224,29 @@ bool LVFreeTypeFontManager::RegisterDocumentFont(int documentId, LVContainerRef 
 
     int index = 0;
 
-    FT_Face face = NULL;
-
     // for all faces in file
     for (;; index++) {
-        int error = FT_New_Memory_Face(_library, buf->get(), buf->length(), index,
-                                       &face); /* create face object */
+        int error = FT_Err_Ok;
+        FreeTypeFaceOwner face = openFreeTypeMemoryFace(
+                _library, buf->get(), buf->length(), index, error);
         if (error) {
             if (index == 0) {
                 CRLog::error("FT_New_Memory_Face returned error %d", error);
             }
             break;
         }
-        //            bool scal = FT_IS_SCALABLE( face );
-        //            bool charset = checkCharSet( face );
-        //            //bool monospaced = isMonoSpaced( face );
-        //            if ( !scal || !charset ) {
-        //    //#if (DEBUG_FONT_MAN==1)
-        //     //           if ( _log ) {
-        //                CRLog::debug("    won't register font %s: %s",
-        //                    name.c_str(), !charset?"no mandatory characters in charset" : "font is not scalable"
-        //                    );
-        //    //            }
-        //    //#endif
-        //                if ( face ) {
-        //                    FT_Done_Face( face );
-        //                    face = NULL;
-        //                }
-        //                break;
-        //            }
         int num_faces = face->num_faces;
 
         css_font_family_t fontFamily = css_ff_sans_serif;
         if (face->face_flags & FT_FACE_FLAG_FIXED_WIDTH)
             fontFamily = css_ff_monospace;
-        lString8 familyName(!faceName.empty() ? faceName : ::familyName(face));
+        lString8 familyName(
+                !faceName.empty() ? faceName : ::familyName(face.get()));
         if (familyName == "Times" || familyName == "Times New Roman")
             fontFamily = css_ff_serif;
 
-        int weight = !faceName.empty() ? (bold ? 700 : 400) : getFontWeight(face);
+        int weight = !faceName.empty()
+                ? (bold ? 700 : 400) : getFontWeight(face.get());
         bool italicFlag = !faceName.empty() ? italic : (face->style_flags & FT_STYLE_FLAG_ITALIC) != 0;
 
         LVFontDef def(
@@ -1252,11 +1268,6 @@ bool LVFreeTypeFontManager::RegisterDocumentFont(int documentId, LVContainerRef 
                     );
         }
 #endif
-        if (face) {
-            FT_Done_Face(face);
-            face = NULL;
-        }
-
         if (_cache.findDuplicate(&def)) {
             CRLog::trace("font definition is duplicate");
             return false;
@@ -1296,11 +1307,11 @@ bool LVFreeTypeFontManager::RegisterExternalFont(int documentId, lString32 name,
     bool res = false;
     int index = 0;
 
-    FT_Face face = NULL;
-
     // for all faces in file
     for (;; index++) {
-        int error = FT_New_Face(_library, fname.c_str(), index, &face); /* create face object */
+        int error = FT_Err_Ok;
+        FreeTypeFaceOwner face =
+                openFreeTypeFace(_library, fname.c_str(), index, error);
         if (error) {
             if (index == 0) {
                 CRLog::error("FT_New_Face returned error %d", error);
@@ -1309,11 +1320,11 @@ bool LVFreeTypeFontManager::RegisterExternalFont(int documentId, lString32 name,
         }
         bool scal = FT_IS_SCALABLE(face);
         bool color = FT_HAS_COLOR(face) != 0;
-        bool charset = checkCharSet(face);
+        bool charset = checkCharSet(face.get());
         if (!charset) {
-            if (FT_Select_Charmap(face, FT_ENCODING_UNICODE)) // returns 0 on success
+            if (FT_Select_Charmap(face.get(), FT_ENCODING_UNICODE)) // returns 0 on success
                 // If no unicode charmap found, try symbol charmap
-                if (!FT_Select_Charmap(face, FT_ENCODING_MS_SYMBOL))
+                if (!FT_Select_Charmap(face.get(), FT_ENCODING_MS_SYMBOL))
                     // It has a symbol charmap: consider it valid
                     charset = true;
         }
@@ -1323,10 +1334,6 @@ bool LVFreeTypeFontManager::RegisterExternalFont(int documentId, lString32 name,
                          name.c_str(),
                          !charset ? "no mandatory characters in charset" : "font nor scalable nor color"
             );
-            if (face) {
-                FT_Done_Face(face);
-                face = NULL;
-            }
             break;
         }
         int num_faces = face->num_faces;
@@ -1371,11 +1378,6 @@ bool LVFreeTypeFontManager::RegisterExternalFont(int documentId, lString32 name,
         }
         res = true;
 
-        if ( face ) {
-            FT_Done_Face(face);
-            face = NULL;
-        }
-
         if ( index >= num_faces - 1 )
             break;
     }
@@ -1403,11 +1405,11 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
 
     int index = 0;
 
-    FT_Face face = NULL;
-
     // for all faces in file
     for (;; index++) {
-        int error = FT_New_Face(_library, fname.c_str(), index, &face); /* create face object */
+        int error = FT_Err_Ok;
+        FreeTypeFaceOwner face =
+                openFreeTypeFace(_library, fname.c_str(), index, error);
         if (error) {
             if (index == 0) {
                 CRLog::error("FT_New_Face returned error %d", error);
@@ -1416,11 +1418,11 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
         }
         bool scal = FT_IS_SCALABLE(face) != 0;
         bool color = FT_HAS_COLOR(face) != 0;
-        bool charset = checkCharSet(face);
+        bool charset = checkCharSet(face.get());
         if (!charset) {
-            if (FT_Select_Charmap(face, FT_ENCODING_UNICODE)) // returns 0 on success
+            if (FT_Select_Charmap(face.get(), FT_ENCODING_UNICODE)) // returns 0 on success
                 // If no unicode charmap found, try symbol charmap
-                if (!FT_Select_Charmap(face, FT_ENCODING_MS_SYMBOL))
+                if (!FT_Select_Charmap(face.get(), FT_ENCODING_MS_SYMBOL))
                     // It has a symbol charmap: consider it valid
                     charset = true;
         }
@@ -1430,10 +1432,6 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
                          name.c_str(),
                          !charset ? "no mandatory characters in charset" : "font nor scalable nor color"
             );
-            if (face) {
-                FT_Done_Face(face);
-                face = NULL;
-            }
             break;
         }
         int num_faces = face->num_faces;
@@ -1441,7 +1439,7 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
         css_font_family_t fontFamily = css_ff_sans_serif;
         if (face->face_flags & FT_FACE_FLAG_FIXED_WIDTH)
             fontFamily = css_ff_monospace;
-        lString8 familyName(::familyName(face));
+        lString8 familyName(::familyName(face.get()));
         /*
         if (familyName == "Times" || familyName == "Times New Roman")
             fontFamily = css_ff_serif;
@@ -1449,7 +1447,7 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
         LVFontDef def(
                 name,
                 -1, // height==-1 for scalable fonts
-                getFontWeight(face),
+                getFontWeight(face.get()),
                 (face->style_flags & FT_STYLE_FLAG_ITALIC) ? true : false,
                 -1, // OpenType features = -1 for not yet instantiated fonts
                 fontFamily,
@@ -1463,11 +1461,6 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
                     );
         }
 #endif
-
-        if (face) {
-            FT_Done_Face(face);
-            face = NULL;
-        }
 
         if (_cache.findDuplicate(&def)) {
             CRLog::trace("font definition is duplicate");

@@ -40,6 +40,24 @@ static int testVariableAndScopedFonts()
             || !fontMan->RegisterFont(globalCjk))
         return fail("vendored global font fixtures did not register");
 
+    static const int externalDocumentId = 38;
+    const lString8 duplicateFamily("RAII Duplicate");
+    if (!fontMan->RegisterExternalFont(
+                externalDocumentId,
+                Utf8ToUnicode(globalRoboto),
+                duplicateFamily,
+                false,
+                false))
+        return fail("first external font candidate did not register");
+    if (fontMan->RegisterExternalFont(
+                externalDocumentId,
+                Utf8ToUnicode(globalCjk),
+                duplicateFamily,
+                false,
+                false))
+        return fail("duplicate external font candidate was published");
+    fontMan->UnregisterDocumentFonts(externalDocumentId);
+
     LVFontRef systemFont = fontMan->GetFont(
             24, 400, false, css_ff_sans_serif,
             lString8("Roboto"), 0, -1, false);

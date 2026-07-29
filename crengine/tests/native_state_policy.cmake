@@ -119,6 +119,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvfont/lvfontglyphcache.cpp" GLYPH_CACHE_
 file(READ "${SOURCE_ROOT}/crengine/include/lvdocview.h" DOC_VIEW_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdocview.cpp" DOC_VIEW_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/tests/document_regression_test.cpp" DOCUMENT_REGRESSION_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/tests/typography_regression_test.cpp" TYPOGRAPHY_REGRESSION_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/hist.h" HISTORY_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/hist.cpp" HISTORY_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/props.cpp" PROPERTIES_SOURCE)
@@ -1342,6 +1343,53 @@ forbid_source_text(
   "${FREETYPE_FONT_MANAGER_SOURCE}"
   "delete font"
   "FreeType face failure must remain scope-bound"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "using FreeTypeFaceOwner ="
+  "FreeType enumeration faces must use deleter-aware exclusive ownership"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FreeTypeFaceOwner openFreeTypeFace("
+  "file-backed FreeType faces must enter ownership at the factory boundary"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FreeTypeFaceOwner openFreeTypeMemoryFace("
+  "memory-backed FreeType faces must enter ownership at the factory boundary"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FreeTypeFaceOwner face ="
+  "font enumeration loops must retain scoped face candidates"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FT_Face face = NULL"
+  "font enumeration loops must not retain raw FreeType face owners"
+)
+string(REGEX MATCHALL "FT_Done_Face\\("
+  FREETYPE_FACE_TEARDOWNS "${FREETYPE_FONT_MANAGER_SOURCE}")
+list(LENGTH FREETYPE_FACE_TEARDOWNS FREETYPE_FACE_TEARDOWN_COUNT)
+if(NOT FREETYPE_FACE_TEARDOWN_COUNT EQUAL 1)
+  message(FATAL_ERROR
+    "FreeType face teardown must remain centralized in the RAII deleter")
+endif()
+require_source_text(
+  "${TYPOGRAPHY_REGRESSION_SOURCE}"
+  "fontMan->RegisterFont(globalRoboto)"
+  "FreeType file-face enumeration must retain native font coverage"
+)
+require_source_text(
+  "${TYPOGRAPHY_REGRESSION_SOURCE}"
+  "fontMan->RegisterDocumentFont("
+  "FreeType memory-face enumeration must retain native font coverage"
+)
+require_source_text(
+  "${TYPOGRAPHY_REGRESSION_SOURCE}"
+  "duplicate external font candidate was published"
+  "FreeType face ownership must retain duplicate early-return coverage"
 )
 require_source_text(
   "${CORE_SAFETY_SOURCE}"

@@ -210,7 +210,7 @@ DRM или ограничений доступа, подбор/получени�
   и teardown, table-cell
   page-context ownership, draw-time bookmark-range filters и full CCRTable
   row-group/row/column/cell graph publication, включая MathML table expansion,
-  FreeType face load-candidates, color-glyph scaling workspace, scoped
+  FreeType face load/enumeration candidates, color-glyph scaling workspace, scoped
   bitmap/Win32 manager load candidates, transactional legacy bitmap-font file
   candidates и alternate-backend interface compile gate, portable RAII Win32
   glyph-cache graph и language-compatibility cache owners, transactional
