@@ -317,6 +317,11 @@ DRM или ограничений доступа, подбор/получени�
   сохраняет typed snapshot через Bundle и `take()`-ит owner до dispatch
   результата. Invalid restore, result без owner и launch failure безопасно
   очищаются без подмены цели другой операции.
+  Book delete и remove-from-recent захватывают clone-on-boundary
+  `DeletionSnapshot` target/parent до confirmation. Direct и SAF deletion
+  завершают один общий history effect: DB binder nullable-safe, callback
+  принадлежит captured service generation, а delayed directory/recent refresh
+  повторно проверяет lifecycle и не обновляет уничтоженную Activity.
   `LoadDocumentTask` хранит свой `BookInfo` вместо чтения mutable global book
   во время engine work; только current generation публикует UI, failure
   recovery и позднее stream-to-cache/fingerprint reconciliation. Закрытие

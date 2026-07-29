@@ -135,6 +135,12 @@ target, reject overlap, persist the paired snapshot through the Activity bundle,
 and take the exact owner before dispatching a result. Invalid restore, an
 ownerless result and launcher failure cannot reuse or overwrite another
 operation's target.
+Book deletion and remove-from-recent capture a clone-on-boundary
+`DeletionSnapshot` of the target and parent before showing confirmation.
+Direct-file and SAF success enter the same history effect. Database readiness is
+nullable-safe and tied to the captured service generation; delayed directory or
+recent-shelf refresh checks that lifecycle again and cannot update a destroyed
+Activity.
 Each `LoadDocumentTask` retains its own `BookInfo`, settings and completion
 state rather than consulting a book pointer that another request can replace
 while native parsing is running. The old book is saved and marked closed before

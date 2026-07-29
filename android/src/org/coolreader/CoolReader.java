@@ -69,6 +69,7 @@ import org.coolreader.crengine.BrowserViewLayout;
 import org.coolreader.crengine.CRRootView;
 import org.coolreader.crengine.CRToolBar;
 import org.coolreader.crengine.CoverpageManager;
+import org.coolreader.crengine.DeletionSnapshot;
 import org.coolreader.crengine.DeviceInfo;
 import org.coolreader.crengine.DocumentFileCache;
 import org.coolreader.crengine.DocumentLoadLifecycle;
@@ -2191,13 +2192,8 @@ public class CoolReader extends BaseActivity {
 			showToast(R.string.could_not_delete_file, target);
 			return;
 		}
-		mHistory.removeBookInfo(
-				getDB(), target, true, true);
-		FileInfo dirToUpdate = target.parent;
-		if (dirToUpdate != null) {
-			BackgroundThread.instance().postGUI(
-					() -> directoryUpdated(dirToUpdate), 700);
-		}
+		finishDeletedBook(
+				captureDeletion(target));
 		updateExtSDURI(target, sdCardUri);
 	}
 
@@ -2433,17 +2429,23 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void askDeleteBook(final FileInfo item) {
+		DeletionSnapshot<FileInfo> requested =
+				captureDeletion(item);
+		if (requested == null)
+			return;
 		askConfirmation(R.string.win_title_confirm_book_delete, () -> {
-			closeBookIfOpened(item);
-			FileInfo file = mScanner.findFileInTree(item);
+			if (!mServiceLifecycle.isActive())
+				return;
+			FileInfo requestedTarget = requested.getTarget();
+			closeBookIfOpened(requestedTarget);
+			FileInfo file =
+					mScanner.findFileInTree(requestedTarget);
 			if (file == null)
-				file = item;
-			final FileInfo finalFile = file;
+				file = requestedTarget;
+			DeletionSnapshot<FileInfo> deletion =
+					captureDeletion(file);
 			if (file.deleteFile()) {
-				waitForCRDBService(() -> {
-					mHistory.removeBookInfo(getDB(), finalFile, true, true);
-					BackgroundThread.instance().postGUI(() -> directoryUpdated(finalFile.parent, null), 700);
-				});
+				finishDeletedBook(deletion);
 			} else {
 				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 					Uri docUri = null;
@@ -2452,11 +2454,7 @@ public class CoolReader extends BaseActivity {
 						docUri = DocumentsContractWrapper.getDocumentUri(file, this, sdCardUri);
 					if (null != docUri) {
 						if (DocumentsContractWrapper.deleteFile(this, docUri)) {
-							waitForCRDBService(() -> {
-								mHistory.removeBookInfo(
-										getDB(), finalFile, true, true);
-								BackgroundThread.instance().postGUI(() -> directoryUpdated(finalFile.parent), 700);
-							});
+							finishDeletedBook(deletion);
 						} else {
 							showToast(R.string.could_not_delete_file, file);
 						}
@@ -2465,7 +2463,7 @@ public class CoolReader extends BaseActivity {
 						launchOpenDocumentTree(
 								DocumentTreeRequestState.Command
 										.DELETE_FILE,
-								file);
+								deletion.getTarget());
 					}
 				} else {
 					showToast(R.string.could_not_delete_file, file);
@@ -2475,10 +2473,80 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void askDeleteRecent(final FileInfo item) {
-		askConfirmation(R.string.win_title_confirm_history_record_delete, () -> waitForCRDBService(() -> {
-			mHistory.removeBookInfo(getDB(), item, true, false);
-			directoryUpdated(mScanner.createRecentRoot());
-		}));
+		DeletionSnapshot<FileInfo> requested =
+				captureDeletion(item);
+		if (requested == null)
+			return;
+		askConfirmation(
+				R.string.win_title_confirm_history_record_delete,
+				() -> removeRecentBook(requested));
+	}
+
+	private void finishDeletedBook(
+			DeletionSnapshot<FileInfo> deletion) {
+		if (deletion == null || !mServiceLifecycle.isActive())
+			return;
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		FileInfo target = deletion.getTarget();
+		FileInfo parent = deletion.getParent();
+		waitForCRDBService(() -> {
+			if (!lifecycle.isActive())
+				return;
+			CRDBService.LocalBinder db = getDB();
+			if (db == null)
+				return;
+			mHistory.removeBookInfo(
+					db,
+					target,
+					true,
+					true);
+			if (parent != null) {
+				BackgroundThread.instance().postGUI(() -> {
+					if (lifecycle.isActive())
+						directoryUpdated(parent, null);
+				}, 700);
+			}
+		});
+	}
+
+	private void removeRecentBook(
+			DeletionSnapshot<FileInfo> deletion) {
+		if (deletion == null || !mServiceLifecycle.isActive())
+			return;
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		FileInfo target = deletion.getTarget();
+		waitForCRDBService(() -> {
+			if (!lifecycle.isActive())
+				return;
+			CRDBService.LocalBinder db = getDB();
+			if (db == null)
+				return;
+			mHistory.removeBookInfo(
+					db,
+					target,
+					true,
+					false);
+			if (lifecycle.isActive())
+				directoryUpdated(
+						mScanner.createRecentRoot());
+		});
+	}
+
+	private static DeletionSnapshot<FileInfo> captureDeletion(
+			FileInfo target) {
+		return DeletionSnapshot.capture(
+				target,
+				target != null ? target.parent : null,
+				CoolReader::copyDeletionFile);
+	}
+
+	private static FileInfo copyDeletionFile(FileInfo value) {
+		FileInfo copy = new FileInfo(value);
+		copy.parent =
+				value.parent != null
+						? new FileInfo(value.parent)
+						: null;
+		return copy;
 	}
 
 	public void askDeleteCatalog(final FileInfo item) {

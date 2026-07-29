@@ -1058,6 +1058,46 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void bookDeletionUsesCloneOnBoundarySnapshot()
+			throws Exception {
+		assertTrue(Modifier.isFinal(
+				DeletionSnapshot.class.getModifiers()));
+		for (Field field :
+				DeletionSnapshot.class.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		assertTrue(DeletionSnapshot.Copier.class.isInterface());
+
+		Method captureDeletion =
+				CoolReader.class.getDeclaredMethod(
+						"captureDeletion",
+						FileInfo.class);
+		assertTrue(Modifier.isPrivate(
+				captureDeletion.getModifiers()));
+		assertTrue(Modifier.isStatic(
+				captureDeletion.getModifiers()));
+		Method copyDeletionFile =
+				CoolReader.class.getDeclaredMethod(
+						"copyDeletionFile",
+						FileInfo.class);
+		assertTrue(Modifier.isPrivate(
+				copyDeletionFile.getModifiers()));
+		assertTrue(Modifier.isStatic(
+				copyDeletionFile.getModifiers()));
+		for (String name : new String[]{
+				"finishDeletedBook",
+				"removeRecentBook"}) {
+			Method method =
+					CoolReader.class.getDeclaredMethod(
+							name,
+							DeletionSnapshot.class);
+			assertTrue(Modifier.isPrivate(
+					method.getModifiers()));
+		}
+	}
+
+	@Test
 	public void documentTreePickerOwnsAtomicRestorableRequest()
 			throws Exception {
 		Field requests =
