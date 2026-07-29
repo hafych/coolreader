@@ -644,6 +644,7 @@ endif()
 if(USE_CLANG_WARNING_GATE)
   set(CLANG_WARNING_GATE_TARGETS
     crengine
+    tinydict
     core_safety_test
     thread_safety_test
     document_regression_test
@@ -660,7 +661,7 @@ if(USE_CLANG_WARNING_GATE)
     if(TARGET ${CLANG_WARNING_TARGET})
       target_compile_options(${CLANG_WARNING_TARGET} PRIVATE
         $<$<COMPILE_LANGUAGE:C>:-Wall;-Wextra;-Wpedantic;-Werror=return-type;-Werror=implicit-function-declaration;-Werror=incompatible-pointer-types;-Werror=sign-compare;-Werror=unused-but-set-variable;-Werror=unused-parameter>
-        $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Werror=return-type;-Werror=uninitialized;-Werror=delete-non-virtual-dtor;-Werror=switch;-Werror=non-c-typedef-for-linkage;-Werror=misleading-indentation;-Werror=reorder-ctor;-Werror=sign-compare;-Werror=unused-but-set-variable;-Werror=unused-parameter>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Werror=return-type;-Werror=uninitialized;-Werror=delete-non-virtual-dtor;-Werror=switch;-Werror=non-c-typedef-for-linkage;-Werror=misleading-indentation;-Werror=reorder-ctor;-Werror=sign-compare;-Werror=unused-but-set-variable;-Werror=unused-parameter;-Werror=unused-private-field>
       )
     endif()
   endforeach()

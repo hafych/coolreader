@@ -154,7 +154,6 @@ class TinyDictZStream
 
     int type;
     unsigned size;
-    unsigned txtpos;
 
     unsigned headerLength;
     bool error;
@@ -599,7 +598,7 @@ bool TinyDictZStream::read( unsigned char * buf, unsigned start, unsigned len )
 }
 
 TinyDictZStream::TinyDictZStream()
-: f ( NULL ), size( 0 ), txtpos(0)
+: f ( NULL ), size( 0 )
 , headerLength(0), error( false )
 , chunks(NULL), offsets(NULL), chunkLength(0), chunkCount(0)
 , zInitialized(false), packed_size(0), unp_buffer(NULL), unp_buffer_start(0), unp_buffer_len(0), unp_buffer_size(0)

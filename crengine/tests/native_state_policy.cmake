@@ -49,6 +49,7 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/dictdlg.cpp" DICTIONARY_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3qt.cpp" QT_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/cr3xcb.cpp" XCB_GUI_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/CMakeLists.txt" LEGACY_GUI_CMAKE_SOURCE)
+file(READ "${SOURCE_ROOT}/tinydict/tinydict.cpp" TINYDICT_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom.cpp" DOM_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvtinydom_internal.h" DOM_INTERNAL_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/include/lvtinydom.h" DOM_HEADER)
@@ -245,6 +246,22 @@ if(UNUSED_PARAMETER_GATE_COUNT LESS 2)
   message(FATAL_ERROR
     "the Clang warning gate must reject unused parameters in C and C++")
 endif()
+require_source_text(
+  "${ROOT_CMAKE_SOURCE}"
+  "tinydict
+    core_safety_test"
+  "the Clang warning gate must include the dictionary target"
+)
+require_source_text(
+  "${ROOT_CMAKE_SOURCE}"
+  "-Werror=unused-private-field"
+  "the Clang warning gate must reject unused private state"
+)
+forbid_source_text(
+  "${TINYDICT_SOURCE}"
+  "unsigned txtpos;"
+  "dictionary streams must not retain unused private state"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(
