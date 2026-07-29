@@ -1447,6 +1447,53 @@ require_source_text(
   "persistent FreeType face ownership must retain reload recovery coverage"
 )
 require_source_text(
+  "${FREETYPE_FONT_MANAGER_HEADER}"
+  "class FreeTypeLibraryOwner"
+  "process-level FreeType libraries must use deleter-aware ownership"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_HEADER}"
+  "std::unique_ptr<FT_LibraryRec_, FreeTypeLibraryDeleter> _owner"
+  "FreeType library handles must retain standard exclusive ownership"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_HEADER}"
+  "FreeTypeLibraryOwner _library;\n    LVFontCache _cache"
+  "FreeType libraries must outlive every cached face owner"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FreeTypeLibraryOwner candidate(rawLibrary)"
+  "FreeType library initialization must begin as a scoped candidate"
+)
+require_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "_library = std::move(candidate)"
+  "initialized FreeType libraries must publish by ownership transfer"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_HEADER}"
+  "FT_Library _library"
+  "font managers must not retain a raw FreeType library owner"
+)
+forbid_source_text(
+  "${FREETYPE_FONT_MANAGER_SOURCE}"
+  "FT_Done_FreeType(_library"
+  "FreeType library teardown must remain automatic"
+)
+string(REGEX MATCHALL "FT_Done_FreeType\\("
+  FREETYPE_LIBRARY_TEARDOWNS "${FREETYPE_FONT_MANAGER_HEADER}")
+list(LENGTH FREETYPE_LIBRARY_TEARDOWNS FREETYPE_LIBRARY_TEARDOWN_COUNT)
+if(NOT FREETYPE_LIBRARY_TEARDOWN_COUNT EQUAL 1)
+  message(FATAL_ERROR
+    "FreeType library teardown must remain centralized in the RAII deleter")
+endif()
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "if (!ShutdownFontManager() || fontMan)"
+  "FreeType library ownership must retain repeated manager teardown coverage"
+)
+require_source_text(
   "${CORE_SAFETY_SOURCE}"
   "static int testFontCacheOwnership()"
   "font-cache ownership must retain native lifecycle regression coverage"

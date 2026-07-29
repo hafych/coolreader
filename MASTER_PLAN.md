@@ -215,7 +215,8 @@ DRM или ограничений доступа, подбор/получени�
   bitmap/Win32 manager load candidates, transactional legacy bitmap-font file
   candidates и alternate-backend interface compile gate, portable RAII Win32
   glyph-cache graph и language-compatibility cache owners, transactional
-  HarfBuzz font replacement/buffer lifecycle, а также bounded NanoSVG
+  HarfBuzz font replacement/buffer lifecycle и process-level FreeType library,
+  а также bounded NanoSVG
   image/rasterizer/RGBA workspace ownership и transactional
   selection-range split/draw/text owner publication, включая batched
   word/filter/crop/extended-word owner-list factories, а также bounded

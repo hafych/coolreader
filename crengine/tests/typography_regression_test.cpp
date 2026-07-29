@@ -1,6 +1,7 @@
 #include "lvfntman.h"
 #include "lvstreamutils.h"
 #include "../src/lvfont/lvfreetypeface.h"
+#include "../src/lvfont/lvfreetypefontman.h"
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -8,7 +9,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <memory>
 
 static int fail(const char *message)
 {
@@ -128,9 +128,7 @@ static int testPersistentFaceReloadOwnership()
     FT_Library rawLibrary = nullptr;
     if (FT_Init_FreeType(&rawLibrary) != FT_Err_Ok)
         return fail("persistent face fixture FreeType did not initialize");
-    using FreeTypeLibraryOwner =
-            std::unique_ptr<FT_LibraryRec_, decltype(&FT_Done_FreeType)>;
-    FreeTypeLibraryOwner library(rawLibrary, &FT_Done_FreeType);
+    FreeTypeLibraryOwner library(rawLibrary);
     LVMutex mutex;
     LVFontGlobalGlyphCache glyphCache(0x20000);
     LVFreeTypeFace face(mutex, library.get(), &glyphCache);

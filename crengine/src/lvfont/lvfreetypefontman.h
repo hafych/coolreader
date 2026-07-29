@@ -58,6 +58,40 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+struct FreeTypeLibraryDeleter {
+    void operator()(FT_Library library) const {
+        if (library)
+            FT_Done_FreeType(library);
+    }
+};
+
+class FreeTypeLibraryOwner {
+    std::unique_ptr<FT_LibraryRec_, FreeTypeLibraryDeleter> _owner;
+
+public:
+    explicit FreeTypeLibraryOwner(FT_Library library = nullptr)
+        : _owner(library) {
+    }
+
+    FreeTypeLibraryOwner(FreeTypeLibraryOwner &&) = default;
+    FreeTypeLibraryOwner &operator=(FreeTypeLibraryOwner &&) = default;
+    FreeTypeLibraryOwner(const FreeTypeLibraryOwner &) = delete;
+    FreeTypeLibraryOwner &operator=(const FreeTypeLibraryOwner &) = delete;
+
+    FT_Library get() const {
+        return _owner.get();
+    }
+
+    // FreeType's C API borrows this handle; ownership stays in this wrapper.
+    operator FT_Library() const {
+        return get();
+    }
+
+    explicit operator bool() const {
+        return static_cast<bool>(_owner);
+    }
+};
+
 using LVFontLangCompatibilityTable =
         LVHashTable<lString8, font_lang_compat>;
 using LVFontLangCompatibilityTableRef =
@@ -67,8 +101,8 @@ class LVFreeTypeFontManager : public LVFontManager {
 private:
     lString8 _path;
     lString8Collection _fallbackFontFaces;
+    FreeTypeLibraryOwner _library;
     LVFontCache _cache;
-    FT_Library _library;
     LVFontGlobalGlyphCache _globalCache;
     lString32 _requiredChars;
     LVHashTable<lString8, LVFontLangCompatibilityTableRef> _supportedLangs;

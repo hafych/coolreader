@@ -749,8 +749,6 @@ LVFreeTypeFontManager::~LVFreeTypeFontManager() {
     _supportedLangs.clear();
     _globalCache.clear();
     _cache.clear();
-    if (_library)
-        FT_Done_FreeType(_library);
 #if (DEBUG_FONT_MAN == 1)
     if ( _log ) {
         fclose(_log);
@@ -759,12 +757,16 @@ LVFreeTypeFontManager::~LVFreeTypeFontManager() {
 }
 
 LVFreeTypeFontManager::LVFreeTypeFontManager()
-        : _library(NULL), _globalCache(GLYPH_CACHE_SIZE), _supportedLangs(16) {
+        : _library(nullptr), _globalCache(GLYPH_CACHE_SIZE), _supportedLangs(16) {
     FONT_MAN_GUARD
-    int error = FT_Init_FreeType(&_library);
+    FT_Library rawLibrary = nullptr;
+    int error = FT_Init_FreeType(&rawLibrary);
+    FreeTypeLibraryOwner candidate(rawLibrary);
     if (error) {
         // error
         CRLog::error("Error while initializing freetype library");
+    } else {
+        _library = std::move(candidate);
     }
 #if (DEBUG_FONT_MAN == 1)
     _log = fopen(DEBUG_FONT_MAN_LOG_FILE, "at");
@@ -1481,7 +1483,7 @@ bool LVFreeTypeFontManager::RegisterFont(lString8 name) {
 bool LVFreeTypeFontManager::Init(lString8 path) {
     _path = path;
     initSystemFonts();
-    return (_library != NULL);
+    return static_cast<bool>(_library);
 }
 
 bool LVFreeTypeFontManager::SetAsPreferredFontWithBias(lString8 face, int bias, bool clearOthersBias)
