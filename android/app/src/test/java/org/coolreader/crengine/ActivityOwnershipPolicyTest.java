@@ -20,6 +20,8 @@ import static org.junit.Assert.assertTrue;
 import org.coolreader.CoolReader;
 import org.coolreader.Dictionaries;
 import org.coolreader.plugins.litres.LitresPlugin;
+import org.coolreader.tts.TTSControlBinder;
+import org.coolreader.tts.TTSControlServiceAccessor;
 import org.junit.Test;
 
 import com.s_trace.motion_watchdog.MotionWatchdogHandler;
@@ -426,7 +428,8 @@ public class ActivityOwnershipPolicyTest {
 				"positionSaveLifecycle",
 				"positionSaveScheduler",
 				"selectionUpdateLifecycle",
-				"drawTaskLifecycle"}) {
+				"drawTaskLifecycle",
+				"ttsInitializationLifecycle"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -540,6 +543,38 @@ public class ActivityOwnershipPolicyTest {
 						CloseableTaskGate.Token.class);
 		assertTrue(Modifier.isSynchronized(
 				complete.getModifiers()));
+		Method beginIfIdle =
+				CloseableTaskGate.class.getDeclaredMethod(
+						"beginIfIdle");
+		assertTrue(Modifier.isSynchronized(
+				beginIfIdle.getModifiers()));
+		for (String name : new String[]{
+				"startTts",
+				"stopTts"}) {
+			Method method =
+					ReaderView.class.getDeclaredMethod(name);
+			assertTrue(Modifier.isPrivate(
+					method.getModifiers()));
+		}
+		Method finishTtsInitialization =
+				ReaderView.class.getDeclaredMethod(
+						"finishTtsInitialization",
+						CloseableTaskGate.Token.class,
+						TTSControlServiceAccessor.class);
+		assertTrue(Modifier.isPrivate(
+				finishTtsInitialization.getModifiers()));
+		Method initTts =
+				CoolReader.class.getDeclaredMethod(
+						"initTTS",
+						TTSControlServiceAccessor.Callback.class,
+						Runnable.class);
+		assertTrue(Modifier.isPublic(initTts.getModifiers()));
+		Method activeTtsCallback =
+				CoolReader.class.getDeclaredMethod(
+						"postForActiveTtsGeneration",
+						Runnable.class);
+		assertTrue(Modifier.isPrivate(
+				activeTtsCallback.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				TapHighlightState.class.getModifiers()));
 		for (Field field :
@@ -589,6 +624,37 @@ public class ActivityOwnershipPolicyTest {
 	@Test
 	public void ttsDialogOwnsItsCloseableWorkLifecycle()
 			throws Exception {
+		for (String name : new String[]{
+				"mContext",
+				"mLocker",
+				"onConnectCallbacks",
+				"mServiceConnection"}) {
+			Field field =
+					TTSControlServiceAccessor.class
+							.getDeclaredField(name);
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		Field bindingRegistered =
+				TTSControlServiceAccessor.class.getDeclaredField(
+						"mBindingRegistered");
+		assertTrue(Modifier.isPrivate(
+				bindingRegistered.getModifiers()));
+		Method bind =
+				TTSControlServiceAccessor.class.getDeclaredMethod(
+						"bind",
+						TTSControlBinder.Callback.class);
+		assertEquals(boolean.class, bind.getReturnType());
+		for (String legacy : new String[]{
+				"mServiceBound",
+				"bindIsCalled"}) {
+			for (Field field :
+					TTSControlServiceAccessor.class
+							.getDeclaredFields()) {
+				assertFalse(field.getName().equals(legacy));
+			}
+		}
+
 		Field lifecycle =
 				TTSToolbarDlg.class.getDeclaredField(
 						"workLifecycle");

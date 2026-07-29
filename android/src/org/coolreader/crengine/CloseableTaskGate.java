@@ -16,6 +16,13 @@ final class CloseableTaskGate {
 	private Token current;
 	private boolean closed;
 
+	synchronized Token beginIfIdle() {
+		if (closed || current != null)
+			return null;
+		current = new Token();
+		return current;
+	}
+
 	synchronized Token replace() {
 		if (closed)
 			return null;

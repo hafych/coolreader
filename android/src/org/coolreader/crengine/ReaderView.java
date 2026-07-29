@@ -61,6 +61,7 @@ import org.coolreader.CoolReader;
 import org.coolreader.R;
 import org.coolreader.crengine.InputDialog.InputHandler;
 import org.coolreader.genrescollection.GenresCollection;
+import org.coolreader.tts.TTSControlServiceAccessor;
 import org.koekak.android.ebookdownloader.SonyBookSelector;
 
 import java.io.ByteArrayInputStream;
@@ -2451,26 +2452,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			case DCMD_USER_MANUAL:
 				showManual();
 				break;
-			case DCMD_TTS_PLAY: {
-				if(isTTSActive()){
-					log.i("DCMD_TTS_PLAY: skipping re-init of TTS");
-					return;
-				}
-				log.i("DCMD_TTS_PLAY: initializing TTS");
-				mActivity.initTTS(ttsacc -> BackgroundThread.instance().executeGUI(() -> {
-					log.i("TTS created: opening TTS toolbar");
-					ttsToolbar = TTSToolbarDlg.showDialog(mActivity, ReaderView.this, ttsacc);
-					ttsToolbar.setOnCloseListener(() -> ttsToolbar = null);
-					ttsToolbar.setAppSettings(mSettings, null);
-					ttsToolbar.initAudiobookWordTimings(null);
-				}));
-			}
-			break;
+			case DCMD_TTS_PLAY:
+				startTts();
+				break;
 			case DCMD_TTS_STOP:
-				if(ttsToolbar != null){
-					log.i("DCMD_TTS_STOP: stopping TTS");
-					ttsToolbar.stopAndClose();
-				}
+				stopTts();
 				break;
 			case DCMD_TOGGLE_DOCUMENT_STYLES:
 				if (isBookLoaded())
@@ -2658,8 +2644,57 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	boolean firstShowBrowserCall = true;
 
-
+	private final CloseableTaskGate ttsInitializationLifecycle =
+			new CloseableTaskGate();
 	private TTSToolbarDlg ttsToolbar;
+
+	private void startTts() {
+		BackgroundThread.ensureGUI();
+		if (ttsToolbar != null) {
+			log.i("DCMD_TTS_PLAY: skipping re-init of active TTS");
+			return;
+		}
+		CloseableTaskGate.Token owner =
+				ttsInitializationLifecycle.beginIfIdle();
+		if (owner == null) {
+			log.i("DCMD_TTS_PLAY: TTS initialization is already pending");
+			return;
+		}
+		log.i("DCMD_TTS_PLAY: initializing TTS");
+		mActivity.initTTS(
+				ttsacc -> finishTtsInitialization(owner, ttsacc),
+				() -> ttsInitializationLifecycle.complete(owner));
+	}
+
+	private void finishTtsInitialization(
+			CloseableTaskGate.Token owner,
+			TTSControlServiceAccessor ttsAccessor) {
+		BackgroundThread.ensureGUI();
+		if (!ttsInitializationLifecycle.complete(owner)
+				|| !mServiceLifecycle.isActive()
+				|| ttsAccessor == null)
+			return;
+		log.i("TTS created: opening TTS toolbar");
+		TTSToolbarDlg toolbar = TTSToolbarDlg.showDialog(
+				mActivity, this, ttsAccessor);
+		ttsToolbar = toolbar;
+		toolbar.setOnCloseListener(() -> {
+			if (ttsToolbar == toolbar)
+				ttsToolbar = null;
+		});
+		toolbar.setAppSettings(mSettings, null);
+		toolbar.initAudiobookWordTimings(null);
+	}
+
+	private void stopTts() {
+		BackgroundThread.ensureGUI();
+		ttsInitializationLifecycle.cancel();
+		TTSToolbarDlg toolbar = ttsToolbar;
+		if (toolbar != null) {
+			log.i("DCMD_TTS_STOP: stopping TTS");
+			toolbar.stopAndClose();
+		}
+	}
 
 	public void pauseTTS() {
 		if (ttsToolbar != null)
@@ -6323,6 +6358,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void destroy() {
 		log.i("ReaderView.destroy() is called");
 		cancelDelayedReaderWork();
+		stopTts();
 		if (mInitialized) {
 			//close();
 			BackgroundThread.instance().postBackground(() -> {
@@ -6335,8 +6371,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 			});
 			//engine.waitTasksCompletion();
-			if (null != ttsToolbar)
-				ttsToolbar.stopAndClose();
 		}
 	}
 
@@ -6348,6 +6382,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		closePositionSave();
 		closeSelectionUpdates();
 		drawTaskLifecycle.close();
+		ttsInitializationLifecycle.close();
 		synchronized (viewportResizeState) {
 			viewportResizeState.close();
 			resizeScheduler.cancel();

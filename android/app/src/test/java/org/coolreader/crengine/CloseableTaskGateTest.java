@@ -9,6 +9,20 @@ import static org.junit.Assert.assertTrue;
 
 public class CloseableTaskGateTest {
 	@Test
+	public void beginIfIdleAdmitsOnlyOnePendingGeneration() {
+		CloseableTaskGate gate = new CloseableTaskGate();
+		CloseableTaskGate.Token first = gate.beginIfIdle();
+
+		assertNotNull(first);
+		assertNull(gate.beginIfIdle());
+		assertTrue(gate.complete(first));
+
+		CloseableTaskGate.Token second = gate.beginIfIdle();
+		assertNotNull(second);
+		assertTrue(gate.isActive(second));
+	}
+
+	@Test
 	public void replacementInvalidatesOnlyThePreviousGeneration() {
 		CloseableTaskGate gate = new CloseableTaskGate();
 		CloseableTaskGate.Token first = gate.replace();
@@ -63,6 +77,7 @@ public class CloseableTaskGateTest {
 		assertFalse(gate.close());
 		assertTrue(gate.isClosed());
 		assertFalse(gate.isActive(token));
+		assertNull(gate.beginIfIdle());
 		assertNull(gate.replace());
 	}
 }

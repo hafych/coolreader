@@ -434,6 +434,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   dedicated cancelable scheduler. Reload and close invalidate stale retries,
   terminal completion cannot clear a replacement, and Reader destruction
   prevents queued work from touching the destroyed native document.
+- TTS startup now admits only one pending reader request. Stop and destruction
+  invalidate late success, initialization failure permits a retry, and an old
+  toolbar cannot clear a replacement. Service binding state and pending
+  callbacks are serialized under one connector lock and cleared on unbind.
 - TTS audiobook timing work and its periodic position poll now belong to the
   dialog lifecycle. Reinitialization rejects stale results, while close removes
   pending callbacks, retires the timing thread and prevents late service or

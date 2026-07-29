@@ -1609,6 +1609,7 @@ def main() -> None:
         encoding="utf-8")
     for marker in (
         "final class CloseableTaskGate",
+        "synchronized Token beginIfIdle()",
         "synchronized Token replace()",
         "synchronized void cancel()",
         "synchronized boolean complete(Token token)",
@@ -1625,11 +1626,13 @@ def main() -> None:
     closeable_gate_test_text = CLOSEABLE_TASK_GATE_TEST.read_text(
         encoding="utf-8")
     for marker in (
+        "beginIfIdleAdmitsOnlyOnePendingGeneration",
         "replacementInvalidatesOnlyThePreviousGeneration",
         "cancelIsIdempotentAndAllowsAnotherGeneration",
         "completionClearsOnlyItsExactGeneration",
         "nullIsNeverAnActiveGeneration",
         "closePermanentlyRejectsWork",
+        "assertNull(gate.beginIfIdle())",
         "assertNull(gate.replace())",
     ):
         if marker not in closeable_gate_test_text:
@@ -1995,6 +1998,7 @@ def main() -> None:
         "private final DelayedExecutor positionSaveScheduler",
         "private final CloseableTaskGate selectionUpdateLifecycle",
         "private final CloseableTaskGate drawTaskLifecycle",
+        "private final CloseableTaskGate ttsInitializationLifecycle",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -2015,6 +2019,7 @@ def main() -> None:
         "private void closeSelectionUpdates()",
         "selectionUpdateLifecycle.close()",
         "drawTaskLifecycle.close()",
+        "ttsInitializationLifecycle.close()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -2051,6 +2056,11 @@ def main() -> None:
         "drawTaskLifecycle.complete(owner)",
         "&& !drawTaskLifecycle.isClosed()",
         "&& mServiceLifecycle.isActive())",
+        "ttsInitializationLifecycle.beginIfIdle()",
+        "ttsInitializationLifecycle.complete(owner)",
+        "ttsInitializationLifecycle.cancel()",
+        "private void finishTtsInitialization(",
+        "if (ttsToolbar == toolbar)",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -3379,6 +3389,33 @@ def main() -> None:
                 violations.append(
                     f"{relative(path)} omits lifecycle marker: {marker}")
 
+    tts_accessor = SOURCE / "tts" / "TTSControlServiceAccessor.java"
+    tts_accessor_text = tts_accessor.read_text(encoding="utf-8")
+    for marker in (
+        "private final Object mLocker",
+        "private boolean mBindingRegistered",
+        "public boolean bind(",
+        "synchronized (mLocker)",
+        "callbacks = new ArrayList<>(onConnectCallbacks)",
+        "onConnectCallbacks.clear()",
+        "if (!mBindingRegistered)",
+        "return bound",
+    ):
+        if marker not in tts_accessor_text:
+            violations.append(
+                f"{relative(tts_accessor)} omits serialized binding "
+                f"state marker: {marker}")
+    for legacy in (
+        "mServiceBound",
+        "bindIsCalled",
+        "synchronized (this)",
+        "synchronized (TTSControlServiceAccessor.this)",
+    ):
+        if legacy in tts_accessor_text:
+            violations.append(
+                f"{relative(tts_accessor)} retains split binding state: "
+                f"{legacy}")
+
     for marker in (
         "private final ToastView mToastView = new ToastView()",
         "mToastView.close()",
@@ -3407,6 +3444,24 @@ def main() -> None:
     if "stopServices();" not in cool_reader_text:
         violations.append(
             f"{relative(COOL_READER)} does not stop its owned service graph")
+    for marker in (
+        "final TTSControlServiceAccessor accessor",
+        "final String requestedEngine",
+        "postForActiveTtsGeneration(",
+        "callback.run(accessor)",
+        "requestedEngine.equals(",
+        "&& lifecycle.isActive())",
+        "postTtsInitializationFailure(",
+        "if (!bindingStarted)",
+    ):
+        if marker not in cool_reader_text:
+            violations.append(
+                f"{relative(COOL_READER)} omits generation-owned TTS "
+                f"initialization marker: {marker}")
+    if "callback.run(ttsControlServiceAccessor)" in cool_reader_text:
+        violations.append(
+            f"{relative(COOL_READER)} publishes TTS through a mutable "
+            "accessor generation")
     find_pattern(
         COOL_READER,
         cool_reader_text,

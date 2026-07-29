@@ -100,6 +100,7 @@ import org.coolreader.crengine.ReaderViewLayout;
 import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.ServiceDependencies;
 import org.coolreader.crengine.ServiceLifecycle;
+import org.coolreader.crengine.TTSToolbarDlg;
 import org.coolreader.crengine.Utils;
 import org.coolreader.genrescollection.GenresCollection;
 import org.coolreader.tts.OnTTSCreatedListener;
@@ -2111,36 +2112,87 @@ public class CoolReader extends BaseActivity {
 
 
 	public void initTTS(TTSControlServiceAccessor.Callback callback) {
+		initTTS(callback, null);
+	}
+
+	public void initTTS(
+			TTSControlServiceAccessor.Callback callback,
+			Runnable failureCallback) {
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		if (mDestroyed
+				|| lifecycle == null
+				|| !lifecycle.isActive())
+			return;
 		showToast("Initializing TTS");
 		if (null == ttsControlServiceAccessor)
 			ttsControlServiceAccessor = new TTSControlServiceAccessor(this);
-		ttsControlServiceAccessor.bind(ttsbinder -> {
-			ttsbinder.initTTS(ttsEnginePackage, new OnTTSCreatedListener() {
+		final TTSControlServiceAccessor accessor =
+				ttsControlServiceAccessor;
+		final String requestedEngine = ttsEnginePackage;
+		boolean bindingStarted = accessor.bind(ttsbinder -> {
+			ttsbinder.initTTS(requestedEngine, new OnTTSCreatedListener() {
 				@Override
 				public void onCreated() {
-					if (null != callback)
-						callback.run(ttsControlServiceAccessor);
+					if (callback != null) {
+						postForActiveTtsGeneration(
+								() -> callback.run(accessor));
+					}
 				}
 
 				@Override
 				public void onFailed() {
-					BackgroundThread.instance().executeGUI(() -> showToast("Cannot initialize TTS"));
+					postTtsInitializationFailure(failureCallback);
 				}
 
 				@Override
 				public void onTimedOut() {
-					// TTS engine init hangs, remove it from settings
-					log.e("TTS engine \"" + ttsEnginePackage + "\" init failure, disabling!");
-					BackgroundThread.instance().executeGUI(() -> {
-						showToast(R.string.tts_init_failure, ttsEnginePackage);
-						setSetting(PROP_APP_TTS_ENGINE, "", false);
-						ttsEnginePackage = "";
-						try {
-							mReaderView.getTTSToolbar().stopAndClose();
-						} catch (Exception ignored) {}
+					log.e("TTS engine \"" + requestedEngine
+							+ "\" init failure");
+					postForActiveTtsGeneration(() -> {
+						if (requestedEngine.equals(
+								ttsEnginePackage)) {
+							showToast(
+									R.string.tts_init_failure,
+									requestedEngine);
+							setSetting(
+									PROP_APP_TTS_ENGINE,
+									"",
+									false);
+							ttsEnginePackage = "";
+							TTSToolbarDlg toolbar =
+									mReaderView != null
+											? mReaderView
+													.getTTSToolbar()
+											: null;
+							if (toolbar != null)
+								toolbar.stopAndClose();
+						}
+						if (failureCallback != null)
+							failureCallback.run();
 					});
 				}
 			});
+		});
+		if (!bindingStarted)
+			postTtsInitializationFailure(failureCallback);
+	}
+
+	private void postTtsInitializationFailure(
+			Runnable failureCallback) {
+		postForActiveTtsGeneration(() -> {
+			showToast("Cannot initialize TTS");
+			if (failureCallback != null)
+				failureCallback.run();
+		});
+	}
+
+	private void postForActiveTtsGeneration(Runnable callback) {
+		BackgroundThread.instance().executeGUI(() -> {
+			ServiceLifecycle lifecycle = mServiceLifecycle;
+			if (!mDestroyed
+					&& lifecycle != null
+					&& lifecycle.isActive())
+				callback.run();
 		});
 	}
 

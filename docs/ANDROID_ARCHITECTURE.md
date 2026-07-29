@@ -47,6 +47,16 @@ cancellation invalidates the exact old wrapper, only the current generation can
 claim execution, and a successful claim clears the slot before invoking user
 code. Reentrant scheduling therefore cannot be cleared by its predecessor, and
 an already-removed callback cannot run merely because a newer callback exists.
+Reader TTS startup uses the gate's begin-if-idle mode: repeated play commands
+share one pending initialization, stop cancels its exact token, and reader
+destruction closes startup permanently. Success and failure complete only that
+request; a stale success cannot open a toolbar, and each toolbar close callback
+clears only its own identity. `CoolReader` captures the exact service accessor
+and engine package requested, then delivers results on the GUI thread only
+while its service generation is active. The application-context TTS connector
+serializes binder registration, binder publication and pending callbacks under
+one lock, snapshots callbacks before delivery, reports bind failure and clears
+queued work on unbind.
 Long-lived dialog work uses a closeable generation gate when cancellation must
 also be permanent after teardown. `TTSToolbarDlg` assigns audiobook timing
 initialization and its periodic position poll to the current gate token.

@@ -239,6 +239,13 @@ DRM или ограничений доступа, подбор/получени�
   единый контракт без int overflow и division by zero. Stateless
   `DocumentPositionPolicy` централизует one-based display page, percent text и
   0–100 → valid page mapping с точной 100% last-page boundary.
+  Асинхронный startup TTS теперь использует begin-if-idle closeable token:
+  повторный PLAY не дублирует bind/init, STOP инвалидирует exact request,
+  destroy permanently закрывает startup, success/failure завершают только свой
+  owner, а toolbar close очищает лишь собственную identity. `CoolReader`
+  публикует captured accessor/engine только активному service generation;
+  TTS connector держит registration/binder/pending callbacks под одним lock,
+  сообщает bind failure и очищает очередь при unbind.
   Долгая инициализация audiobook word timings и периодический position poll
   `TTSToolbarDlg` теперь принадлежат closeable generation gate: повторная
   инициализация инвалидирует старую публикацию, закрытие очищает main-handler
