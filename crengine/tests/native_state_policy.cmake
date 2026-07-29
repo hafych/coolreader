@@ -2300,6 +2300,33 @@ forbid_source_text(
   "JPEG source-manager teardown must remain part of jpeg_destroy_decompress"
 )
 
+# --- stream image decoder factory ownership ---
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "std::unique_ptr<LVImageSource> candidate"
+  "stream image decoders must enter scoped ownership before validation"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "if ( !candidate->Decode( NULL ) )"
+  "stream image candidates must validate while still scoped"
+)
+require_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "return LVImageSourceRef(candidate.release())"
+  "stream image ownership must transfer only after validation"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "stream image factory published a failed decoder"
+  "stream image factory ownership must retain rejection coverage"
+)
+forbid_source_text(
+  "${IMAGE_FACTORY_SOURCE}"
+  "LVImageSource * img ="
+  "stream image factory candidates must not begin as raw owners"
+)
+
 # --- synthetic/draw-buffer/XPM image sources ---
 require_source_text(
   "${IMAGE_SOURCE_HEADER}"

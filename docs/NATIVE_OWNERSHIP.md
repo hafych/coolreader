@@ -241,6 +241,13 @@ scanline and converted output row use the image pool; all are released by
 flags make partial decompressor teardown and `OnEndDecode(errors=true)`
 explicit, and successful decoding completes with `jpeg_finish_decompress()`.
 
+The stream image factory keeps its selected PNG, JPEG, GIF, SVG or dummy
+decoder in a `unique_ptr` through header decode and dimension-budget
+validation. A failed or oversized decoder is destroyed without first creating
+an intrusive reference record; ownership crosses into `LVImageSourceRef` only
+after the candidate is complete. Native PNG coverage feeds a recognized but
+truncated header through this rejection path under sanitizers.
+
 XPM parsed rows, palettes and decode rows, plus dummy and draw-buffer conversion
 rows, use standard containers. `LVDrawBufImgSource` keeps a non-owning
 compatibility view and, only when requested by its legacy factory, a

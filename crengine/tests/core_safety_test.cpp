@@ -5272,6 +5272,13 @@ static int testPngDecoderOwnership() {
             || callback.ends != 2 || callback.errorEnds != 0)
         return fail("PNG decoder callback lifecycle is incomplete");
 
+    static const std::size_t factoryRejectedSize = 4;
+    if (!LVCreateStreamImageSource(
+                LVCreateMemoryStream(
+                        const_cast<unsigned char *>(validPng),
+                        static_cast<int>(factoryRejectedSize),
+                        true, LVOM_READ)).isNull())
+        return fail("stream image factory published a failed decoder");
     static const std::size_t truncatedSize = 46;
     LVPngImageSource truncated(
             NULL,

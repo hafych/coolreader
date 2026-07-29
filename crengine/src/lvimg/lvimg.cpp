@@ -74,48 +74,47 @@ LVImageSourceRef LVCreateStreamImageSource( ldomNode * node, LVStreamRef stream 
     stream->SetPos( 0 );
 
 
-    LVImageSource * img = NULL;
+    std::unique_ptr<LVImageSource> candidate;
 #if (USE_LIBPNG==1)
     if ( LVPngImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVPngImageSource( node, stream );
+        candidate = std::make_unique<LVPngImageSource>(node, stream);
     else
 #endif
 #if (USE_LIBJPEG==1)
     if ( LVJpegImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVJpegImageSource( node, stream );
+        candidate = std::make_unique<LVJpegImageSource>(node, stream);
     else
 #endif
 #if (USE_GIF==1)
     if ( LVGifImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVGifImageSource( node, stream );
+        candidate = std::make_unique<LVGifImageSource>(node, stream);
     else
 #endif
 #if (USE_NANOSVG==1)
     if ( LVSvgImageSource::CheckPattern( hdr, (lUInt32)bytesRead ) )
-        img = new LVSvgImageSource( node, stream );
+        candidate = std::make_unique<LVSvgImageSource>(node, stream);
     else
 #endif
-        img = new LVDummyImageSource( node, 50, 50 );
+        candidate = std::make_unique<LVDummyImageSource>(node, 50, 50);
 
-    if ( !img )
+    if ( !candidate )
         return ref;
-    ref = LVImageSourceRef( img );
-    if ( !img->Decode( NULL ) )
+    if ( !candidate->Decode( NULL ) )
     {
         return LVImageSourceRef();
     }
     ParseBudget budget;
     if (!budget.checkImageDimensions(
-            static_cast<unsigned>(img->GetWidth()),
-            static_cast<unsigned>(img->GetHeight())))
+            static_cast<unsigned>(candidate->GetWidth()),
+            static_cast<unsigned>(candidate->GetHeight())))
     {
         CRLog::error("ParseBudget[%d:%s]: image dimensions rejected (%dx%d)",
                      static_cast<int>(budget.error()),
                      parseBudgetErrorName(budget.error()),
-                     img->GetWidth(), img->GetHeight());
+                     candidate->GetWidth(), candidate->GetHeight());
         return LVImageSourceRef();
     }
-    return ref;
+    return LVImageSourceRef(candidate.release());
 }
 
 LVImageSourceRef LVCreateStreamImageSource( LVStreamRef stream )
