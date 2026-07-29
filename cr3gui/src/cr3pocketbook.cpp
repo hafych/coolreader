@@ -734,12 +734,12 @@ class CRPbDictionaryView : public CRViewDialog
 private:
     CRPbDictionaryDialog *_parent;
     std::unique_ptr<CRPbDictionaryMenu> _dictMenu;
-    LVHashTable<lString16, int> _dictsTable;
+    LVHashTable<lString32, int> _dictsTable;
     char ** _dictNames;
     int _dictIndex;
     int _dictCount;
-    lString16 _word;
-    lString16 _searchPattern;
+    lString32 _word;
+    lString32 _searchPattern;
     bool _active;
     bool _dictsLoaded;
     int _selectedIndex;
@@ -759,7 +759,7 @@ public:
     CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDialog *parent);
     virtual ~CRPbDictionaryView();
     virtual void draw();
-    virtual void translate(const lString16 &w);
+    virtual void translate(const lString32 &w);
     virtual lString8 createArticle(const char *word, const char *translation);
     virtual bool onCommand( int command, int params );
     void doActivate();
@@ -790,10 +790,11 @@ class CRPbDictionaryMenuItem : public CRMenuItem
 private:
     const char *_word;
     const char *_translation;
-    lString16 _word16;
-    lString16 _translation16;
+    lString32 _wordText;
+    lString32 _translationText;
 protected:
-    lString16 createItemValue(const char *_translation);
+    lString32 createItemValue(
+            const char *translation);
 public:
     CRPbDictionaryMenuItem(CRMenu * menu, int id, const char *word, const char *translation);
     virtual void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected );
@@ -851,7 +852,7 @@ protected:
     bool _dictViewActive;
     bool _autoTranslate;
     bool _wordTranslated;
-    lString16 _selText;
+    lString32 _selText;
     lString8 _prompt;
 protected:
     virtual void draw();
@@ -1088,7 +1089,8 @@ protected:
         if (m_goToPage != -1) {
             CRRectSkinRef skin = _wm->getSkin()->getWindowSkin( L"#dialog" )->getClientSkin();
             LVDrawBuf * buf = _wm->getScreen()->getCanvas().get();
-            lString16 text = lString16::itoa(m_goToPage + 1);
+            lString32 text =
+                    lString32::itoa(m_goToPage + 1);
             lvPoint text_size = skin->measureText(text);
             lvRect rc;
             rc.left = _wm->getScreen()->getWidth() - 65;
@@ -1533,15 +1535,16 @@ static void paused_rotate_timer()
 }
 
 CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDialog *parent) 
-    : CRViewDialog(wm, lString16::empty_str, lString8::empty_str, lvRect(), false, true), _parent(parent),
+    : CRViewDialog(wm, lString32::empty_str, lString8::empty_str, lvRect(), false, true), _parent(parent),
     _dictMenu(), _dictsTable(16), _active(false), _dictsLoaded(false), _itemsCount(5), _translateResult(0),
     _newWord(NULL), _newTranslation(NULL)
 {
-    setSkinName(lString16("#dict"));
+    setSkinName(U"#dict");
     lvRect rect = _wm->getScreen()->getRect();
     if ( !_wm->getSkin().isNull() ) {
         _skin = _wm->getSkin()->getWindowSkin(getSkinName().c_str());
-        _toolBarImg = _wm->getSkin()->getImage(L"cr3_dict_tools.png");
+        _toolBarImg = _wm->getSkin()->getImage(
+                U"cr3_dict_tools.png");
         CRRectSkinRef clientSkin = _skin->getClientSkin();
         if ( !clientSkin.isNull() ) {
             getDocView()->setBackgroundColor(clientSkin->getBackgroundColor());
@@ -1557,7 +1560,9 @@ CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDi
     _dictMenu->reconfigure(0);
     CRPropRef props = CRPocketBookDocView::instance->getProps();
     getDocView()->setVisiblePageCount(props->getIntDef(PROP_POCKETBOOK_DICT_PAGES, 1));
-    lString16 lastDict = props->getStringDef(PROP_POCKETBOOK_DICT, pbGlobals->getDictionary());
+    lString32 lastDict = props->getStringDef(
+            PROP_POCKETBOOK_DICT,
+            pbGlobals->getDictionary());
     if (lastDict.empty()) {
         loadDictionaries();
         if (_dictCount > 0)
@@ -1568,14 +1573,19 @@ CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDi
         int rc = OpenDictionary((char *)UnicodeToUtf8(lastDict).c_str());
         if (rc == 1) {
             _caption = lastDict;
-            getDocView()->createDefaultDocument(lString16::empty_str, Utf8ToUnicode(TR("@Word_not_found")));
+            getDocView()->createDefaultDocument(
+                    lString32::empty_str,
+                    Utf8ToUnicode(
+                            TR("@Word_not_found")));
             return;
         }
         lString8 dName =  UnicodeToUtf8(lastDict);
         CRLog::error("OpenDictionary(%s) returned %d", dName.c_str(), rc);
     }
     _dictIndex = -1;
-    getDocView()->createDefaultDocument(lString16::empty_str, Utf8ToUnicode(TR("@Dic_error")));
+    getDocView()->createDefaultDocument(
+            lString32::empty_str,
+            Utf8ToUnicode(TR("@Dic_error")));
 }
 
 void CRPbDictionaryView::loadDictionaries()
@@ -1681,17 +1691,20 @@ void CRPbDictionaryView::selectDictionary()
     CRLog::trace("selectDictionary()");
     LVFontRef valueFont(fontMan->GetFont( VALUE_FONT_SIZE, 400, true, css_ff_sans_serif, lString8("Liberation Sans")));
     std::unique_ptr<CRMenu> dictsMenu = std::make_unique<CRMenu>(
-            _wm, nullptr, PB_CMD_SELECT_DICT, lString16(""),
+            _wm, nullptr, PB_CMD_SELECT_DICT,
+            lString32::empty_str,
             LVImageSourceRef(), LVFontRef(), valueFont,
             CRPocketBookDocView::instance->getNewProps(),
             PROP_POCKETBOOK_DICT);
     dictsMenu->setAccelerators(_wm->getAccTables().get("menu"));
-    dictsMenu->setSkinName(lString16("#settings"));
+    dictsMenu->setSkinName(U"#settings");
     if (!_dictsLoaded) {
         loadDictionaries();
     }
     for (int i = 0; i < _dictCount; i++) {
-        lString16 dictName = Utf8ToUnicode(_dictNames[i]);
+        lString32 dictName =
+                Utf8ToUnicode(
+                        lString8(_dictNames[i]));
         dictsMenu->addItem(std::make_unique<CRMenuItem>(
                 dictsMenu.get(), i, dictName,
                 LVImageSourceRef(), LVFontRef(),
@@ -1711,7 +1724,9 @@ void CRPbDictionaryView::onDictionarySelect()
 {
     CRPocketBookDocView::instance->applySettings();
     CRPropRef props = CRPocketBookDocView::instance->getProps();
-    lString16 lastDict = props->getStringDef(PROP_POCKETBOOK_DICT);
+    lString32 lastDict =
+            props->getStringDef(
+                    PROP_POCKETBOOK_DICT);
     int index = _dictsTable.get(lastDict);
     CRLog::trace("CRPbDictionaryView::onDictionarySelect(%d)", index);
     if (index >= 0 && index <= _dictCount) {
@@ -1729,7 +1744,7 @@ void CRPbDictionaryView::onDictionarySelect()
         }
         _caption = lastDict;
     }
-    lString16 word = _word;
+    lString32 word = _word;
     _word.clear();
     _parent->setDocDirty();
     _selectedIndex = PB_DICT_DEACTIVATE;
@@ -1849,14 +1864,16 @@ lString8 CRPbDictionaryView::createArticle(const char *word, const char *transla
 
     article << "<title><p>" << word << "</p></title>";
     if (translation != NULL) {
-        lString16 src = Utf8ToUnicode(translation), dst;
+        lString32 src =
+                Utf8ToUnicode(lString8(translation));
+        lString32 dst;
         //article << "<section style=\"text-align: left; text-indent: 0; font-size: 70%\">";
         article << "<section>";
         article << "<p>";
         int offset = 0, count = 0;
-        const lChar8 *closeTag = NULL;
+        const lChar32 *closeTag = NULL;
         for (int i = 0; i < src.length(); i++) {
-            lChar16 currentChar = src[i];
+            lChar32 currentChar = src[i];
             if (currentChar == 1 || currentChar == 2 || currentChar == 3 ||
                 currentChar == '\n') {
                 if (count > 0) {
@@ -1872,15 +1889,15 @@ lString8 CRPbDictionaryView::createArticle(const char *word, const char *transla
                     }
                     break;
                 case 2:
-                    dst << "<emphasis>";
-                    closeTag = "</emphasis>";
+                    dst << U"<emphasis>";
+                    closeTag = U"</emphasis>";
                     break;
                 case 3:
-                    dst << "<strong>";
-                    closeTag = "</strong>";
+                    dst << U"<strong>";
+                    closeTag = U"</strong>";
                     break;
                 case '\n':
-                    dst << "</p><p>";
+                    dst << U"</p><p>";
 				default:
                     break;
                 }
@@ -1892,7 +1909,7 @@ lString8 CRPbDictionaryView::createArticle(const char *word, const char *transla
                 dst.append(src, offset, count);
             if (closeTag != NULL)
                 dst.append(closeTag);
-            dst << "</p>";
+            dst << U"</p>";
             article << UnicodeToUtf8(dst);
         } else
             article << translation;
@@ -1901,19 +1918,21 @@ lString8 CRPbDictionaryView::createArticle(const char *word, const char *transla
     return article;
 }
 
-void CRPbDictionaryView::translate(const lString16 &w)
+void CRPbDictionaryView::translate(
+        const lString32 &w)
 {
     lString8 body;
 
     CRLog::trace("CRPbDictionaryView::translate() start");
     if (_dictIndex >= 0) {
-        lString16 s16 = w;
-        if (s16 == _word)
+        lString32 normalizedWord = w;
+        if (normalizedWord == _word)
             return;
-        _word = s16;
+        _word = normalizedWord;
 
-        s16.lowercase();
-        lString8 what = UnicodeToUtf8( s16 );
+        normalizedWord.lowercase();
+        lString8 what =
+                UnicodeToUtf8(normalizedWord);
         char *word = NULL, *translation = NULL;
 
         _translateResult = LookupWord((char *)what.c_str(), &word, &translation);
@@ -1981,15 +2000,19 @@ int CRPbDictionaryView::getDesiredHeight()
     return skinRect.height();
 }
 
-lString16 CRPbDictionaryMenuItem::createItemValue(const char * translation)
+lString32 CRPbDictionaryMenuItem::createItemValue(
+        const char *translation)
 {
-    lString16 src = Utf8ToUnicode(translation);
-    lString16 dst;
+    if (!translation)
+        return lString32::empty_str;
+    lString32 src =
+            Utf8ToUnicode(lString8(translation));
+    lString32 dst;
     int count = src.length();
     if (count > 256)
         count = 256;
     for (int i = 0; i < count; i++) {
-        lChar16 currentChar = src[i];
+        lChar32 currentChar = src[i];
         if ((currentChar == 1 || currentChar == 2 || currentChar == 3))
             continue;
         if (currentChar == '\n')
@@ -2000,10 +2023,14 @@ lString16 CRPbDictionaryMenuItem::createItemValue(const char * translation)
 }
 
 CRPbDictionaryMenuItem::CRPbDictionaryMenuItem(CRMenu * menu, int id, const char *word, const char *translation)
-    : CRMenuItem(menu, id, lString16::empty_str, LVImageSourceRef(), LVFontRef() ), _word( word ), _translation(translation)
+    : CRMenuItem(
+            menu, id, lString32::empty_str,
+            LVImageSourceRef(), LVFontRef() ),
+      _word( word ), _translation(translation)
 {
-    _word16 = Utf8ToUnicode(word);
-    _translation16 = createItemValue(_translation);
+    if (word)
+        _wordText = Utf8ToUnicode(lString8(word));
+    _translationText = createItemValue(_translation);
 }
 
 void CRPbDictionaryMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected)
@@ -2023,23 +2050,28 @@ void CRPbDictionaryMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef s
     }
     lvRect textRect = rc;
     textRect.left += imgWidth;
-    lString16 word = _word16 + " ";
+    lString32 word = _wordText + U" ";
     lvPoint sz = skin->measureTextItem(word);
     textRect.right = textRect.left + sz.x;
     skin->drawText( buf, textRect, word);
     textRect.left = textRect.right + 1;
     textRect.right = rc.right;
-    valueSkin->drawText( buf, textRect, _translation16 );
+    valueSkin->drawText(
+            buf, textRect, _translationText);
     if (selected)
         buf.InvertRect(rc.left, rc.top, rc.right, rc.bottom);
 }
 
 
 CRPbDictionaryMenu::CRPbDictionaryMenu(CRGUIWindowManager * wm, CRPbDictionaryView *parent)
-    : CRMenu(wm, NULL, 0, lString16::empty_str, LVImageSourceRef(), LVFontRef(), LVFontRef() ), _parent(parent)
+    : CRMenu(
+            wm, NULL, 0, lString32::empty_str,
+            LVImageSourceRef(), LVFontRef(),
+            LVFontRef() ),
+      _parent(parent)
 {
     _fullscreen = false;
-    setSkinName(lString16("#dict-list"));
+    setSkinName(U"#dict-list");
 }
 
 bool CRPbDictionaryMenu::newPage(const char *firstWord, const char *firstTranslation)
@@ -2293,13 +2325,23 @@ void CRPbDictionaryDialog::onWordSelection()
             if (_prompt.empty()) {
                 int key = 0;
                 int keyFlags = 0;
-                lString16 prompt_msg = lString16(_("Press $1 to translate"));
+                lString32 promptMessage =
+                        Utf8ToUnicode(lString8(
+                                _("Press $1 to translate")));
                 if (_acceleratorTable->findCommandKey(MCMD_OK, 0, key, keyFlags))
-                    prompt_msg.replaceParam(1, lString16(getKeyName(key, keyFlags)));
+                    promptMessage.replaceParam(
+                            1,
+                            Utf8ToUnicode(lString8(
+                                    getKeyName(
+                                            key,
+                                            keyFlags))));
                 else
-                    prompt_msg.replaceParam(1, lString16::empty_str);
+                    promptMessage.replaceParam(
+                            1, lString32::empty_str);
                 lString8 body;
-                body << "<p>" << UnicodeToUtf8(prompt_msg) << "</p";
+                body << "<p>"
+                     << UnicodeToUtf8(promptMessage)
+                     << "</p";
                 _prompt = CRViewDialog::makeFb2Xml(body);
             }
             _dictView->setTranslation(_prompt);

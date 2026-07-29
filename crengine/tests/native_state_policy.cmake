@@ -7147,6 +7147,31 @@ forbid_source_text(
   "PocketBook dictionary stylesheet paths must not regress to legacy Unicode width"
 )
 require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "LVHashTable<lString32, int> _dictsTable;"
+  "PocketBook dictionary indexes must retain current-width keys"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "void CRPbDictionaryView::translate("
+  "PocketBook dictionary lookup must retain its current-width boundary"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString32 CRPbDictionaryMenuItem::createItemValue("
+  "PocketBook dictionary menu text must retain current-width storage"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lString16"
+  "PocketBook GUI internals must not regress to legacy Unicode-width storage"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lChar16"
+  "PocketBook GUI internals must not regress to legacy Unicode-width characters"
+)
+require_source_text(
   "${NANOX_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "NanoX window managers must adopt a newly created screen"
