@@ -371,30 +371,41 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	MMapTest();
 #endif
 
-    lString8 exe_dir;
     char exe_fn[MAX_PATH+1];
     GetModuleFileNameA( NULL, exe_fn, MAX_PATH );
     lChar16 exe_fn16[MAX_PATH+1];
     GetModuleFileNameW( NULL, exe_fn16, MAX_PATH );
-	lString16 exedir = LVExtractPath(lString16(exe_fn16));	
-	lString8 exedir8 = UnicodeToUtf8( exedir );
-	CRLog::debug("exedir=%s", exedir8.c_str());
+    lString32 executablePath =
+            Utf16ToUnicode(exe_fn16);
+    lString32 executableDirectory =
+            LVExtractPath(executablePath);
+    CRLog::debug(
+            "executableDirectory=%s",
+            UnicodeToUtf8(
+                    executableDirectory).c_str());
 
 	std::unique_ptr<CRMoFileTranslator> translator(
 			new CRMoFileTranslator());
-    translator->openMoFile(exedir + "/po/ru.mo");
+    translator->openMoFile(
+            executableDirectory + U"po/ru.mo");
 	CRI18NTranslator::setTranslator( translator.release() );
 
 
-	lChar16 sysdir[MAX_PATH+1];
-	GetWindowsDirectoryW(sysdir, MAX_PATH);
-	lString16 fontdir( sysdir );
-	fontdir << L"\\Fonts\\";
-	lString8 fontdir8( UnicodeToUtf8(fontdir) );
-	lString8 fd = UnicodeToLocal(exedir);
+    lChar16 systemDirectoryBuffer[MAX_PATH+1];
+    GetWindowsDirectoryW(
+            systemDirectoryBuffer,
+            MAX_PATH);
+    lString32 fontDirectory =
+            Utf16ToUnicode(
+                    systemDirectoryBuffer)
+            + U"\\Fonts\\";
+    lString8 fontDirectoryUtf8 =
+            UnicodeToUtf8(fontDirectory);
+    lString8 executableDirectoryUtf8 =
+            UnicodeToUtf8(executableDirectory);
 	lString32Collection fontDirs;
-	//fontDirs.add( fontdir );
-    fontDirs.add(Utf16ToUnicode(exedir) + U"fonts");
+    fontDirs.add(
+            executableDirectory + U"fonts");
 	InitCREngine( exe_fn, fontDirs );
     const char * fontnames[] = {
 #if 1
@@ -444,7 +455,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         NULL
     };
     for ( int fi = 0; fontnames[fi]; fi++ ) {
-        fontMan->RegisterFont( fontdir8 + fontnames[fi] );
+        fontMan->RegisterFont(
+                fontDirectoryUtf8 + fontnames[fi]);
     }
     //LVCHECKPOINT("WinMain start");
 
@@ -473,15 +485,18 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		CRWin32WindowManager winman(500, 700);
 
 		const char * keymap_locations [] = {
-			exedir8.c_str(),
+			executableDirectoryUtf8.c_str(),
 			NULL,
 		};
 		loadKeymaps( winman, keymap_locations );
 		
 
-        ldomDocCache::init( exedir + "cache", 0x100000 * 96 ); /*96Mb*/
+        ldomDocCache::init(
+                executableDirectory + U"cache",
+                0x100000 * 96 ); /*96Mb*/
 
-        winman.loadSkin( LVExtractPath(LocalToUnicode(lString8(exe_fn))) + "skin" );
+        winman.loadSkin(
+                executableDirectory + U"skin");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
                 std::make_unique<V3DocViewWin>(
                         &winman);
@@ -489,22 +504,23 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
         main_win->getDocView()->setTextColor(0x000000);
         main_win->getDocView()->setFontSize( 20 );
-        main_win->loadCSS( exedir + "fb2.css" );
-        main_win->loadSettings( exedir + "cr3.ini" );
+        main_win->loadCSS(
+                executableDirectory + U"fb2.css");
+        main_win->loadSettings(
+                executableDirectory + U"cr3.ini");
         main_win->saveSettings(lString32::empty_str);
-        main_win->setHelpFile( exedir + "cr3-manual-ru.fb2" );
-        HyphMan::initDictionaries( exedir + "hyph\\" );
-        main_win->loadDefaultCover( exedir + "cr3_def_cover.png" );
+        main_win->setHelpFile(
+                executableDirectory
+                + U"cr3-manual-ru.fb2");
+        HyphMan::initDictionaries(
+                executableDirectory + U"hyph\\");
+        main_win->loadDefaultCover(
+                executableDirectory
+                + U"cr3_def_cover.png");
 		main_win->setBookmarkDir(U"c:\\cr3\\bookmarks\\");
-		lString8 exedir8 = UnicodeToUtf8( exedir );
-		const char * dirs[] = {
-			exedir8.c_str(),
-			NULL
-		};
 
-		loadKeymaps( winman, dirs );
-
-        main_win->loadHistory( exedir + "cr3hist.bmk" );
+        main_win->loadHistory(
+                executableDirectory + U"cr3hist.bmk");
 
         winman.activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument( LocalToUnicode( cmdline )) ) {

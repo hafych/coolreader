@@ -6832,6 +6832,36 @@ require_source_text(
   "Win32 window managers must adopt their created screen"
 )
 require_source_text(
+  "${WIN_GUI_SOURCE}"
+  "lString32 executablePath ="
+  "Win32 executable paths must widen immediately after the WinAPI boundary"
+)
+require_source_text(
+  "${WIN_GUI_SOURCE}"
+  "lString32 executableDirectory ="
+  "Win32 resource paths must retain current-width storage"
+)
+require_source_text(
+  "${WIN_GUI_SOURCE}"
+  "lString32 fontDirectory ="
+  "Win32 font paths must retain current-width storage"
+)
+require_source_text(
+  "${WIN_GUI_SOURCE}"
+  "Utf16ToUnicode(exe_fn16);"
+  "Win32 executable paths must convert explicitly at the UTF-16 boundary"
+)
+forbid_source_text(
+  "${WIN_GUI_SOURCE}"
+  "lString16 "
+  "Win32 GUI internals must not retain legacy-width string storage"
+)
+forbid_source_text(
+  "${WIN_GUI_SOURCE}"
+  "exedir +"
+  "Win32 resource paths must not regress to the legacy path variable"
+)
+require_source_text(
   "${JINKE_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "Jinke window managers must adopt their created screen"
