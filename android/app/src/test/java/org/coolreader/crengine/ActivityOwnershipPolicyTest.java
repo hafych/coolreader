@@ -431,7 +431,11 @@ public class ActivityOwnershipPolicyTest {
 				"drawTaskLifecycle",
 				"ttsInitializationLifecycle",
 				"readerSurfaceState",
-				"einkRefreshScheduler"}) {
+				"einkRefreshScheduler",
+				"keyDoubleClickState",
+				"keyDoubleClickScheduler",
+				"tapGestureLifecycle",
+				"tapGestureScheduler"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -484,6 +488,16 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains parallel surface lifecycle state",
 					field.getName().equals("mSurfaceCreated"));
+			for (String legacy : new String[]{
+					"currentDoubleClickAction",
+					"currentSingleClickAction",
+					"currentDoubleClickActionStart",
+					"currentDoubleClickActionKeyCode"}) {
+				assertFalse(
+						"ReaderView retains parallel key click state "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
 			assertFalse(
 					"ReaderView retains dead animation serial state",
 					field.getName().equals(
@@ -657,6 +671,63 @@ public class ActivityOwnershipPolicyTest {
 		assertSynchronizedMethod(
 				ReaderSurfaceState.class,
 				"close");
+		assertTrue(Modifier.isFinal(
+				KeyDoubleClickState.class.getModifiers()));
+		for (Field field :
+				KeyDoubleClickState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Class<?> nested :
+				KeyDoubleClickState.class.getDeclaredClasses()) {
+			for (Field field : nested.getDeclaredFields()) {
+				assertTrue(Modifier.isPrivate(
+						field.getModifiers()));
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+			}
+		}
+		assertSynchronizedMethod(
+				KeyDoubleClickState.class,
+				"defer",
+				int.class,
+				long.class,
+				Object.class,
+				Object.class);
+		assertSynchronizedMethod(
+				KeyDoubleClickState.class,
+				"resolvePress",
+				int.class,
+				long.class,
+				long.class);
+		assertSynchronizedMethod(
+				KeyDoubleClickState.class,
+				"claimSingle",
+				KeyDoubleClickState.Pending.class);
+		assertSynchronizedMethod(
+				KeyDoubleClickState.class,
+				"cancel");
+		assertSynchronizedMethod(
+				KeyDoubleClickState.class,
+				"close");
+		for (String name : new String[]{
+				"cancelTapGestureTimeout",
+				"closeGestureTimeouts"}) {
+			Method method =
+					ReaderView.class.getDeclaredMethod(name);
+			assertTrue(Modifier.isPrivate(
+					method.getModifiers()));
+		}
+		Method scheduleTapGestureTimeout =
+				ReaderView.class.getDeclaredMethod(
+						"scheduleTapGestureTimeout",
+						ReaderView.TapHandler.class,
+						Runnable.class,
+						long.class);
+		assertTrue(Modifier.isPrivate(
+				scheduleTapGestureTimeout.getModifiers()));
 	}
 
 	@Test

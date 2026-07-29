@@ -458,6 +458,11 @@ The historical Debian changelog remains in [`changelog`](changelog).
   cancellation, replacement or View detachment. Stray terminal events are
   safe, pressed state is cleared, and an old gesture cannot repeat into a new
   one.
+- Reader key single/double-click decisions now use one identity-owned state, so
+  a stale timer cannot erase a replacement pending action. Touch long-press and
+  double-tap timeouts are reader-owned and canceled on gesture changes,
+  `ACTION_CANCEL`, focus loss, book close or destruction; delayed tap inspection
+  cannot publish against a replacement book.
 - Reader animation and GC schedulers are now generation-owned and canceled
   during every teardown. Animation updates no longer coordinate unrelated
   Activities through a class monitor or retain active state after destruction.

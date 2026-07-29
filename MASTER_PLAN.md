@@ -269,6 +269,15 @@ DRM или ограничений доступа, подбор/получени�
   Повторяемые touch-actions также используют exact one-shot generation:
   `UP`/`CANCEL`, новое нажатие и detach View отменяют pending wrapper, снимают
   pressed-state и не позволяют callback старого жеста действовать на новый.
+  Key single/double-click decision вынесен из четырёх parallel полей в
+  synchronized `KeyDoubleClickState`: immutable pending identity не позволяет
+  stale timer очистить replacement, matching second press потребляет double,
+  остальные/expired/regressed события flush только prior single с
+  overflow-safe elapsed. Touch long/double timeouts используют отдельный
+  closeable gate и reader scheduler; replacement/drag/`ACTION_CANCEL`/focus
+  loss/book close/destroy отменяют exact owner, stale selection completion
+  проверяет handler identity и active service generation, а delayed
+  link/image/bookmark completion дополнительно проверяет captured book identity.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

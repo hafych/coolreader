@@ -82,6 +82,19 @@ Repeated touch actions use the same exact-wrapper principle. Each press owns a
 new press or View detachment invalidates the pending wrapper and clears the
 pressed state. A callback already removed from the Handler queue therefore
 cannot observe or act on a replacement gesture.
+Reader input timeouts follow the same ownership rule. Key single/double-click
+resolution lives in a synchronized `KeyDoubleClickState` instead of four
+parallel fields. A scheduled single-click claims its exact immutable pending
+decision, so an old timer cannot clear or execute a replacement; a matching
+second press consumes the double action, while another, expired or
+clock-regressed press flushes only the prior single action with overflow-safe
+elapsed arithmetic. Touch long-press and double-tap timeouts use a separate
+closeable gate plus reader-owned scheduler. Gesture replacement, drag-mode
+entry, `ACTION_CANCEL`, focus loss, book close and reader destruction cancel
+the exact timeout, and late selection inspection verifies both its handler
+identity and active service generation before publishing UI. Link/image/
+bookmark inspection also captures book identity, so its delayed GUI result
+cannot act on a replacement document.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

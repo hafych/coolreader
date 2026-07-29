@@ -188,6 +188,9 @@ VIEWPORT_RESIZE_STATE = (
 READER_SURFACE_STATE = (
     SOURCE / "crengine" / "ReaderSurfaceState.java"
 )
+KEY_DOUBLE_CLICK_STATE = (
+    SOURCE / "crengine" / "KeyDoubleClickState.java"
+)
 POSITION_PROPERTIES = SOURCE / "crengine" / "PositionProperties.java"
 DOCUMENT_POSITION_POLICY = (
     SOURCE / "crengine" / "DocumentPositionPolicy.java"
@@ -273,6 +276,18 @@ READER_SURFACE_STATE_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderSurfaceStateTest.java"
+)
+KEY_DOUBLE_CLICK_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "KeyDoubleClickStateTest.java"
 )
 POSITION_PROPERTIES_TEST = (
     ROOT
@@ -2016,6 +2031,10 @@ def main() -> None:
         "private final CloseableTaskGate ttsInitializationLifecycle",
         "private final ReaderSurfaceState readerSurfaceState",
         "private final DelayedExecutor einkRefreshScheduler",
+        "private final KeyDoubleClickState<ReaderAction>",
+        "private final DelayedExecutor keyDoubleClickScheduler",
+        "private final CloseableTaskGate tapGestureLifecycle",
+        "private final DelayedExecutor tapGestureScheduler",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
@@ -2039,6 +2058,10 @@ def main() -> None:
         "ttsInitializationLifecycle.close()",
         "readerSurfaceState.close()",
         "einkRefreshScheduler.cancel()",
+        "keyDoubleClickState.close()",
+        "keyDoubleClickScheduler.cancel()",
+        "tapGestureLifecycle.close()",
+        "tapGestureScheduler.cancel()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -2087,6 +2110,17 @@ def main() -> None:
         "readerSurfaceState.markSurfaceCreated()",
         "readerSurfaceState.markSurfaceDestroyed()",
         "readerSurfaceState.isDrawable()",
+        "keyDoubleClickState.resolvePress(",
+        "keyDoubleClickState.defer(",
+        "keyDoubleClickState.claimSingle(pending)",
+        "tapGestureLifecycle.replace()",
+        "tapGestureLifecycle.complete(owner)",
+        "tapGestureLifecycle.cancel()",
+        "tapGestureScheduler.postDelayed(",
+        "private void closeGestureTimeouts()",
+        "currentTapHandler != handler",
+        "== MotionEvent.ACTION_CANCEL",
+        "mBookInfo != gestureBook",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -2108,6 +2142,10 @@ def main() -> None:
         "nextUpdateId",
         "lastDrawTaskId",
         "mSurfaceCreated",
+        "currentDoubleClickAction",
+        "currentSingleClickAction",
+        "currentDoubleClickActionStart",
+        "currentDoubleClickActionKeyCode",
         "updateSerialNumber",
         "postGUI(() -> mEinkScreen.refreshScreen(surface)",
         "BackgroundThread.instance().postGUI("
@@ -2155,6 +2193,47 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_SURFACE_STATE_TEST)} omits surface "
                 f"lifecycle regression: {marker}")
+
+    key_double_click_state_text = KEY_DOUBLE_CLICK_STATE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class KeyDoubleClickState<T>",
+        "private Pending<T> current",
+        "private boolean closed",
+        "synchronized Pending<T> defer(",
+        "synchronized PressResult<T> resolvePress(",
+        "synchronized T claimSingle(Pending<T> pending)",
+        "synchronized void cancel()",
+        "synchronized boolean close()",
+        "now >= pending.startedAt",
+        "elapsed >= 0",
+        "elapsed < interval",
+        "static final class Pending<T>",
+        "static final class PressResult<T>",
+        "private final boolean consumesPress",
+    ):
+        if marker not in key_double_click_state_text:
+            violations.append(
+                f"{relative(KEY_DOUBLE_CLICK_STATE)} omits exact key "
+                f"double-click marker: {marker}")
+
+    key_double_click_state_test_text = (
+        KEY_DOUBLE_CLICK_STATE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "matchingSecondPressConsumesDoubleAction",
+        "differentKeyFlushesSingleWithoutConsumingPress",
+        "expiredOrRegressedClockFlushesSingle",
+        "staleTimerCannotClaimReplacementDecision",
+        "cancelAllowsAnotherDecision",
+        "closePermanentlyRejectsDecisions",
+        "Long.MIN_VALUE",
+        "Long.MAX_VALUE",
+    ):
+        if marker not in key_double_click_state_test_text:
+            violations.append(
+                f"{relative(KEY_DOUBLE_CLICK_STATE_TEST)} omits key "
+                f"double-click regression: {marker}")
 
     auto_scroll_state_text = AUTO_SCROLL_SESSION_STATE.read_text(
         encoding="utf-8")

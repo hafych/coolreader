@@ -411,10 +411,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public final int LONG_KEYPRESS_TIME = 900;
 	public final int AUTOREPEAT_KEYPRESS_TIME = 700;
 	public final int DOUBLE_CLICK_INTERVAL = 400;
-	private ReaderAction currentDoubleClickAction = null;
-	private ReaderAction currentSingleClickAction = null;
-	private long currentDoubleClickActionStart = 0;
-	private int currentDoubleClickActionKeyCode = 0;
+	private final KeyDoubleClickState<ReaderAction>
+			keyDoubleClickState = new KeyDoubleClickState<>();
+	private final DelayedExecutor keyDoubleClickScheduler =
+			DelayedExecutor.createGUI("key-double-click");
 //	boolean VOLUME_KEYS_ZOOM = false;
 
 	//private boolean backKeyDownHere = false;
@@ -487,8 +487,26 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		trackedKeyEvent = null;
 		actionToRepeat = null;
 		repeatActionActive = false;
+		cancelKeyDoubleClick();
 		if (currentTapHandler != null)
 			currentTapHandler.cancel();
+	}
+
+	private void cancelKeyDoubleClick() {
+		keyDoubleClickState.cancel();
+		keyDoubleClickScheduler.cancel();
+	}
+
+	private void applyDeferredKeyAction(
+			KeyDoubleClickState.Pending<ReaderAction> pending) {
+		BackgroundThread.ensureGUI();
+		ReaderAction action =
+				keyDoubleClickState.claimSingle(pending);
+		if (action == null || !mServiceLifecycle.isActive())
+			return;
+		log.d("onKeyUp: single click action "
+				+ action.id + " found");
+		onAction(action);
 	}
 
 	private boolean isTracked(KeyEvent event) {
@@ -958,8 +976,42 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			currentImageViewer.close();
 	}
 
+	private final CloseableTaskGate tapGestureLifecycle =
+			new CloseableTaskGate();
+	private final DelayedExecutor tapGestureScheduler =
+			DelayedExecutor.createGUI("tap-gesture");
 	private TapHandler currentTapHandler = null;
 	private long firstTapTimeStamp;
+
+	private void scheduleTapGestureTimeout(
+			TapHandler handler,
+			Runnable timeout,
+			long delay) {
+		CloseableTaskGate.Token owner =
+				tapGestureLifecycle.replace();
+		if (owner == null)
+			return;
+		tapGestureScheduler.postDelayed(() -> {
+			if (!tapGestureLifecycle.complete(owner)
+					|| currentTapHandler != handler
+					|| !mServiceLifecycle.isActive())
+				return;
+			timeout.run();
+		}, delay);
+	}
+
+	private void cancelTapGestureTimeout() {
+		tapGestureLifecycle.cancel();
+		tapGestureScheduler.cancel();
+	}
+
+	private void closeGestureTimeouts() {
+		keyDoubleClickState.close();
+		keyDoubleClickScheduler.cancel();
+		tapGestureLifecycle.close();
+		tapGestureScheduler.cancel();
+		currentTapHandler = null;
+	}
 
 	public class TapHandler {
 
@@ -1003,6 +1055,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		/// cancel current action and reset touch tracking state
 		private boolean cancel() {
+			if (currentTapHandler != this)
+				return true;
+			cancelTapGestureTimeout();
 			if (state == STATE_INITIAL)
 				return true;
 			switch (state) {
@@ -1065,6 +1120,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		/// perform action and reset touch tracking state
 		private boolean performAction(final ReaderAction action, boolean checkForLinks) {
+			if (currentTapHandler != this)
+				return true;
+			cancelTapGestureTimeout();
 			log.d("performAction on touch: " + action);
 			state = STATE_DONE;
 
@@ -1076,6 +1134,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 
 			// check link before executing action
+			final BookInfo gestureBook = mBookInfo;
 			mEngine.execute(new Task() {
 				String link;
 				ImageInfo image;
@@ -1105,8 +1164,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 
 				public void done() {
+					if (!mServiceLifecycle.isActive()
+							|| mBookInfo != gestureBook)
+						return;
+					if (bookmark != null && gestureBook == null)
+						return;
 					if (bookmark != null)
-						bookmark = mBookInfo.findBookmark(bookmark);
+						bookmark = gestureBook.findBookmark(
+								bookmark);
 					if (link == null && image == null && bookmark == null) {
 						onAction(action);
 					} else if (image != null) {
@@ -1161,6 +1226,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private boolean startSelection() {
+			if (currentTapHandler != this)
+				return true;
+			cancelTapGestureTimeout();
 			state = STATE_SELECTION;
 			// check link before executing action
 			mEngine.execute(new Task() {
@@ -1180,6 +1248,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 
 				public void done() {
+					if (currentTapHandler != TapHandler.this
+							|| !mServiceLifecycle.isActive())
+						return;
 					if (bookmark != null)
 						bookmark = mBookInfo.findBookmark(bookmark);
 					if (image != null) {
@@ -1199,7 +1270,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		private boolean trackDoubleTap() {
 			state = STATE_WAIT_FOR_DOUBLE_CLICK;
-			BackgroundThread.instance().postGUI(() -> {
+			scheduleTapGestureTimeout(this, () -> {
 				if (currentTapHandler == TapHandler.this && state == STATE_WAIT_FOR_DOUBLE_CLICK)
 					performAction(shortTapAction, false);
 			}, DOUBLE_CLICK_INTERVAL);
@@ -1207,7 +1278,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private boolean trackLongTap() {
-			BackgroundThread.instance().postGUI(() -> {
+			scheduleTapGestureTimeout(this, () -> {
 				if (currentTapHandler == TapHandler.this && state == STATE_DOWN_1) {
 					if (longTapAction == ReaderAction.START_SELECTION)
 						startSelection();
@@ -1331,6 +1402,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							if (start_x < dragThreshold * 170 / 100 && isBacklightControlFlick == 1
 									|| start_x > width - dragThreshold * 170 / 100 && isBacklightControlFlick == 2) {
 								// brightness
+								cancelTapGestureTimeout();
 								state = STATE_BRIGHTNESS;
 								brightness_type = isColdWarmBacklightControlTogether ? BRIGHTNESS_TYPE_BOTH : BRIGHTNESS_TYPE_COMMON;
 								startBrightnessControl(start_x, start_y, brightness_type);
@@ -1342,6 +1414,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							if (start_x < dragThreshold * 170 / 100 && isWarmBacklightControlFlick == 1
 									|| start_x > width - dragThreshold * 170 / 100 && isWarmBacklightControlFlick == 2) {
 								// warm backlight brightness
+								cancelTapGestureTimeout();
 								state = STATE_BRIGHTNESS;
 								brightness_type = BRIGHTNESS_TYPE_WARM;
 								startBrightnessControl(start_x, start_y, brightness_type);
@@ -1356,9 +1429,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							}
 							startAnimation(start_x, start_y, width, height, x, y);
 							updateAnimation(x, y);
+							cancelTapGestureTimeout();
 							state = STATE_FLIPPING;
 						}
 						if (mGesturePageFlipsPerFullSwipe > 1) {
+							cancelTapGestureTimeout();
 							state = STATE_FLIP_TRACKING;
 							updatePageFlipTracking(start_x, start_y);
 						}
@@ -1379,7 +1454,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						break;
 				}
 
-			} else if (event.getAction() == MotionEvent.ACTION_OUTSIDE) {
+			} else if (event.getAction() == MotionEvent.ACTION_OUTSIDE
+					|| event.getAction()
+							== MotionEvent.ACTION_CANCEL) {
 				return unexpectedEvent();
 			}
 			return true;
@@ -6353,6 +6430,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void close() {
 		BackgroundThread.ensureGUI();
 		log.i("ReaderView.close() is called");
+		stopTracking();
 		invalidateTapHighlight();
 		cancelSelectionUpdates();
 		if (!mOpened)
@@ -6422,6 +6500,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		ttsInitializationLifecycle.close();
 		readerSurfaceState.close();
 		einkRefreshScheduler.cancel();
+		closeGestureTimeouts();
 		synchronized (viewportResizeState) {
 			viewportResizeState.close();
 			resizeScheduler.cancel();
@@ -7031,24 +7110,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		//ReaderAction dblAction = ReaderAction.findForDoubleKey( keyCode, mSettings );
 
 		if (event.getRepeatCount() == 0) {
-			if (keyCode == currentDoubleClickActionKeyCode && currentDoubleClickActionStart + DOUBLE_CLICK_INTERVAL > android.os.SystemClock.uptimeMillis()) {
-				if (currentDoubleClickAction != null) {
-					log.d("executing doubleclick action " + currentDoubleClickAction);
-					onAction(currentDoubleClickAction);
+			KeyDoubleClickState.PressResult<ReaderAction>
+					pending =
+					keyDoubleClickState.resolvePress(
+							keyCode,
+							android.os.SystemClock.uptimeMillis(),
+							DOUBLE_CLICK_INTERVAL);
+			if (pending != null) {
+				keyDoubleClickScheduler.cancel();
+				ReaderAction pendingAction = pending.action();
+				if (pendingAction != null) {
+					log.d("executing pending key action "
+							+ pendingAction);
+					onAction(pendingAction);
 				}
-				currentDoubleClickActionStart = 0;
-				currentDoubleClickActionKeyCode = 0;
-				currentDoubleClickAction = null;
-				currentSingleClickAction = null;
-				return true;
-			} else {
-				if (currentSingleClickAction != null) {
-					onAction(currentSingleClickAction);
-				}
-				currentDoubleClickActionStart = 0;
-				currentDoubleClickActionKeyCode = 0;
-				currentDoubleClickAction = null;
-				currentSingleClickAction = null;
+				if (pending.consumesPress())
+					return true;
 			}
 		}
 
@@ -7170,21 +7247,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		} else {
 			if (!dblAction.isNone()) {
 				// wait for possible double click
-				currentDoubleClickActionStart = android.os.SystemClock.uptimeMillis();
-				currentDoubleClickAction = dblAction;
-				currentSingleClickAction = action;
-				currentDoubleClickActionKeyCode = keyCode;
-				final int myKeyCode = keyCode;
-				BackgroundThread.instance().postGUI(() -> {
-					if (currentSingleClickAction != null && currentDoubleClickActionKeyCode == myKeyCode) {
-						log.d("onKeyUp: single click action " + currentSingleClickAction.id + " found for key " + myKeyCode + " single click");
-						onAction(currentSingleClickAction);
-					}
-					currentDoubleClickActionStart = 0;
-					currentDoubleClickActionKeyCode = 0;
-					currentDoubleClickAction = null;
-					currentSingleClickAction = null;
-				}, DOUBLE_CLICK_INTERVAL);
+				KeyDoubleClickState.Pending<ReaderAction>
+						pending =
+						keyDoubleClickState.defer(
+								keyCode,
+								android.os.SystemClock
+										.uptimeMillis(),
+								action,
+								dblAction);
+				if (pending != null) {
+					keyDoubleClickScheduler.postDelayed(
+							() -> applyDeferredKeyAction(
+									pending),
+							DOUBLE_CLICK_INTERVAL);
+				}
 				// posted
 				return true;
 			}
