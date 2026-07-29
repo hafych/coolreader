@@ -6958,6 +6958,31 @@ forbid_source_text(
 )
 require_source_text(
   "${JINKE_SOURCE}"
+  "static lString8 lastBookmark;"
+  "Jinke bookmark ABI state must retain bounded string storage"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "static lString32 historyFileName("
+  "Jinke history paths must retain current-width storage"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "static char last_bookmark["
+  "Jinke bookmark ABI state must not use a fixed global buffer"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "history_file_name"
+  "Jinke history paths must not use a fixed global buffer"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "strcpy("
+  "Jinke plugin state must not use unbounded C string copies"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
   "using JinkeBufferPtr ="
   "Jinke plugin output buffers must share a scoped malloc owner"
 )

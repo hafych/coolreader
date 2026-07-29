@@ -55,7 +55,7 @@ using JinkeBufferPtr =
 status_info_t lastState = {};
 static CallbackFunction * v3_callbacks = NULL;
 
-static char last_bookmark[2048]= {0};
+static lString8 lastBookmark;
 static int last_bookmark_page = 0;
 
 static bool shuttingDown = false;
@@ -208,13 +208,13 @@ public:
     {
         instance = this;
     }
-    virtual void closing()
+    void closing() override
     {
-        strcpy( last_bookmark, GetCurrentPositionBookmark() );
+        lastBookmark = GetCurrentPositionBookmark();
         last_bookmark_page = CRJinkeDocView::instance->getDocView()->getCurPage();
         V3DocViewWin::closing();
     }
-    virtual ~CRJinkeDocView()
+    ~CRJinkeDocView() override
     {
         instance = NULL;
     }
@@ -719,7 +719,8 @@ void vFreeDir() { }
 #endif
 
 
-static char history_file_name[1024] = "/root/abook/.cr3hist";
+static lString32 historyFileName(
+        U"/root/abook/.cr3hist");
 
 static const char * getLang( )
 {
@@ -802,10 +803,13 @@ int InitDoc(char *fileName)
     {
         lString8 fn(fileName);
         if ( fn.startsWith(lString8("/home")) ) {
-            strcpy( history_file_name, "/home/.cr3hist" );
+            historyFileName = U"/home/.cr3hist";
             bookmarkDir = U"/home/bookmarks/";
         }
-        CRLog::info( "History file name: %s", history_file_name );
+        CRLog::info(
+                "History file name: %s",
+                UnicodeToUtf8(
+                        historyFileName).c_str());
     }
 
     lString32 manualFile;
@@ -867,7 +871,6 @@ int InitDoc(char *fileName)
     lString32Collection fontDirs;
     fontDirs.add(U"/root/abook/fonts");
     fontDirs.add(U"/home/fonts");
-    //fontDirs.add( lString16(L"/root/crengine/fonts") ); // will be added
     CRLog::info("INIT...");
     if ( !InitCREngine( "/root/crengine/", fontDirs ) )
         return 0;
@@ -954,9 +957,11 @@ int InitDoc(char *fileName)
         }
         CRLog::debug("settings at %s", UnicodeToUtf8(ini).c_str() );
 #if USE_JINKE_USER_DATA!=1
-    if ( !main_win->loadHistory(
-                Utf8ToUnicode(lString8(history_file_name))) ) {
-        CRLog::error("Cannot read history file %s", history_file_name);
+    if ( !main_win->loadHistory(historyFileName) ) {
+        CRLog::error(
+                "Cannot read history file %s",
+                UnicodeToUtf8(
+                        historyFileName).c_str());
     }
 #endif
 
@@ -984,13 +989,7 @@ int InitDoc(char *fileName)
 const char * GetCurrentPositionBookmark()
 {
     if ( !CRJinkeDocView::instance )
-        return last_bookmark;
+        return lastBookmark.c_str();
     CRLog::trace("GetCurrentPositionBookmark() - returning empty string");
-    //ldomXPointer ptr = main_win->getDocView()->getBookmark();
-    //lString16 bmtext( !ptr ? L"" : ptr.toString() );
-    static char buf[1024];
-    //strcpy( buf, UnicodeToUtf8( bmtext ).c_str() );
-    strcpy( buf, "" );
-    CRLog::trace("   return bookmark=%s", buf);
-    return buf;
+    return "";
 }
