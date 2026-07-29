@@ -57,6 +57,13 @@ while its service generation is active. The application-context TTS connector
 serializes binder registration, binder publication and pending callbacks under
 one lock, snapshots callbacks before delivery, reports bind failure and clears
 queued work on unbind.
+The service itself owns engine replacement through `TtsInitializationState`.
+Every attempt has its own `TextToSpeech` candidate and daemon timeout; callback
+and timeout completion are serialized onto the service queue and must claim the
+same request. Replacement cancels and shuts down only the previous attempt, so
+its late callback cannot cancel the current timeout or publish the old engine.
+Service destruction closes the state before draining its queue, suppresses
+later callback posts, and releases TTS resources only after queued work stops.
 The toolbar itself receives an immutable `TtsDocumentSnapshot` and a narrow
 `TtsDocumentHandler` for the captured book/interaction; it never retains
 `ReaderView`. Selection movement, temporary view mode, cover publication,
@@ -298,6 +305,11 @@ the same request. The picker performs cleanup through an overridden
 `BaseDialog.onClose()` rather than replacing the base dismiss listener, so
 Activity dialog bookkeeping is preserved and a closed picker cannot publish
 late font results.
+TTS options use independent latest-only `TtsOptionsSession` channels for
+engines, locales, voices and engine initialization. A newer locale rejects a
+late voice list from its predecessor, engine replacement invalidates both
+dependent catalogs, and every service outcome returns to the GUI owner before
+touching option Views. Closing the dialog permanently invalidates all channels.
 Reader-mode options additionally capture the exact `BookInfo` and document
 interaction before fetching the native font catalog. The dialog receives an
 immutable `ReaderDocumentOptions` snapshot plus a narrow generation-aware

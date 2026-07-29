@@ -255,6 +255,13 @@ DRM или ограничений доступа, подбор/получени�
   публикует captured accessor/engine только активному service generation;
   TTS connector держит registration/binder/pending callbacks под одним lock,
   сообщает bind failure и очищает очередь при unbind.
+  Смена TTS engine теперь также latest-request-owned внутри сервиса:
+  `TtsInitializationState` отделяет per-attempt candidate и daemon timeout,
+  replacement отменяет timer и shutdown только прежнего candidate, а
+  callback/timeout сериализуются service queue и могут завершить только exact
+  owner. Teardown сначала закрывает initialization state и дренирует service
+  thread, затем освобождает TTS, поэтому callback старого engine не отменяет
+  timeout и не публикует instance нового.
   Долгая инициализация audiobook word timings и периодический position poll
   `TTSToolbarDlg` теперь принадлежат closeable generation gate: повторная
   инициализация инвалидирует старую публикацию, закрытие очищает main-handler
@@ -357,6 +364,11 @@ DRM или ограничений доступа, подбор/получени�
   uncheck и dismiss физически вызывают `ScanControl.stop()`, а late completion
   публикуется только exact request. Вложенный picker больше не заменяет
   `BaseDialog` dismiss-listener и сохраняет Activity dialog-close bookkeeping.
+  TTS-options получают отдельные latest-only каналы engines/locales/voices/init:
+  смена языка не может опубликовать voices предыдущего locale, смена engine
+  инвалидирует зависимые списки, failure/timeout всегда возвращаются на GUI, а
+  dismiss permanently закрывает все четыре канала и отклоняет late service
+  callbacks.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

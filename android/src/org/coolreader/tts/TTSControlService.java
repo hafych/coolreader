@@ -120,7 +120,9 @@ public class TTSControlService extends BaseService {
 	private TextToSpeech mTTS;
 	private boolean mTTSInitialized = false;
 	private String mTTSEnginePackage;
-	private Timer mInitTTSTimer;
+	private final TtsInitializationState mTtsInitializationState =
+			new TtsInitializationState();
+	private volatile TtsInitAttempt mTtsInitAttempt;
 	private String mAuthors;
 	private String mTitle;
 	private String mCurrentUtterance;
@@ -143,6 +145,28 @@ public class TTSControlService extends BaseService {
 	private MediaSession mMediaSession;
 	private MediaSession.Callback mMediaSessionCallback;
 	private PlaybackState.Builder mPlaybackStateBuilder;
+
+	private static final class TtsInitAttempt {
+		private final TtsInitializationState.Request owner;
+		private final OnTTSCreatedListener listener;
+		private final boolean resumeSpeaking;
+		private final Timer timeout =
+				new Timer("CoolReader TTS init", true);
+		private volatile TextToSpeech candidate;
+
+		private TtsInitAttempt(
+				TtsInitializationState.Request owner,
+				OnTTSCreatedListener listener,
+				boolean resumeSpeaking) {
+			this.owner = owner;
+			this.listener = listener;
+			this.resumeSpeaking = resumeSpeaking;
+		}
+
+		private void cancelTimeout() {
+			timeout.cancel();
+		}
+	}
 	private MediaPlayer mMediaPlayer;
 	private VolumeSettingsContentObserver mVolumeSettingsContentObserver;
 	private final Object mLocker = new Object();
@@ -585,6 +609,16 @@ public class TTSControlService extends BaseService {
 	@Override
 	public void onDestroy() {
 		log.d("onDestroy");
+		synchronized (mTtsInitializationState) {
+			mTtsInitializationState.close();
+			TtsInitAttempt pending = mTtsInitAttempt;
+			if (pending != null)
+				pending.cancelTimeout();
+		}
+		super.onDestroy();
+		TtsInitAttempt initAttempt = mTtsInitAttempt;
+		mTtsInitAttempt = null;
+		discardTtsInitAttempt(initAttempt);
 		getApplicationContext().getContentResolver().unregisterContentObserver(mVolumeSettingsContentObserver);
 		synchronized (mLocker) {
 			if (null != mMediaPlayer) {
@@ -611,15 +645,9 @@ public class TTSControlService extends BaseService {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 			mNotificationManager.deleteNotificationChannel(NOTIFICATION_CHANNEL_ID);
 		}
-		if (null != mTTS) {
-			mTTSEnginePackage = null;
-			try {
-				mTTS.shutdown();
-			} catch (Exception ignored) {}
-			mTTS = null;
-			mTTSInitialized = false;
-		}
-		super.onDestroy();
+		shutdownCurrentTts();
+		mTTSEnginePackage = null;
+		mTTSInitialized = false;
 	}
 
 	@Override
@@ -684,57 +712,187 @@ public class TTSControlService extends BaseService {
 				listener.onCreated();
 			return;
 		}
-		if (null != mTTS) {
-			try {
-				mTTS.stop();
-				mTTS.shutdown();
-			} catch (Exception ignored) {
-			}
-			mTTS = null;
-		}
+		TtsInitializationState.Request owner =
+				mTtsInitializationState.replace(engine);
+		if (owner == null)
+			return;
+		TtsInitAttempt previous = mTtsInitAttempt;
+		mTtsInitAttempt = null;
+		discardTtsInitAttempt(previous);
+		shutdownCurrentTts();
 		mTTSInitialized = false;
+		mTTSEnginePackage = null;
 		final boolean isSpeaking = State.PLAYING == mState;
-		TextToSpeech.OnInitListener onInitListener = status -> {
-			mInitTTSTimer.cancel();
-			mInitTTSTimer = null;
-			L.i("TTS init status: " + status);
-			if (status == TextToSpeech.SUCCESS) {
-				mTTSInitialized = true;
-				mTTSEnginePackage = engine;
-				setupTTSHandlers();
-				if (null != listener)
-					listener.onCreated();
-				if (isSpeaking)
-					say_impl(mCurrentUtterance);
-			} else {
-				try {
-					mTTS.shutdown();
-				} catch (Exception ignored) {}
-				mTTS = null;
-				if (null != listener)
-					listener.onFailed();
-			}
-		};
-		mInitTTSTimer = new Timer();
-		mInitTTSTimer.schedule(new TimerTask() {
+		TtsInitAttempt attempt =
+				new TtsInitAttempt(owner, listener, isSpeaking);
+		mTtsInitAttempt = attempt;
+		attempt.timeout.schedule(new TimerTask() {
 			@Override
 			public void run() {
-				// TTS engine init hangs, call listener
-				log.e("TTS engine \"" + engine + "\" init failure with timeout!");
-				if (null != listener)
-					listener.onTimedOut();
-				mInitTTSTimer.cancel();
-				mInitTTSTimer = null;
-				try {
-					mTTS.shutdown();
-				} catch (Exception ignored) {}
-				mTTS = null;
+				postTtsInitializationTask(
+						attempt,
+						"timeoutTTSInitialization",
+						() -> timeoutTtsInitialization(attempt));
 			}
 		}, INIT_TTS_TIMEOUT);
-		if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH && null != engine && engine.length() > 0)
-			mTTS = new TextToSpeech(this, onInitListener, engine);
-		else
-			mTTS = new TextToSpeech(this, onInitListener);
+		TextToSpeech.OnInitListener onInitListener = status ->
+				postTtsInitializationTask(
+						attempt,
+						"completeTTSInitialization",
+						() -> completeTtsInitialization(
+								attempt, status));
+		try {
+			TextToSpeech candidate;
+			if (Build.VERSION.SDK_INT
+					> Build.VERSION_CODES.ICE_CREAM_SANDWICH
+					&& null != engine && engine.length() > 0) {
+				candidate = new TextToSpeech(
+						this, onInitListener, engine);
+			} else {
+				candidate = new TextToSpeech(
+						this, onInitListener);
+			}
+			attempt.candidate = candidate;
+			if (mTtsInitializationState.isActive(owner)
+					&& mTtsInitAttempt == attempt) {
+				mTTS = candidate;
+			} else {
+				shutdownTts(candidate);
+			}
+		} catch (RuntimeException e) {
+			log.e("Cannot create TTS engine \"" + engine + "\"", e);
+			failTtsInitialization(attempt, false);
+		}
+	}
+
+	private void postTtsInitializationTask(
+			TtsInitAttempt attempt,
+			String name,
+			Runnable action) {
+		synchronized (mTtsInitializationState) {
+			if (!mTtsInitializationState.isActive(
+					attempt.owner))
+				return;
+			execTask(new Task(name) {
+				@Override
+				public void work() {
+					action.run();
+				}
+			});
+		}
+	}
+
+	private void completeTtsInitialization(
+			TtsInitAttempt attempt, int status) {
+		synchronized (mTtsInitializationState) {
+			if (!claimTtsInitAttempt(attempt)) {
+				discardStaleTtsInitAttempt(attempt);
+				return;
+			}
+			L.i("TTS init status: " + status);
+			TextToSpeech candidate = attempt.candidate;
+			if (status == TextToSpeech.SUCCESS
+					&& candidate != null && mTTS == candidate) {
+				mTTSInitialized = true;
+				mTTSEnginePackage = attempt.owner.engine();
+				setupTTSHandlers();
+				if (attempt.listener != null)
+					attempt.listener.onCreated();
+				if (attempt.resumeSpeaking)
+					say_impl(mCurrentUtterance);
+				return;
+			}
+			failClaimedTtsInitialization(attempt, false);
+		}
+	}
+
+	private void timeoutTtsInitialization(
+			TtsInitAttempt attempt) {
+		synchronized (mTtsInitializationState) {
+			if (!claimTtsInitAttempt(attempt)) {
+				discardStaleTtsInitAttempt(attempt);
+				return;
+			}
+			log.e("TTS engine \"" + attempt.owner.engine()
+					+ "\" init failure with timeout!");
+			failClaimedTtsInitialization(attempt, true);
+		}
+	}
+
+	private void failTtsInitialization(
+			TtsInitAttempt attempt, boolean timedOut) {
+		synchronized (mTtsInitializationState) {
+			if (!claimTtsInitAttempt(attempt)) {
+				discardStaleTtsInitAttempt(attempt);
+				return;
+			}
+			failClaimedTtsInitialization(attempt, timedOut);
+		}
+	}
+
+	private void failClaimedTtsInitialization(
+			TtsInitAttempt attempt, boolean timedOut) {
+		TextToSpeech candidate = attempt.candidate;
+		if (mTTS == candidate)
+			mTTS = null;
+		mTTSInitialized = false;
+		mTTSEnginePackage = null;
+		shutdownTts(candidate);
+		if (attempt.listener != null) {
+			if (timedOut)
+				attempt.listener.onTimedOut();
+			else
+				attempt.listener.onFailed();
+		}
+	}
+
+	private boolean claimTtsInitAttempt(
+			TtsInitAttempt attempt) {
+		if (attempt == null
+				|| !mTtsInitializationState.complete(
+						attempt.owner))
+			return false;
+		attempt.cancelTimeout();
+		if (mTtsInitAttempt == attempt)
+			mTtsInitAttempt = null;
+		return true;
+	}
+
+	private void discardStaleTtsInitAttempt(
+			TtsInitAttempt attempt) {
+		if (attempt == null)
+			return;
+		attempt.cancelTimeout();
+		TextToSpeech candidate = attempt.candidate;
+		if (candidate != null && mTTS != candidate)
+			shutdownTts(candidate);
+	}
+
+	private void discardTtsInitAttempt(
+			TtsInitAttempt attempt) {
+		if (attempt == null)
+			return;
+		attempt.cancelTimeout();
+		TextToSpeech candidate = attempt.candidate;
+		if (mTTS == candidate)
+			mTTS = null;
+		shutdownTts(candidate);
+	}
+
+	private void shutdownCurrentTts() {
+		TextToSpeech current = mTTS;
+		mTTS = null;
+		shutdownTts(current);
+	}
+
+	private static void shutdownTts(TextToSpeech tts) {
+		if (tts == null)
+			return;
+		try {
+			tts.stop();
+			tts.shutdown();
+		} catch (Exception ignored) {
+		}
 	}
 
 	/**
