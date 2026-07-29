@@ -7973,6 +7973,26 @@ forbid_source_text(
   "dead settings examples must not retain raw ownership patterns"
 )
 require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::unique_ptr<CRMenu> hyphMenu = std::make_unique<CRMenu>("
+  "hyphenation submenu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "hyphMenu.get(), i, item->getTitle(),"
+  "hyphenation items must keep a non-owning parent link"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(hyphMenu));"
+  "hyphenation submenus must transfer through the owner-aware boundary"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "CRMenu * hyphMenu = new"
+  "hyphenation submenu candidates must not begin as raw owners"
+)
+require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"

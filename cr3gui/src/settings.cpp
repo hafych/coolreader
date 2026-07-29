@@ -764,26 +764,26 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
                 kerning_options));
 
         //====== Hyphenation ==========
-		if ( HyphMan::getDictList() ) {
+        if ( HyphMan::getDictList() ) {
             // strings from CREngine - just to catch by gettext tools
             _("[No Hyphenation]");
             _("[Algorythmic Hyphenation]");
-			CRMenu * hyphMenu = new CRMenu(_wm, mainMenu, mm_Hyphenation,
-					_("Hyphenation"),
-					LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_HYPHENATION_DICT );
-			for ( i=0; i<HyphMan::getDictList()->length(); i++ ) {
-				HyphDictionary * item = HyphMan::getDictList()->get( i );
-				hyphMenu->addItem(std::make_unique<CRMenuItem>(
-					hyphMenu, i,
-					item->getTitle(),
-					LVImageSourceRef(),
-					LVFontRef(), item->getId().c_str()));
-			}
-			hyphMenu->setAccelerators( _menuAccelerators );
+            std::unique_ptr<CRMenu> hyphMenu = std::make_unique<CRMenu>(
+                    _wm, mainMenu, mm_Hyphenation, _("Hyphenation"),
+                    LVImageSourceRef(), LVFontRef(), valueFont, props,
+                    PROP_HYPHENATION_DICT);
+            for ( i=0; i<HyphMan::getDictList()->length(); i++ ) {
+                HyphDictionary * item = HyphMan::getDictList()->get( i );
+                hyphMenu->addItem(std::make_unique<CRMenuItem>(
+                        hyphMenu.get(), i, item->getTitle(),
+                        LVImageSourceRef(), LVFontRef(),
+                        item->getId().c_str()));
+            }
+            hyphMenu->setAccelerators( _menuAccelerators );
             hyphMenu->setSkinName(cs32("#settings"));
             hyphMenu->reconfigure( 0 );
-            mainMenu->addItem( hyphMenu );
-		}
+            mainMenu->addItem(std::move(hyphMenu));
+        }
 
         mainMenu->addItem(createOptionMenu(
                 mainMenu, mm_FloatingPunctuation, _("Floating punctuation"),
