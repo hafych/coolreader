@@ -875,6 +875,35 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void settingsPersistenceIsStatelessAndSettingsOwned()
+			throws Exception {
+		Class<?> settingsManager = null;
+		for (Class<?> nested : BaseActivity.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("SettingsManager"))
+				settingsManager = nested;
+		}
+		assertTrue(settingsManager != null);
+		Field store =
+				settingsManager.getDeclaredField("settingsFileStore");
+		assertFalse(Modifier.isStatic(store.getModifiers()));
+		assertTrue(Modifier.isPrivate(store.getModifiers()));
+		assertTrue(Modifier.isFinal(store.getModifiers()));
+
+		assertTrue(
+				Modifier.isFinal(
+						SettingsFileStore.class.getModifiers()));
+		assertEquals(
+				0,
+				SettingsFileStore.class
+						.getDeclaredFields().length);
+		for (Field field : settingsManager.getDeclaredFields()) {
+			assertFalse(
+					"SettingsManager retains a dead save executor",
+					field.getName().equals("saveSettingsTask"));
+		}
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

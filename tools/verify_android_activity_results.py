@@ -30,6 +30,21 @@ PROFILE_SETTINGS_FILTER_TEST = (
     / "crengine"
     / "ProfileSettingsFilterTest.java"
 )
+SETTINGS_FILE_STORE = (
+    SOURCE / "crengine" / "SettingsFileStore.java"
+)
+SETTINGS_FILE_STORE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "SettingsFileStoreTest.java"
+)
 READER_ACTION = SOURCE / "crengine" / "ReaderAction.java"
 ACTION_ICON_SET = SOURCE / "crengine" / "ActionIconSet.java"
 DEFAULT_INPUT_ACTIONS = SOURCE / "crengine" / "DefaultInputActions.java"
@@ -710,6 +725,24 @@ def main() -> None:
             violations.append(
                 f"{relative(BASE_ACTIVITY)} retains inline profile rules: "
                 f"{legacy}")
+    for marker in (
+        "private final SettingsFileStore settingsFileStore",
+        "new SettingsFileStore()",
+        "settingsFileStore.save(f, settings)",
+    ):
+        if marker not in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} omits settings store marker: "
+                f"{marker}")
+    for legacy in (
+        "saveSettingsTask",
+        "FileOutputStream os = new FileOutputStream(f)",
+        "settings.store(os,",
+    ):
+        if legacy in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} retains inline/dead settings "
+                f"persistence marker: {legacy}")
 
     settings_text = SETTINGS.read_text(encoding="utf-8")
     if "PROFILE_SETTINGS" in settings_text:
@@ -749,6 +782,36 @@ def main() -> None:
             violations.append(
                 f"{relative(PROFILE_SETTINGS_FILTER_TEST)} omits profile "
                 f"filter regression: {marker}")
+
+    settings_store_text = SETTINGS_FILE_STORE.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class SettingsFileStore",
+        "void save(File target, Properties settings) throws IOException",
+        'throw new IllegalArgumentException(',
+        '"target must not be null"',
+        '"settings must not be null"',
+        "try (FileOutputStream output =",
+        'settings.store(output, "Cool Reader 3 settings")',
+    ):
+        if marker not in settings_store_text:
+            violations.append(
+                f"{relative(SETTINGS_FILE_STORE)} omits scoped settings "
+                f"persistence marker: {marker}")
+
+    settings_store_test_text = SETTINGS_FILE_STORE_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "saveRoundTripsProperties",
+        "saveTruncatesThePreviousSnapshot",
+        "nullSnapshotCannotTruncateExistingSettings",
+        'store.save(target, null)',
+        '"preserved"',
+    ):
+        if marker not in settings_store_test_text:
+            violations.append(
+                f"{relative(SETTINGS_FILE_STORE_TEST)} omits settings "
+                f"persistence regression: {marker}")
 
     app_locale_text = APP_LOCALE_SELECTION.read_text(encoding="utf-8")
     for marker in (

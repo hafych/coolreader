@@ -72,7 +72,6 @@ import org.coolreader.genrescollection.GenresCollection;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -1590,6 +1589,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		private final DefaultInputActions defaultInputActions;
 		private final ProfileSettingsFilter profileSettingsFilter =
 				ProfileSettingsFilter.legacy();
+		private final SettingsFileStore settingsFileStore =
+				new SettingsFileStore();
 
 		public SettingsManager(BaseActivity activity) {
 			this.mActivity = activity;
@@ -1605,23 +1606,10 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			return defaultInputActions;
 		}
 
-		//int lastSaveId = 0;
 		public void setSettings(Properties settings, int delayMillis, boolean notify) {
 			Properties oldSettings = mSettings;
 			mSettings = new Properties(settings);
 			saveSettings(mSettings);
-//			if (delayMillis >= 0) {
-//				saveSettingsTask.postDelayed(new Runnable() {
-//		    		public void run() {
-//		    			BackgroundThread.instance().postGUI(new Runnable() {
-//		    				@Override
-//		    				public void run() {
-//		   						saveSettings(mSettings);
-//		    				}
-//		    			});
-//		    		}
-//		    	}, delayMillis);
-//			}
 			if (notify)
 				mActivity.onSettingsChanged(mSettings, oldSettings);
 		}
@@ -2006,13 +1994,10 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			saveSettings(f, settings);
 		}
 
-		DelayedExecutor saveSettingsTask = DelayedExecutor.createBackground("saveSettings");
-
 		public void saveSettings(File f, Properties settings) {
 			try {
 				log.v("saveSettings()");
-				FileOutputStream os = new FileOutputStream(f);
-				settings.store(os, "Cool Reader 3 settings");
+				settingsFileStore.save(f, settings);
 				log.i("Settings successfully saved to file " + f.getAbsolutePath());
 			} catch (Exception e) {
 				log.e("exception while saving settings", e);

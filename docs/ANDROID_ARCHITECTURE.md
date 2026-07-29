@@ -149,6 +149,11 @@ Numbered-profile selection is delegated by `SettingsManager` to one immutable
 `ProfileSettingsFilter`. Exact, wildcard-prefix and `styles.` rules are
 pure JVM-tested, both load and save use the same matcher, and `Settings` no
 longer exposes the rule backing array.
+The final settings snapshot is written through a stateless
+`SettingsFileStore` owned by `SettingsManager`. It validates the target and
+snapshot before opening the file, scopes the output stream with
+try-with-resources, and preserves the existing synchronous save semantics.
+The unreachable delayed-save executor and callback graph have been removed.
 
 Screen-backlight user-activity timestamps and scheduled timer tasks belong to
 the `ScreenBacklightControl` of one `BaseActivity` generation. Threshold and

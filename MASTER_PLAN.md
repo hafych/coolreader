@@ -157,6 +157,10 @@ DRM или ограничений доступа, подбор/получени�
   catalog `BaseActivity`, с явным E-Ink snapshot и без public static array.
   Profile load/save filtering также вынесен из `SettingsManager` в единый
   immutable matcher без public rule-array и с JVM regression на wildcard rules.
+  Синхронная запись настроек делегирована отдельному stateless
+  `SettingsFileStore`: snapshot валидируется до открытия файла, output всегда
+  закрывается, round-trip/truncation покрыты JVM-тестами, а мёртвый
+  `saveSettingsTask` и его закомментированный callback удалены.
   Built-in background textures вынесены из `Engine` в immutable catalog;
   immutable metadata и `none → external → built-in` List snapshot JVM-tested.
   `DocumentFormat` extension/MIME metadata теперь clone-on-boundary, private

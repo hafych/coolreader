@@ -62,6 +62,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   been removed.
 - Numbered profile load/save now shares one immutable, test-covered settings
   filter; its exact and wildcard rules no longer escape through a public array.
+- Settings persistence now uses a narrow, test-covered file store that
+  validates snapshots before opening the target and always closes its output
+  stream. The unreachable delayed-save executor and callback block are gone.
 - External dictionary definitions, including intent data keys, now live in one
   immutable catalog; legacy array callers receive independent snapshots.
 - Audio sibling selection and filename transliteration now use private
