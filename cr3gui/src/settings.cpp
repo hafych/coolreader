@@ -212,7 +212,8 @@ bool CRSettingsMenu::onCommand( int command, int params )
 }
 
 #if CR_INTERNAL_PAGE_ORIENTATION==1 || defined(CR_POCKETBOOK)
-CRMenu * CRSettingsMenu::createOrientationMenu( CRMenu * mainMenu, CRPropRef props )
+std::unique_ptr<CRMenu> CRSettingsMenu::createOrientationMenu(
+        CRMenu * mainMenu, CRPropRef props)
 {
 	item_def_t page_orientations[] = {
 		{_("0` (Portrait)"), "0"},
@@ -228,10 +229,12 @@ CRMenu * CRSettingsMenu::createOrientationMenu( CRMenu * mainMenu, CRPropRef pro
 #else
 	const char * propName = PROP_ROTATE_ANGLE;
 #endif
-    CRMenu * orientationMenu = new CRMenu(_wm, mainMenu, mm_Orientation,
+    std::unique_ptr<CRMenu> orientationMenu =
+            std::make_unique<CRMenu>(
+            _wm, mainMenu, mm_Orientation,
             Utf8ToUnicode(lString8(_("Page orientation"))),
-                            LVImageSourceRef(), LVFontRef(), valueFont, props,  propName);
-    addMenuItems( orientationMenu, page_orientations );
+            LVImageSourceRef(), LVFontRef(), valueFont, props, propName);
+    addMenuItems(orientationMenu.get(), page_orientations);
     orientationMenu->reconfigure( 0 );
 
     return orientationMenu;
@@ -291,7 +294,8 @@ class OnDemandFontMenuItem : public CRMenuItem
     }
 };
 
-CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * mainMenu, CRPropRef props )
+std::unique_ptr<CRMenu> CRSettingsMenu::createFontSizeMenu(
+        CRGUIWindowManager * wm, CRMenu * mainMenu, CRPropRef props)
 {
     lString32Collection list;
     fontMan->getFaceList( list );
@@ -299,8 +303,9 @@ CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * m
     //LVFontRef menuFont( fontMan->GetFont( MENU_FONT_SIZE, 600, false, css_ff_sans_serif, lString8("Arial")) );
     CRMenuSkinRef skin = wm->getSkin()->getMenuSkin(U"#settings");
     LVFontRef valueFont = skin->getValueSkin()->getFont();//( fontMan->GetFont( VALUE_FONT_SIZE, 400, true, css_ff_sans_serif, lString8("Arial")) );
-    CRMenu * fontSizeMenu;
-    fontSizeMenu = new FontSizeMenu(_wm, mainMenu, valueFont, props );
+    std::unique_ptr<FontSizeMenu> fontSizeMenu =
+            std::make_unique<FontSizeMenu>(
+                    _wm, mainMenu, valueFont, props);
     for ( unsigned i=0; i<sizeof(cr_font_sizes)/sizeof(int); i++ ) {
         //char name[32];
         char defvalue[400];
@@ -310,7 +315,7 @@ CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * m
                 cr_font_sizes[i],
                 _("The quick brown fox jumps over lazy dog"));
         fontSizeMenu->addItem(std::make_unique<OnDemandFontMenuItem>(
-                        fontSizeMenu, 0,
+                        fontSizeMenu.get(), 0,
                         Utf8ToUnicode(lString8(defvalue)),
                         LVImageSourceRef(),
                         lString32::itoa(cr_font_sizes[i]).c_str(),
@@ -318,7 +323,8 @@ CRMenu * CRSettingsMenu::createFontSizeMenu( CRGUIWindowManager * wm, CRMenu * m
                         fontFace,
                         UnicodeToUtf8(skin->getItemSkin()->getFontFace())));
     }
-    fontSizeMenu->setAccelerators( _wm->getAccTables().get("menu") );
+    fontSizeMenu->setAccelerators(
+            _wm->getAccTables().get(U"menu"));
     fontSizeMenu->setSkinName(cs32("#settings"));
     fontSizeMenu->reconfigure( 0 );
     return fontSizeMenu;
@@ -646,8 +652,9 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         fontFallbackFaceMenu->reconfigure( 0 );
         mainMenu->addItem( fontFallbackFaceMenu );
 
-        CRMenu * fontSizeMenu = createFontSizeMenu( _wm, mainMenu, props );
-        mainMenu->addItem( fontSizeMenu );
+        std::unique_ptr<CRMenu> fontSizeMenu =
+                createFontSizeMenu(_wm, mainMenu, props);
+        mainMenu->addItem(std::move(fontSizeMenu));
 
         CRMenu * emboldenModeMenu = new CRMenu(_wm, mainMenu, mm_Embolden,
                 _("Font weight"),
@@ -680,8 +687,9 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         mainMenu->addItem( interlineSpaceMenu );
 
 #if CR_INTERNAL_PAGE_ORIENTATION==1 || defined(CR_POCKETBOOK)
-        CRMenu * orientationMenu = createOrientationMenu(mainMenu, props);
-        mainMenu->addItem( orientationMenu );
+        std::unique_ptr<CRMenu> orientationMenu =
+                createOrientationMenu(mainMenu, props);
+        mainMenu->addItem(std::move(orientationMenu));
 #endif
 #ifdef CR_POCKETBOOK
         CRMenu * rotateModeMenu = new CRMenu(_wm, mainMenu, mm_rotateMode,

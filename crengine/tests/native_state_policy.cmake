@@ -7872,6 +7872,41 @@ require_source_text(
   "std::make_unique<OnDemandFontMenuItem>"
   "settings font items must enter scoped ownership"
 )
+require_source_text(
+  "${SETTINGS_HEADER}"
+  "std::unique_ptr<CRMenu> createFontSizeMenu("
+  "font-size menu factories must return scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "std::make_unique<FontSizeMenu>"
+  "font-size menu candidates must enter scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(fontSizeMenu));"
+  "font-size menus must transfer through the owner-aware boundary"
+)
+require_source_text(
+  "${SETTINGS_HEADER}"
+  "std::unique_ptr<CRMenu> createOrientationMenu("
+  "orientation menu factories must return scoped ownership"
+)
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "mainMenu->addItem(std::move(orientationMenu));"
+  "orientation menus must transfer through the owner-aware boundary"
+)
+forbid_source_text(
+  "${SETTINGS_HEADER}"
+  "CRMenu * createFontSizeMenu"
+  "font-size menu factories must not return raw ownership"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "new FontSizeMenu"
+  "font-size menu candidates must not begin as raw owners"
+)
 forbid_source_text(
   "${SETTINGS_SOURCE}"
   "addItem( new"
