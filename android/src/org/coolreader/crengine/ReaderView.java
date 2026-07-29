@@ -3827,6 +3827,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void stopTts() {
 		BackgroundThread.ensureGUI();
 		ttsInitializationLifecycle.cancel();
+		mActivity.cancelTtsInitialization();
 		TTSToolbarDlg toolbar = ttsToolbar;
 		if (toolbar != null) {
 			log.i("DCMD_TTS_STOP: stopping TTS");

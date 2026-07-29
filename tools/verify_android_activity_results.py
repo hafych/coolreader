@@ -4229,11 +4229,16 @@ def main() -> None:
     for marker in (
         "final TTSControlServiceAccessor accessor",
         "final String requestedEngine",
-        "postForActiveTtsGeneration(",
+        "private final TtsInitializationSession "
+        "ttsInitializationRequests",
+        "ttsInitializationRequests.replace(",
+        "new ActivityTtsBindingCallback(",
+        "new ActivityTtsInitializationListener(",
+        "ttsInitializationRequests.complete(request)",
+        "ttsInitializationRequests.close()",
+        "cancelTtsInitialization()",
         "callback.run(accessor)",
-        "requestedEngine.equals(",
-        "&& lifecycle.isActive())",
-        "postTtsInitializationFailure(",
+        "request.getLifecycle().isActive()",
         "if (!bindingStarted)",
     ):
         if marker not in cool_reader_text:
@@ -4244,6 +4249,10 @@ def main() -> None:
         violations.append(
             f"{relative(COOL_READER)} publishes TTS through a mutable "
             "accessor generation")
+    if "postForActiveTtsGeneration(" in cool_reader_text:
+        violations.append(
+            f"{relative(COOL_READER)} retains non-exact TTS generation "
+            "dispatch")
     for marker in (
         "private void stopTtsForDocumentChange()",
         "mReaderView.stopTtsForDocumentChange()",

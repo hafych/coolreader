@@ -915,12 +915,17 @@ public class ActivityOwnershipPolicyTest {
 						TTSControlServiceAccessor.Callback.class,
 						Runnable.class);
 		assertTrue(Modifier.isPublic(initTts.getModifiers()));
-		Method activeTtsCallback =
+		Method cancelTts =
 				CoolReader.class.getDeclaredMethod(
-						"postForActiveTtsGeneration",
-						Runnable.class);
+						"cancelTtsInitialization");
+		assertTrue(Modifier.isPublic(cancelTts.getModifiers()));
+		Method applyTtsResult =
+				CoolReader.class.getDeclaredMethod(
+						"applyTtsInitializationResult",
+						TtsInitializationSession.Request.class,
+						TtsInitializationSession.Outcome.class);
 		assertTrue(Modifier.isPrivate(
-				activeTtsCallback.getModifiers()));
+				applyTtsResult.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				TapHighlightState.class.getModifiers()));
 		for (Field field :
@@ -1264,6 +1269,95 @@ public class ActivityOwnershipPolicyTest {
 						DictionaryLookupSession.Request.class);
 		assertTrue(Modifier.isPrivate(
 				applyLookup.getModifiers()));
+	}
+
+	@Test
+	public void activityTtsInitializationIsExactAndDetachable()
+			throws Exception {
+		Field requests =
+				CoolReader.class.getDeclaredField(
+						"ttsInitializationRequests");
+		assertTrue(Modifier.isPrivate(
+				requests.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				requests.getModifiers()));
+		assertEquals(
+				TtsInitializationSession.class,
+				requests.getType());
+		for (Field field :
+				TtsInitializationSession.Request.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+			assertFalse(Runnable.class.isAssignableFrom(
+					field.getType()));
+		}
+		assertSynchronizedMethod(
+				TtsInitializationSession.class,
+				"replace",
+				ServiceLifecycle.class,
+				String.class,
+				Runnable.class,
+				Runnable.class);
+		assertSynchronizedMethod(
+				TtsInitializationSession.class,
+				"isActive",
+				TtsInitializationSession.Request.class);
+		assertSynchronizedMethod(
+				TtsInitializationSession.class,
+				"complete",
+				TtsInitializationSession.Request.class);
+		assertSynchronizedMethod(
+				TtsInitializationSession.class,
+				"cancel");
+		assertSynchronizedMethod(
+				TtsInitializationSession.class,
+				"close");
+		for (String className : new String[]{
+				"ActivityTtsBindingCallback",
+				"ActivityTtsInitializationListener"}) {
+			Class<?> callbackClass = null;
+			for (Class<?> nested :
+					CoolReader.class.getDeclaredClasses()) {
+				if (nested.getSimpleName().equals(className)) {
+					callbackClass = nested;
+					break;
+				}
+			}
+			assertTrue(callbackClass != null);
+			assertTrue(Modifier.isPrivate(
+					callbackClass.getModifiers()));
+			assertTrue(Modifier.isStatic(
+					callbackClass.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					callbackClass.getModifiers()));
+			Field activityReference =
+					callbackClass.getDeclaredField(
+							"activityReference");
+			assertEquals(
+					java.lang.ref.WeakReference.class,
+					activityReference.getType());
+			assertTrue(Modifier.isPrivate(
+					activityReference.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					activityReference.getModifiers()));
+		}
+		Method startBound =
+				CoolReader.class.getDeclaredMethod(
+						"startBoundTtsInitialization",
+						TtsInitializationSession.Request.class,
+						TTSControlBinder.class);
+		assertTrue(Modifier.isPrivate(
+				startBound.getModifiers()));
+		Method postResult =
+				CoolReader.class.getDeclaredMethod(
+						"postTtsInitializationResult",
+						TtsInitializationSession.Request.class,
+						TtsInitializationSession.Outcome.class);
+		assertTrue(Modifier.isPrivate(
+				postResult.getModifiers()));
 	}
 
 	@Test

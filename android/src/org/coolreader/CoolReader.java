@@ -110,10 +110,12 @@ import org.coolreader.crengine.Scanner;
 import org.coolreader.crengine.ServiceDependencies;
 import org.coolreader.crengine.ServiceLifecycle;
 import org.coolreader.crengine.TTSToolbarDlg;
+import org.coolreader.crengine.TtsInitializationSession;
 import org.coolreader.crengine.Utils;
 import org.coolreader.db.CRDBService;
 import org.coolreader.genrescollection.GenresCollection;
 import org.coolreader.tts.OnTTSCreatedListener;
+import org.coolreader.tts.TTSControlBinder;
 import org.coolreader.tts.TTSControlServiceAccessor;
 import org.koekak.android.ebookdownloader.SonyBookSelector;
 
@@ -123,6 +125,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -131,6 +134,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 public class CoolReader extends BaseActivity {
 	public static final Logger log = L.create("cr");
@@ -163,6 +167,8 @@ public class CoolReader extends BaseActivity {
 	private final OptionsDialogRequestSession<OptionsDialog.Mode>
 			optionsDialogRequests =
 					new OptionsDialogRequestSession<>();
+	private final TtsInitializationSession ttsInitializationRequests =
+			new TtsInitializationSession();
 	private final ExternalDocumentValidator mExternalDocumentValidator =
 			new ExternalDocumentValidator();
 	//View startupView;
@@ -391,6 +397,7 @@ public class CoolReader extends BaseActivity {
 		libraryRootRequests.close();
 		libraryDocumentRequests.close();
 		optionsDialogRequests.close();
+		ttsInitializationRequests.close();
 
 		// Shutdown TTS service if running
 		if (null != ttsControlServiceAccessor) {
@@ -537,7 +544,8 @@ public class CoolReader extends BaseActivity {
 			if (null != mReaderView && mReaderView.isTTSActive()) {
 				// Set new TTS engine if running
 				initTTS(null);
-			}
+			} else
+				cancelTtsInitialization();
 		}
 		//
 	}
@@ -2470,79 +2478,195 @@ public class CoolReader extends BaseActivity {
 		ServiceLifecycle lifecycle = mServiceLifecycle;
 		if (mDestroyed
 				|| lifecycle == null
-				|| !lifecycle.isActive())
+				|| !lifecycle.isActive()) {
+			postRejectedTtsInitialization(failureCallback);
 			return;
+		}
 		showToast("Initializing TTS");
 		if (null == ttsControlServiceAccessor)
 			ttsControlServiceAccessor = new TTSControlServiceAccessor(this);
 		final TTSControlServiceAccessor accessor =
 				ttsControlServiceAccessor;
 		final String requestedEngine = ttsEnginePackage;
-		boolean bindingStarted = accessor.bind(ttsbinder -> {
-			ttsbinder.initTTS(requestedEngine, new OnTTSCreatedListener() {
-				@Override
-				public void onCreated() {
-					if (callback != null) {
-						postForActiveTtsGeneration(
-								() -> callback.run(accessor));
-					}
-				}
-
-				@Override
-				public void onFailed() {
-					postTtsInitializationFailure(failureCallback);
-				}
-
-				@Override
-				public void onTimedOut() {
-					log.e("TTS engine \"" + requestedEngine
-							+ "\" init failure");
-					postForActiveTtsGeneration(() -> {
-						if (requestedEngine.equals(
-								ttsEnginePackage)) {
-							showToast(
-									R.string.tts_init_failure,
-									requestedEngine);
-							setSetting(
-									PROP_APP_TTS_ENGINE,
-									"",
-									false);
-							ttsEnginePackage = "";
-							TTSToolbarDlg toolbar =
-									mReaderView != null
-											? mReaderView
-													.getTTSToolbar()
-											: null;
-							if (toolbar != null)
-								toolbar.stopAndClose();
-						}
-						if (failureCallback != null)
-							failureCallback.run();
-					});
-				}
-			});
-		});
+		Runnable successCallback =
+				callback != null
+						? () -> callback.run(accessor)
+						: null;
+		TtsInitializationSession.Replacement replacement =
+				ttsInitializationRequests.replace(
+						lifecycle,
+						requestedEngine,
+						successCallback,
+						failureCallback);
+		if (replacement == null) {
+			postRejectedTtsInitialization(failureCallback);
+			return;
+		}
+		postTtsInitializationCancellation(
+				replacement.getCancellation());
+		TtsInitializationSession.Request request =
+				replacement.getCurrent();
+		boolean bindingStarted = accessor.bind(
+				new ActivityTtsBindingCallback(this, request));
 		if (!bindingStarted)
-			postTtsInitializationFailure(failureCallback);
+			postTtsInitializationResult(
+					request,
+					TtsInitializationSession.Outcome.FAILED);
 	}
 
-	private void postTtsInitializationFailure(
+	public void cancelTtsInitialization() {
+		postTtsInitializationCancellation(
+				ttsInitializationRequests.cancel());
+	}
+
+	private void postRejectedTtsInitialization(
 			Runnable failureCallback) {
-		postForActiveTtsGeneration(() -> {
-			showToast("Cannot initialize TTS");
-			if (failureCallback != null)
+		if (failureCallback == null)
+			return;
+		BackgroundThread.instance().executeGUI(() -> {
+			if (!mDestroyed)
 				failureCallback.run();
 		});
 	}
 
-	private void postForActiveTtsGeneration(Runnable callback) {
+	private void postTtsInitializationCancellation(
+			TtsInitializationSession.Cancellation cancellation) {
+		if (cancellation == null)
+			return;
 		BackgroundThread.instance().executeGUI(() -> {
-			ServiceLifecycle lifecycle = mServiceLifecycle;
 			if (!mDestroyed
-					&& lifecycle != null
-					&& lifecycle.isActive())
-				callback.run();
+					&& cancellation.getLifecycle().isActive())
+				cancellation.run();
 		});
+	}
+
+	private void startBoundTtsInitialization(
+			TtsInitializationSession.Request request,
+			TTSControlBinder binder) {
+		if (binder == null) {
+			postTtsInitializationResult(
+					request,
+					TtsInitializationSession.Outcome.FAILED);
+			return;
+		}
+		if (mDestroyed
+				|| !request.getLifecycle().isActive()
+				|| !ttsInitializationRequests.isActive(request))
+			return;
+		binder.initTTS(
+				request.getEngine(),
+				new ActivityTtsInitializationListener(
+						this, request));
+	}
+
+	private void postTtsInitializationResult(
+			TtsInitializationSession.Request request,
+			TtsInitializationSession.Outcome outcome) {
+		BackgroundThread.instance().executeGUI(
+				() -> applyTtsInitializationResult(
+						request, outcome));
+	}
+
+	private void applyTtsInitializationResult(
+			TtsInitializationSession.Request request,
+			TtsInitializationSession.Outcome outcome) {
+		TtsInitializationSession.Completion completion =
+				ttsInitializationRequests.complete(request);
+		if (completion == null
+				|| mDestroyed
+				|| !request.getLifecycle().isActive())
+			return;
+		switch (outcome) {
+			case CREATED:
+				completion.runSuccess();
+				break;
+			case FAILED:
+				showToast("Cannot initialize TTS");
+				completion.runFailure();
+				break;
+			case TIMED_OUT:
+				String requestedEngine = request.getEngine();
+				log.e("TTS engine \"" + requestedEngine
+						+ "\" init failure");
+				if (Objects.equals(
+						requestedEngine,
+						ttsEnginePackage)) {
+					showToast(
+							R.string.tts_init_failure,
+							requestedEngine);
+					setSetting(
+							PROP_APP_TTS_ENGINE,
+							"",
+							false);
+					ttsEnginePackage = "";
+					TTSToolbarDlg toolbar =
+							mReaderView != null
+									? mReaderView
+											.getTTSToolbar()
+									: null;
+					if (toolbar != null)
+						toolbar.stopAndClose();
+				}
+				completion.runFailure();
+				break;
+		}
+	}
+
+	private static final class ActivityTtsBindingCallback
+			implements TTSControlBinder.Callback {
+		private final WeakReference<CoolReader> activityReference;
+		private final TtsInitializationSession.Request request;
+
+		private ActivityTtsBindingCallback(
+				CoolReader activity,
+				TtsInitializationSession.Request request) {
+			activityReference = new WeakReference<>(activity);
+			this.request = request;
+		}
+
+		@Override
+		public void run(TTSControlBinder binder) {
+			CoolReader activity = activityReference.get();
+			if (activity != null)
+				activity.startBoundTtsInitialization(
+						request, binder);
+		}
+	}
+
+	private static final class ActivityTtsInitializationListener
+			implements OnTTSCreatedListener {
+		private final WeakReference<CoolReader> activityReference;
+		private final TtsInitializationSession.Request request;
+
+		private ActivityTtsInitializationListener(
+				CoolReader activity,
+				TtsInitializationSession.Request request) {
+			activityReference = new WeakReference<>(activity);
+			this.request = request;
+		}
+
+		private void publish(
+				TtsInitializationSession.Outcome outcome) {
+			CoolReader activity = activityReference.get();
+			if (activity != null)
+				activity.postTtsInitializationResult(
+						request, outcome);
+		}
+
+		@Override
+		public void onCreated() {
+			publish(TtsInitializationSession.Outcome.CREATED);
+		}
+
+		@Override
+		public void onFailed() {
+			publish(TtsInitializationSession.Outcome.FAILED);
+		}
+
+		@Override
+		public void onTimedOut() {
+			publish(TtsInitializationSession.Outcome.TIMED_OUT);
+		}
 	}
 
 	public void showOptionsDialog(final OptionsDialog.Mode mode) {

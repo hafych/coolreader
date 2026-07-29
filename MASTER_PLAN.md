@@ -252,7 +252,12 @@ DRM или ограничений доступа, подбор/получени�
   повторный PLAY не дублирует bind/init, STOP инвалидирует exact request,
   destroy permanently закрывает startup, success/failure завершают только свой
   owner, а toolbar close очищает лишь собственную identity. `CoolReader`
-  публикует captured accessor/engine только активному service generation;
+  публикует captured accessor/engine только exact Activity request активного
+  service generation. `TtsInitializationSession` атомарно заменяет pending
+  bind/init, передаёт predecessor cancellation caller gate и очищает его
+  success/failure callbacks; STOP, смена engine и destroy инвалидируют request.
+  Binder-connect и engine-result listeners статичны и держат Activity только
+  через `WeakReference`, поэтому очередь сервиса не удерживает уничтоженный UI;
   TTS connector держит registration/binder/pending callbacks под одним lock,
   сообщает bind failure и очищает очередь при unbind.
   DB connector теперь также владеет exact platform registration через

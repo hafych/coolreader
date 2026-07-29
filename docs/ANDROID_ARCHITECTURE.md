@@ -52,8 +52,14 @@ share one pending initialization, stop cancels its exact token, and reader
 destruction closes startup permanently. Success and failure complete only that
 request; a stale success cannot open a toolbar, and each toolbar close callback
 clears only its own identity. `CoolReader` captures the exact service accessor
-and engine package requested, then delivers results on the GUI thread only
-while its service generation is active. The application-context TTS connector
+and engine package in an Activity-owned `TtsInitializationSession`, then
+delivers results on the GUI thread only after claiming that exact request while
+its captured service generation is active. Replacement transfers the prior
+failure callback as one-shot cancellation so the reader gate cannot remain
+pending; stop, engine change and Activity teardown detach all terminal
+callbacks. Binder-connect and engine-result listeners are static weak-Activity
+adapters, so a service queue cannot retain destroyed UI. The
+application-context TTS connector
 serializes binder registration, binder publication and pending callbacks under
 one lock, snapshots callbacks before delivery, reports bind failure and clears
 queued work on unbind.
