@@ -231,6 +231,13 @@ cannot republish after stop or destroy. Timer rescheduling and cancellation
 share the same owner lock, speed publication is volatile, book close finishes
 only an initialized session, and `ReaderView.destroy()` permanently rejects
 late initialization and timer callbacks before native teardown.
+Deferred native swap-to-cache retries use a `CloseableTaskGate` identity token
+and their own cancelable GUI scheduler instead of a volatile task pointer.
+Loading or closing a book invalidates the exact retry generation while keeping
+the reader reusable; terminal success/failure clears only its matching owner.
+`ReaderView.destroy()` closes the gate and removes the pending delay before
+native teardown, so a retained callback cannot swap an already destroyed
+`DocView`.
 Font-face next/previous commands delegate catalog navigation to the stateless
 `FontFaceSwitcher`. Empty native catalogs are a no-op, an unavailable current
 face starts at the directional edge, and known faces wrap safely after

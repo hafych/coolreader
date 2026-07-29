@@ -416,7 +416,9 @@ public class ActivityOwnershipPolicyTest {
 				"autoScrollScheduler",
 				"autoScrollSessions",
 				"gcTask",
-				"animationUpdateLock"}) {
+				"animationUpdateLock",
+				"swapTaskLifecycle",
+				"swapTaskScheduler"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -437,6 +439,10 @@ public class ActivityOwnershipPolicyTest {
 					"ReaderView retains a racy autoscroll pointer",
 					field.getName().equals(
 							"currentAutoScrollAnimation"));
+			assertFalse(
+					"ReaderView retains a racy swap task pointer",
+					field.getName().equals(
+							"currentSwapTask"));
 		}
 		assertTrue(Modifier.isFinal(
 				AutoScrollSessionState.class.getModifiers()));
@@ -457,6 +463,17 @@ public class ActivityOwnershipPolicyTest {
 				ReaderView.class.getDeclaredMethod(
 						"cancelDelayedReaderWork");
 		assertTrue(Modifier.isPrivate(teardown.getModifiers()));
+		Method closeSwapTasks =
+				ReaderView.class.getDeclaredMethod(
+						"closeSwapTasks");
+		assertTrue(Modifier.isPrivate(
+				closeSwapTasks.getModifiers()));
+		Method complete =
+				CloseableTaskGate.class.getDeclaredMethod(
+						"complete",
+						CloseableTaskGate.Token.class);
+		assertTrue(Modifier.isSynchronized(
+				complete.getModifiers()));
 	}
 
 	@Test

@@ -34,6 +34,27 @@ public class CloseableTaskGateTest {
 	}
 
 	@Test
+	public void completionClearsOnlyItsExactGeneration() {
+		CloseableTaskGate gate = new CloseableTaskGate();
+		CloseableTaskGate.Token stale = gate.replace();
+		CloseableTaskGate.Token current = gate.replace();
+
+		assertFalse(gate.complete(stale));
+		assertTrue(gate.isActive(current));
+		assertTrue(gate.complete(current));
+		assertFalse(gate.complete(current));
+		assertFalse(gate.isActive(current));
+	}
+
+	@Test
+	public void nullIsNeverAnActiveGeneration() {
+		CloseableTaskGate gate = new CloseableTaskGate();
+
+		assertFalse(gate.isActive(null));
+		assertFalse(gate.complete(null));
+	}
+
+	@Test
 	public void closePermanentlyRejectsWork() {
 		CloseableTaskGate gate = new CloseableTaskGate();
 		CloseableTaskGate.Token token = gate.replace();

@@ -1581,9 +1581,10 @@ def main() -> None:
         "final class CloseableTaskGate",
         "synchronized Token replace()",
         "synchronized void cancel()",
+        "synchronized boolean complete(Token token)",
         "synchronized boolean close()",
         "synchronized boolean isActive(Token token)",
-        "return !closed && current == token",
+        "return !closed && token != null && current == token",
         "synchronized boolean isClosed()",
     ):
         if marker not in closeable_gate_text:
@@ -1596,6 +1597,8 @@ def main() -> None:
     for marker in (
         "replacementInvalidatesOnlyThePreviousGeneration",
         "cancelIsIdempotentAndAllowsAnotherGeneration",
+        "completionClearsOnlyItsExactGeneration",
+        "nullIsNeverAnActiveGeneration",
         "closePermanentlyRejectsWork",
         "assertNull(gate.replace())",
     ):
@@ -1952,12 +1955,17 @@ def main() -> None:
         "private final DelayedExecutor animationScheduler",
         "private final AutoScrollSessionState<AutoScrollAnimation>",
         "private final DelayedExecutor autoScrollScheduler",
+        "private final CloseableTaskGate swapTaskLifecycle",
+        "private final DelayedExecutor swapTaskScheduler",
         "private volatile int autoScrollSpeed",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
         "animationScheduler.cancel()",
         "autoScrollScheduler.cancel()",
         "autoScrollSessions.close()",
+        "private void closeSwapTasks()",
+        "swapTaskLifecycle.close()",
+        "swapTaskScheduler.cancel()",
         "gcTask.cancel()",
         "synchronized (animationUpdateLock)",
         "autoScrollSessions.beginInitialization(this)",
@@ -1965,6 +1973,10 @@ def main() -> None:
         "autoScrollSessions.readySession()",
         "autoScrollScheduler.postDelayed(",
         "new AutoscrollTimerTask(interval).schedule()",
+        "swapTaskLifecycle.replace()",
+        "swapTaskLifecycle.isActive(owner)",
+        "swapTaskScheduler.postDelayed(",
+        "swapTaskLifecycle.complete(owner)",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -1976,6 +1988,7 @@ def main() -> None:
             "the process-wide AnimationUpdate class monitor")
     for legacy in (
         "currentAutoScrollAnimation",
+        "currentSwapTask",
         "BackgroundThread.instance().postGUI("
         "AutoscrollTimerTask.this",
     ):

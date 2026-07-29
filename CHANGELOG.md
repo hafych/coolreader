@@ -409,6 +409,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
   a dedicated cancelable timer. Stopped background initialization cannot
   resurrect a session, partial page reinitialization is not rendered, and
   destroy permanently rejects queued timer or initialization callbacks.
+- Deferred document swap-to-cache retries now use exact lifecycle tokens and a
+  dedicated cancelable scheduler. Reload and close invalidate stale retries,
+  terminal completion cannot clear a replacement, and Reader destruction
+  prevents queued work from touching the destroyed native document.
 - TTS audiobook timing work and its periodic position poll now belong to the
   dialog lifecycle. Reinitialization rejects stale results, while close removes
   pending callbacks, retires the timing thread and prevents late service or

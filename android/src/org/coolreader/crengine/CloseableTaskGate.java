@@ -27,6 +27,13 @@ final class CloseableTaskGate {
 		current = null;
 	}
 
+	synchronized boolean complete(Token token) {
+		if (!isActive(token))
+			return false;
+		current = null;
+		return true;
+	}
+
 	synchronized boolean close() {
 		if (closed)
 			return false;
@@ -36,7 +43,7 @@ final class CloseableTaskGate {
 	}
 
 	synchronized boolean isActive(Token token) {
-		return !closed && current == token;
+		return !closed && token != null && current == token;
 	}
 
 	synchronized boolean isClosed() {

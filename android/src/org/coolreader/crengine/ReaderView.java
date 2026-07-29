@@ -6098,6 +6098,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void cancelDelayedReaderWork() {
 		animationScheduler.cancel();
 		gcTask.cancel();
+		closeSwapTasks();
 		synchronized (autoScrollSessions) {
 			autoScrollSessions.close();
 			autoScrollScheduler.cancel();
@@ -6254,34 +6255,57 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	};
 
-	private volatile SwapToCacheTask currentSwapTask;
+	private final CloseableTaskGate swapTaskLifecycle =
+			new CloseableTaskGate();
+	private final DelayedExecutor swapTaskScheduler =
+			DelayedExecutor.createGUI("swap-to-cache");
 
 	private void scheduleSwapTask() {
-		currentSwapTask = new SwapToCacheTask();
-		currentSwapTask.reschedule();
+		CloseableTaskGate.Token owner =
+				swapTaskLifecycle.replace();
+		if (owner != null)
+			new SwapToCacheTask(owner).reschedule();
 	}
 
 	private void cancelSwapTask() {
-		currentSwapTask = null;
+		synchronized (swapTaskLifecycle) {
+			swapTaskLifecycle.cancel();
+			swapTaskScheduler.cancel();
+		}
+	}
+
+	private void closeSwapTasks() {
+		synchronized (swapTaskLifecycle) {
+			swapTaskLifecycle.close();
+			swapTaskScheduler.cancel();
+		}
 	}
 
 	private class SwapToCacheTask extends Task {
-		boolean isTimeout;
-		long startTime;
+		private final CloseableTaskGate.Token owner;
+		private final long startTime;
+		private boolean isTimeout;
 
-		public SwapToCacheTask() {
+		public SwapToCacheTask(
+				CloseableTaskGate.Token owner) {
+			this.owner = owner;
 			startTime = System.currentTimeMillis();
 		}
 
 		public void reschedule() {
-			if (this != currentSwapTask)
-				return;
-			BackgroundThread.instance().postGUI(() -> post(SwapToCacheTask.this), 2000);
+			synchronized (swapTaskLifecycle) {
+				if (!swapTaskLifecycle.isActive(owner))
+					return;
+				swapTaskScheduler.postDelayed(() -> {
+					if (swapTaskLifecycle.isActive(owner))
+						post(SwapToCacheTask.this);
+				}, 2000);
+			}
 		}
 
 		@Override
 		public void work() throws Exception {
-			if (this != currentSwapTask)
+			if (!swapTaskLifecycle.isActive(owner))
 				return;
 			int res = doc.swapToCache();
 			isTimeout = res == DocView.SWAP_TIMEOUT;
@@ -6295,8 +6319,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		@Override
 		public void done() {
-			if (isTimeout)
+			if (!swapTaskLifecycle.isActive(owner))
+				return;
+			if (isTimeout) {
 				reschedule();
+			} else {
+				swapTaskLifecycle.complete(owner);
+			}
+		}
+
+		@Override
+		public void fail(Exception e) {
+			swapTaskLifecycle.complete(owner);
+			super.fail(e);
 		}
 
 	}

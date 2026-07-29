@@ -201,6 +201,11 @@ DRM или ограничений доступа, подбор/получени�
   init публикует render-ready только точному owner, stop/destroy не допускают
   resurrection, re-init временно скрывает partial state, speed публикуется
   volatile, а close не запускает page cleanup для ещё не initialized session.
+  Отложенный native swap-to-cache также переведён с volatile task pointer на
+  exact `CloseableTaskGate` token и отдельный cancelable GUI scheduler:
+  reload/close инвалидируют retry с возможностью следующей книги, terminal
+  completion очищает только своего owner, а destroy закрывает gate до native
+  teardown и не допускает swap уже уничтоженного `DocView`.
   Font-face navigation вынесена в stateless `FontFaceSwitcher`: empty native
   catalog даёт no-op, missing current начинает с directional edge, известные
   значения корректно wrap, magnitude направления нормализуется без overflow.
