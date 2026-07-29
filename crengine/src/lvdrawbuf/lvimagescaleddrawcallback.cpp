@@ -23,9 +23,12 @@
 #include "lvimagescaleddrawcallback.h"
 #include "lvdrawbuf_utils.h"
 #include "lvimg.h"
+#include "parsebudget.h"
 
 #include <cstdlib>
+#include <limits>
 #include <memory>
+#include <new>
 #include <string.h>
 #include <vector>
 
@@ -45,6 +48,26 @@ struct SmoothScaledBufferDeleter {
 #endif
     }
 };
+
+bool getSmoothSnapshotByteCount(
+        int width, int height, std::size_t &byteCount)
+{
+    if (width <= 0 || height <= 0)
+        return false;
+    ParseBudget budget;
+    if (!budget.checkImageDimensions(
+                static_cast<unsigned>(width),
+                static_cast<unsigned>(height)))
+        return false;
+    const lUInt64 bytes =
+            static_cast<lUInt64>(width)
+            * static_cast<lUInt64>(height)
+            * sizeof(lUInt32);
+    if (bytes > std::numeric_limits<std::size_t>::max())
+        return false;
+    byteCount = static_cast<std::size_t>(bytes);
+    return true;
+}
 
 }
 
@@ -174,6 +197,22 @@ LVImageScaledDrawCallback::LVImageScaledDrawCallback(LVBaseDrawBuf *dstbuf, LVIm
         smoothscale = false;
         //fprintf( stderr, "Disabling smoothscale because no scaling was needed (%dx%d -> %dx%d)\n", src_dx, src_dy, dst_dx, dst_dy );
     }
+    // Smooth scaling needs a complete decoded RGBA snapshot. Keep that
+    // allocation bounded and fall back to mapped scaling if it is unavailable.
+    if (smoothscale) {
+        std::size_t snapshotBytes = 0;
+        if (!getSmoothSnapshotByteCount(
+                    src_dx, src_dy, snapshotBytes)) {
+            smoothscale = false;
+        } else {
+            try {
+                decoded.resize(snapshotBytes);
+            } catch (const std::bad_alloc &) {
+                smoothscale = false;
+                decoded.clear();
+            }
+        }
+    }
     if ( src_dx != dst_dx || isNinePatch) {
         if (isNinePatch)
             xmap = GenNinePatchMap(src_dx, dst_dx, ninePatch.left, ninePatch.right);
@@ -185,17 +224,6 @@ LVImageScaledDrawCallback::LVImageScaledDrawCallback(LVBaseDrawBuf *dstbuf, LVIm
             ymap = GenNinePatchMap(src_dy, dst_dy, ninePatch.top, ninePatch.bottom);
         else if (!smoothscale)
             ymap = GenMap( src_dy, dst_dy );
-    }
-    // If we have a smoothscale post-processing pass, we'll need to build a buffer of the *full* decoded image.
-    if (smoothscale) {
-        if ( src_dx<=0 || src_dy<=0 ) {
-            smoothscale = false;
-        } else {
-            const std::size_t pixelCount =
-                    static_cast<std::size_t>(src_dx)
-                    * static_cast<std::size_t>(src_dy);
-            decoded.resize(pixelCount * sizeof(lUInt32));
-        }
     }
 }
 

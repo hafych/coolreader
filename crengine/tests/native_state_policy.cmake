@@ -4023,6 +4023,26 @@ require_source_text(
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"
+  "getSmoothSnapshotByteCount"
+  "smooth-scale snapshots must use checked byte counts"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "budget.checkImageDimensions"
+  "smooth-scale snapshots must honor the shared image budget"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "catch (const std::bad_alloc &)"
+  "smooth-scale allocation failure must enter mapped fallback"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "oversized smooth snapshot did not use mapped fallback"
+  "bounded smooth-scale fallback must retain native regression coverage"
+)
+require_source_text(
+  "${SCALED_IMAGE_SOURCE}"
   "static_cast<lInt64>(i)"
   "scaled-image coordinate products must widen before evaluation"
 )
@@ -4070,6 +4090,11 @@ forbid_source_text(
   "${SCALED_IMAGE_SOURCE}"
   "new lUInt8["
   "smooth-scaling snapshots must remain container-managed"
+)
+forbid_source_text(
+  "${SCALED_IMAGE_SOURCE}"
+  "decoded.resize(pixelCount * sizeof(lUInt32))"
+  "smooth-scale snapshot allocation must not use unchecked multiplication"
 )
 forbid_source_text(
   "${SCALED_IMAGE_SOURCE}"

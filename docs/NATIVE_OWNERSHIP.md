@@ -318,8 +318,11 @@ division, so large but bounded maps cannot overflow their signed intermediate
 arithmetic. The allocator-specific result returned by `qSmoothScaleImage()`
 is held by a scoped `std::unique_ptr` with the matching platform deleter. A
 failed decode does not run the smooth post-processing pass over a partial
-snapshot. Color
-and grayscale draw entry points reject null or dimension-invalid image
+snapshot. The full RGBA snapshot is allocated only after checked byte-count
+arithmetic and the shared image-dimension budget; an oversized source or
+allocation failure disables smooth scaling and builds complete nearest-neighbor
+maps before decode. Color and grayscale draw entry points reject null or
+dimension-invalid image
 sources, invalid destination sizes and unusable backing buffers before
 constructing that callback, entering decode or changing render statistics.
 Successful entry uses one shared 64-bit accounting path; both the image count

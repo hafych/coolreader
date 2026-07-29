@@ -160,8 +160,8 @@ DRM или ограничений доступа, подбор/получени�
   unpacked 8/16/32-bit pixel storage, checked byte-count/format contracts и
   downstream cancellation,
   scoped stream-image decoder factory candidates, scaled-image
-  overflow-safe maps/RGBA snapshots, guarded color/gray image draw entry
-  points and
+  overflow-safe maps/bounded RGBA snapshots with mapped fallback,
+  guarded color/gray image draw entry points and
   saturating 64-bit render statistics,
   nine-patch metadata cache and color-transform
   workspaces/cancellation/64-bit statistics, WOL TOC/image/LZSS buffers and

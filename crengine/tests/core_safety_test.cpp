@@ -5271,6 +5271,42 @@ public:
     }
 };
 
+class SingleRowImageSource : public LVImageSource {
+private:
+    int _width;
+    int _height;
+    int &_decodeCalls;
+
+public:
+    SingleRowImageSource(
+            int width, int height, int &decodeCalls)
+        : _width(width), _height(height),
+          _decodeCalls(decodeCalls)
+    {
+    }
+
+    ldomNode *GetSourceNode() override { return NULL; }
+    LVStream *GetSourceStream() override { return NULL; }
+    void Compact() override {}
+    int GetWidth() const override { return _width; }
+    int GetHeight() const override { return _height; }
+
+    bool Decode(LVImageDecoderCallback *callback) override
+    {
+        ++_decodeCalls;
+        if (!callback || _width <= 0 || _height <= 0)
+            return false;
+        std::vector<lUInt32> row(
+                static_cast<std::size_t>(_width),
+                0x00ffffff);
+        callback->OnStartDecode(this);
+        const bool accepted =
+                callback->OnLineDecoded(this, 0, row.data());
+        callback->OnEndDecode(this, !accepted);
+        return accepted;
+    }
+};
+
 class NinePatchFixtureImageSource : public LVImageSource {
 private:
     bool _markers;
@@ -6562,6 +6598,27 @@ static int testImageSourceOwnership() {
                     ? "smooth image scaling did not render its RAII snapshot"
                     : "mapped image scaling did not render its RAII maps");
     }
+
+    static const int oversizedSmoothDimension = 16385;
+    int oversizedSmoothDecodeCalls = 0;
+    LVImageSourceRef oversizedSmoothSource(
+            new SingleRowImageSource(
+                    oversizedSmoothDimension,
+                    oversizedSmoothDimension,
+                    oversizedSmoothDecodeCalls));
+    LVColorDrawBuf boundedSmoothFallback(2, 2, 32);
+    boundedSmoothFallback.Clear(scaledSentinel);
+    boundedSmoothFallback.setSmoothScalingImages(true);
+    boundedSmoothFallback.Draw(
+            oversizedSmoothSource, 0, 0, 2, 2, false);
+    if (oversizedSmoothDecodeCalls != 1
+            || boundedSmoothFallback.getDrawnImagesCount() != 1
+            || boundedSmoothFallback.GetPixel(0, 0)
+                    == scaledSentinel
+            || boundedSmoothFallback.GetPixel(0, 1)
+                    != scaledSentinel)
+        return fail(
+                "oversized smooth snapshot did not use mapped fallback");
 
     static const int unpackedBpps[] = {8, 16, 32};
     for (int bpp : unpackedBpps) {
