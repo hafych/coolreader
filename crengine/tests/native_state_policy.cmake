@@ -27,6 +27,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/numedit.h" NUMBER_EDIT_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/numedit.cpp" NUMBER_EDIT_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/tocdlg.h" TOC_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/tocdlg.cpp" TOC_DIALOG_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/recentdlg.h" RECENT_DIALOG_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/recentdlg.cpp" RECENT_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7337,6 +7339,36 @@ forbid_source_text(
   "${TOC_DIALOG_SOURCE}"
   "lString16"
   "TOC dialog implementations must not narrow text to UTF-16"
+)
+require_source_text(
+  "${RECENT_DIALOG_SOURCE}"
+  "lString32 author = _book->getAuthor();"
+  "recent-book authors must preserve the history string width"
+)
+require_source_text(
+  "${RECENT_DIALOG_SOURCE}"
+  "lString32 title = _book->getTitle();"
+  "recent-book titles must preserve the history string width"
+)
+require_source_text(
+  "${RECENT_DIALOG_SOURCE}"
+  "_wm->getAccTables().get(U\"bookmarks\")"
+  "recent-book accelerator identifiers must use the current width"
+)
+require_source_text(
+  "${RECENT_DIALOG_SOURCE}"
+  "setSkinName(U\"#bookmarks\")"
+  "recent-book skin identifiers must use the current width"
+)
+forbid_source_text(
+  "${RECENT_DIALOG_SOURCE}"
+  "lString16"
+  "recent-book menu implementations must not narrow text to UTF-16"
+)
+forbid_source_text(
+  "${RECENT_DIALOG_HEADER}"
+  "_helpText"
+  "recent-book menus must not retain unused help-text state"
 )
 require_source_text(
   "${SETTINGS_SOURCE}"

@@ -27,20 +27,18 @@
 class CRRecentBooksMenu : public CRFullScreenMenu
 {
 private:
-    lString16 _helpText;
-    int _helpHeight;
     LVPtrVector<CRFileHistRecord> * _files;
     bool removeItem( int index );
 public:
     CRRecentBooksMenu(CRGUIWindowManager * wm, LVDocView * docview, int numItems, lvRect & rc);
 
-    virtual ~CRRecentBooksMenu() { }
+    ~CRRecentBooksMenu() override { }
 
 #ifdef CR_POCKETBOOK
     void showContextMenu();
     void handleContextMenu(int index);
 #endif
-    virtual bool onCommand( int command, int params );
+    bool onCommand( int command, int params ) override;
 };
 
 

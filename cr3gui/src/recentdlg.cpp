@@ -31,11 +31,15 @@ private:
     CRFileHistRecord * _book;
 public:
     CRRecentBookMenuItem( CRMenu * menu, int index, CRFileHistRecord * book );
-    virtual void Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected );
+    void Draw(
+            LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin,
+            CRRectSkinRef valueSkin, bool selected) override;
 };
 
 CRRecentBookMenuItem::CRRecentBookMenuItem( CRMenu * menu, int index, CRFileHistRecord * book )
-: CRMenuItem(menu, index, lString16::empty_str, LVImageSourceRef(), LVFontRef() ), _book( book )
+: CRMenuItem(
+        menu, index, lString32::empty_str,
+        LVImageSourceRef(), LVFontRef()), _book(book)
 {
 }
 
@@ -60,13 +64,13 @@ void CRRecentBookMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef ski
     lvRect textRect = rc;
     textRect.left += imgWidth;
 
-    lString16 author = _book->getAuthor();
-    lString16 title = _book->getTitle();
-    lString16 series = _book->getSeries();
+    lString32 author = _book->getAuthor();
+    lString32 title = _book->getTitle();
+    lString32 series = _book->getSeries();
     if ( title.empty() )
         title = _book->getFileName();
     else if ( !series.empty() )
-        title << " - " << series;
+        title << U" - " << series;
 
     lvRect posRect = textRect;
     if ( !author.empty() ) {
@@ -97,7 +101,6 @@ static void handle_contextMenu(int index)
 
 void CRRecentBooksMenu::showContextMenu()
 {
-	CRRecentBookMenuItem *item = static_cast<CRRecentBookMenuItem *>(getItems()[_selectedItem]);
 	CRMenuSkinRef skin = getSkin();
 	CRRectSkinRef separatorSkin = skin->getSeparatorSkin();
     int separatorHeight = 0;
@@ -127,7 +130,9 @@ void CRRecentBooksMenu::handleContextMenu(int index)
 #endif
 
 CRRecentBooksMenu::CRRecentBooksMenu(CRGUIWindowManager * wm, LVDocView * docview, int numItems, lvRect & rc)
-    : CRFullScreenMenu( wm, MCMD_BOOKMARK_LIST, lString16(_("Open recent book")), numItems, rc )
+    : CRFullScreenMenu(
+            wm, MCMD_BOOKMARK_LIST,
+            Utf8ToUnicode(lString8(_("Open recent book"))), numItems, rc)
 {
     docview->savePosition(); // to move current file to top
     LVPtrVector<CRFileHistRecord> & files = docview->getHistory()->getRecords();
@@ -138,21 +143,24 @@ CRRecentBooksMenu::CRRecentBooksMenu(CRGUIWindowManager * wm, LVDocView * docvie
         CRRecentBookMenuItem * item = new CRRecentBookMenuItem( this, i, file );
         addItem( item );
     }
-    //_helpText = "Long press 1..8 = set, short press = go to";
-    //_helpHeight = 36;
-    CRGUIAcceleratorTableRef acc = _wm->getAccTables().get("bookmarks");
+    CRGUIAcceleratorTableRef acc = _wm->getAccTables().get(U"bookmarks");
     if ( acc.isNull() )
-        acc = _wm->getAccTables().get("menu");
+        acc = _wm->getAccTables().get(U"menu");
     setAccelerators( acc );
-    setSkinName(lString16("#bookmarks"));
-    lString16 pattern(_("$1 - open book\n$2, $3 - close"));
+    setSkinName(U"#bookmarks");
+    lString32 pattern =
+            Utf8ToUnicode(lString8(_("$1 - open book\n$2, $3 - close")));
 #ifdef CR_POCKETBOOK
-	pattern.replaceParam(1, getCommandKeyName( MCMD_SELECT ));
+    pattern.replaceParam(
+            1, Utf16ToUnicode(getCommandKeyName(MCMD_SELECT)));
 #else    
-    pattern.replaceParam(1, getItemNumberKeysName());
+    pattern.replaceParam(
+            1, Utf16ToUnicode(getItemNumberKeysName()));
 #endif
-    pattern.replaceParam(2, getCommandKeyName(MCMD_OK) );
-    pattern.replaceParam(3, getCommandKeyName(MCMD_CANCEL) );
+    pattern.replaceParam(
+            2, Utf16ToUnicode(getCommandKeyName(MCMD_OK)));
+    pattern.replaceParam(
+            3, Utf16ToUnicode(getCommandKeyName(MCMD_CANCEL)));
     _statusText = pattern;
 #ifdef CR_POCKETBOOK
     bmkDialog = this;
@@ -234,7 +242,7 @@ bool CRRecentBooksMenu::removeItem( int index )
 {
     if ( index <0 || index >= _items.length() )
         return false;
-	int last = getLastOnPage();
+    int last = getLastOnPage();
     CRMenuItem * item = getItems()[index];
     int n = item->getId();
     _files->erase( n, 1 );
