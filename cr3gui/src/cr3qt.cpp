@@ -342,7 +342,7 @@ int main(int argc, char **argv)
     CRLog::info("Trying to translate: 'On'='%s'", gettext("On"));
     CRLog::info("Trying to translate: 'About...'='%s'", gettext("About..."));
 
-    lString16Collection fontDirs;
+    lString32Collection fontDirs;
     //fontDirs.add( lString16(L"/usr/local/share/cr3/fonts") );
     //fontDirs.add( lString16(L"/usr/local/share/fonts/truetype/freefont") );
     //fontDirs.add( lString16(L"/mnt/fonts") );

@@ -87,6 +87,9 @@ DRM или ограничений доступа, подбор/получени�
   на текущую геометрию экрана без device-specific размеров.
   Logo converter использует UTF-32 image/output paths, RAII stream и
   проверку полного write/flush вместо ручного `FILE *`.
+  Shared GUI startup/font discovery и log properties переведены на
+  `lString32Collection`/UTF-32; все platform call sites синхронизированы,
+  а неиспользуемый unchecked file-read helper удалён.
   Гейт расширен: `return-type`, `implicit-function-declaration`,
   `incompatible-pointer-types`, `uninitialized`, `delete-non-virtual-dtor`,
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,

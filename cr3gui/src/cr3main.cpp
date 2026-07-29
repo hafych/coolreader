@@ -157,21 +157,6 @@ bool initHyph(const char * fname)
 }
 #endif
 
-lString8 readFileToString( const char * fname )
-{
-    lString8 buf;
-    LVStreamRef stream = LVOpenFileStream(fname, LVOM_READ);
-    if (!stream)
-        return buf;
-    int sz = stream->GetSize();
-    if (sz>0)
-    {
-        buf.insert( 0, sz, ' ' );
-        stream->Read( buf.modify(), sz, NULL );
-    }
-    return buf;
-}
-
 void ShutdownCREngine()
 {
     HyphMan::uninit();
@@ -180,10 +165,13 @@ void ShutdownCREngine()
 }
 
 #if (USE_FREETYPE==1)
-bool getDirectoryFonts( lString16Collection & pathList, lString16Collection & ext, lString16Collection & fonts, bool absPath )
+bool getDirectoryFonts(
+        const lString32Collection & pathList,
+        const lString32Collection & ext,
+        lString32Collection & fonts, bool absPath)
 {
     int foundCount = 0;
-    lString16 path;
+    lString32 path;
     for ( int di=0; di<pathList.length();di++ ) {
         path = pathList[di];
         LVContainerRef dir = LVOpenDirectory(path.c_str());
@@ -191,12 +179,10 @@ bool getDirectoryFonts( lString16Collection & pathList, lString16Collection & ex
             CRLog::trace("Checking directory %s", UnicodeToUtf8(path).c_str() );
             for ( int i=0; i < dir->GetObjectCount(); i++ ) {
                 const LVContainerItemInfo * item = dir->GetObjectInfo(i);
-                lString16 fileName = item->GetName();
-                lString8 fn = UnicodeToLocal(fileName);
-                    //printf(" test(%s) ", fn.c_str() );
+                lString32 fileName = item->GetName();
                 if ( !item->IsContainer() ) {
                     bool found = false;
-                    lString16 lc = fileName;
+                    lString32 lc = fileName;
                     lc.lowercase();
                     for ( int j=0; j<ext.length(); j++ ) {
                         if ( lc.endsWith(ext[j]) ) {
@@ -206,7 +192,7 @@ bool getDirectoryFonts( lString16Collection & pathList, lString16Collection & ex
                     }
                     if ( !found )
                         continue;
-                    lString16 fn;
+                    lString32 fn;
                     if ( absPath ) {
                         fn = path;
                         if ( !fn.empty() && fn[fn.length()-1]!=PATH_SEPARATOR_CHAR)
@@ -223,76 +209,76 @@ bool getDirectoryFonts( lString16Collection & pathList, lString16Collection & ex
 }
 #endif
 
-bool InitCREngine( const char * exename, lString16Collection & fontDirs )
+bool InitCREngine(
+        const char * exename, lString32Collection & fontDirs)
 {
     CRLog::trace("InitCREngine(%s)", exename);
     for ( int k=0; k<fontDirs.length(); k++ )
-        CRLog::trace(" fontDir: %s", LCSTR(fontDirs[k]));
-    lString16 appname( exename );
+        CRLog::trace(
+                " fontDir: %s", UnicodeToUtf8(fontDirs[k]).c_str());
+    lString32 appname = Utf8ToUnicode(lString8(exename));
     int lastSlash=-1;
-    lChar16 slashChar = '/';
+    lChar32 slashChar = U'/';
     for ( int p=0; p<(int)appname.length(); p++ ) {
-        if ( appname[p]=='\\' ) {
-            slashChar = '\\';
+        if ( appname[p]==U'\\' ) {
+            slashChar = U'\\';
             lastSlash = p;
-        } else if ( appname[p]=='/' ) {
-            slashChar = '/';
+        } else if ( appname[p]==U'/' ) {
+            slashChar = U'/';
             lastSlash=p;
         }
     }
 
-    lString16 appPath;
+    lString32 appPath;
     if ( lastSlash>=0 )
         appPath = appname.substr( 0, lastSlash+1 );
 
-    lString16 fontDir = appPath + "fonts";
+    lString32 fontDir = appPath + U"fonts";
     fontDir << slashChar;
-    lString8 fontDir8 = UnicodeToLocal(fontDir);
-    //const char * fontDir8s = fontDir8.c_str();
-    //InitFontManager( fontDir8 );
     InitFontManager(lString8::empty_str);
 
     // Load font definitions into font manager
     // fonts are in files font1.lbf, font2.lbf, ... font32.lbf
     if (!fontMan->GetFontCount()) {
 
-    lString16Collection fontExt;
+    lString32Collection fontExt;
     #if (USE_FREETYPE==1)
-        fontExt.add(".ttf");
-        fontExt.add(".otf");
-        fontExt.add(".pfa");
-        fontExt.add(".pfb");
+        fontExt.add(U".ttf");
+        fontExt.add(U".otf");
+        fontExt.add(U".pfa");
+        fontExt.add(U".pfb");
     #else
-        fontExt.add(".lbf");
+        fontExt.add(U".lbf");
     #endif
     #if (USE_FREETYPE==1)
-        lString16Collection fonts;
+        lString32Collection fonts;
         fontDirs.add( fontDir );
+    #ifdef _LINUX
+    #ifndef LBOOK
         static const char * msfonts[] = {
             "arial.ttf", "arialbd.ttf", "ariali.ttf", "arialbi.ttf",
             "cour.ttf", "courbd.ttf", "couri.ttf", "courbi.ttf",
             "times.ttf", "timesbd.ttf", "timesi.ttf", "timesbi.ttf",
             NULL
         };
-    #ifdef _LINUX
-    #ifndef LBOOK
-        fontDirs.add("/usr/local/share/crengine/fonts");
-        fontDirs.add("/usr/local/share/fonts/truetype/freefont");
-        fontDirs.add("/usr/share/crengine/fonts");
-        fontDirs.add("/usr/share/fonts/truetype/freefont");
-        fontDirs.add("/root/fonts/truetype");
-        //fontDirs.add( lString16(L"/usr/share/fonts/truetype/msttcorefonts") );
+        fontDirs.add(U"/usr/local/share/crengine/fonts");
+        fontDirs.add(U"/usr/local/share/fonts/truetype/freefont");
+        fontDirs.add(U"/usr/share/crengine/fonts");
+        fontDirs.add(U"/usr/share/fonts/truetype/freefont");
+        fontDirs.add(U"/root/fonts/truetype");
         for ( int fi=0; msfonts[fi]; fi++ )
-            fonts.add( lString16("/usr/share/fonts/truetype/msttcorefonts/") + lString16(msfonts[fi]) );
+            fonts.add(
+                    lString32(U"/usr/share/fonts/truetype/msttcorefonts/")
+                    + Utf8ToUnicode(lString8(msfonts[fi])));
     #endif
     #endif
         getDirectoryFonts( fontDirs, fontExt, fonts, true );
 
-        // load fonts from file
-        CRLog::debug("%d font files found", fonts.length());
+            // load fonts from file
+            CRLog::debug("%d font files found", fonts.length());
         //if (!fontMan->GetFontCount()) {
             for ( int fi=0; fi<fonts.length(); fi++ ) {
-                lString8 fn = UnicodeToLocal(fonts[fi]);
+                lString8 fn = UnicodeToUtf8(fonts[fi]);
                 CRLog::trace("loading font: %s", fn.c_str());
                 if ( !fontMan->RegisterFont(fn) ) {
                     CRLog::trace("    failed\n");
@@ -304,7 +290,7 @@ bool InitCREngine( const char * exename, lString16Collection & fontDirs )
             for (int i=0; i<MAX_FONT_FILE; i++)
             {
                 char fn[1024];
-                sprintf( fn, "font%d.lbf", i );
+                snprintf(fn, sizeof(fn), "font%d.lbf", i);
                 printf("try load font: %s\n", fn);
                 fontMan->RegisterFont( lString8(fn) );
             }
@@ -344,14 +330,14 @@ void InitCREngineLog( const char * cfgfile )
         //CRLog::setLogLevel( CRLog::LL_TRACE );
         return;
     }
-    lString16 logfname(
+    lString32 logfname(
 #ifdef __arm__
-                                               "/dev/null"
+                                               U"/dev/null"
 #else
-                                               "stdout"
+                                               U"stdout"
 #endif
             );
-    lString16 loglevelstr("INFO");
+    lString32 loglevelstr(U"INFO");
 	bool autoFlush = false;
     CRPropRef logprops = LVCreatePropsContainer();
     {
@@ -376,26 +362,26 @@ void InitCREngineLog( const char * cfgfile )
         }
     }
     CRLog::log_level level = CRLog::LL_INFO;
-    if (loglevelstr == "OFF") {
+    if (loglevelstr == U"OFF") {
         level = CRLog::LL_FATAL;
         logfname.clear();
-    } else if (loglevelstr == "FATAL") {
+    } else if (loglevelstr == U"FATAL") {
         level = CRLog::LL_FATAL;
-    } else if (loglevelstr == "ERROR") {
+    } else if (loglevelstr == U"ERROR") {
         level = CRLog::LL_ERROR;
-    } else if (loglevelstr == "WARN") {
+    } else if (loglevelstr == U"WARN") {
         level = CRLog::LL_WARN;
-    } else if (loglevelstr == "INFO") {
+    } else if (loglevelstr == U"INFO") {
         level = CRLog::LL_INFO;
-    } else if (loglevelstr == "DEBUG") {
+    } else if (loglevelstr == U"DEBUG") {
         level = CRLog::LL_DEBUG;
-    } else if (loglevelstr == "TRACE") {
+    } else if (loglevelstr == U"TRACE") {
         level = CRLog::LL_TRACE;
     }
     if ( !logfname.empty() ) {
-        if (logfname == "stdout")
+        if (logfname == U"stdout")
             CRLog::setStdoutLogger();
-        else if (logfname == "stderr")
+        else if (logfname == U"stderr")
             CRLog::setStderrLogger();
         else
             CRLog::setFileLogger( UnicodeToUtf8( logfname ).c_str(), autoFlush );
@@ -403,4 +389,3 @@ void InitCREngineLog( const char * cfgfile )
     CRLog::setLogLevel( level );
     CRLog::trace("Log initialization done.");
 }
-

@@ -2416,9 +2416,9 @@ int InitDoc(const char *exename, char *fileName)
     }
 #endif
 
-    lString16Collection fontDirs;
-    fontDirs.add(lString16(USERFONTDIR));
-    fontDirs.add(lString16(SYSTEMFONTDIR));
+    lString32Collection fontDirs;
+    fontDirs.add(Utf8ToUnicode(lString8(USERFONTDIR)));
+    fontDirs.add(Utf8ToUnicode(lString8(SYSTEMFONTDIR)));
     CRLog::info("INIT...");
     if (!InitCREngine(exename, fontDirs))
         return 0;

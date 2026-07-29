@@ -413,9 +413,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	fontdir << L"\\Fonts\\";
 	lString8 fontdir8( UnicodeToUtf8(fontdir) );
 	lString8 fd = UnicodeToLocal(exedir);
-	lString16Collection fontDirs;
+	lString32Collection fontDirs;
 	//fontDirs.add( fontdir );
-    fontDirs.add( exedir + "fonts" );
+    fontDirs.add(Utf16ToUnicode(exedir) + U"fonts");
 	InitCREngine( exe_fn, fontDirs );
     const char * fontnames[] = {
 #if 1

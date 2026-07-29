@@ -36,6 +36,8 @@ file(READ "${SOURCE_ROOT}/cr3gui/src/citedlg.cpp" CITE_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.h" LINKS_DIALOG_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/linksdlg.cpp" LINKS_DIALOG_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/logoconv.cpp" LOGO_CONVERTER_SOURCE)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3main.h" GUI_STARTUP_HEADER)
+file(READ "${SOURCE_ROOT}/cr3gui/src/cr3main.cpp" GUI_STARTUP_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.h" FULLSCREEN_MENU_HEADER)
 file(READ "${SOURCE_ROOT}/cr3gui/src/fsmenu.cpp" FULLSCREEN_MENU_SOURCE)
 file(READ "${SOURCE_ROOT}/cr3gui/src/t9encoding.h" T9_ENCODING_HEADER)
@@ -7563,6 +7565,64 @@ forbid_source_text(
   "fwrite("
   "logo converter output must use exact stream writes"
 )
+require_source_text(
+  "${GUI_STARTUP_HEADER}"
+  "const lString32Collection & pathList,"
+  "GUI font discovery paths must use the current string collection"
+)
+require_source_text(
+  "${GUI_STARTUP_HEADER}"
+  "const char * exename, lString32Collection & fontPathList"
+  "GUI startup font paths must use the current string collection"
+)
+require_source_text(
+  "${GUI_STARTUP_SOURCE}"
+  "lString32 fileName = item->GetName();"
+  "GUI font discovery filenames must preserve the container string width"
+)
+require_source_text(
+  "${GUI_STARTUP_SOURCE}"
+  "lString32 loglevelstr(U\"INFO\");"
+  "GUI startup log properties must use the current string width"
+)
+require_source_text(
+  "${GUI_STARTUP_SOURCE}"
+  "snprintf(fn, sizeof(fn), \"font%d.lbf\", i);"
+  "legacy bitmap-font discovery must use bounded formatting"
+)
+forbid_source_text(
+  "${GUI_STARTUP_HEADER}"
+  "lString16Collection"
+  "GUI startup declarations must not use the removed UTF-16 collection"
+)
+forbid_source_text(
+  "${GUI_STARTUP_SOURCE}"
+  "lString16Collection"
+  "GUI startup implementations must not use the removed UTF-16 collection"
+)
+forbid_source_text(
+  "${GUI_STARTUP_SOURCE}"
+  "readFileToString("
+  "GUI startup must not retain an unused unchecked file-read helper"
+)
+forbid_source_text(
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+  "lString16Collection fontDirs"
+  "GUI platform startup must use current-width font directories"
+)
+string(REGEX MATCHALL
+  "lString32Collection fontDirs"
+  GUI_PLATFORM_FONT_DIR_DECLARATIONS
+  "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
+)
+list(LENGTH GUI_PLATFORM_FONT_DIR_DECLARATIONS
+  GUI_PLATFORM_FONT_DIR_DECLARATION_COUNT
+)
+if(NOT GUI_PLATFORM_FONT_DIR_DECLARATION_COUNT EQUAL 6)
+  message(FATAL_ERROR
+    "all six GUI platform startup paths must declare current-width font directories"
+  )
+endif()
 require_source_text(
   "${SETTINGS_SOURCE}"
   "lString32Collection list;"

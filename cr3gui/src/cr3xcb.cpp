@@ -1367,7 +1367,7 @@ int main(int argc, char **argv)
     #endif
 
 
-    lString16Collection fontDirs;
+    lString32Collection fontDirs;
     //fontDirs.add( lString16(L"/usr/local/share/cr3/fonts") );
     //fontDirs.add( lString16(L"/usr/local/share/fonts/truetype/freefont") );
     //fontDirs.add( lString16(L"/mnt/fonts") );
