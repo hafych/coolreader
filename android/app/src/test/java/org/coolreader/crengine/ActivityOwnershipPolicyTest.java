@@ -10,6 +10,7 @@
 package org.coolreader.crengine;
 
 import android.app.Activity;
+import android.view.View;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -451,6 +452,32 @@ public class ActivityOwnershipPolicyTest {
 				CloseableTaskGate.class.getDeclaredFields()) {
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+	}
+
+	@Test
+	public void repeatTouchListenerOwnsOneShotCallbacks()
+			throws Exception {
+		assertTrue(
+				View.OnAttachStateChangeListener.class
+						.isAssignableFrom(
+								RepeatOnTouchListener.class));
+		for (String name : new String[]{
+				"handler",
+				"repeatTasks",
+				"initialInterval",
+				"normalInterval",
+				"clickListener"}) {
+			Field field =
+					RepeatOnTouchListener.class
+							.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field :
+				RepeatOnTouchListener.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
 		}
 	}
 

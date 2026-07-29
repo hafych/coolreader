@@ -54,6 +54,11 @@ Reinitialization invalidates older results; close removes owned handler
 callbacks and quits the dialog's timing thread. Completion is published on the
 GUI thread only while its exact token remains active, so stale work cannot
 restore controls or move selection after dismissal.
+Repeated touch actions use the same exact-wrapper principle. Each press owns a
+`ReplaceableTaskSlot` callback and one pressed View. Release, cancellation, a
+new press or View detachment invalidates the pending wrapper and clears the
+pressed state. A callback already removed from the Handler queue therefore
+cannot observe or act on a replacement gesture.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

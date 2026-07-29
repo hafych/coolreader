@@ -76,6 +76,9 @@ TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 TTS_TOOLBAR = SOURCE / "crengine" / "TTSToolbarDlg.java"
+REPEAT_ON_TOUCH_LISTENER = (
+    SOURCE / "crengine" / "RepeatOnTouchListener.java"
+)
 GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
 ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
 READING_TIME_TRACKER = SOURCE / "crengine" / "ReadingTimeTracker.java"
@@ -1375,6 +1378,37 @@ def main() -> None:
             violations.append(
                 f"{relative(TTS_TOOLBAR)} retains unowned TTS lifecycle "
                 f"marker: {legacy}")
+
+    repeat_touch_text = REPEAT_ON_TOUCH_LISTENER.read_text(
+        encoding="utf-8")
+    for marker in (
+        "implements OnTouchListener, View.OnAttachStateChangeListener",
+        "private final Handler handler",
+        "new Handler(Looper.getMainLooper())",
+        "private final ReplaceableTaskSlot repeatTasks",
+        "motionEvent.getActionMasked()",
+        "private void scheduleRepeat(View view, int delayMillis)",
+        "repeatTasks.replace(() -> repeat(view))",
+        "handler.removeCallbacks(replacement.previous())",
+        "private void stopRepeating()",
+        "Runnable pending = repeatTasks.cancel()",
+        "view.removeOnAttachStateChangeListener(this)",
+        "public void onViewDetachedFromWindow(View view)",
+    ):
+        if marker not in repeat_touch_text:
+            violations.append(
+                f"{relative(REPEAT_ON_TOUCH_LISTENER)} omits owned repeat "
+                f"touch marker: {marker}")
+    for legacy in (
+        "private View touchedView",
+        "handlerRunnable",
+        "new Handler()",
+        "motionEvent.getAction()",
+    ):
+        if legacy in repeat_touch_text:
+            violations.append(
+                f"{relative(REPEAT_ON_TOUCH_LISTENER)} retains stale "
+                f"repeat touch marker: {legacy}")
 
     blocking_result_text = BLOCKING_RESULT.read_text(encoding="utf-8")
     for marker in (

@@ -22,6 +22,7 @@ package org.coolreader.crengine;
 // Based on https://stackoverflow.com/a/12795551 for details
 
 import android.os.Handler;
+import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -37,29 +38,17 @@ import android.view.View.OnTouchListener;
  * If it runs slow, it does not generate skipped onClicks. Can be rewritten to
  * achieve this.
  */
-public class RepeatOnTouchListener implements OnTouchListener {
+public class RepeatOnTouchListener
+		implements OnTouchListener, View.OnAttachStateChangeListener {
 
-	private Handler handler = new Handler();
-
-	private int initialInterval;
+	private final Handler handler =
+			new Handler(Looper.getMainLooper());
+	private final ReplaceableTaskSlot repeatTasks =
+			new ReplaceableTaskSlot();
+	private final int initialInterval;
 	private final int normalInterval;
 	private final OnClickListener clickListener;
-	private View touchedView;
-
-	private Runnable handlerRunnable = new Runnable() {
-		@Override
-		public void run() {
-			if (touchedView.isEnabled()) {
-				handler.postDelayed(this, normalInterval);
-				clickListener.onClick(touchedView);
-			} else {
-				// if the view was disabled by the clickListener, remove the callback
-				handler.removeCallbacks(handlerRunnable);
-				touchedView.setPressed(false);
-				touchedView = null;
-			}
-		}
-	};
+	private View pressedView;
 
 	/**
 	 * @param initialInterval The interval after first click event
@@ -81,21 +70,65 @@ public class RepeatOnTouchListener implements OnTouchListener {
 	}
 
 	public boolean onTouch(View view, MotionEvent motionEvent) {
-		switch (motionEvent.getAction()) {
+		switch (motionEvent.getActionMasked()) {
 			case MotionEvent.ACTION_DOWN:
-				handler.removeCallbacks(handlerRunnable);
-				handler.postDelayed(handlerRunnable, initialInterval);
-				touchedView = view;
-				touchedView.setPressed(true);
+				stopRepeating();
+				pressedView = view;
+				view.addOnAttachStateChangeListener(this);
+				view.setPressed(true);
 				clickListener.onClick(view);
+				if (pressedView == view && view.isEnabled())
+					scheduleRepeat(view, initialInterval);
+				else
+					stopRepeating();
 				return true;
 			case MotionEvent.ACTION_UP:
 			case MotionEvent.ACTION_CANCEL:
-				handler.removeCallbacks(handlerRunnable);
-				touchedView.setPressed(false);
-				touchedView = null;
+				stopRepeating();
 				return true;
 		}
 		return false;
+	}
+
+	private void scheduleRepeat(View view, int delayMillis) {
+		ReplaceableTaskSlot.Replacement replacement =
+				repeatTasks.replace(() -> repeat(view));
+		if (replacement.previous() != null)
+			handler.removeCallbacks(replacement.previous());
+		handler.postDelayed(replacement.current(), delayMillis);
+	}
+
+	private void repeat(View view) {
+		if (pressedView != view || !view.isEnabled()) {
+			stopRepeating();
+			return;
+		}
+		clickListener.onClick(view);
+		if (pressedView == view && view.isEnabled())
+			scheduleRepeat(view, normalInterval);
+		else
+			stopRepeating();
+	}
+
+	private void stopRepeating() {
+		Runnable pending = repeatTasks.cancel();
+		if (pending != null)
+			handler.removeCallbacks(pending);
+		View view = pressedView;
+		pressedView = null;
+		if (view != null) {
+			view.removeOnAttachStateChangeListener(this);
+			view.setPressed(false);
+		}
+	}
+
+	@Override
+	public void onViewAttachedToWindow(View view) {
+	}
+
+	@Override
+	public void onViewDetachedFromWindow(View view) {
+		if (pressedView == view)
+			stopRepeating();
 	}
 }

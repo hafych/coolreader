@@ -197,6 +197,9 @@ DRM или ограничений доступа, подбор/получени�
   инициализация инвалидирует старую публикацию, закрытие очищает main-handler
   и завершает owned `HandlerThread`, а stale service/background callbacks не
   меняют selection или UI закрытого диалога.
+  Повторяемые touch-actions также используют exact one-shot generation:
+  `UP`/`CANCEL`, новое нажатие и detach View отменяют pending wrapper, снимают
+  pressed-state и не позволяют callback старого жеста действовать на новый.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
