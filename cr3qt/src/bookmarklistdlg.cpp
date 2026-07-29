@@ -158,17 +158,17 @@ void BookmarkListDialog::on_buttonBox_rejected()
 
 void BookmarkListDialog::on_tableWidget_customContextMenuRequested(QPoint pos)
 {
-    QMenu *menu = new QMenu;
+    QMenu menu;
     CRBookmark * bm = selectedBookmark();
     if ( bm != NULL ) {
-        menu->addAction(m_ui->actionGoToBookmark);
-        menu->addAction(m_ui->actionEdit_Bookmark);
-        menu->addAction(m_ui->actionRemoveBookmark);
+        menu.addAction(m_ui->actionGoToBookmark);
+        menu.addAction(m_ui->actionEdit_Bookmark);
+        menu.addAction(m_ui->actionRemoveBookmark);
     }
     if ( _list.length()>0 )
-        menu->addAction(m_ui->actionRemoveALLBookmarks);
-    menu->addAction(m_ui->actionClose);
-    menu->exec(mapToGlobal(pos));
+        menu.addAction(m_ui->actionRemoveALLBookmarks);
+    menu.addAction(m_ui->actionClose);
+    menu.exec(mapToGlobal(pos));
 }
 
 CRBookmark * BookmarkListDialog::selectedBookmark()

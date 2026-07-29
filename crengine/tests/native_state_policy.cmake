@@ -704,6 +704,28 @@ forbid_source_text(
   "setCallback( oldCallback"
   "modern Qt export callbacks must not return to manual restoration"
 )
+string(REGEX MATCHALL "QMenu menu"
+  MODERN_QT_SCOPED_MENUS "${MODERN_QT_UI_SOURCE}")
+list(LENGTH MODERN_QT_SCOPED_MENUS MODERN_QT_SCOPED_MENU_COUNT)
+if(NOT MODERN_QT_SCOPED_MENU_COUNT EQUAL 3)
+  message(FATAL_ERROR
+    "all modern Qt transient context menus must retain scoped ownership")
+endif()
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "QMessageBox message(QMessageBox::Information"
+  "modern Qt search feedback must retain scoped ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "QMenu *menu = new QMenu"
+  "modern Qt transient context menus must not return to raw ownership"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "QMessageBox * mb = new QMessageBox"
+  "modern Qt search feedback must not return to raw ownership"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(

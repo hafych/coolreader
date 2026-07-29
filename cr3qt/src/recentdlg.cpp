@@ -157,10 +157,10 @@ void RecentBooksDlg::on_tableWidget_doubleClicked(QModelIndex index)
 
 void RecentBooksDlg::on_tableWidget_customContextMenuRequested(QPoint pos)
 {
-    QMenu *menu = new QMenu;
-    menu->addAction(m_ui->actionRemoveItem);
-    menu->addAction(m_ui->actionClearAll);
-    menu->exec(mapToGlobal(pos));
+    QMenu menu;
+    menu.addAction(m_ui->actionRemoveItem);
+    menu.addAction(m_ui->actionClearAll);
+    menu.exec(mapToGlobal(pos));
 }
 
 void RecentBooksDlg::on_actionRemoveItem_triggered()

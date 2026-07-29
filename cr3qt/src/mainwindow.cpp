@@ -454,17 +454,17 @@ void MainWindow::onPropsChange( PropsRef props )
 
 void MainWindow::contextMenu( QPoint pos )
 {
-    QMenu *menu = new QMenu;
-    menu->addAction(ui->actionOpen);
-    menu->addAction(ui->actionRecentBooks);
-    menu->addAction(ui->actionTOC);
-    menu->addAction(ui->actionToggle_Full_Screen);
-    menu->addAction(ui->actionSettings);
+    QMenu menu;
+    menu.addAction(ui->actionOpen);
+    menu.addAction(ui->actionRecentBooks);
+    menu.addAction(ui->actionTOC);
+    menu.addAction(ui->actionToggle_Full_Screen);
+    menu.addAction(ui->actionSettings);
     if ( ui->view->isPointInsideSelection( pos ) )
-        menu->addAction(ui->actionCopy);
-    menu->addAction(ui->actionAddBookmark);
-    menu->addAction(ui->actionClose);
-    menu->exec(ui->view->mapToGlobal(pos));
+        menu.addAction(ui->actionCopy);
+    menu.addAction(ui->actionAddBookmark);
+    menu.addAction(ui->actionClose);
+    menu.exec(ui->view->mapToGlobal(pos));
 }
 
 
@@ -580,8 +580,6 @@ void MainWindow::on_actionFileProperties_triggered()
 void MainWindow::on_actionFindText_triggered()
 {
     SearchDialog::showDlg(this, ui->view);
-//    QMessageBox * mb = new QMessageBox( QMessageBox::Information, tr("Not implemented"), tr("Search is not implemented yet"), QMessageBox::Close, this );
-//    mb->exec();
 }
 
 void MainWindow::on_actionRotate_triggered()
