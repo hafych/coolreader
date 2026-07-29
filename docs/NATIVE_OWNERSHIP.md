@@ -344,6 +344,12 @@ signed overflow, and area multiplication widens each positive dimension before
 evaluation. Repeated accumulation saturates at the 64-bit maximum instead of
 wrapping either statistic.
 
+The shared smooth scaler independently enforces the same 16,384-dimension and
+64-megapixel contract for both input and output. It computes one checked
+`size_t` RGBA byte count before creating scale tables and passes that exact
+value to `malloc`, `_aligned_malloc` or `posix_memalign`, so direct callers such
+as FreeType color-glyph scaling cannot reintroduce signed allocation arithmetic.
+
 The legacy C-style `draw_buf_t` allocation boundary validates bit depth,
 dimensions, row layout and total byte multiplication before allocation. It
 holds malloc-backed bytes in an allocator-matched `unique_ptr`, reports failure

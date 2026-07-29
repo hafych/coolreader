@@ -1186,6 +1186,14 @@ static int testFreeTypeMetricCacheOwnership() {
 static int testFreeTypeColorGlyphScaleOwnership() {
     if (!LVRunFreeTypeColorGlyphScaleOwnershipRegression())
         return fail("FreeType color glyph scale ownership regression failed");
+    lUInt8 sourcePixel[] = {0, 0, 0, 0};
+    if (CRe::qSmoothScaleImage(
+                sourcePixel, 1, 1, false,
+                16385, 1) != NULL
+            || CRe::qSmoothScaleImage(
+                    sourcePixel, 16385, 1, false,
+                    1, 1) != NULL)
+        return fail("smooth scaler accepted an unbounded workspace");
     return 0;
 }
 #endif

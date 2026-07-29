@@ -217,6 +217,7 @@ file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.cpp" UNPACKED_I
 file(READ "${SOURCE_ROOT}/crengine/src/lvimg/lvunpackedimgsource.h" UNPACKED_IMAGE_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.cpp" SCALED_IMAGE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvimagescaleddrawcallback.h" SCALED_IMAGE_HEADER)
+file(READ "${SOURCE_ROOT}/thirdparty_unman/qimagescale/qimagescale.cpp" SMOOTH_SCALER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvbasedrawbuf.h" BASE_DRAW_BUFFER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvdrawbuf/lvcolordrawbuf.cpp" COLOR_DRAW_BUFFER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/lvcolordrawbuf.h" COLOR_DRAW_BUFFER_HEADER)
@@ -4020,6 +4021,41 @@ require_source_text(
   "${SCALED_IMAGE_SOURCE}"
   "std::unique_ptr<lUInt8, SmoothScaledBufferDeleter> scaled"
   "smooth-scale results must have scoped ownership"
+)
+require_source_text(
+  "${SMOOTH_SCALER_SOURCE}"
+  "getSmoothScaleByteCount"
+  "smooth scaler inputs and outputs must use checked byte counts"
+)
+require_source_text(
+  "${SMOOTH_SCALER_SOURCE}"
+  "MAX_SMOOTH_SCALE_PIXELS"
+  "smooth scaler workspaces must retain a bounded pixel contract"
+)
+require_source_text(
+  "${SMOOTH_SCALER_SOURCE}"
+  "posix_memalign(&ptr, 16, outputBytes)"
+  "smooth scaler allocation must use the checked output byte count"
+)
+require_source_text(
+  "${SMOOTH_SCALER_SOURCE}"
+  "malloc(outputBytes)"
+  "legacy Android smooth scaling must use the checked output byte count"
+)
+require_source_text(
+  "${SMOOTH_SCALER_SOURCE}"
+  "_aligned_malloc(outputBytes, 16)"
+  "MinGW smooth scaling must use the checked output byte count"
+)
+forbid_source_text(
+  "${SMOOTH_SCALER_SOURCE}"
+  "dw * dh * 4"
+  "smooth scaler allocation must not use signed size arithmetic"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "smooth scaler accepted an unbounded workspace"
+  "smooth scaler bounds must retain native regression coverage"
 )
 require_source_text(
   "${SCALED_IMAGE_SOURCE}"

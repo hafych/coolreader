@@ -161,7 +161,7 @@ DRM или ограничений доступа, подбор/получени�
   downstream cancellation,
   scoped stream-image decoder factory candidates, scaled-image
   overflow-safe maps/clipping, bounded source/destination RGBA workspaces
-  with mapped fallback,
+  and shared scaler allocation with mapped fallback,
   complete smooth-output/nine-patch lifecycle,
   guarded color/gray image draw entry
   points with success-only accounting and

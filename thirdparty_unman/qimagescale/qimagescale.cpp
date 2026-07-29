@@ -43,6 +43,7 @@
 
 #include <stdlib.h>
 #include <iostream>
+#include <limits>
 
 #ifndef FBINK_QIS_NO_SIMD
 #if defined(__ARM_NEON__)
@@ -58,6 +59,37 @@
 #endif
 
 namespace CRe {
+
+namespace {
+
+constexpr int MAX_SMOOTH_SCALE_DIMENSION = 16384;
+constexpr std::size_t MAX_SMOOTH_SCALE_PIXELS =
+        64ULL * 1024ULL * 1024ULL;
+
+bool getSmoothScaleByteCount(
+        int width, int height, std::size_t &byteCount)
+{
+    if (width <= 0 || height <= 0
+            || width > MAX_SMOOTH_SCALE_DIMENSION
+            || height > MAX_SMOOTH_SCALE_DIMENSION)
+        return false;
+    const std::size_t unsignedWidth =
+            static_cast<std::size_t>(width);
+    const std::size_t unsignedHeight =
+            static_cast<std::size_t>(height);
+    if (unsignedWidth
+            > MAX_SMOOTH_SCALE_PIXELS / unsignedHeight)
+        return false;
+    const std::size_t pixelCount =
+            unsignedWidth * unsignedHeight;
+    if (pixelCount
+            > std::numeric_limits<std::size_t>::max() / 4)
+        return false;
+    byteCount = pixelCount * 4;
+    return true;
+}
+
+} // namespace
 
 /*
  * Copyright (C) 2004, 2005 Daniel M. Duley
@@ -753,7 +785,13 @@ static void qt_qimageScaleAARGB_down_xy(QImageScaleInfo *isi, unsigned int *dest
 unsigned char* qSmoothScaleImage(const unsigned char* src, int sw, int sh, bool ignore_alpha, int dw, int dh)
 {
     unsigned char* buffer = nullptr;
-    if (src == nullptr || dw <= 0 || dh <= 0)
+    std::size_t sourceBytes = 0;
+    std::size_t outputBytes = 0;
+    if (src == nullptr
+            || !getSmoothScaleByteCount(
+                    sw, sh, sourceBytes)
+            || !getSmoothScaleByteCount(
+                    dw, dh, outputBytes))
         return buffer;
 
     // NOTE: We enforce 32bpp input buffers, because that's what Qt uses, even for RGB with no alpha.
@@ -765,14 +803,14 @@ unsigned char* qSmoothScaleImage(const unsigned char* src, int sw, int sh, bool 
 
     // SSE/NEON friendly alignment, just in case...
 #if defined(__ANDROID__) && __ANDROID_API__ < 17
-    buffer = (unsigned char*) malloc(dw * dh * 4);
+    buffer = (unsigned char*) malloc(outputBytes);
     if (buffer == nullptr) {
         std::cerr << "qSmoothScaleImage: out of memory, returning null!" << std::endl;
         qimageFreeScaleInfo(scaleinfo);
         return nullptr;
     }
 #elif defined(__MINGW32__)
-    buffer = (unsigned char*) _aligned_malloc(dw * dh * 4, 16);
+    buffer = (unsigned char*) _aligned_malloc(outputBytes, 16);
     if (buffer == nullptr) {
         std::cerr << "qSmoothScaleImage: out of memory, returning null!" << std::endl;
         qimageFreeScaleInfo(scaleinfo);
@@ -781,7 +819,7 @@ unsigned char* qSmoothScaleImage(const unsigned char* src, int sw, int sh, bool 
 #else
     void *ptr;
     // NOTE: Output format is always RGBA! So make enough room for 4 bytes per pixel ;).
-    if (posix_memalign(&ptr, 16, dw * dh * 4) != 0) {
+    if (posix_memalign(&ptr, 16, outputBytes) != 0) {
         std::cerr << "qSmoothScaleImage: out of memory, returning null!" << std::endl;
         qimageFreeScaleInfo(scaleinfo);
         return nullptr;
