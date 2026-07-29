@@ -321,6 +321,48 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void baseActivityConfigurationIsImmutableAndGenerationScoped()
+			throws Exception {
+		for (String name : new String[]{
+				"PREF_FILE",
+				"PREF_LAST_BOOK",
+				"PREF_LAST_LOCATION",
+				"PREF_LAST_NOTIFICATION_MASK",
+				"PREF_LAST_LOGCAT",
+				"PREF_HELP_FILE"}) {
+			assertFinalStaticField(BaseActivity.class, name);
+		}
+
+		Field systemLocale =
+				BaseActivity.class.getDeclaredField("systemLocale");
+		assertFalse(Modifier.isStatic(systemLocale.getModifiers()));
+		assertTrue(Modifier.isPrivate(systemLocale.getModifiers()));
+		assertTrue(Modifier.isFinal(systemLocale.getModifiers()));
+		assertEquals(java.util.Locale.class, systemLocale.getType());
+		for (Field field : BaseActivity.class.getDeclaredFields()) {
+			assertFalse(
+					"BaseActivity retains a process locale snapshot",
+					field.getName().equals("defaultLocale"));
+		}
+		for (Field field : AppLocaleSelection.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+
+		Class<?> settingsManager = null;
+		for (Class<?> nested : BaseActivity.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("SettingsManager"))
+				settingsManager = nested;
+		}
+		assertTrue(settingsManager != null);
+		Field debugReset =
+				settingsManager.getDeclaredField("DEBUG_RESET_OPTIONS");
+		assertTrue(Modifier.isStatic(debugReset.getModifiers()));
+		assertTrue(Modifier.isFinal(debugReset.getModifiers()));
+	}
+
+	@Test
 	public void optionsDialogKeepsUiConfigurationGenerationScoped()
 			throws Exception {
 		for (String name : new String[]{

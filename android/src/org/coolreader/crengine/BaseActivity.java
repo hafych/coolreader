@@ -335,11 +335,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		super.onPause();
 	}
 
-	protected static String PREF_FILE = "CR3LastBook";
-	protected static String PREF_LAST_BOOK = "LastBook";
-	protected static String PREF_LAST_LOCATION = "LastLocation";
-	protected static String PREF_LAST_NOTIFICATION_MASK = "LastNoticeMask";
-	protected static String PREF_LAST_LOGCAT = "LastLogcat";
+	protected static final String PREF_FILE = "CR3LastBook";
+	protected static final String PREF_LAST_BOOK = "LastBook";
+	protected static final String PREF_LAST_LOCATION = "LastLocation";
+	protected static final String PREF_LAST_NOTIFICATION_MASK =
+			"LastNoticeMask";
+	protected static final String PREF_LAST_LOGCAT = "LastLogcat";
 
 	@Override
 	protected void onResume() {
@@ -1282,7 +1283,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 
-	private static String PREF_HELP_FILE = "HelpFile";
+	private static final String PREF_HELP_FILE = "HelpFile";
 
 	public String getLastGeneratedHelpFileSignature() {
 		SharedPreferences pref = getSharedPreferences(PREF_FILE, 0);
@@ -1297,6 +1298,19 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 
 	private String currentLanguage;
+	private final Locale systemLocale = currentSystemLocale();
+
+	private static Locale currentSystemLocale() {
+		android.content.res.Configuration configuration =
+				Resources.getSystem().getConfiguration();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+				&& !configuration.getLocales().isEmpty()) {
+			return configuration.getLocales().get(0);
+		}
+		return configuration.locale != null
+				? configuration.locale
+				: Locale.getDefault();
+	}
 
 	public String getCurrentLanguage() {
 		return currentLanguage;
@@ -1314,16 +1328,15 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			// Change locale settings in the app.
 			DisplayMetrics dm = res.getDisplayMetrics();
 			android.content.res.Configuration conf = res.getConfiguration();
-			conf.locale = (lang == Lang.DEFAULT) ? defaultLocale : lang.getLocale();
-			currentLanguage = (lang == Lang.DEFAULT) ? Lang.getCode(defaultLocale) : lang.code;
+			AppLocaleSelection selection =
+					AppLocaleSelection.resolve(lang, systemLocale);
+			conf.locale = selection.locale();
+			currentLanguage = selection.code();
 			res.updateConfiguration(conf, dm);
 		} catch (Exception e) {
 			log.e("error while setting locale " + lang, e);
 		}
 	}
-
-	// Store system locale here, on class creation
-	private static final Locale defaultLocale = Locale.getDefault();
 
 
 	public void applyAppSetting(String key, String value) {
@@ -1924,7 +1937,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 		File propsFile;
 		private static final String SETTINGS_FILE_NAME = "cr3.ini";
-		private static boolean DEBUG_RESET_OPTIONS = false;
+		private static final boolean DEBUG_RESET_OPTIONS = false;
 
 		private Properties loadSettings() {
 			File[] dataDirs = Engine.getDataDirectories(null, false, true);

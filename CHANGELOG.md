@@ -59,6 +59,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
   and labels now share one typed immutable catalog instead of parallel arrays.
 - External dictionary definitions, including intent data keys, now live in one
   immutable catalog; legacy array callers receive independent snapshots.
+- BaseActivity preference/debug configuration is now immutable, while system
+  locale resolution uses a snapshot owned by the current Activity generation.
 - The native Engine retains only application context plus a detachable weak UI
   host, and stale Activity shutdown can no longer tear down a newer generation.
 - ReaderView receives scanner, history, document cache and a per-generation

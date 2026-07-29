@@ -13,6 +13,7 @@ COOL_READER = SOURCE / "CoolReader.java"
 DICTIONARIES = SOURCE / "Dictionaries.java"
 DICTIONARY_CATALOG = SOURCE / "DictionaryCatalog.java"
 BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
+APP_LOCALE_SELECTION = SOURCE / "crengine" / "AppLocaleSelection.java"
 READER_ACTION = SOURCE / "crengine" / "ReaderAction.java"
 ACTION_ICON_SET = SOURCE / "crengine" / "ActionIconSet.java"
 DEFAULT_INPUT_ACTIONS = SOURCE / "crengine" / "DefaultInputActions.java"
@@ -236,6 +237,18 @@ DICTIONARY_CATALOG_TEST = (
     / "coolreader"
     / "DictionaryCatalogTest.java"
 )
+APP_LOCALE_SELECTION_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "AppLocaleSelectionTest.java"
+)
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
 COVERPAGE_MANAGER = SOURCE / "crengine" / "CoverpageManager.java"
@@ -378,6 +391,61 @@ def main() -> None:
             violations.append(
                 f"{relative(BASE_ACTIVITY)} retains shared action state: "
                 f"{legacy}")
+    for marker in (
+        "protected static final String PREF_FILE",
+        "protected static final String PREF_LAST_BOOK",
+        "protected static final String PREF_LAST_LOCATION",
+        "protected static final String PREF_LAST_NOTIFICATION_MASK",
+        "protected static final String PREF_LAST_LOGCAT",
+        "private static final String PREF_HELP_FILE",
+        "private static final boolean DEBUG_RESET_OPTIONS",
+        "private final Locale systemLocale = currentSystemLocale()",
+        "Resources.getSystem().getConfiguration()",
+        "configuration.getLocales().get(0)",
+        "AppLocaleSelection.resolve(lang, systemLocale)",
+    ):
+        if marker not in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} omits immutable locale/config "
+                f"marker: {marker}")
+    for legacy in (
+        "protected static String PREF_",
+        "private static String PREF_HELP_FILE",
+        "private static boolean DEBUG_RESET_OPTIONS",
+        "static final Locale defaultLocale",
+    ):
+        if legacy in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} retains mutable/process config: "
+                f"{legacy}")
+
+    app_locale_text = APP_LOCALE_SELECTION.read_text(encoding="utf-8")
+    for marker in (
+        "final class AppLocaleSelection",
+        "private final Locale locale",
+        "private final String code",
+        "if (language == Settings.Lang.DEFAULT)",
+        "Settings.Lang.getCode(systemLocale)",
+        "Locale locale = language.getLocale()",
+    ):
+        if marker not in app_locale_text:
+            violations.append(
+                f"{relative(APP_LOCALE_SELECTION)} omits immutable locale "
+                f"marker: {marker}")
+
+    app_locale_test_text = APP_LOCALE_SELECTION_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "systemSettingUsesCurrentActivitySnapshot",
+        "explicitSettingIgnoresSystemLocale",
+        "missingInputsAreRejected",
+        '"pt_BR"',
+        "Settings.Lang.UK",
+    ):
+        if marker not in app_locale_test_text:
+            violations.append(
+                f"{relative(APP_LOCALE_SELECTION_TEST)} omits locale "
+                f"regression: {marker}")
 
     reader_action_text = READER_ACTION.read_text(encoding="utf-8")
     for marker in (

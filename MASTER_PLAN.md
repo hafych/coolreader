@@ -144,7 +144,9 @@ DRM или ограничений доступа, подбор/получени�
   перезаписи user mappings, ReaderView-owned immutable/overflow-safe gesture
   acceleration curve и единый immutable typed OptionsDialog style catalog
   вместо параллельных process-wide массивов, плюс immutable external-dictionary
-  metadata и snapshot-only array API без process-wide catalog escape.
+  metadata и snapshot-only array API без process-wide catalog escape, а также
+  final BaseActivity preference/debug constants и generation-owned system
+  locale resolution.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
