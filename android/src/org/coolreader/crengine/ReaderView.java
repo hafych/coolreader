@@ -211,7 +211,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 					AutoScrollAnimation autoScroll =
 							autoScrollSessions.readySession();
-					if (autoScroll != null) {
+					if (autoScroll != null
+							&& autoScroll.isReadySession()) {
 						autoScroll.draw(canvas);
 					} else if (currentAnimation != null) {
 						currentAnimation.draw(canvas);
@@ -2535,10 +2536,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void startAutoScroll() {
 		if (isAutoScrollActive())
 			return;
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		if (!isBookLoaded()
+				|| !isDocumentInteractionCurrent(
+				expectedBook, interaction))
+			return;
 		log.d("startAutoScroll()");
 		AutoScrollAnimation animation =
 				new AutoScrollAnimation(
-						AUTOSCROLL_START_ANIMATION_PERCENT * 100);
+						AUTOSCROLL_START_ANIMATION_PERCENT * 100,
+						expectedBook, interaction);
 		if (!autoScrollSessions.requestStart(animation))
 			return;
 		animation.start();
@@ -2594,6 +2603,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	class AutoScrollAnimation {
+		private final BookInfo expectedBook;
+		private final DocumentLoadLifecycle.Interaction interaction;
 
 		boolean isScrollView;
 		BitmapInfo image1;
@@ -2615,7 +2626,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		public final static int ANIMATION_INTERVAL_NORMAL = 30;
 		public final static int ANIMATION_INTERVAL_EINK = 5000;
 
-		public AutoScrollAnimation(final int startProgress) {
+		private AutoScrollAnimation(
+				final int startProgress,
+				BookInfo expectedBook,
+				DocumentLoadLifecycle.Interaction interaction) {
+			this.expectedBook = expectedBook;
+			this.interaction = interaction;
 			progress = startProgress;
 			startAnimationProgress = AUTOSCROLL_START_ANIMATION_PERCENT * 100;
 
@@ -2637,10 +2653,28 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 		}
 
+		private boolean ownsDocument() {
+			return isBookLoaded()
+					&& isDocumentInteractionCurrent(
+							expectedBook, interaction);
+		}
+
+		private boolean isCurrentSession() {
+			return ownsDocument()
+					&& autoScrollSessions.isCurrent(this);
+		}
+
+		private boolean isReadySession() {
+			return ownsDocument()
+					&& autoScrollSessions.isReady(this);
+		}
+
 		private void start() {
 			BackgroundThread.instance().postBackground(() -> {
-				if (!autoScrollSessions.isCurrent(this))
+				if (!isCurrentSession()) {
+					abandonFailedStart();
 					return;
+				}
 				if (initPageTurn(progress)) {
 					log.d("AutoScrollAnimation: starting autoscroll timer");
 					timerInterval = DeviceInfo.EINK_SCREEN ? ANIMATION_INTERVAL_EINK : ANIMATION_INTERVAL_NORMAL;
@@ -2663,8 +2697,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private boolean onTimer() {
-			if (!autoScrollSessions.isReady(this))
+			if (!isReadySession()) {
+				if (!ownsDocument())
+					abandonFailedStart();
 				return false;
+			}
 			int newProgress = calcProgressPercent();
 			alog.v("onTimer(progress = " + newProgress + ")");
 			mActivity.onUserActivity();
@@ -2678,7 +2715,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							return false;
 						}
 					}
-					if (!autoScrollSessions.isReady(this))
+					if (!isReadySession())
 						return false;
 					draw();
 				}
@@ -2705,27 +2742,28 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 			private boolean schedule() {
 				synchronized (autoScrollSessions) {
-					if (autoScrollSessions.isCurrent(
-							AutoScrollAnimation.this)) {
+					if (isCurrentSession()) {
 						autoScrollScheduler.postDelayed(
 								this, interval);
 						return true;
 					}
 				}
+				if (!ownsDocument())
+					abandonFailedStart();
 				return false;
 			}
 
 			@Override
 			public void run() {
-				if (!autoScrollSessions.isCurrent(
-						AutoScrollAnimation.this)) {
+				if (!isCurrentSession()) {
 					log.v("timer is cancelled - GUI");
+					abandonFailedStart();
 					return;
 				}
 				BackgroundThread.instance().postBackground(() -> {
-					if (!autoScrollSessions.isCurrent(
-							AutoScrollAnimation.this)) {
+					if (!isCurrentSession()) {
 						log.v("timer is cancelled - BackgroundThread");
+						abandonFailedStart();
 						return;
 					}
 					if (onTimer())
@@ -2742,7 +2780,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private boolean initPageTurn(int startProgress) {
-			if (!autoScrollSessions.beginInitialization(this))
+			if (!isCurrentSession()
+					|| !autoScrollSessions.beginInitialization(this)
+					|| !ownsDocument())
 				return false;
 			cancelGc();
 			log.v("initPageTurn(startProgress = " + startProgress + ")");
@@ -2750,7 +2790,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			progress = startProgress;
 			PositionProperties nextPosition =
 					doc.getPositionProps(null, true);
-			if (nextPosition == null)
+			if (nextPosition == null || !isCurrentSession())
 				return false;
 			currPos = nextPosition;
 			charCount = currPos.charCount;
@@ -2761,7 +2801,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			log.v("initPageTurn(charCount = " + charCount + ")");
 			if (isScrollView) {
 				image1 = preparePageImage(0);
-				if (image1 == null) {
+				if (image1 == null || !isCurrentSession()) {
 					log.v("ScrollViewAnimation -- not started: image is null");
 					return false;
 				}
@@ -2773,7 +2813,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					pos1 = 0;
 				nextPos = pos1;
 				image2 = preparePageImage(pos1 - pos0);
-				if (image2 == null) {
+				if (image2 == null || !isCurrentSession()) {
 					log.v("ScrollViewAnimation -- not started: image is null");
 					return false;
 				}
@@ -2785,6 +2825,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return false;
 				}
 				image1 = preparePageImage(0);
+				if (!isCurrentSession())
+					return false;
 				image2 = preparePageImage(1);
 				if (page1 == page2) {
 					log.v("PageViewAnimation -- cannot start animation: not moved");
@@ -2798,7 +2840,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			long duration = android.os.SystemClock.uptimeMillis() - pageTurnStart;
 			log.v("AutoScrollAnimation -- page turn initialized in " + duration + " millis");
-			if (!autoScrollSessions.markReady(this))
+			if (!ownsDocument()
+					|| !autoScrollSessions.markReady(this)
+					|| !ownsDocument())
 				return false;
 			draw();
 			return true;
@@ -2807,11 +2851,26 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		private boolean donePageTurn(boolean turnPage) {
 			log.v("donePageTurn()");
+			if (currPos == null || !ownsDocument())
+				return false;
 			if (turnPage) {
+				boolean moved;
 				if (isScrollView)
-					doc.doCommand(ReaderCommand.DCMD_GO_POS.nativeId, nextPos);
+					moved = doc.doCommand(
+							ReaderCommand.DCMD_GO_POS.nativeId,
+							nextPos);
 				else
-					doc.doCommand(ReaderCommand.DCMD_PAGEDOWN.nativeId, 1);
+					moved = doc.doCommand(
+							ReaderCommand.DCMD_PAGEDOWN.nativeId,
+							1);
+				if (!moved) {
+					progress = 0;
+					return false;
+				}
+				if (!ownsDocument())
+					return false;
+				updateCurrentPositionStatus(
+						expectedBook, interaction);
 			}
 			progress = 0;
 			//draw();
@@ -2823,6 +2882,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void draw(boolean isPartially) {
+			if (!isReadySession())
+				return;
 			//	long startTs = android.os.SystemClock.uptimeMillis();
 			drawCallback(this::draw, null, isPartially);
 		}
@@ -2848,10 +2909,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		private void finishStop() {
 			BackgroundThread.instance().executeBackground(() -> {
+				if (!ownsDocument())
+					return;
 				donePageTurn(wantPageTurn());
-				//redraw();
-				drawPage(null, false);
-				scheduleSaveCurrentPositionBookmark(DEF_SAVE_POSITION_INTERVAL);
+				if (!ownsDocument())
+					return;
+				BackgroundThread.instance().executeGUI(() -> {
+					if (!ownsDocument())
+						return;
+					//redraw();
+					drawPage(null, false);
+					scheduleSaveCurrentPositionBookmark(
+							DEF_SAVE_POSITION_INTERVAL,
+							expectedBook, interaction);
+				});
 			});
 			scheduleGc();
 		}
@@ -2910,7 +2981,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void draw(Canvas canvas) {
-			if (!autoScrollSessions.isReady(this))
+			if (!isReadySession())
 				return;
 			alog.v("AutoScrollAnimation.draw(" + progress + ")");
 			if (progress != 0 && progress < startAnimationProgress)

@@ -231,6 +231,10 @@ DRM или ограничений доступа, подбор/получени�
   init публикует render-ready только точному owner, stop/destroy не допускают
   resurrection, re-init временно скрывает partial state, speed публикуется
   volatile, а close не запускает page cleanup для ещё не initialized session.
+  Каждая animation дополнительно хранит immutable captured book+interaction:
+  init, timer, image preparation, native page turn, render и stop completion
+  повторно проверяют обе identity; stale session снимается без page cleanup,
+  а redraw/position-save после stop возвращаются на GUI с той же exact-парой.
   Отложенный native swap-to-cache также переведён с volatile task pointer на
   exact `CloseableTaskGate` token и отдельный cancelable GUI scheduler:
   reload/close инвалидируют retry с возможностью следующей книги, terminal

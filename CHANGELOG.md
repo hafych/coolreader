@@ -433,7 +433,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Reader autoscroll now uses an identity-owned start/ready/stop lifecycle and
   a dedicated cancelable timer. Stopped background initialization cannot
   resurrect a session, partial page reinitialization is not rendered, and
-  destroy permanently rejects queued timer or initialization callbacks.
+  destroy permanently rejects queued timer or initialization callbacks. Each
+  session also carries its exact book/document interaction through native page
+  turns, rendering and stop persistence, so replacement abandons stale work
+  without moving or saving the new document.
 - Deferred document swap-to-cache retries now use exact lifecycle tokens and a
   dedicated cancelable scheduler. Reload and close invalidate stale retries,
   terminal completion cannot clear a replacement, and Reader destruction

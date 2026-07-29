@@ -2251,6 +2251,35 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits reader-owned delayed work "
                 f"marker: {marker}")
+    auto_scroll_start = reader_view_text.find(
+        "\n\tclass AutoScrollAnimation {")
+    auto_scroll_end = reader_view_text.find(
+        "\n\tpublic void onCommand(",
+        auto_scroll_start + 1,
+    )
+    if auto_scroll_start < 0 or auto_scroll_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits bounded autoscroll "
+            "implementation")
+    else:
+        auto_scroll_text = reader_view_text[
+            auto_scroll_start:auto_scroll_end
+        ]
+        for marker in (
+            "private final BookInfo expectedBook",
+            "private final DocumentLoadLifecycle.Interaction interaction",
+            "private boolean ownsDocument()",
+            "private boolean isCurrentSession()",
+            "private boolean isReadySession()",
+            "isDocumentInteractionCurrent(",
+            "updateCurrentPositionStatus(",
+            "expectedBook, interaction",
+            "scheduleSaveCurrentPositionBookmark(",
+        ):
+            if marker not in auto_scroll_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} omits exact-document "
+                    f"autoscroll marker: {marker}")
     if "synchronized (AnimationUpdate.class)" in reader_view_text:
         violations.append(
             f"{relative(READER_VIEW)} coordinates reader generations on "
@@ -2403,6 +2432,7 @@ def main() -> None:
         '"loadInteraction"',
         'nested.getSimpleName().equals("ViewAnimationBase")',
         'nested.getSimpleName().equals("AnimationUpdate")',
+        'nested.getSimpleName().equals("AutoScrollAnimation")',
         '"isDocumentPositionCommand"',
         '"isDocumentInteractionCurrent"',
         '"isOwnedDocumentLoadCurrent"',

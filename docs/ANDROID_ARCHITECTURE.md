@@ -351,7 +351,12 @@ background initialization; initialization temporarily suppresses drawing and
 cannot republish after stop or destroy. Timer rescheduling and cancellation
 share the same owner lock, speed publication is volatile, book close finishes
 only an initialized session, and `ReaderView.destroy()` permanently rejects
-late initialization and timer callbacks before native teardown.
+late initialization and timer callbacks before native teardown. Every
+animation also captures the exact `BookInfo` and document interaction.
+Initialization, page-image preparation, timer work, native page turns and
+rendering revalidate that pair. Stop completion returns to the GUI with the
+same pair before redraw or position persistence; replacement instead abandons
+the stale session without moving or saving the new document.
 Deferred native swap-to-cache retries use a `CloseableTaskGate` identity token
 and their own cancelable GUI scheduler instead of a volatile task pointer.
 Loading or closing a book invalidates the exact retry generation while keeping

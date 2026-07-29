@@ -449,14 +449,18 @@ public class ActivityOwnershipPolicyTest {
 		assertTrue(Modifier.isVolatile(animation.getModifiers()));
 		Class<?> viewAnimationBase = null;
 		Class<?> animationUpdate = null;
+		Class<?> autoScrollAnimation = null;
 		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
 			if (nested.getSimpleName().equals("ViewAnimationBase"))
 				viewAnimationBase = nested;
 			if (nested.getSimpleName().equals("AnimationUpdate"))
 				animationUpdate = nested;
+			if (nested.getSimpleName().equals("AutoScrollAnimation"))
+				autoScrollAnimation = nested;
 		}
 		assertTrue(viewAnimationBase != null);
 		assertTrue(animationUpdate != null);
+		assertTrue(autoScrollAnimation != null);
 		for (Class<?> owner : new Class<?>[]{
 				viewAnimationBase, animationUpdate}) {
 			Field expectedBook =
@@ -475,6 +479,35 @@ public class ActivityOwnershipPolicyTest {
 					interaction.getModifiers()));
 			assertTrue(Modifier.isFinal(
 					interaction.getModifiers()));
+		}
+		for (String fieldName : new String[]{
+				"expectedBook",
+				"interaction"}) {
+			Field field =
+					autoScrollAnimation.getDeclaredField(
+							fieldName);
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		assertEquals(
+				BookInfo.class,
+				autoScrollAnimation.getDeclaredField(
+						"expectedBook").getType());
+		assertEquals(
+				DocumentLoadLifecycle.Interaction.class,
+				autoScrollAnimation.getDeclaredField(
+						"interaction").getType());
+		for (String methodName : new String[]{
+				"ownsDocument",
+				"isCurrentSession",
+				"isReadySession"}) {
+			Method method =
+					autoScrollAnimation.getDeclaredMethod(
+							methodName);
+			assertTrue(Modifier.isPrivate(
+					method.getModifiers()));
 		}
 		Field autoScrollSpeed =
 				ReaderView.class.getDeclaredField(
