@@ -40,6 +40,12 @@ Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain
 generation-scoped and detachable.
 
+The native Engine's SAF-era process snapshot contains only immutable empty
+legacy-root collections, a one-time font initialization candidate and the
+final native DOM version. Each Engine generation owns its own
+`MountPathCorrector`; no potentially mutable path graph is shared between
+Activities.
+
 Scanner filesystem/resource access and cached online-store plugins also retain
 only application context. Cached process objects must never capture the
 Activity that first requested them.

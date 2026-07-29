@@ -77,6 +77,31 @@ public class ActivityOwnershipPolicyTest {
 				deferredQueueCount);
 	}
 
+	@Test
+	public void engineProcessSnapshotIsImmutableAndPathStateIsScoped()
+			throws Exception {
+		assertFinalStaticField(Engine.class, "PROGRESS_STYLE");
+		assertFinalStaticField(Engine.class, "DOM_VERSION_CURRENT");
+		assertFinalStaticField(Engine.class, "MOUNTED_ROOTS");
+		assertFinalStaticField(Engine.class, "MOUNTED_ROOTS_MAP");
+
+		Field pathCorrector =
+				Engine.class.getDeclaredField("mPathCorrector");
+		assertTrue(Modifier.isFinal(pathCorrector.getModifiers()));
+		assertFalse(Modifier.isStatic(pathCorrector.getModifiers()));
+		for (String legacy : new String[]{
+				"mountedRootsList",
+				"mountedRootsMap",
+				"pathCorrector",
+				"mFonts"}) {
+			for (Field field : Engine.class.getDeclaredFields()) {
+				assertFalse(
+						"Engine retains mutable process field " + legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
 	private static void assertVolatileField(Class<?> type, String name)
 			throws Exception {
 		Field field = type.getDeclaredField(name);
@@ -84,6 +109,13 @@ public class ActivityOwnershipPolicyTest {
 				type.getSimpleName() + "." + name
 						+ " must be published across threads",
 				Modifier.isVolatile(field.getModifiers()));
+	}
+
+	private static void assertFinalStaticField(Class<?> type, String name)
+			throws Exception {
+		Field field = type.getDeclaredField(name);
+		assertTrue(Modifier.isStatic(field.getModifiers()));
+		assertTrue(Modifier.isFinal(field.getModifiers()));
 	}
 
 	private static void assertRetainsNoActivity(Class<?> type) {

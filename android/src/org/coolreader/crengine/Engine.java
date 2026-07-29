@@ -44,6 +44,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 
@@ -63,6 +64,8 @@ public class Engine {
 	private final Context mAppContext;
 	private static volatile Context sNativeAppContext;
 	private WeakReference<BaseActivity> mActivityRef;
+	private final MountPathCorrector mPathCorrector =
+			new MountPathCorrector(new File[]{});
 
 	public enum font_lang_compat {
 		font_lang_compat_invalid_tag,
@@ -82,7 +85,7 @@ public class Engine {
 	 */
 	public static File[] getStorageDirectories(boolean writableOnly) {
 		Collection<File> res = new HashSet<File>(2);
-		for (File dir : mountedRootsList) {
+		for (File dir : MOUNTED_ROOTS) {
 			if (dir.isDirectory() && dir.canRead() && (!writableOnly || dir.canWrite())) {
 				String[] list = dir.list();
 				// dir.list() can return null when I/O error occurs.
@@ -94,7 +97,7 @@ public class Engine {
 	}
 
 	public static Map<String, String> getMountedRootsMap() {
-		return mountedRootsMap;
+		return MOUNTED_ROOTS_MAP;
 	}
 
 	private final Map<String, String> mAppPrivateDirs = new HashMap<String, String>();
@@ -104,9 +107,7 @@ public class Engine {
 	}
 
 	public boolean isRootsMountPoint(String path) {
-		if (mountedRootsMap == null)
-			return false;
-		return mountedRootsMap.containsKey(path);
+		return MOUNTED_ROOTS_MAP.containsKey(path);
 	}
 
 	/**
@@ -293,7 +294,8 @@ public class Engine {
 	private ProgressDialog mProgress;
 	private boolean enable_progress = true;
 	private boolean progressShown = false;
-	private static int PROGRESS_STYLE = ProgressDialog.STYLE_HORIZONTAL;
+	private static final int PROGRESS_STYLE =
+			ProgressDialog.STYLE_HORIZONTAL;
 	private Drawable progressIcon = null;
 
 	// public void setProgressDrawable( final BitmapDrawable drawable )
@@ -1036,13 +1038,6 @@ public class Engine {
 		}
 	}
 
-	private static void initMountRoots() {
-		mountedRootsMap = Collections.emptyMap();
-		mountedRootsList = new File[]{};
-		pathCorrector = new MountPathCorrector(mountedRootsList);
-		log.i("Legacy filesystem root discovery is disabled; use SAF library roots");
-	}
-
 	// public void waitTasksCompletion()
 	// {
 	// log.i("waiting for engine tasks completion");
@@ -1205,7 +1200,7 @@ public class Engine {
 	public static final int BLOCK_RENDERING_FLAGS_BOOK = 0x1375131;
 	public static final int BLOCK_RENDERING_FLAGS_WEB = 0x7FFFFFFF;
 	/// Current version of DOM parsing engine (See lvtinydom.cpp)
-	public static int DOM_VERSION_CURRENT;
+	public static final int DOM_VERSION_CURRENT;
 
 	public static final BackgroundTextureInfo NO_TEXTURE = new BackgroundTextureInfo(
 			BackgroundTextureInfo.NO_TEXTURE_ID, "(SOLID COLOR)", 0);
@@ -1463,22 +1458,22 @@ public class Engine {
 	}
 
 	public MountPathCorrector getPathCorrector() {
-		return pathCorrector;
+		return mPathCorrector;
 	}
 
-	private static File[] mountedRootsList;
-	private static Map<String, String> mountedRootsMap;
-	private static MountPathCorrector pathCorrector;
-	private static String[] mFonts;
+	private static final List<File> MOUNTED_ROOTS =
+			Collections.emptyList();
+	private static final Map<String, String> MOUNTED_ROOTS_MAP =
+			Collections.emptyMap();
 
 	// static initialization
 	static {
 		log.i("Engine() : static initialization");
 		installLibrary();
-		initMountRoots();
-		mFonts = findFonts();
+		log.i("Legacy filesystem root discovery is disabled; use SAF library roots");
+		String[] fonts = findFonts();
 		findExternalHyphDictionaries();
-		if (!initInternal(mFonts, DeviceInfo.getSDKLevel())) {
+		if (!initInternal(fonts, DeviceInfo.getSDKLevel())) {
 			log.i("Engine.initInternal failed!");
 			throw new RuntimeException("Cannot initialize CREngine JNI");
 		}

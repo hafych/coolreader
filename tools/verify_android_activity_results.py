@@ -166,9 +166,25 @@ def main() -> None:
         "WeakReference<BaseActivity>",
         "mAppContext",
         "detachActivity",
+        "private final MountPathCorrector mPathCorrector",
+        "private static final List<File> MOUNTED_ROOTS",
+        "private static final Map<String, String> MOUNTED_ROOTS_MAP",
+        "private static final int PROGRESS_STYLE",
+        "public static final int DOM_VERSION_CURRENT",
+        "String[] fonts = findFonts()",
     ):
         if marker not in engine_text:
             violations.append(f"{relative(ENGINE)} omits marker: {marker}")
+    for marker in (
+        "private static File[] mountedRootsList",
+        "private static Map<String, String> mountedRootsMap",
+        "private static MountPathCorrector pathCorrector",
+        "private static String[] mFonts",
+    ):
+        if marker in engine_text:
+            violations.append(
+                f"{relative(ENGINE)} retains mutable process snapshot "
+                f"state: {marker}")
 
     services_text = SERVICES.read_text(encoding="utf-8")
     if re.search(

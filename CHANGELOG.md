@@ -358,6 +358,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Android GUI/background tasks queued before handler startup now retain their
   delay and drain exactly once; concurrent handler attachment can no longer
   strand or replay tasks across Activity generations.
+- Android Engine mount/font/DOM initialization is now an immutable process
+  snapshot, while each Activity service generation owns its path corrector.
 - All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
   `sign-compare` and `unused-but-set-variable` promoted to the full
   `-Werror` gate alongside the existing high-confidence classes.
