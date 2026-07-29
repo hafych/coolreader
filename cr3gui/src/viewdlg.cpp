@@ -181,44 +181,45 @@ bool CRViewDialog::hasDictionaries()
 	body << "<p>" << _("Dictionaries in standard unix .dict format are supported.") << "</p>";
 	body << "<p>" << _("For each dictionary, pair of files should be provided: data file (with .dict or .dict.dz extension, and index file with .index extension") << "</p>";
 	lString8 xml = CRViewDialog::makeFb2Xml( body );
-	CRViewDialog * dlg = new CRViewDialog(
+    std::unique_ptr<CRViewDialog> dlg = std::make_unique<CRViewDialog>(
             _wm, Utf8ToUnicode(lString8(_("Dictionary"))),
             xml, lvRect(), true, true);
-	_wm->activateWindow( dlg );
+    _wm->activateWindow(std::move(dlg));
 	return false;
 }
 
 void CRViewDialog::showGoToPageDialog()
 {
-    CRNumberEditDialog * dlg;
+    std::unique_ptr<CRNumberEditDialog> dlg;
 #if USE_SEPARATE_GO_TO_PAGE_DIALOG==1
     LVTocItem * toc = _docview->getToc();
     if ( toc && toc->getChildCount()>0 ) {
 #endif
-        dlg = new CRTOCDialog( _wm,
-            Utf8ToUnicode(lString8(_("Table of contents"))),
-            MCMD_GO_PAGE_APPLY, _docview->getPageCount(), _docview.get() );
+        dlg = std::make_unique<CRTOCDialog>(
+                _wm, Utf8ToUnicode(lString8(_("Table of contents"))),
+                MCMD_GO_PAGE_APPLY, _docview->getPageCount(),
+                _docview.get());
 #if USE_SEPARATE_GO_TO_PAGE_DIALOG==1
     } else {
-        dlg = new CRNumberEditDialog( _wm,
-            Utf8ToUnicode(lString8(_("Enter page number"))),
-            lString32::empty_str,
-            MCMD_GO_PAGE_APPLY, 1, _docview->getPageCount() );
+        dlg = std::make_unique<CRNumberEditDialog>(
+                _wm, Utf8ToUnicode(lString8(_("Enter page number"))),
+                lString32::empty_str, MCMD_GO_PAGE_APPLY,
+                1, _docview->getPageCount());
     }
 #endif
     dlg->setAccelerators( getDialogAccelerators() );
-    _wm->activateWindow( dlg );
+    _wm->activateWindow(std::move(dlg));
 }
 
 void CRViewDialog::showGoToPercentDialog()
 {
-    CRNumberEditDialog * dlg;
-    dlg = new CRNumberEditDialog( _wm,
-        Utf8ToUnicode(lString8(_("Enter position percent"))),
-        lString32::empty_str,
-        MCMD_GO_PERCENT_APPLY, 0, 100 );
+    std::unique_ptr<CRNumberEditDialog> dlg =
+            std::make_unique<CRNumberEditDialog>(
+                    _wm, Utf8ToUnicode(lString8(_("Enter position percent"))),
+                    lString32::empty_str,
+                    MCMD_GO_PERCENT_APPLY, 0, 100);
     dlg->setAccelerators( getDialogAccelerators() );
-    _wm->activateWindow( dlg );
+    _wm->activateWindow(std::move(dlg));
 }
 
 bool CRViewDialog::showLinksDialog()
@@ -241,10 +242,12 @@ void CRViewDialog::showSearchDialog()
     rc.bottom -= v_margin;
     rc.top += rc.height() / 2;
     _searchPattern.clear();
-    CRScreenKeyboard * dlg = new CRScreenKeyboard(
-            _wm, MCMD_SEARCH_FINDFIRST,
-            Utf8ToUnicode(lString8(_("Search"))), _searchPattern, rc);
-    _wm->activateWindow( dlg );
+    std::unique_ptr<CRScreenKeyboard> dlg =
+            std::make_unique<CRScreenKeyboard>(
+                    _wm, MCMD_SEARCH_FINDFIRST,
+                    Utf8ToUnicode(lString8(_("Search"))),
+                    _searchPattern, rc);
+    _wm->activateWindow(std::move(dlg));
 }
 
 #define EXTERNAL_DICTIONARY_EXECUTABLE_NAME "edict_launcher"
@@ -269,8 +272,9 @@ bool CRViewDialog::findInDictionary( lString32 pattern )
     }
 	lString8 body = _dict->translate( UnicodeToUtf8( pattern ) );
     lString8 txt = CRViewDialog::makeFb2Xml( body );
-    CRViewDialog * dlg = new CRViewDialog( _wm, pattern, txt, lvRect(), true, true );
-    _wm->activateWindow( dlg );
+    std::unique_ptr<CRViewDialog> dlg = std::make_unique<CRViewDialog>(
+            _wm, pattern, txt, lvRect(), true, true);
+    _wm->activateWindow(std::move(dlg));
 	return true;
 #endif
 }
@@ -382,11 +386,12 @@ void CRViewDialog::showDictWithVKeyboard()
     rc.bottom -= v_margin;
     rc.top += rc.height() / 2;
     _searchPattern.clear();
-    CRScreenKeyboard * dlg = new CRScreenKeyboard(
-            _wm, MCMD_DICT_FIND,
-            Utf8ToUnicode(lString8(_("Find in dictionary"))),
-            _searchPattern, rc);
-    _wm->activateWindow( dlg );
+    std::unique_ptr<CRScreenKeyboard> dlg =
+            std::make_unique<CRScreenKeyboard>(
+                    _wm, MCMD_DICT_FIND,
+                    Utf8ToUnicode(lString8(_("Find in dictionary"))),
+                    _searchPattern, rc);
+    _wm->activateWindow(std::move(dlg));
 }
 
 bool CRViewDialog::onCommand( int command, int params )
@@ -414,11 +419,11 @@ bool CRViewDialog::onCommand( int command, int params )
 		case MCMD_SEARCH_FINDFIRST:
 			if ( !_searchPattern.empty() && params ) {
                 if ( findText( _searchPattern, 0, 1 ) || findText( _searchPattern, -1, 1 )) {
-                    CRSelNavigationDialog * dlg =
-                            new CRSelNavigationDialog(
+                    std::unique_ptr<CRSelNavigationDialog> dlg =
+                            std::make_unique<CRSelNavigationDialog>(
                                     _wm, this,
                                     Utf16ToUnicode(_searchPattern));
-                    _wm->activateWindow( dlg );
+                    _wm->activateWindow(std::move(dlg));
                 }
             }
 			return true;
@@ -671,11 +676,11 @@ void CRViewDialog::showKeymapDialog()
 	txt << "</table>";
 	//============================================================
     txt = CRViewDialog::makeFb2Xml(txt);
-    CRViewDialog * dlg = new CRViewDialog(
+    std::unique_ptr<CRViewDialog> dlg = std::make_unique<CRViewDialog>(
             _wm, Utf8ToUnicode(lString8(_("Keyboard layout"))),
             txt, lvRect(), true, true);
     dlg->getDocView()->setVisiblePageCount(1);
-    _wm->activateWindow( dlg );
+    _wm->activateWindow(std::move(dlg));
     //TODO:
 }
 

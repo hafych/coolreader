@@ -8193,6 +8193,51 @@ forbid_source_text(
   "main-window dialog candidates must not begin as raw owners"
 )
 require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "std::unique_ptr<CRNumberEditDialog> dlg;"
+  "page navigation dialog candidates must enter scoped ownership"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "dlg = std::make_unique<CRTOCDialog>("
+  "table-of-contents dialog candidates must enter scoped ownership"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "std::unique_ptr<CRScreenKeyboard> dlg ="
+  "screen-keyboard candidates must enter scoped ownership"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "std::unique_ptr<CRSelNavigationDialog> dlg ="
+  "selection-navigation dialog candidates must enter scoped ownership"
+)
+require_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "_wm->activateWindow(std::move(dlg));"
+  "view-dialog candidates must transfer through owner-aware activation"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "CRViewDialog * dlg = new"
+  "view-dialog candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "CRNumberEditDialog * dlg"
+  "number-edit dialog candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "CRScreenKeyboard * dlg = new"
+  "screen-keyboard candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${VIEW_DIALOG_SOURCE}"
+  "CRSelNavigationDialog * dlg ="
+  "selection-navigation dialog candidates must not begin as raw owners"
+)
+require_source_text(
   "${SETTINGS_HEADER}"
   "std::unique_ptr<CRMenu> createOrientationMenu("
   "orientation menu factories must return scoped ownership"
