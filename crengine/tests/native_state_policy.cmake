@@ -7939,6 +7939,31 @@ require_source_text(
 )
 require_source_text(
   "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<CRPbDictionaryDialog> _dictDlg;"
+  "PocketBook document windows must own persistent dictionary dialogs"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<CRPbDictionaryView> _dictView;"
+  "PocketBook dictionary dialogs must own their dictionary views"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<LVPageWordSelector> _wordSelector;"
+  "PocketBook dictionary dialogs must own active word selectors"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<CRPbDictionaryMenu> _dictMenu;"
+  "PocketBook dictionary views must own their menus"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRPbDictionaryDialog &_dialog;"
+  "PocketBook dictionary proxies must expose their persistent dialog borrow"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
   "std::unique_ptr<CRMenu> dictsMenu = std::make_unique<CRMenu>("
   "PocketBook dictionary-menu candidates must enter scoped ownership"
 )
@@ -7961,6 +7986,46 @@ forbid_source_text(
   "${POCKETBOOK_SOURCE}"
   "CRPbDictionaryProxyWindow *dlg = new"
   "PocketBook dictionary proxy candidates must not begin as raw owners"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRPbDictionaryDialog * _dictDlg;"
+  "PocketBook document windows must not retain raw dictionary-dialog ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRPbDictionaryView * _dictView;"
+  "PocketBook dictionary dialogs must not retain raw view ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "LVPageWordSelector * _wordSelector;"
+  "PocketBook dictionary dialogs must not retain raw selector ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "CRPbDictionaryMenu *_dictMenu;"
+  "PocketBook dictionary views must not retain raw menu ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "delete _dictDlg"
+  "PocketBook dictionary-dialog teardown must remain automatic"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "delete _dictView"
+  "PocketBook dictionary-view teardown must remain automatic"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "delete _wordSelector"
+  "PocketBook word-selector teardown must remain automatic"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "delete _dictMenu"
+  "PocketBook dictionary-menu teardown must remain automatic"
 )
 forbid_source_text(
   "${POCKETBOOK_SOURCE}"

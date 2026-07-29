@@ -618,7 +618,7 @@ class CRPbDictionaryView : public CRViewDialog
 {
 private:
     CRPbDictionaryDialog *_parent;
-    CRPbDictionaryMenu *_dictMenu;
+    std::unique_ptr<CRPbDictionaryMenu> _dictMenu;
     LVHashTable<lString16, int> _dictsTable;
     char ** _dictNames;
     int _dictIndex;
@@ -731,8 +731,8 @@ class CRPbDictionaryDialog : public CRGUIWindowBase
 protected:
     CRViewDialog * _docwin;
     LVDocView * _docview;
-    LVPageWordSelector * _wordSelector;
-    CRPbDictionaryView * _dictView;
+    std::unique_ptr<LVPageWordSelector> _wordSelector;
+    std::unique_ptr<CRPbDictionaryView> _dictView;
     bool _dictViewActive;
     bool _autoTranslate;
     bool _wordTranslated;
@@ -741,7 +741,7 @@ protected:
 protected:
     virtual void draw();
     void endWordSelection();
-    bool isWordSelection() { return _wordSelector!=NULL; }
+    bool isWordSelection() { return static_cast<bool>(_wordSelector); }
     void onWordSelection();
     bool _docDirty;
     int _curPage;
@@ -749,14 +749,7 @@ protected:
     int _lastWordY;
 public:
     CRPbDictionaryDialog( CRGUIWindowManager * wm, CRViewDialog * docwin,  lString8 css);
-    virtual ~CRPbDictionaryDialog() {
-        if (_wordSelector) {
-            delete _wordSelector;
-            _wordSelector = NULL;
-        }
-        delete _dictView;
-        _dictView = NULL;
-    }
+    virtual ~CRPbDictionaryDialog() = default;
     /// returns true if command is processed
     virtual bool onCommand( int command, int params );
     virtual void activateDictView(bool active)
@@ -787,21 +780,24 @@ public:
 class CRPbDictionaryProxyWindow : public CRPbDictionaryDialog
 {
 private:
-    CRPbDictionaryDialog *_dictDlg;
+    CRPbDictionaryDialog &_dialog;
 protected:
-    virtual void draw() { _dictDlg->draw(); }
+    virtual void draw() { _dialog.draw(); }
 public:
-    CRPbDictionaryProxyWindow(CRPbDictionaryDialog * dictDialog)
-        : CRPbDictionaryDialog(dictDialog->getWindowManager(), dictDialog->_docwin, lString8::empty_str), _dictDlg(dictDialog)
+    explicit CRPbDictionaryProxyWindow(CRPbDictionaryDialog & dictDialog)
+        : CRPbDictionaryDialog(
+                dictDialog.getWindowManager(), dictDialog._docwin,
+                lString8::empty_str),
+          _dialog(dictDialog)
     {
-        _dictDlg->_wordTranslated = _dictDlg->_dictViewActive = false;
-        _dictDlg->_selText.clear();
+        _dialog._wordTranslated = _dialog._dictViewActive = false;
+        _dialog._selText.clear();
         CRPocketBookScreen::instance->setForceSoftUpdate(true);
         lvRect rect = _wm->getScreen()->getRect();
-        _dictDlg->setRect(rect);
-        rect.top = rect.bottom - _dictDlg->_dictView->getDesiredHeight();
-        _dictDlg->_dictView->setRect(rect);
-        _dictDlg->_dictView->reconfigure(0);
+        _dialog.setRect(rect);
+        rect.top = rect.bottom - _dialog._dictView->getDesiredHeight();
+        _dialog._dictView->setRect(rect);
+        _dialog._dictView->reconfigure(0);
     }
     virtual ~CRPbDictionaryProxyWindow()
     {
@@ -809,65 +805,65 @@ public:
     }
     virtual void activateDictView(bool active)
     {
-        _dictDlg->activateDictView(active);
+        _dialog.activateDictView(active);
     }
     virtual bool onCommand( int command, int params )
     {
         if (command == MCMD_CANCEL) {
-            _dictDlg->_docview->clearSelection();
+            _dialog._docview->clearSelection();
             _wm->closeWindow( this );
             return true;
         }
-        return _dictDlg->onCommand(command, params);
+        return _dialog.onCommand(command, params);
     }
     virtual void startWordSelection()
     {
-        _dictDlg->setDocDirty();
-        _dictDlg->startWordSelection();
+        _dialog.setDocDirty();
+        _dialog.startWordSelection();
     }
     virtual void Update()
     {
-        _dictDlg->Update();
+        _dialog.Update();
     }
     virtual bool isDocDirty()
     {
-        return _dictDlg->isDocDirty();
+        return _dialog.isDocDirty();
     }
     virtual void setDocDirty()
     {
-        _dictDlg->setDocDirty();
+        _dialog.setDocDirty();
     }
     virtual void reconfigure( int flags )
     {
-        _dictDlg->reconfigure(flags);
+        _dialog.reconfigure(flags);
     }
     virtual bool isSelectingWord()
     {
-        return _dictDlg->isSelectingWord();
+        return _dialog.isSelectingWord();
     }
     virtual void setDirty()
     {
-        _dictDlg->setDirty();
+        _dialog.setDirty();
     }
     virtual bool isDirty()
     {
-        return _dictDlg->isDirty();
+        return _dialog.isDirty();
     }
     virtual void setVisible( bool visible )
     {
-        _dictDlg->setVisible(visible);
+        _dialog.setVisible(visible);
     }
     virtual bool isVisible() const
     {
-        return _dictDlg->isVisible();
+        return _dialog.isVisible();
     }
     virtual const lvRect & getRect()
     {
-        return _dictDlg->getRect();
+        return _dialog.getRect();
     }
     virtual void activated()
     {
-        _dictDlg->activated();
+        _dialog.activated();
     }
 };
 
@@ -878,7 +874,7 @@ private:
     int _quick_menuactions[9];
     tocentry *_toc;
     int _tocLength;
-    CRPbDictionaryDialog * _dictDlg;
+    std::unique_ptr<CRPbDictionaryDialog> _dictDlg;
     bool _rotatetimerset;
     bool _lastturn;
     int _pausedRotation;
@@ -1026,7 +1022,7 @@ protected:
 public:
     static CRPocketBookDocView * instance;
     explicit CRPocketBookDocView( CRGUIWindowManager * wm )
-        : V3DocViewWin( wm ), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(NULL), _rotatetimerset(false),
+        : V3DocViewWin( wm ), _bm3x3(NULL), _toc(NULL), _tocLength(0), _dictDlg(), _rotatetimerset(false),
         _lastturn(true), _pauseRotationTimer(false), m_goToPage(-1), _restore_globOrientation(false), m_skipEvent(false)
     {
         instance = this;
@@ -1190,15 +1186,17 @@ public:
 
     void showDictDialog()
     {
-        if (_dictDlg == NULL) {
+        if (!_dictDlg) {
             lString16 filename("dict.css");
             lString8 dictCss;
             if (_cssDir.length() > 0 && LVFileExists( _cssDir + filename ))
                 LVLoadStylesheetFile( _cssDir + filename, dictCss );
-            _dictDlg = new CRPbDictionaryDialog( _wm, this, dictCss );
+            _dictDlg =
+                    std::make_unique<CRPbDictionaryDialog>(
+                            _wm, this, dictCss);
         }
         std::unique_ptr<CRPbDictionaryProxyWindow> dlg =
-                std::make_unique<CRPbDictionaryProxyWindow>(_dictDlg);
+                std::make_unique<CRPbDictionaryProxyWindow>(*_dictDlg);
         CRPbDictionaryProxyWindow * activeDialog = dlg.get();
         _wm->activateWindow(std::move(dlg));
         activeDialog->startWordSelection();
@@ -1287,8 +1285,6 @@ public:
     virtual ~CRPocketBookDocView()
     {
         instance = NULL;
-        if (_dictDlg != NULL)
-            delete _dictDlg;
     }
 
     CRPropRef getNewProps() {
@@ -1462,7 +1458,7 @@ static void paused_rotate_timer()
 
 CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDialog *parent) 
     : CRViewDialog(wm, lString16::empty_str, lString8::empty_str, lvRect(), false, true), _parent(parent),
-    _dictsTable(16), _active(false), _dictsLoaded(false), _itemsCount(5), _translateResult(0),
+    _dictMenu(), _dictsTable(16), _active(false), _dictsLoaded(false), _itemsCount(5), _translateResult(0),
     _newWord(NULL), _newTranslation(NULL)
 {
     setSkinName(lString16("#dict"));
@@ -1480,7 +1476,7 @@ CRPbDictionaryView::CRPbDictionaryView(CRGUIWindowManager * wm, CRPbDictionaryDi
         }
     }
     rect.top = rect.bottom - getDesiredHeight();
-    _dictMenu = new CRPbDictionaryMenu(_wm, this);
+    _dictMenu = std::make_unique<CRPbDictionaryMenu>(_wm, this);
     setRect(rect);
     _dictMenu->reconfigure(0);
     CRPropRef props = CRPocketBookDocView::instance->getProps();
@@ -1520,8 +1516,6 @@ CRPbDictionaryView::~CRPbDictionaryView()
 {
     if (_dictIndex >= 0)
         CloseDictionary();
-    delete _dictMenu;
-    _dictMenu = NULL;
 }
 
 void CRPbDictionaryView::setRect( const lvRect & rc )
@@ -2101,15 +2095,16 @@ void CRPbDictionaryMenu::reconfigure( int flags )
 }
 
 CRPbDictionaryDialog::CRPbDictionaryDialog( CRGUIWindowManager * wm, CRViewDialog * docwin, lString8 css )
-    : CRGUIWindowBase( wm ), _docwin(docwin), _docview(docwin->getDocView()), _docDirty(true), _curPage(0),
+    : CRGUIWindowBase( wm ), _docwin(docwin),
+    _docview(docwin->getDocView()), _wordSelector(), _dictView(),
+    _docDirty(true), _curPage(0),
     _lastWordX(0), _lastWordY(0)
 {
-    _wordSelector = NULL;
     _fullscreen = true;
     CRGUIAcceleratorTableRef acc = _wm->getAccTables().get("dict");
     if ( acc.isNull() )
         acc = _wm->getAccTables().get("dialog");
-    _dictView = new CRPbDictionaryView(wm, this);
+    _dictView = std::make_unique<CRPbDictionaryView>(wm, this);
     if (!css.empty())
         _dictView->getDocView()->setStyleSheet(css);
     int fs = _docview->getDocProps()->getIntDef( PROP_FONT_SIZE, 22 );
@@ -2149,7 +2144,7 @@ void CRPbDictionaryDialog::startWordSelection()
 {
     if (isWordSelection())
         endWordSelection();
-    _wordSelector = new LVPageWordSelector(_docview);
+    _wordSelector = std::make_unique<LVPageWordSelector>(_docview);
     int curPage = _docview->getCurPage();
     CRLog::trace("CRPbDictionaryDialog::startWordSelection(), _curPage = %d, _lastWordX=%d, _lastWordY=%d",
                  _curPage, _lastWordX, _lastWordY);
@@ -2166,8 +2161,7 @@ void CRPbDictionaryDialog::startWordSelection()
 void CRPbDictionaryDialog::endWordSelection()
 {
     if (isWordSelection()) {
-        delete _wordSelector;
-        _wordSelector = NULL;
+        _wordSelector.reset();
         _docview->clearSelection();
         _dictView->clearSelection();
     }
