@@ -1537,6 +1537,12 @@ public class ActivityOwnershipPolicyTest {
 				DocumentTreeRequestState.class,
 				"cancel",
 				DocumentTreeRequestState.Request.class);
+		assertSynchronizedMethod(
+				DocumentTreeRequestState.class,
+				"close");
+		assertSynchronizedMethod(
+				DocumentTreeRequestState.class,
+				"isClosed");
 		for (Field field :
 				DocumentTreeRequestState.Request.class
 						.getDeclaredFields()) {

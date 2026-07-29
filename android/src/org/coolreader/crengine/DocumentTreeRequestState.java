@@ -38,6 +38,7 @@ public final class DocumentTreeRequestState<T> {
 	}
 
 	private Request<T> current;
+	private boolean closed;
 
 	public synchronized Request<T> begin(
 			Command command,
@@ -49,7 +50,8 @@ public final class DocumentTreeRequestState<T> {
 			Command command,
 			T argument,
 			int attempt) {
-		if (current != null
+		if (closed
+				|| current != null
 				|| command == null
 				|| argument == null
 				|| attempt < 0)
@@ -66,20 +68,36 @@ public final class DocumentTreeRequestState<T> {
 	}
 
 	public synchronized Request<T> take() {
+		if (closed)
+			return null;
 		Request<T> request = current;
 		current = null;
 		return request;
 	}
 
 	public synchronized boolean cancel(Request<T> request) {
-		if (request == null || current != request)
+		if (closed
+				|| request == null
+				|| current != request)
 			return false;
 		current = null;
 		return true;
 	}
 
 	public synchronized boolean isPending() {
-		return current != null;
+		return !closed && current != null;
+	}
+
+	public synchronized boolean close() {
+		if (closed)
+			return false;
+		closed = true;
+		current = null;
+		return true;
+	}
+
+	public synchronized boolean isClosed() {
+		return closed;
 	}
 
 	public static final class Request<T> {

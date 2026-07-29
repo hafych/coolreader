@@ -331,7 +331,9 @@ DRM или ограничений доступа, подбор/получени�
   delete-folder или save-logcat request, не допускает overlapping launch,
   сохраняет typed snapshot через Bundle и `take()`-ит owner до dispatch
   результата. Invalid restore, result без owner и launch failure безопасно
-  очищаются без подмены цели другой операции.
+  очищаются без подмены цели другой операции. Launch и result дополнительно
+  требуют active service generation, а Activity teardown permanently закрывает
+  state, освобождает pending `FileInfo` graph и запрещает повторный request.
   Book delete и remove-from-recent захватывают clone-on-boundary
   `DeletionSnapshot` target/parent до confirmation. Direct и SAF deletion
   завершают один общий history effect: DB binder nullable-safe, callback

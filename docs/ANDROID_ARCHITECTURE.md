@@ -151,7 +151,9 @@ Delete-file, delete-folder and save-logcat launches atomically capture their
 target, reject overlap, persist the paired snapshot through the Activity bundle,
 and take the exact owner before dispatching a result. Invalid restore, an
 ownerless result and launcher failure cannot reuse or overwrite another
-operation's target.
+operation's target. Launch and result dispatch also require an active service
+generation. Activity teardown permanently closes the state, releases its
+pending `FileInfo` graph and rejects every later request.
 Book deletion and remove-from-recent capture a clone-on-boundary
 `DeletionSnapshot` of the target and parent before showing confirmation.
 Direct-file and SAF success enter the same history effect. Database readiness is

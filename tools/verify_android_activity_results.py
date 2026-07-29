@@ -852,6 +852,14 @@ REQUIRED_COOL_READER_MARKERS = (
     "STATE_OPEN_DOCUMENT_TREE_ARG",
     "STATE_OPEN_DOCUMENT_TREE_ATTEMPT",
     "request.getAttempt()",
+    "openDocumentTreeRequests.close()",
+    "|| !lifecycle.isActive())\n"
+    "\t\t\treturn;\n"
+    "\t\tif (resultCode != Activity.RESULT_OK",
+    "|| !lifecycle.isActive())\n"
+    "\t\t\treturn false;\n"
+    "\t\tDocumentTreeRequestState.Request<FileInfo> request =\n"
+    "\t\t\t\topenDocumentTreeRequests.begin(",
     "postFolderDeletionSuccess(",
     "postFolderDeletionFailure(",
     "applyFolderDeletionEffects(",

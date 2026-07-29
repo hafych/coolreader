@@ -116,4 +116,26 @@ public class DocumentTreeRequestStateTest {
 							command.getCode()));
 		}
 	}
+
+	@Test
+	public void closeDropsPendingAndPermanentlyRejectsWork() {
+		DocumentTreeRequestState<String> state =
+				new DocumentTreeRequestState<>();
+		DocumentTreeRequestState.Request<String> request =
+				state.begin(
+						DocumentTreeRequestState.Command.DELETE_FOLDER,
+						"folder",
+						1);
+
+		assertTrue(state.close());
+		assertFalse(state.close());
+		assertTrue(state.isClosed());
+		assertFalse(state.isPending());
+		assertNull(state.peek());
+		assertNull(state.take());
+		assertFalse(state.cancel(request));
+		assertNull(state.begin(
+				DocumentTreeRequestState.Command.SAVE_LOGCAT,
+				"log"));
+	}
 }

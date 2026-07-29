@@ -396,6 +396,7 @@ public class CoolReader extends BaseActivity {
 		logcatExportRequests.close();
 		libraryRootRequests.close();
 		libraryDocumentRequests.close();
+		openDocumentTreeRequests.close();
 		optionsDialogRequests.close();
 		ttsInitializationRequests.close();
 
@@ -2283,6 +2284,11 @@ public class CoolReader extends BaseActivity {
 			log.w("Ignoring document tree result without an owner");
 			return;
 		}
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		if (mDestroyed
+				|| lifecycle == null
+				|| !lifecycle.isActive())
+			return;
 		if (resultCode != Activity.RESULT_OK || intent == null) {
 			if (request.getCommand()
 					== DocumentTreeRequestState.Command.DELETE_FOLDER) {
@@ -2337,6 +2343,11 @@ public class CoolReader extends BaseActivity {
 			DocumentTreeRequestState.Command command,
 			FileInfo argument,
 			int attempt) {
+		ServiceLifecycle lifecycle = mServiceLifecycle;
+		if (mDestroyed
+				|| lifecycle == null
+				|| !lifecycle.isActive())
+			return false;
 		DocumentTreeRequestState.Request<FileInfo> request =
 				openDocumentTreeRequests.begin(
 						command,
