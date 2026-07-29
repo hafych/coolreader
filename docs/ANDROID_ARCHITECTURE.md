@@ -44,6 +44,14 @@ probed by `ExternalDocumentValidator`, while resolver-owned content URIs remain
 in the Activity's ContentResolver flow. Storage helpers such as
 `DocumentFileCache` depend on `Context`, not on an Activity subtype.
 
+## Testable view geometry
+
+`ReaderView` delegates natural page-flip lookup indexing to the pure
+`PageFlipGeometry` component. It widens multiplication before division and
+clamps every lookup to the table's last valid index. Boundary and integer-limit
+behavior is covered by a local JVM test, without constructing an Activity,
+Surface or native document.
+
 ## Migration rule
 
 New Android components should:

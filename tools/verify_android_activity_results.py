@@ -19,6 +19,19 @@ SERVICE_DEPENDENCIES = SOURCE / "crengine" / "ServiceDependencies.java"
 TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
+PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
+PAGE_FLIP_GEOMETRY_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "PageFlipGeometryTest.java"
+)
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
 COVERPAGE_MANAGER = SOURCE / "crengine" / "CoverpageManager.java"
@@ -250,6 +263,39 @@ def main() -> None:
     ):
         if marker not in reader_view_text:
             violations.append(f"{relative(READER_VIEW)} omits marker: {marker}")
+    if "PageFlipGeometry.tableIndex(" not in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} does not use bounded page-flip "
+            "table indexing")
+    find_pattern(
+        READER_VIEW,
+        reader_view_text,
+        r"\[[^\]\n]*\*\s*SIN_TABLE_SIZE\s*/",
+        "indexes a page-flip table with unchecked int arithmetic",
+        violations)
+
+    page_flip_geometry_text = PAGE_FLIP_GEOMETRY.read_text(encoding="utf-8")
+    for marker in (
+        "static int tableIndex(int value, int maximum, int lastIndex)",
+        "value >= maximum",
+        "(long) value * lastIndex / maximum",
+    ):
+        if marker not in page_flip_geometry_text:
+            violations.append(
+                f"{relative(PAGE_FLIP_GEOMETRY)} omits bounded-index "
+                f"marker: {marker}")
+
+    page_flip_geometry_test_text = PAGE_FLIP_GEOMETRY_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "indexIsClampedToBothTableEdges",
+        "indexUsesWidenedIntermediateArithmetic",
+        "Integer.MAX_VALUE - 1",
+    ):
+        if marker not in page_flip_geometry_test_text:
+            violations.append(
+                f"{relative(PAGE_FLIP_GEOMETRY_TEST)} omits regression "
+                f"marker: {marker}")
 
     for path in (FILE_BROWSER, ROOT_VIEW):
         text = path.read_text(encoding="utf-8")
