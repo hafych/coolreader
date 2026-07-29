@@ -6888,6 +6888,41 @@ forbid_source_text(
 )
 require_source_text(
   "${JINKE_SOURCE}"
+  "status_info_t lastState = {};"
+  "Jinke status snapshots must initialize every field"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "static bool updateJinkeBatteryState(LVDocView *docView)"
+  "Jinke battery updates must retain an explicit current-API adapter"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "return docView->setBatteryState("
+  "Jinke battery updates must use the current state tuple"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "CR_BATTERY_CHARGER_NO,"
+  "Jinke battery updates must preserve their no-charger semantics"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
+  "pid_t pid;"
+  "Jinke child-process handling must use the portable process type"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "setBatteryState( ::getBatteryState()"
+  "Jinke battery calls must not regress to the retired one-value API"
+)
+forbid_source_text(
+  "${JINKE_SOURCE}"
+  "__pid_t"
+  "Jinke child-process handling must not use a libc-internal type"
+)
+require_source_text(
+  "${JINKE_SOURCE}"
   "using JinkeBufferPtr ="
   "Jinke plugin output buffers must share a scoped malloc owner"
 )

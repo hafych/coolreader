@@ -52,7 +52,7 @@ using JinkeBufferPtr =
 // uncomment to use separate .ini files for different formats
 #define SEPARATE_INI_FILES 1
 
-status_info_t lastState = {0,0,0};
+status_info_t lastState = {};
 static CallbackFunction * v3_callbacks = NULL;
 
 static char last_bookmark[2048]= {0};
@@ -86,6 +86,17 @@ int getBatteryState()
         return ch * 100 / 16;
     return 100;
 #endif
+}
+
+static bool updateJinkeBatteryState(LVDocView *docView)
+{
+    const int chargeLevel = ::getBatteryState();
+    if (chargeLevel < 0)
+        return false;
+    return docView->setBatteryState(
+            chargeLevel,
+            CR_BATTERY_CHARGER_NO,
+            chargeLevel);
 }
 
 #include <cri18n.h>
@@ -173,7 +184,7 @@ public:
         instance = this;
     }
     // runs event loop
-    virtual int runEventLoop()
+    int runEventLoop() override
     {
         return 0; // NO EVENT LOOP AVAILABLE
     }
@@ -339,7 +350,9 @@ int OnKeyPressed(int keyId, int state)
     }
     bool needUpdate = false;
     needUpdate = CRJinkeWindowManager::instance->onKeyPressed( code, flags ) || needUpdate;
-    needUpdate = main_win->getDocView()->setBatteryState( ::getBatteryState() ) || needUpdate;
+    needUpdate =
+            updateJinkeBatteryState(main_win->getDocView())
+            || needUpdate;
     needUpdate = CRJinkeWindowManager::instance->processPostedEvents() || needUpdate;
     if ( needUpdate )
     	CRJinkeWindowManager::instance->update( false );
@@ -451,7 +464,7 @@ int OnStatusInfoChange( status_info_t * statusInfo, myRECT * rectToUpdate )
         return 0;
     if ( batteryChanged && main_win!=NULL ) {
         LVDocView * _docview = main_win->getDocView();
-        _docview->setBatteryState( ::getBatteryState() );
+        updateJinkeBatteryState(_docview);
         main_win->setDirty();
         main_win->getWindowManager()->update( false );
     }
@@ -554,7 +567,7 @@ void GetPageData(void **data)
 {
 #ifdef ALLOW_RUN_EXE
     if ( EXE_FILE_NAME!=NULL ) {
-        __pid_t pid;
+        pid_t pid;
         pid = fork();
         if(!pid) {
             execve(EXE_FILE_NAME, NULL, NULL);
@@ -569,7 +582,6 @@ void GetPageData(void **data)
 
     //TODO:
     CRLog::trace("GetPageData() enter");
-    //_docview->setBatteryState( ::getBatteryState() );
     //_docview->Draw();
     //LVDocImageRef pageImage = _docview->getPageImage(0);
     CRJinkeWindowManager::instance->update( false );
@@ -949,7 +961,7 @@ int InitDoc(char *fileName)
 #endif
 
         LVDocView * _docview = main_win->getDocView();
-        _docview->setBatteryState( ::getBatteryState() );
+        updateJinkeBatteryState(_docview);
         wm->activateWindow(std::move(mainWindowOwner));
         if ( !main_win->loadDocument(
                     Utf8ToUnicode(lString8(fileName))) ) {
