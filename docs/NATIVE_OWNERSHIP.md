@@ -929,3 +929,10 @@ event in a `unique_ptr` while assigning its target and releases it only across
 the legacy `postEvent()` ownership-transfer boundary. Native coverage verifies
 independent accelerator-table copies, in-place remapping, appended publication
 and delivery of the translated command to the selected window.
+
+Page-image cache misses construct both their draw buffer and background thread
+under exclusive ownership before transferring them into `LVRef` and publishing
+one cache entry. A control-block allocation failure therefore leaves the cache
+empty, while the next attempt can render and publish normally. Nested
+float/inline-box highlight rendering also keeps each translated mark copy in a
+scoped candidate until its owning range list accepts it.

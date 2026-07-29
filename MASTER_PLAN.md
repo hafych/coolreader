@@ -176,7 +176,9 @@ DRM или ограничений доступа, подбор/получени�
   output ownership, а также GUI window-manager screen owner/borrow lifecycle,
   transactional canvas-generation resize, GUI window/event queue ownership и
   scoped accelerator/command-event publication candidates и lifecycle
-  `CRDocViewWindow`, bookmark mutation/highlight-range candidates и
+  `CRDocViewWindow`, scoped page-image render candidates,
+  bookmark mutation/highlight-range candidates и scoped nested-render mark
+  copies, а также
   transactional bookmark-list publication, render-flow float/shift publication
   и teardown, table-cell
   page-context ownership, draw-time bookmark-range filters и full CCRTable

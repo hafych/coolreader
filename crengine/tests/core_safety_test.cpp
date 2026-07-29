@@ -1849,6 +1849,46 @@ static int testGuiRuntimeOwnership() {
         ShutdownFontManager();
         return fail("GUI document-view fixture font did not register");
     }
+#if CR_ENABLE_PAGE_IMAGE_CACHE==1
+    const char *pageImageError = NULL;
+    {
+        LVDocView pageView(8, true);
+        pageView.createDefaultDocument(
+                U"Page cache", U"Scoped page image candidate");
+        pageView.setViewMode(DVM_SCROLL);
+        pageView.Resize(160, 180);
+
+        bool adoptionFailed = false;
+        ref_count_rec_t::failNextAllocationForRegression();
+        try {
+            pageView.cachePageImage(0);
+        } catch (const std::bad_alloc &) {
+            adoptionFailed = true;
+        }
+        LVCacheStats rejectedStats =
+                pageView.getPageImageCacheStats();
+        if (!adoptionFailed || rejectedStats.itemCount != 0)
+            pageImageError =
+                    "page image cache published a rejected buffer candidate";
+
+        if (!pageImageError) {
+            pageView.cachePageImage(0);
+            LVDocImageRef image = pageView.getPageImage(0);
+            LVCacheStats committedStats =
+                    pageView.getPageImageCacheStats();
+            if (image.isNull() || !image->getDrawBuf()
+                    || image->getDrawBuf()->GetWidth() != 160
+                    || image->getDrawBuf()->GetHeight() != 180
+                    || committedStats.itemCount != 1)
+                pageImageError =
+                        "page image cache did not publish one complete candidate";
+        }
+    }
+    if (pageImageError) {
+        ShutdownFontManager();
+        return fail(pageImageError);
+    }
+#endif
     std::atomic<int> docViewDestroyed(0);
     const char *docViewError = NULL;
     {

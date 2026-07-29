@@ -5269,17 +5269,18 @@ static void getAbsMarksFromMarks(ldomMarkedRangeList * marks, ldomMarkedRangeLis
     // coordinates.
     for ( int i=0; i<marks->length(); i++ ) {
         ldomMarkedRange * mark = marks->get(i);
-        ldomMarkedRange * newmark = new ldomMarkedRange( *mark );
-        newmark->start.y += final_node_rect.top;
-        newmark->end.y += final_node_rect.top;
-        newmark->start.x += final_node_rect.left;
-        newmark->end.x += final_node_rect.left;
+        std::unique_ptr<ldomMarkedRange> candidate(
+                new ldomMarkedRange(*mark));
+        candidate->start.y += final_node_rect.top;
+        candidate->end.y += final_node_rect.top;
+        candidate->start.x += final_node_rect.left;
+        candidate->end.x += final_node_rect.left;
             // (Note: early when developping this, NOT updating x gave the
             // expected results, although logically it should be updated...
             // But now, it seems to work, and is needed to correctly shift
             // highlight marks in inlineBox by the containing final block's
             // left margin...)
-        absmarks->add(newmark);
+        absmarks->add(candidate.release());
     }
 }
 

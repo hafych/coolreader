@@ -833,22 +833,32 @@ void LVDocView::cachePageImage( int delta )
 		return;
 	}
 	//CRLog::trace("cachePageImage: starting new render task for page [%d]", offset);
-	LVDrawBuf * buf = NULL;
+    std::unique_ptr<LVDrawBuf> drawbufCandidate;
 	if ( m_bitsPerPixel==-1 ) {
 #if (COLOR_BACKBUFFER==1)
-        buf = new LVColorDrawBuf( m_dx, m_dy, DEF_COLOR_BUFFER_BPP );
+        drawbufCandidate.reset(
+                new LVColorDrawBuf(
+                        m_dx, m_dy, DEF_COLOR_BUFFER_BPP));
 #else
-		buf = new LVGrayDrawBuf( m_dx, m_dy, m_drawBufferBits );
+        drawbufCandidate.reset(
+                new LVGrayDrawBuf(
+                        m_dx, m_dy, m_drawBufferBits));
 #endif
 	} else {
         if ( m_bitsPerPixel==32 || m_bitsPerPixel==16 ) {
-            buf = new LVColorDrawBuf( m_dx, m_dy, m_bitsPerPixel );
+            drawbufCandidate.reset(
+                    new LVColorDrawBuf(
+                            m_dx, m_dy, m_bitsPerPixel));
 		} else {
-			buf = new LVGrayDrawBuf( m_dx, m_dy, m_bitsPerPixel );
+            drawbufCandidate.reset(
+                    new LVGrayDrawBuf(
+                            m_dx, m_dy, m_bitsPerPixel));
 		}
 	}
-	LVRef<LVDrawBuf> drawbuf( buf );
-	LVRef<LVThread> thread( new LVDrawThread( this, offset, p, drawbuf ) );
+    LVRef<LVDrawBuf> drawbuf(drawbufCandidate.release());
+    std::unique_ptr<LVThread> threadCandidate(
+            new LVDrawThread(this, offset, p, drawbuf));
+    LVRef<LVThread> thread(threadCandidate.release());
 	m_imageCache.set( offset, p, drawbuf, thread );
 	//CRLog::trace("cachePageImage: caching page [%d] is finished", offset);
 }

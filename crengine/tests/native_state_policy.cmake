@@ -1066,6 +1066,36 @@ require_source_text(
   "page image cache probes must use scoped locking"
 )
 require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "std::unique_ptr<LVDrawBuf> drawbufCandidate;"
+  "page image cache buffers must begin in scoped ownership"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "std::unique_ptr<LVThread> threadCandidate("
+  "page image render threads must begin in scoped ownership"
+)
+require_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "LVRef<LVDrawBuf> drawbuf(drawbufCandidate.release());"
+  "page image buffers must cross an explicit reference transfer boundary"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "page image cache published a rejected buffer candidate"
+  "page image cache must retain failed-adoption rollback coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "page image cache did not publish one complete candidate"
+  "page image cache must retain successful publication coverage"
+)
+forbid_source_text(
+  "${DOC_VIEW_SOURCE}"
+  "LVDrawBuf * buf = NULL;"
+  "page image cache buffers must not begin as raw owners"
+)
+require_source_text(
   "${SKIN_SOURCE}"
   "_imageCache.getStats()"
   "decoded image cache must expose bounded cache counters"
@@ -6935,6 +6965,21 @@ forbid_source_text(
 )
 
 # --- selection range graph ownership and transactional publication ---
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "std::unique_ptr<ldomMarkedRange> candidate("
+  "nested render mark copies must begin in scoped ownership"
+)
+require_source_text(
+  "${FORMATTER_SOURCE}"
+  "absmarks->add(candidate.release());"
+  "nested render marks must cross an explicit owning-list boundary"
+)
+forbid_source_text(
+  "${FORMATTER_SOURCE}"
+  "ldomMarkedRange * newmark = new ldomMarkedRange"
+  "nested render mark copies must not begin as raw owners"
+)
 require_source_text(
   "${DOM_SOURCE}"
   "static T * publishOwnedRangeItem"
