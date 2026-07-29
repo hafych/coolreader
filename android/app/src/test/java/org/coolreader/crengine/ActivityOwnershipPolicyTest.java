@@ -182,6 +182,32 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void animationTimingBelongsToReaderAndUsesPrivateState()
+			throws Exception {
+		Field timing =
+				ReaderView.class.getDeclaredField("animationTiming");
+		assertFalse(Modifier.isStatic(timing.getModifiers()));
+		assertTrue(Modifier.isPrivate(timing.getModifiers()));
+		assertTrue(Modifier.isFinal(timing.getModifiers()));
+
+		for (Field field : AnimationTiming.class.getDeclaredFields()) {
+			if (Modifier.isStatic(field.getModifiers())) {
+				assertTrue(Modifier.isFinal(field.getModifiers()));
+				assertTrue(field.getType().isPrimitive());
+			} else {
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+				if (field.getType().isArray())
+					assertTrue(Modifier.isFinal(field.getModifiers()));
+			}
+		}
+		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
+			assertFalse(
+					"Animation timing must not remain nested in ReaderView",
+					nested.getSimpleName().equals("RingBuffer"));
+		}
+	}
+
+	@Test
 	public void styleOptionsHaveOneImmutableTypedCatalog()
 			throws Exception {
 		assertFinalStaticField(

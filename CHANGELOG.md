@@ -367,6 +367,10 @@ The historical Debian changelog remains in [`changelog`](changelog).
 
 ### Fixed
 
+- Scroll-view animation frames now use fractional progress instead of truncated
+  integer division, and autoscroll duration arithmetic widens before multiplying
+  character counts. Draw-time averaging is isolated per reader and validates
+  restored samples.
 - Natural page-flip table lookups now clamp widened indices through a tested
   geometry component instead of using overflow-prone inline arithmetic and an
   out-of-bounds `length` fallback.

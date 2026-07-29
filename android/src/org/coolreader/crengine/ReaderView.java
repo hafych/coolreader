@@ -474,8 +474,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		Bookmark bmk = getCurrentPositionBookmark();
 		if (bmk != null)
 			savePositionBookmark(bmk);
-		if (!mAvgDrawAnimationStats.isEmpty())
-			setSetting(PROP_APP_VIEW_ANIM_DURATION, String.valueOf(mAvgDrawAnimationStats.average()), false, true, false);
+		if (animationTiming.hasSamples()) {
+			setSetting(
+					PROP_APP_VIEW_ANIM_DURATION,
+					String.valueOf(animationTiming.averageDrawDuration()),
+					false,
+					true,
+					false);
+		}
 		log.i("calling bookView.onPause()");
 		bookView.onPause();
 	}
@@ -2077,15 +2083,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		private int calcProgressPercent() {
 			long duration = Utils.timeInterval(pageTurnStart);
-			long estimatedFullDuration = 60000 * charCount / autoScrollSpeed;
-			int percent = (int) (10000 * duration / estimatedFullDuration);
-//			if (duration > estimatedFullDuration - timerInterval / 3)
-//				percent = 10000;
-			if (percent > 10000)
-				percent = 10000;
-			if (percent < 0)
-				percent = 0;
-			return percent;
+			return AnimationTiming.autoscrollProgress(
+					duration, charCount, autoScrollSpeed);
 		}
 
 		private boolean onTimer() {
@@ -2918,7 +2917,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		} else if (PROP_APP_MULTI_SELECTION_ACTION.equals(key)) {
 			mMultiSelectionAction = Utils.parseInt(value, SELECTION_ACTION_TOOLBAR);
 		} else if (PROP_APP_VIEW_ANIM_DURATION.equals(key)) {
-			mAvgDrawAnimationStats.fill(Utils.parseInt(value, 50));
+			animationTiming.resetSamples(Utils.parseInt(value, 50));
 		} else {
 			//mActivity.applyAppSetting(key, value);
 		}
@@ -4544,11 +4543,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (duration > 0 && pageFlipAnimationSpeedMs != 0) {
 				int steps = (int) (duration / getAvgAnimationDrawDuration()) + 2;
 				for (int i = 1; i < steps; i++) {
-					this.progress = i/steps;
-					if(accelerated){
-						double accelFactor = Math.pow(i, 2)/Math.pow(steps, 2);
-						this.progress += (1-progress) * accelFactor;
-					}
+					this.progress = AnimationTiming.scrollStep(
+							i, steps, accelerated);
 					draw();
 				}
 			}else{
@@ -5109,66 +5105,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	private static final class RingBuffer {
-		private final long [] mArray;
-		private long mSum;
-		private long mAvg;
-		private int mPos;
-		private int mCount;
-		private final int mSize;
-
-		public RingBuffer(int size, long initialAvg) {
-			mSize = size;
-			mArray = new long[size];
-			mPos = 0;
-			mCount = 0;
-			mAvg = initialAvg;
-			mSum = 0;
-		}
-
-		public long average() {
-			return mAvg;
-		}
-
-		public void add(long val) {
-			if (mCount < mSize)
-				mCount++;
-			else							// array is full
-				mSum -= mArray[mPos];		// subtract from sum the value to replace
-			mArray[mPos] = val;				// write new value
-			mSum += val;					// update sum
-			mAvg = mSum /mCount;			// calculate average value
-			mPos++;
-			if (mPos >= mSize)
-				mPos = 0;
-		}
-
-		public boolean isEmpty() {
-			return 0 == mCount;
-		}
-
-		public void fill(long value) {
-			mPos = 0;
-			mCount = 0;
-			mSum = 0;
-			for (int i = 0; i < mSize; i++) {
-				add(value);
-			}
-		}
-	}
-
-	private final RingBuffer mAvgDrawAnimationStats = new RingBuffer(32, 50);
+	private final AnimationTiming animationTiming =
+			new AnimationTiming(32, 50);
 
 	private long getAvgAnimationDrawDuration() {
-		return mAvgDrawAnimationStats.average();
+		return animationTiming.averageDrawDuration();
 	}
 
 	private void updateAnimationDurationStats(long duration) {
-		if (duration <= 0)
-			duration = 1;
-		else if (duration > 1000)
-			return;
-		mAvgDrawAnimationStats.add(duration);
+		animationTiming.recordDrawDuration(duration);
 	}
 
 	private void drawPage() {

@@ -79,6 +79,10 @@ storage and the legacy numeric samples are locked by a pure JVM regression.
 Gesture animation uses the same boundary: each `ReaderView` owns an immutable
 `GestureAcceleration` curve, input is clamped, and interpolation widens before
 arithmetic so the full signed-integer range cannot overflow.
+Each reader also owns an `AnimationTiming` sample window. It validates persisted
+draw averages, computes fractional scroll frames without integer truncation,
+and widens autoscroll character-duration arithmetic before clamping progress.
+These timing rules are pure JVM-tested rather than embedded in rendering code.
 
 Options UI state is scoped to each `OptionsDialog` generation. Resource-backed
 motion and gesture choices, format capability flags, and icon visibility no

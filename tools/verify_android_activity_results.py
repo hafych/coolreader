@@ -29,6 +29,7 @@ TOAST_VIEW = SOURCE / "crengine" / "ToastView.java"
 SCANNER = SOURCE / "crengine" / "Scanner.java"
 READER_VIEW = SOURCE / "crengine" / "ReaderView.java"
 GESTURE_ACCELERATION = SOURCE / "crengine" / "GestureAcceleration.java"
+ANIMATION_TIMING = SOURCE / "crengine" / "AnimationTiming.java"
 VM_RUNTIME_HACK = SOURCE / "crengine" / "VMRuntimeHack.java"
 BITMAP_MEMORY_ACCOUNTING = (
     SOURCE / "crengine" / "BitmapMemoryAccounting.java"
@@ -225,6 +226,18 @@ GESTURE_ACCELERATION_TEST = (
     / "coolreader"
     / "crengine"
     / "GestureAccelerationTest.java"
+)
+ANIMATION_TIMING_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "AnimationTimingTest.java"
 )
 DICTIONARY_CATALOG_TEST = (
     ROOT
@@ -1039,6 +1052,63 @@ def main() -> None:
         if marker not in gesture_acceleration_test_text:
             violations.append(
                 f"{relative(GESTURE_ACCELERATION_TEST)} omits gesture "
+                f"regression: {marker}")
+
+    for marker in (
+        "private final AnimationTiming animationTiming",
+        "animationTiming.hasSamples()",
+        "animationTiming.resetSamples(",
+        "animationTiming.averageDrawDuration()",
+        "animationTiming.recordDrawDuration(duration)",
+        "AnimationTiming.scrollStep(",
+        "AnimationTiming.autoscrollProgress(",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits animation timing marker: "
+                f"{marker}")
+    for legacy in (
+        "class RingBuffer",
+        "mAvgDrawAnimationStats",
+        "this.progress = i/steps",
+        "60000 * charCount",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains inline animation timing: "
+                f"{legacy}")
+
+    animation_timing_text = ANIMATION_TIMING.read_text(encoding="utf-8")
+    for marker in (
+        "final class AnimationTiming",
+        "private final long[] samples",
+        "private final long initialAverage",
+        "duration * samples.length",
+        "double progress = (double) clampedStep / steps",
+        "MILLIS_PER_MINUTE",
+        "* characterCount",
+        "elapsedMillis >= estimatedDuration",
+    ):
+        if marker not in animation_timing_text:
+            violations.append(
+                f"{relative(ANIMATION_TIMING)} omits scoped/widened timing "
+                f"marker: {marker}")
+
+    animation_timing_test_text = ANIMATION_TIMING_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "rollingAveragePreservesLegacySamplingRules",
+        "persistedAverageResetsTheWholeWindowSafely",
+        "linearScrollStepsUseFractionalProgress",
+        "acceleratedScrollStepsAreBoundedAndMonotonic",
+        "autoscrollProgressMatchesNormalTimingAndClamps",
+        "autoscrollWidensCharacterDurationMultiplication",
+        "15_000_000L",
+        "100_000",
+    ):
+        if marker not in animation_timing_test_text:
+            violations.append(
+                f"{relative(ANIMATION_TIMING_TEST)} omits animation "
                 f"regression: {marker}")
 
     vm_runtime_text = VM_RUNTIME_HACK.read_text(encoding="utf-8")
