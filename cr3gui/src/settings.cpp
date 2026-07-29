@@ -42,8 +42,6 @@ class CRControlsMenuItem : public CRMenuItem
 private:
     int _key;
     int _flags;
-    int _command;
-    int _params;
     CRControlsMenu * _controlsMenu;
     lString32 _settingKey;
     int _defCommand;
@@ -187,13 +185,10 @@ CRControlsMenuItem::CRControlsMenuItem( CRControlsMenu * menu, int id, int key, 
 
 void CRControlsMenuItem::Draw( LVDrawBuf & buf, lvRect & rc, CRRectSkinRef skin, CRRectSkinRef valueSkin, bool selected )
 {
-    lvRect itemBorders = skin->getBorderWidths();
     skin->draw( buf, rc );
     buf.SetTextColor( skin->getTextColor() );
     buf.SetBackgroundColor( skin->getBackgroundColor() );
     lvRect textRect = rc;
-    lvRect borders = skin->getBorderWidths();
-    //textRect.shrinkBy(borders);
     skin->drawText(buf, textRect, _label);
     lString32 s = getSubmenuValue();
     if ( s.empty() )
@@ -415,12 +410,6 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
                 {NULL, NULL},
         };
 
-	item_def_t bookmark_icons[] = {
-		{_("On"), "1"},
-		{_("Off"), "0"},
-		{NULL, NULL},
-	};
-
 	item_def_t kerning_options[] = {
 		{_("On"), "1"},
 		{_("Off"), "0"},
@@ -534,6 +523,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
 		{NULL, NULL},
 	};
 
+#if ENABLE_UPDATE_MODE_SETTING==1
     item_def_t screen_update_options[] = {
         {_("Always use fast updates"), "0"},
         {_("Don't use fast updates"), "1"},
@@ -547,6 +537,7 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
         {_("Full updates every 14 pages"), "14"},
         {NULL, NULL},
     };
+#endif
 
     item_def_t turbo_update_options[] = {
         {_("Turbo mode disabled"), "0"},
@@ -755,14 +746,6 @@ CRSettingsMenu::CRSettingsMenu( CRGUIWindowManager * wm, CRPropRef newProps, int
             addMenuItems( turboUpdatesMenu, turbo_update_options );
             mainMenu->addItem( turboUpdatesMenu );
         }
-
-#if 0
-        CRMenu * bookmarkIconsMenu = new CRMenu(_wm, mainMenu, mm_BookmarkIcons,
-                _("Show bookmark icons"),
-                                LVImageSourceRef(), LVFontRef(), valueFont, props, PROP_BOOKMARK_ICONS );
-        addMenuItems( bookmarkIconsMenu, bookmark_icons );
-        mainMenu->addItem( bookmarkIconsMenu );
-#endif
 
         CRMenu * highlightbookmarksMenu = new CRMenu(_wm, mainMenu, mm_HighlightBookmarks,
                 _("Highlight bookmarks"),

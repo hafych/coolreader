@@ -7080,6 +7080,31 @@ forbid_source_text(
   "setSkinName(lString16"
   "settings skin identifiers must use the current string width"
 )
+require_source_text(
+  "${SETTINGS_SOURCE}"
+  "#if ENABLE_UPDATE_MODE_SETTING==1\n    item_def_t screen_update_options[]"
+  "conditional update options must share their consumer feature guard"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "int _command;"
+  "settings control items must not retain unused command state"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "int _params;"
+  "settings control items must not retain unused parameter state"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "lvRect itemBorders"
+  "settings control drawing must not retain unused border state"
+)
+forbid_source_text(
+  "${SETTINGS_SOURCE}"
+  "item_def_t bookmark_icons[]"
+  "settings must not retain a disabled bookmark-icon option table"
+)
 forbid_source_text(
   "${SETTINGS_SOURCE}"
   "sprintf( defvalue"
