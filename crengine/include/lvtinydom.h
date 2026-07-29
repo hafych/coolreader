@@ -456,6 +456,9 @@ typedef std::unique_ptr<ldomNode, ldomNodePartDeleter>
 #define TNC_PART_MASK (TNC_PART_LEN-1)
 typedef std::array<ldomNodePartOwner, TNC_PART_COUNT>
         ldomNodePartList;
+
+bool LVRunDomMutableNodeOwnershipRegression();
+
 /// storage of ldomNode
 class tinyNodeCollection
 {
@@ -711,6 +714,14 @@ public:
     ldomNode * allocTinyNode( int type );
     /// allocate new tinyElement
     ldomNode * allocTinyElement( ldomNode * parent, lUInt16 nsid, lUInt16 id );
+    /// allocate a mutable text node after its payload is ready
+    ldomNode * allocTinyText(
+            ldomNode * parent, const lString8 & text );
+#if BUILD_LITE!=1
+    /// allocate a persistent text node without leaking its arena slot
+    ldomNode * allocTinyPersistentText(
+            ldomNode * parent, const lString8 & text );
+#endif
     /// recycle ldomNode on node removing
     void recycleTinyNode( lUInt32 index );
 

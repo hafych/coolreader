@@ -3105,6 +3105,12 @@ static int testDomNodePartOwnership() {
     return 0;
 }
 
+static int testDomMutableNodeOwnership() {
+    if (!LVRunDomMutableNodeOwnershipRegression())
+        return fail("DOM mutable/persistent node ownership regression failed");
+    return 0;
+}
+
 static int testXPointerStateOwnership() {
     ldomXPointer pointer;
     pointer.setOffset(11);
@@ -7421,6 +7427,8 @@ int main() {
     if (testDomChunkStorageOwnership() != 0)
         return 1;
     if (testDomNodePartOwnership() != 0)
+        return 1;
+    if (testDomMutableNodeOwnership() != 0)
         return 1;
     if (testXPointerStateOwnership() != 0)
         return 1;

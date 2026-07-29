@@ -767,6 +767,14 @@ Malformed catalogs preserve the live chunks and their active data. Runtime
 style, rectangle, text and element chunks all cross one `unique_ptr`-based
 adoption helper before `_activeChunk` or another raw view can observe them.
 
+Mutable DOM element and text payloads are also constructed under exclusive
+ownership before an arena slot can expose them. Parent child arrays reserve
+their publication slot first. Mutable-to-persistent conversion builds and
+fills the storage item before changing the node union/type, while the reverse
+conversion copies a complete `tinyElement` or `ldomTextNode` candidate before
+retiring the persistent item. Repeated native lifecycle coverage preserves
+attributes, child identities and text across both transition directions.
+
 The legacy pre-20200824 HTML autoclose table is an array of owned rule vectors.
 Construction stages each rule in a local vector and swaps duplicate tag entries,
 while modern DOM versions simply retain an empty table with automatic teardown.

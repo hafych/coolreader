@@ -18162,6 +18162,14 @@ public:
     { _document->_tinyElementCount++; }
     /// destructor
     ~tinyElement() { _document->_tinyElementCount--; }
+
+    void reserveChildPublication()
+    {
+        if (_children.length() == INT_MAX)
+            throw std::length_error(
+                    "DOM child publication overflow");
+        _children.reserve(_children.length() + 1);
+    }
 };
 
 
@@ -18182,11 +18190,44 @@ void tinyNodeCollection::compact()
 /// allocate new tinyElement
 ldomNode * tinyNodeCollection::allocTinyElement( ldomNode * parent, lUInt16 nsid, lUInt16 id )
 {
+    std::unique_ptr<tinyElement> candidate =
+            std::make_unique<tinyElement>(
+                    static_cast<ldomDocument *>(this),
+                    parent, nsid, id);
     ldomNode * node = allocTinyNode( ldomNode::NT_ELEMENT );
-    tinyElement * elem = new tinyElement( (ldomDocument*)this, parent, nsid, id );
-    node->NPELEM = elem;
+    node->NPELEM = candidate.release();
     return node;
 }
+
+ldomNode * tinyNodeCollection::allocTinyText(
+        ldomNode * parent, const lString8 & text )
+{
+    std::unique_ptr<ldomTextNode> candidate =
+            std::make_unique<ldomTextNode>(
+                    parent ? parent->getDataIndex() : 0, text);
+    ldomNode * node = allocTinyNode(ldomNode::NT_TEXT);
+    node->_data._text_ptr = candidate.release();
+    return node;
+}
+
+#if BUILD_LITE!=1
+ldomNode * tinyNodeCollection::allocTinyPersistentText(
+        ldomNode * parent, const lString8 & text )
+{
+    ldomNode * node = allocTinyNode(ldomNode::NT_PTEXT);
+    const lUInt32 nodeIndex = node->_handle._dataIndex;
+    try {
+        node->_data._ptext_addr = _textStorage.allocText(
+                nodeIndex,
+                parent ? parent->getDataIndex() : 0,
+                text);
+    } catch (...) {
+        recycleTinyNode(nodeIndex);
+        throw;
+    }
+    return node;
+}
+#endif
 
 static void readOnlyError()
 {
@@ -19039,11 +19080,18 @@ void ldomNode::setText( lString32 str )
     case NT_PTEXT:
         {
             // convert persistent text to mutable
-            lUInt32 parentIndex = getDocument()->_textStorage.getParent(_data._ptext_addr);
-            getDocument()->_textStorage.freeNode( _data._ptext_addr );
-            _data._text_ptr = new ldomTextNode( parentIndex, UnicodeToUtf8(str) );
-            // change type from PTEXT to TEXT
-            _handle._dataIndex = (_handle._dataIndex & ~0xF) | NT_TEXT;
+            ldomDocument * document = getDocument();
+            const lUInt32 persistentAddress = _data._ptext_addr;
+            const lUInt32 parentIndex =
+                    document->_textStorage.getParent(
+                            persistentAddress);
+            std::unique_ptr<ldomTextNode> mutableCandidate =
+                    std::make_unique<ldomTextNode>(
+                            parentIndex, UnicodeToUtf8(str));
+            document->_textStorage.freeNode(persistentAddress);
+            _data._text_ptr = mutableCandidate.release();
+            _handle._dataIndex =
+                    (_handle._dataIndex & ~0xF) | NT_TEXT;
         }
         break;
 #endif
@@ -19070,11 +19118,18 @@ void ldomNode::setText8( lString8 utf8 )
     case NT_PTEXT:
         {
             // convert persistent text to mutable
-            lUInt32 parentIndex = getDocument()->_textStorage.getParent(_data._ptext_addr);
-            getDocument()->_textStorage.freeNode( _data._ptext_addr );
-            _data._text_ptr = new ldomTextNode( parentIndex, utf8 );
-            // change type from PTEXT to TEXT
-            _handle._dataIndex = (_handle._dataIndex & ~0xF) | NT_TEXT;
+            ldomDocument * document = getDocument();
+            const lUInt32 persistentAddress = _data._ptext_addr;
+            const lUInt32 parentIndex =
+                    document->_textStorage.getParent(
+                            persistentAddress);
+            std::unique_ptr<ldomTextNode> mutableCandidate =
+                    std::make_unique<ldomTextNode>(
+                            parentIndex, utf8);
+            document->_textStorage.freeNode(persistentAddress);
+            _data._text_ptr = mutableCandidate.release();
+            _handle._dataIndex =
+                    (_handle._dataIndex & ~0xF) | NT_TEXT;
         }
         break;
 #endif
@@ -20298,6 +20353,7 @@ ldomNode * ldomNode::insertChildElement( lUInt32 index, lUInt16 nsid, lUInt16 id
         tinyElement * me = NPELEM;
         if (index>(lUInt32)me->_children.length())
             index = me->_children.length();
+        me->reserveChildPublication();
         ldomNode * node = getDocument()->allocTinyElement( this, nsid, id );
         me->_children.insert( index, node->getDataIndex() );
         return node;
@@ -20313,6 +20369,7 @@ ldomNode * ldomNode::insertChildElement( lUInt16 id )
     if  ( isElement() ) {
         if ( isPersistent() )
             modify();
+        NPELEM->reserveChildPublication();
         ldomNode * node = getDocument()->allocTinyElement( this, LXML_NS_NONE, id );
         NPELEM->_children.insert( NPELEM->_children.length(), node->getDataIndex() );
         return node;
@@ -20331,15 +20388,15 @@ ldomNode * ldomNode::insertChildText( lUInt32 index, const lString32 & value )
         tinyElement * me = NPELEM;
         if (index>(lUInt32)me->_children.length())
             index = me->_children.length();
+        me->reserveChildPublication();
 #if !defined(USE_PERSISTENT_TEXT) || BUILD_LITE==1
-        ldomNode * node = getDocument()->allocTinyNode( NT_TEXT );
         lString8 s8 = UnicodeToUtf8(value);
-        node->_data._text_ptr = new ldomTextNode(_handle._dataIndex, s8);
+        ldomNode * node =
+                getDocument()->allocTinyText(this, s8);
 #else
-        ldomNode * node = getDocument()->allocTinyNode( NT_PTEXT );
-        //node->_data._ptext_addr._parentIndex = _handle._dataIndex;
         lString8 s8 = UnicodeToUtf8(value);
-        node->_data._ptext_addr = getDocument()->_textStorage.allocText( node->_handle._dataIndex, _handle._dataIndex, s8 );
+        ldomNode * node =
+                getDocument()->allocTinyPersistentText(this, s8);
 #endif
         me->_children.insert( index, node->getDataIndex() );
         return node;
@@ -20356,14 +20413,15 @@ ldomNode * ldomNode::insertChildText( const lString32 & value )
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
+        me->reserveChildPublication();
 #if !defined(USE_PERSISTENT_TEXT) || BUILD_LITE==1
-        ldomNode * node = getDocument()->allocTinyNode( NT_TEXT );
         lString8 s8 = UnicodeToUtf8(value);
-        node->_data._text_ptr = new ldomTextNode(_handle._dataIndex, s8);
+        ldomNode * node =
+                getDocument()->allocTinyText(this, s8);
 #else
-        ldomNode * node = getDocument()->allocTinyNode( NT_PTEXT );
         lString8 s8 = UnicodeToUtf8(value);
-        node->_data._ptext_addr = getDocument()->_textStorage.allocText( node->_handle._dataIndex, _handle._dataIndex, s8 );
+        ldomNode * node =
+                getDocument()->allocTinyPersistentText(this, s8);
 #endif
         me->_children.insert( me->_children.length(), node->getDataIndex() );
         return node;
@@ -20380,12 +20438,13 @@ ldomNode * ldomNode::insertChildText(const lString8 & s8, bool before_last_child
         if ( isPersistent() )
             modify();
         tinyElement * me = NPELEM;
+        me->reserveChildPublication();
 #if !defined(USE_PERSISTENT_TEXT) || BUILD_LITE==1
-        ldomNode * node = getDocument()->allocTinyNode( NT_TEXT );
-        node->_data._text_ptr = new ldomTextNode(_handle._dataIndex, s8);
+        ldomNode * node =
+                getDocument()->allocTinyText(this, s8);
 #else
-        ldomNode * node = getDocument()->allocTinyNode( NT_PTEXT );
-        node->_data._ptext_addr = getDocument()->_textStorage.allocText( node->_handle._dataIndex, _handle._dataIndex, s8 );
+        ldomNode * node =
+                getDocument()->allocTinyPersistentText(this, s8);
 #endif
         int index = me->_children.length();
         if ( before_last_child && index > 0 )
@@ -20864,9 +20923,20 @@ ldomNode * ldomNode::persist()
             tinyElement * elem = NPELEM;
             int attrCount = elem->_attrs.length();
             int childCount = elem->_children.length();
-            _handle._dataIndex = (_handle._dataIndex & ~0xF) | NT_PELEMENT;
-            _data._pelem_addr = getDocument()->_elemStorage.allocElem(_handle._dataIndex, elem->_parentNode ? elem->_parentNode->_handle._dataIndex : 0, elem->_children.length(), elem->_attrs.length() );
-            ElementDataStorageItem * data = getDocument()->_elemStorage.getElem(_data._pelem_addr);
+            ldomDocument * document = getDocument();
+            const lUInt32 persistentDataIndex =
+                    (_handle._dataIndex & ~0xF) | NT_PELEMENT;
+            const lUInt32 persistentAddress =
+                    document->_elemStorage.allocElem(
+                            persistentDataIndex,
+                            elem->_parentNode
+                                    ? elem->_parentNode
+                                            ->_handle._dataIndex
+                                    : 0,
+                            childCount, attrCount);
+            ElementDataStorageItem * data =
+                    document->_elemStorage.getElem(
+                            persistentAddress);
             data->nsid = elem->_nsid;
             data->id = elem->_id;
             lUInt16 * attrs = data->attrs();
@@ -20882,15 +20952,25 @@ ldomNode * ldomNode::persist()
                 data->children[i] = elem->_children[i];
             }
             data->rendMethod = (lUInt8)elem->_rendMethod;
+            _data._pelem_addr = persistentAddress;
+            _handle._dataIndex = persistentDataIndex;
             delete elem;
         } else {
             // TEXT->PTEXT
-            lString8 utf8 = _data._text_ptr->getText();
-            lUInt32 parentIndex = _data._text_ptr->getParentIndex();
-            delete _data._text_ptr;
-            _handle._dataIndex = (_handle._dataIndex & ~0xF) | NT_PTEXT;
-            _data._ptext_addr = getDocument()->_textStorage.allocText(_handle._dataIndex, parentIndex, utf8 );
-            // change type
+            ldomTextNode * mutableText = _data._text_ptr;
+            const lString8 utf8 = mutableText->getText();
+            const lUInt32 parentIndex =
+                    mutableText->getParentIndex();
+            ldomDocument * document = getDocument();
+            const lUInt32 persistentDataIndex =
+                    (_handle._dataIndex & ~0xF) | NT_PTEXT;
+            const lUInt32 persistentAddress =
+                    document->_textStorage.allocText(
+                            persistentDataIndex,
+                            parentIndex, utf8);
+            _data._ptext_addr = persistentAddress;
+            _handle._dataIndex = persistentDataIndex;
+            delete mutableText;
         }
     }
 #endif
@@ -20905,29 +20985,128 @@ ldomNode * ldomNode::modify()
     if ( isPersistent() ) {
         if ( isElement() ) {
             // PELEM->ELEM
-            ElementDataStorageItem * data = getDocument()->_elemStorage.getElem(_data._pelem_addr);
-            tinyElement * elem = new tinyElement(getDocument(), getParentNode(), data->nsid, data->id );
+            ldomDocument * document = getDocument();
+            const lUInt32 persistentAddress =
+                    _data._pelem_addr;
+            ElementDataStorageItem * data =
+                    document->_elemStorage.getElem(
+                            persistentAddress);
+            std::unique_ptr<tinyElement> mutableCandidate =
+                    std::make_unique<tinyElement>(
+                            document, getParentNode(),
+                            data->nsid, data->id);
             for ( int i=0; i<data->childCount; i++ )
-                elem->_children.add( data->children[i] );
+                mutableCandidate->_children.add(
+                        data->children[i]);
             for ( int i=0; i<data->attrCount; i++ )
-                elem->_attrs.add( data->attr(i) );
-            _handle._dataIndex = (_handle._dataIndex & ~0xF) | NT_ELEMENT;
-            elem->_rendMethod = (lvdom_element_render_method)data->rendMethod;
-            getDocument()->_elemStorage.freeNode( _data._pelem_addr );
-            NPELEM = elem;
+                mutableCandidate->_attrs.add(data->attr(i));
+            mutableCandidate->_rendMethod =
+                    static_cast<lvdom_element_render_method>(
+                            data->rendMethod);
+            document->_elemStorage.freeNode(
+                    persistentAddress);
+            NPELEM = mutableCandidate.release();
+            _handle._dataIndex =
+                    (_handle._dataIndex & ~0xF) | NT_ELEMENT;
         } else {
             // PTEXT->TEXT
             // convert persistent text to mutable
-            lString8 utf8 = getDocument()->_textStorage.getText(_data._ptext_addr);
-            lUInt32 parentIndex = getDocument()->_textStorage.getParent(_data._ptext_addr);
-            getDocument()->_textStorage.freeNode( _data._ptext_addr );
-            _data._text_ptr = new ldomTextNode( parentIndex, utf8 );
-            // change type
-            _handle._dataIndex = (_handle._dataIndex & ~0xF) | NT_TEXT;
+            ldomDocument * document = getDocument();
+            const lUInt32 persistentAddress =
+                    _data._ptext_addr;
+            const lString8 utf8 =
+                    document->_textStorage.getText(
+                            persistentAddress);
+            const lUInt32 parentIndex =
+                    document->_textStorage.getParent(
+                            persistentAddress);
+            std::unique_ptr<ldomTextNode> mutableCandidate =
+                    std::make_unique<ldomTextNode>(
+                            parentIndex, utf8);
+            document->_textStorage.freeNode(
+                    persistentAddress);
+            _data._text_ptr = mutableCandidate.release();
+            _handle._dataIndex =
+                    (_handle._dataIndex & ~0xF) | NT_TEXT;
         }
     }
 #endif
     return this;
+}
+
+bool LVRunDomMutableNodeOwnershipRegression()
+{
+#if BUILD_LITE!=1
+    std::unique_ptr<ldomDocument> document =
+            std::make_unique<ldomDocument>();
+    ldomNode * root = document->getRootNode();
+    const lUInt16 containerId =
+            document->getElementNameIndex(
+                    U"ownership-container");
+    const lUInt16 leafId =
+            document->getElementNameIndex(
+                    U"ownership-leaf");
+    const lUInt16 attributeId =
+            document->getAttrNameIndex(
+                    U"ownership-state");
+    ldomNode * container =
+            root->insertChildElement(containerId);
+    if (!container)
+        return false;
+    container->setAttributeValue(
+            LXML_NS_NONE, attributeId, U"retained");
+    ldomNode * text =
+            container->insertChildText(
+                    lString8("initial text"), false);
+    ldomNode * leaf =
+            container->insertChildElement(leafId);
+    if (!text || !leaf
+            || container->getChildCount() != 2)
+        return false;
+
+    for (int lifecycle = 0; lifecycle < 2; ++lifecycle) {
+        container->persist();
+        if (!container->isPersistent()
+                || container->getChildCount() != 2
+                || container->getChildNode(0) != text
+                || container->getChildNode(1) != leaf
+                || container->getAttributeValue(
+                        LXML_NS_NONE, attributeId)
+                        != lString32(U"retained"))
+            return false;
+        container->modify();
+        if (container->isPersistent()
+                || container->getChildCount() != 2
+                || container->getChildNode(0) != text
+                || container->getChildNode(1) != leaf
+                || container->getAttributeValue(
+                        LXML_NS_NONE, attributeId)
+                        != lString32(U"retained"))
+            return false;
+    }
+
+    text->persist();
+    text->setText(lString32(U"wide replacement"));
+    if (text->isPersistent()
+            || text->getText()
+                    != lString32(U"wide replacement"))
+        return false;
+    text->persist();
+    text->setText8(lString8("utf8 replacement"));
+    if (text->isPersistent()
+            || text->getText8()
+                    != lString8("utf8 replacement"))
+        return false;
+    text->persist();
+    text->modify();
+    return !text->isPersistent()
+            && text->getText8()
+                    == lString8("utf8 replacement")
+            && container->getChildNode(0) == text
+            && container->getChildNode(1) == leaf;
+#else
+    return true;
+#endif
 }
 
 

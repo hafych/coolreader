@@ -4602,6 +4602,68 @@ forbid_source_text(
   "DOM active-chunk views must not publish before owning-list adoption"
 )
 
+# --- mutable/persistent DOM node transition ownership ---
+require_source_text(
+  "${DOM_SOURCE}"
+  "void reserveChildPublication()"
+  "DOM parents must reserve child publication before allocating a node"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<tinyElement> candidate ="
+  "mutable DOM elements must begin in scoped ownership"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<ldomTextNode> candidate ="
+  "mutable DOM text payloads must begin in scoped ownership"
+)
+require_source_text(
+  "${DOM_HEADER}"
+  "ldomNode * allocTinyPersistentText("
+  "persistent DOM text allocation must use a rollback-aware helper"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "recycleTinyNode(nodeIndex);"
+  "failed persistent DOM text allocation must recycle its arena slot"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<tinyElement> mutableCandidate ="
+  "persistent DOM elements must stage their complete mutable replacement"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "std::unique_ptr<ldomTextNode> mutableCandidate ="
+  "persistent DOM text nodes must stage their mutable replacement"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "const lUInt32 persistentDataIndex ="
+  "mutable DOM nodes must compute persistent identity before publication"
+)
+require_source_text(
+  "${DOM_SOURCE}"
+  "bool LVRunDomMutableNodeOwnershipRegression()"
+  "DOM node transitions must expose a native lifecycle regression seam"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "DOM mutable/persistent node ownership regression failed"
+  "DOM node transitions must retain native lifecycle coverage"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "tinyElement * elem = new tinyElement"
+  "mutable DOM elements must not begin as raw owners"
+)
+forbid_source_text(
+  "${DOM_SOURCE}"
+  "_data._text_ptr = new ldomTextNode"
+  "mutable DOM text payloads must not publish raw allocations"
+)
+
 # --- file-stream owned and borrowed OS resources ---
 require_source_text(
   "${FILE_STREAM_HEADER}"
