@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <cstdlib>
+#include <memory>
 #include <crengine.h>
 #include <crgui.h>
 #include <crtrace.h>
@@ -70,6 +72,28 @@ extern "C" {
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+
+struct CFreeDeleter {
+    template <typename T>
+    void operator()(T *ptr) const noexcept
+    {
+        std::free(ptr);
+    }
+};
+
+template <typename T>
+using CFreePtr = std::unique_ptr<T, CFreeDeleter>;
+
+struct XcbKeySymbolsDeleter {
+    void operator()(xcb_key_symbols_t *symbols) const noexcept
+    {
+        if (symbols)
+            xcb_key_symbols_free(symbols);
+    }
+};
+
+using XcbKeySymbolsPtr =
+        std::unique_ptr<xcb_key_symbols_t, XcbKeySymbolsDeleter>;
 
 #define XCB_ALL_PLANES ~0
 
@@ -297,11 +321,11 @@ class CRXCBScreen : public CRGUIScreenBase
             if ( im )
                 xcb_image_destroy( im );
             im = NULL;
-            xcb_shm_query_version_reply_t *rep_shm;
-
-            rep_shm = xcb_shm_query_version_reply (connection,
-                    xcb_shm_query_version (connection),
-                    NULL);
+            CFreePtr<xcb_shm_query_version_reply_t> rep_shm(
+                    xcb_shm_query_version_reply(
+                            connection,
+                            xcb_shm_query_version(connection),
+                            NULL));
             if(rep_shm) {
                 xcb_image_format_t format;
                 int shmctl_status;
@@ -314,31 +338,6 @@ class CRXCBScreen : public CRGUIScreenBase
 
                 im = xcb_image_create_native (connection, _width, _height,
                      format, depth, NULL, ~0, NULL);
-#if 0
-                if ( !im ) {
-                    CRLog::trace("Failed image format %d %d", format, depth);
-                    int sz = _width*_height*4;
-                    lUInt8 * data = (lUInt8*)malloc(sz);
-                    int params[] = {
-                        XCB_IMAGE_FORMAT_XY_BITMAP, 24,
-                        XCB_IMAGE_FORMAT_XY_PIXMAP, 24,
-                        XCB_IMAGE_FORMAT_Z_PIXMAP, 24,
-                        XCB_IMAGE_FORMAT_XY_BITMAP, 32,
-                        XCB_IMAGE_FORMAT_XY_PIXMAP, 32,
-                        XCB_IMAGE_FORMAT_Z_PIXMAP, 32,
-                        0, 0,
-                    };
-                    for ( int i=0; params[i+1]; i+=2 ) {
-                        im = xcb_image_create_native (connection, _width, _height,
-                             (xcb_image_format_t)params[i], params[i+1], NULL, ~0, NULL);
-                        if ( im ) {
-                            CRLog::trace("Passed image format %d %d", params[i], params[i+1]);
-                            break;
-                        }
-                        CRLog::trace("Failed image format %d %d", params[i], params[i+1]);
-                    }
-                }
-#endif
                 //format, depth, NULL, ~0, NULL);
                 //format, depth, NULL, ~0, NULL);
                 assert(im);
@@ -357,7 +356,6 @@ class CRXCBScreen : public CRGUIScreenBase
                         shminfo.shmid, 0);
                 shmctl_status = shmctl(shminfo.shmid, IPC_RMID, 0);
                 assert(shmctl_status != -1);
-                free (rep_shm);
 
             } else {
                 printf("Can't get shm\n");
@@ -650,37 +648,64 @@ class CRXCBScreen : public CRGUIScreenBase
             xcb_colormap_t    colormap;
             colormap = screen->default_colormap;
 
-            xcb_alloc_color_reply_t *rep;
-            rep = xcb_alloc_color_reply (connection, xcb_alloc_color (connection, colormap, 0, 0, 0), NULL);
+            CFreePtr<xcb_alloc_color_reply_t> rep(
+                    xcb_alloc_color_reply(
+                            connection,
+                            xcb_alloc_color(
+                                    connection, colormap, 0, 0, 0),
+                            NULL));
             pal_[0] = rep->pixel;
-            free(rep);
-            rep = xcb_alloc_color_reply (connection, xcb_alloc_color (connection, colormap, 0x55<<8, 0x55<<8, 0x55<<8), NULL);
+            rep.reset(xcb_alloc_color_reply(
+                    connection,
+                    xcb_alloc_color(
+                            connection, colormap,
+                            0x55<<8, 0x55<<8, 0x55<<8),
+                    NULL));
             pal_[1] = rep->pixel;
-            free(rep);
-            rep = xcb_alloc_color_reply (connection, xcb_alloc_color (connection, colormap, 0xaa<<8, 0xaa<<8, 0xaa<<8), NULL);
+            rep.reset(xcb_alloc_color_reply(
+                    connection,
+                    xcb_alloc_color(
+                            connection, colormap,
+                            0xaa<<8, 0xaa<<8, 0xaa<<8),
+                    NULL));
             pal_[2] = rep->pixel;
-            free(rep);
-            rep = xcb_alloc_color_reply (connection, xcb_alloc_color (connection, colormap, 0xff<<8, 0xff<<8, 0xff<<8), NULL);
+            rep.reset(xcb_alloc_color_reply(
+                    connection,
+                    xcb_alloc_color(
+                            connection, colormap,
+                            0xff<<8, 0xff<<8, 0xff<<8),
+                    NULL));
             pal_[3] = rep->pixel;
-            free(rep);
 
             for ( int kk=0; kk<16; kk++ ) {
                 int cc = kk | (kk<<4);
-                rep = xcb_alloc_color_reply (connection, xcb_alloc_color (connection, colormap, cc<<8, cc<<8, cc<<8), NULL);
+                rep.reset(xcb_alloc_color_reply(
+                        connection,
+                        xcb_alloc_color(
+                                connection, colormap,
+                                cc<<8, cc<<8, cc<<8),
+                        NULL));
                 pal16_[kk] = rep->pixel;
-                free(rep);
             }
             for ( int kk=0; kk<8; kk++ ) {
                 int cc = (kk<<5) | (kk<<2) | (kk>>1);
-                rep = xcb_alloc_color_reply (connection, xcb_alloc_color (connection, colormap, cc<<8, cc<<8, cc<<8), NULL);
+                rep.reset(xcb_alloc_color_reply(
+                        connection,
+                        xcb_alloc_color(
+                                connection, colormap,
+                                cc<<8, cc<<8, cc<<8),
+                        NULL));
                 pal8_[kk] = rep->pixel;
-                free(rep);
             }
             for ( int kk=0; kk<256; kk++ ) {
                 int cc = kk;
-                rep = xcb_alloc_color_reply (connection, xcb_alloc_color (connection, colormap, cc<<8, cc<<8, cc<<8), NULL);
+                rep.reset(xcb_alloc_color_reply(
+                        connection,
+                        xcb_alloc_color(
+                                connection, colormap,
+                                cc<<8, cc<<8, cc<<8),
+                        NULL));
                 pal256_[kk] = rep->pixel;
-                free(rep);
             }
 
             pal = pal_;
@@ -732,14 +757,16 @@ static struct atom {
 cr_rotate_angle_t readXCBScreenRotationAngle()
 {
     xcb_randr_get_screen_info_cookie_t cookie;
-    xcb_randr_get_screen_info_reply_t *reply;
     xcb_randr_rotation_t rotation;
 
     cookie = xcb_randr_get_screen_info(connection, screen->root);
-    reply = xcb_randr_get_screen_info_reply(connection, cookie, NULL);
+    CFreePtr<xcb_randr_get_screen_info_reply_t> reply(
+            xcb_randr_get_screen_info_reply(
+                    connection, cookie, NULL));
+    if (!reply)
+        return CR_ROTATE_ANGLE_0;
 
     rotation = (xcb_randr_rotation_t)reply->rotation;
-    free(reply);
 
     switch(rotation) {
         case XCB_RANDR_ROTATION_ROTATE_0:
@@ -759,7 +786,7 @@ class CRXCBWindowManager : public CRGUIWindowManager
 {
 protected:
     xcb_atom_t wm_protocols_atom, wm_delete_window_atom;
-    xcb_key_symbols_t * keysyms;
+    XcbKeySymbolsPtr keysyms;
     xcb_visibility_t visibility;
     //xcb_connection_t * _connection;
 
@@ -769,14 +796,16 @@ protected:
             return;
 
         xcb_intern_atom_cookie_t cookie;
-        xcb_intern_atom_reply_t *reply = NULL;
+        CFreePtr<xcb_intern_atom_reply_t> reply;
 
         int atoms_cnt = sizeof(atoms) / sizeof(struct atom);
         for(int i = 0; i < atoms_cnt; i++) {
             cookie = xcb_intern_atom_unchecked(connection, 0, strlen(atoms[i].name), atoms[i].name);
-            reply = xcb_intern_atom_reply(connection, cookie, NULL);
-            atoms[i].atom = reply->atom;
-            free(reply);
+            reply.reset(
+                    xcb_intern_atom_reply(
+                            connection, cookie, NULL));
+            if (reply)
+                atoms[i].atom = reply->atom;
         }
     }
 
@@ -909,7 +938,7 @@ public:
 
 
     CRXCBWindowManager( int dx, int dy )
-    : CRGUIWindowManager(NULL), keysyms(NULL)
+    : CRGUIWindowManager(NULL), keysyms()
     {
         setOwnedScreen( std::unique_ptr<CRGUIScreen>(
                 new CRXCBScreen( dx, dy ) ) );
@@ -1095,12 +1124,12 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
 {
     if ( _stopFlag )
         waitForEvent = false;
-    xcb_generic_event_t *event = NULL;
+    CFreePtr<xcb_generic_event_t> event;
     for (;;) {
         if ( waitForEvent )
-            event = xcb_wait_for_event (connection);
+            event.reset(xcb_wait_for_event(connection));
         else
-            event = xcb_poll_for_event (connection);
+            event.reset(xcb_poll_for_event(connection));
         waitForEvent = false;
         if ( !event )
             break;
@@ -1121,7 +1150,8 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
             break;
         case XCB_VISIBILITY_NOTIFY:
             {
-                xcb_visibility_notify_event_t *v = (xcb_visibility_notify_event_t *)event;
+                xcb_visibility_notify_event_t *v =
+                        (xcb_visibility_notify_event_t *)event.get();
                 visibility = (xcb_visibility_t)v->state;
 
                 break;
@@ -1131,7 +1161,8 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
                 //if(count_if(efifo.begin(), efifo.end(), isConfigure) > 0)
                 //    break;
 
-                xcb_configure_notify_event_t *conf = (xcb_configure_notify_event_t *)event;
+                xcb_configure_notify_event_t *conf =
+                        (xcb_configure_notify_event_t *)event.get();
                 if (_screen->getWidth() != conf->width || _screen->getHeight() != conf->height) {
                     cr_rotate_angle_t angle = readXCBScreenRotationAngle();
                     CRLog::info("Setting new window size: %d x %d, angle: %d", conf->width, conf->height, (int)angle );
@@ -1142,7 +1173,8 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
             }
         case XCB_CLIENT_MESSAGE:
             {
-                xcb_client_message_event_t *msg = (xcb_client_message_event_t *)event;
+                xcb_client_message_event_t *msg =
+                        (xcb_client_message_event_t *)event.get();
                 if((msg->type == wm_protocols_atom) &&
                         (msg->format == 32) &&
                         (msg->data.data32[0] == (uint32_t)wm_delete_window_atom)) {
@@ -1151,11 +1183,13 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
             }
         case XCB_KEY_RELEASE:
             {
-                xcb_key_press_event_t *release = (xcb_key_press_event_t *)event;
+                xcb_key_press_event_t *release =
+                        (xcb_key_press_event_t *)event.get();
 #define XCB_LOOKUP_CHARS_T 2
                 xcb_keycode_t key = release->detail;
                 int state = (release->state & XCB_MOD_MASK_1) ? KEY_FLAG_LONG_PRESS : 0;
-                xcb_keysym_t sym = xcb_key_symbols_get_keysym( keysyms,
+                xcb_keysym_t sym = xcb_key_symbols_get_keysym(
+                                        keysyms.get(),
                                         key,
                                         XCB_LOOKUP_CHARS_T); //xcb_lookup_key_sym_t xcb_lookup_chars_t
                 printf("Key released keycode=%d char=%04x state=%d\n", (int)key, (int)sym, state );
@@ -1172,8 +1206,6 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
             /* Unknown event type, ignore it */
             break;
         }
-
-        free (event);
 
     }
 }
@@ -1207,28 +1239,28 @@ int CRXCBWindowManager::runEventLoop()
 
     
     xcb_intern_atom_cookie_t cookie;
-    xcb_intern_atom_reply_t *reply = NULL;
+    CFreePtr<xcb_intern_atom_reply_t> reply;
 
 
     cookie = xcb_intern_atom_unchecked(connection, 0, strlen("WM_DELETE_WINDOW"), "WM_DELETE_WINDOW");
-    reply = xcb_intern_atom_reply(connection, cookie, NULL);
+    reply.reset(xcb_intern_atom_reply(
+            connection, cookie, NULL));
     wm_delete_window_atom = reply->atom;
-    free(reply);
 
     cookie = xcb_intern_atom_unchecked(connection, 0, strlen("WM_PROTOCOLS"), "WM_PROTOCOLS");
-    reply = xcb_intern_atom_reply(connection, cookie, NULL);
+    reply.reset(xcb_intern_atom_reply(
+            connection, cookie, NULL));
     wm_protocols_atom = reply->atom;
-    free(reply);
 
     static bool alt_pressed = false;
 
     CRLog::trace("CRXCBWindowManager::runEventLoop()");
-    keysyms = xcb_key_symbols_alloc( connection );
+    keysyms.reset(xcb_key_symbols_alloc(connection));
 
     int res = CRGUIWindowManager::runEventLoop();
 
     delete_properties();
-    xcb_key_symbols_free( keysyms );
+    keysyms.reset();
     return res;
 }
 

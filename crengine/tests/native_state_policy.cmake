@@ -6907,6 +6907,56 @@ require_source_text(
   "XCB canvas creation must configure a reference-owned candidate"
 )
 require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "using CFreePtr = std::unique_ptr<T, CFreeDeleter>;"
+  "XCB malloc-backed resources must share a scoped free deleter"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "CFreePtr<xcb_generic_event_t> event;"
+  "XCB event polling must retain scoped event ownership"
+)
+require_source_text(
+  "${XCB_GUI_SOURCE}"
+  "XcbKeySymbolsPtr keysyms;"
+  "XCB key-symbol tables must use their API-specific owner"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "free(reply)"
+  "XCB reply teardown must remain automatic"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "free(rep)"
+  "XCB color-reply teardown must remain automatic"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "free (rep_shm)"
+  "XCB shared-memory reply teardown must remain automatic"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "free (event)"
+  "XCB event teardown must remain automatic"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "xcb_key_symbols_free( keysyms )"
+  "XCB key-symbol teardown must remain automatic"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "xcb_key_symbols_free(keysyms)"
+  "XCB key-symbol teardown must not bypass its API-specific owner"
+)
+forbid_source_text(
+  "${XCB_GUI_SOURCE}"
+  "lUInt8 * data = (lUInt8*)malloc"
+  "XCB screen setup must not retain dead raw allocation probes"
+)
+require_source_text(
   "${NANOX_SOURCE}"
   "virtual LVRef<LVDrawBuf> createCanvas( int dx, int dy )"
   "NanoX canvas creation must return reference ownership"
