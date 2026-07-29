@@ -73,57 +73,58 @@ public class Dictionaries {
 	DictInfo currentDictionary2;
 	DictInfo currentDictionary3;
 	
-	public static class DictInfo {
+	public static final class DictInfo {
 		public final String id; 
 		public final String name;
 		public final String packageName;
 		public final String className;
 		public final String action;
 		public final Integer internal;
-		public String dataKey = SearchManager.QUERY; 
-		public DictInfo ( String id, String name, String packageName, String className, String action, Integer internal ) {
+		public final String dataKey;
+
+		public DictInfo(
+				String id,
+				String name,
+				String packageName,
+				String className,
+				String action,
+				Integer internal) {
+			this(
+					id,
+					name,
+					packageName,
+					className,
+					action,
+					internal,
+					SearchManager.QUERY);
+		}
+
+		public DictInfo(
+				String id,
+				String name,
+				String packageName,
+				String className,
+				String action,
+				Integer internal,
+				String dataKey) {
 			this.id = id;
 			this.name = name;
 			this.packageName = packageName;
 			this.className = className;
 			this.action = action;
 			this.internal = internal;
+			this.dataKey = dataKey;
 		}
-		public DictInfo setDataKey(String key) { this.dataKey = key; return this; }
 	}
 
-	static final DictInfo dicts[] = {
-		new DictInfo("Fora", "Fora Dictionary", "com.ngc.fora", "com.ngc.fora.ForaDictionary", Intent.ACTION_SEARCH, 0),
-		new DictInfo("ColorDict", "ColorDict", "com.socialnmobile.colordict", "com.socialnmobile.colordict.activity.Main", Intent.ACTION_SEARCH, 0),
-		new DictInfo("ColorDictApi", "ColorDict new / GoldenDict", "com.socialnmobile.colordict", "com.socialnmobile.colordict.activity.Main", Intent.ACTION_SEARCH, 1),
-		new DictInfo("AardDict", "Aard Dictionary", "aarddict.android", "aarddict.android.Article", Intent.ACTION_SEARCH, 0),
-		new DictInfo("AardDictLookup", "Aard Dictionary Lookup", "aarddict.android", "aarddict.android.Lookup", Intent.ACTION_SEARCH, 0),
-		new DictInfo("Aard2", "Aard 2 Dictionary", "itkach.aard2", "aard2.lookup", Intent.ACTION_SEARCH, 3),
-		new DictInfo("OnyxDictOld", "ONYX Dictionary (Old)", "com.onyx.dict", "com.onyx.dict.activity.DictMainActivity", Intent.ACTION_VIEW, 0).setDataKey("android.intent.action.SEARCH"),
-		new DictInfo("OnyxDict", "ONYX Dictionary", "com.onyx.dict", "com.onyx.dict.main.ui.DictMainActivity", Intent.ACTION_VIEW, 0).setDataKey("android.intent.action.SEARCH"),
-		new DictInfo("OnyxDictWindowed", "ONYX Dictionary (Windowed)", "com.onyx.dict", "com.onyx.dict.translation.ui.ProcessTextActivity", Intent.ACTION_VIEW, 0).setDataKey("android.intent.extra.PROCESS_TEXT"),
-		new DictInfo("Dictan", "Dictan Dictionary", "info.softex.dictan", null, Intent.ACTION_VIEW, 2),
-		new DictInfo("FreeDictionary.org", "Free Dictionary . org", "org.freedictionary", "org.freedictionary.MainActivity", "android.intent.action.VIEW", 0),
-		new DictInfo("ABBYYLingvo", "ABBYY Lingvo", "com.abbyy.mobile.lingvo.market", null /*com.abbyy.mobile.lingvo.market.MainActivity*/, "com.abbyy.mobile.lingvo.intent.action.TRANSLATE", 0).setDataKey("com.abbyy.mobile.lingvo.intent.extra.TEXT"),
-		//new DictInfo("ABBYYLingvoLive", "ABBYY Lingvo Live", "com.abbyy.mobile.lingvolive", null, "com.abbyy.mobile.lingvo.intent.action.TRANSLATE", 0).setDataKey("com.abbyy.mobile.lingvo.intent.extra.TEXT"),
-		new DictInfo("LingoQuizLite", "Lingo Quiz Lite", "mnm.lite.lingoquiz", "mnm.lite.lingoquiz.ExchangeActivity", "lingoquiz.intent.action.ADD_WORD", 0).setDataKey("EXTRA_WORD"),
-		new DictInfo("LingoQuiz", "Lingo Quiz", "mnm.lingoquiz", "mnm.lingoquiz.ExchangeActivity", "lingoquiz.intent.action.ADD_WORD", 0).setDataKey("EXTRA_WORD"),
-		new DictInfo("LEODictionary", "LEO Dictionary", "org.leo.android.dict", "org.leo.android.dict.LeoDict", "android.intent.action.SEARCH", 0).setDataKey("query"),
-		new DictInfo("PopupDictionary", "Popup Dictionary", "com.barisatamer.popupdictionary", "com.barisatamer.popupdictionary.MainActivity", "android.intent.action.VIEW", 0),
-		new DictInfo("GoogleTranslate", "Google Translate", "com.google.android.apps.translate", "com.google.android.apps.translate.TranslateActivity", Intent.ACTION_SEND, 4),
-		new DictInfo("YandexTranslate", "Yandex Translate", "ru.yandex.translate", "ru.yandex.translate.ui.activities.MainActivity", Intent.ACTION_SEND, 4),
-		new DictInfo("Wikipedia", "Wikipedia", "org.wikipedia", "org.wikipedia.search.SearchActivity", Intent.ACTION_SEND, 0),
-	};
+	private static final DictionaryCatalog DICTIONARY_CATALOG =
+			DictionaryCatalog.legacy();
 
 	public static final String DEFAULT_DICTIONARY_ID = "Fora";
 	public static final String DEFAULT_ONYX_DICTIONARY_ID = "OnyxDictWindowed";
 
 	static DictInfo findById(String id) {
-		for(DictInfo d: dicts) {
-			if (d.id.equals(id))
-				return d;
-		}
-		return null;
+		return DICTIONARY_CATALOG.findById(id);
 	}
 	
 	public static DictInfo defaultDictionary() {
@@ -134,13 +135,13 @@ public class Dictionaries {
 		
 	
 	public static DictInfo[] getDictList() {
-		return dicts;
+		return DICTIONARY_CATALOG.snapshot();
 	}
 
 
 	public static List<DictInfo> getDictListExt(BaseActivity act, boolean bOnlyInstalled) {
 		ArrayList<DictInfo> dlist = new ArrayList<DictInfo>();
-		for (DictInfo dict : dicts) {
+		for (DictInfo dict : DICTIONARY_CATALOG.entries()) {
 			boolean installed = act.isPackageInstalled(dict.packageName);
 			if ((dict.internal == 1) && (dict.packageName.equals("com.socialnmobile.colordict")) && (!installed)) {
 				installed = act.isPackageInstalled("mobi.goldendict.android");

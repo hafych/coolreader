@@ -57,6 +57,8 @@ The historical Debian changelog remains in [`changelog`](changelog).
 - Gesture acceleration now uses an immutable curve owned by each reader and
   widened interpolation across the full integer range. Document style codes
   and labels now share one typed immutable catalog instead of parallel arrays.
+- External dictionary definitions, including intent data keys, now live in one
+  immutable catalog; legacy array callers receive independent snapshots.
 - The native Engine retains only application context plus a detachable weak UI
   host, and stale Activity shutdown can no longer tear down a newer generation.
 - ReaderView receives scanner, history, document cache and a per-generation

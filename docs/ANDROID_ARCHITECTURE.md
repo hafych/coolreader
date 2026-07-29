@@ -123,6 +123,11 @@ navigation mappings may replace conflicting generated defaults, while an
 explicit user mapping remains authoritative; menu-access fallback logic is
 covered without constructing an Activity.
 
+External dictionary intent definitions live in one immutable
+`DictionaryCatalog`. Every `DictInfo`, including its intent data key, is final;
+legacy array callers receive independent snapshots, so one dialog cannot
+rewrite integrations observed by another Activity generation.
+
 ## Migration rule
 
 New Android components should:

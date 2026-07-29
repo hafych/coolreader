@@ -143,7 +143,8 @@ DRM или ограничений доступа, подбор/получени�
   SettingsManager-owned device input defaults с корректным Nook override без
   перезаписи user mappings, ReaderView-owned immutable/overflow-safe gesture
   acceleration curve и единый immutable typed OptionsDialog style catalog
-  вместо параллельных process-wide массивов.
+  вместо параллельных process-wide массивов, плюс immutable external-dictionary
+  metadata и snapshot-only array API без process-wide catalog escape.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

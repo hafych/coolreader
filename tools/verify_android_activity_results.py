@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "android" / "src" / "org" / "coolreader"
 COOL_READER = SOURCE / "CoolReader.java"
 DICTIONARIES = SOURCE / "Dictionaries.java"
+DICTIONARY_CATALOG = SOURCE / "DictionaryCatalog.java"
 BASE_ACTIVITY = SOURCE / "crengine" / "BaseActivity.java"
 READER_ACTION = SOURCE / "crengine" / "ReaderAction.java"
 ACTION_ICON_SET = SOURCE / "crengine" / "ActionIconSet.java"
@@ -223,6 +224,17 @@ GESTURE_ACCELERATION_TEST = (
     / "coolreader"
     / "crengine"
     / "GestureAccelerationTest.java"
+)
+DICTIONARY_CATALOG_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "DictionaryCatalogTest.java"
 )
 FILE_BROWSER = SOURCE / "crengine" / "FileBrowser.java"
 ROOT_VIEW = SOURCE / "crengine" / "CRRootView.java"
@@ -452,6 +464,59 @@ def main() -> None:
         if marker not in default_input_test_text:
             violations.append(
                 f"{relative(DEFAULT_INPUT_ACTIONS_TEST)} omits input "
+                f"regression: {marker}")
+
+    dictionaries_text = DICTIONARIES.read_text(encoding="utf-8")
+    for marker in (
+        "private static final DictionaryCatalog DICTIONARY_CATALOG",
+        "public static final class DictInfo",
+        "public final String dataKey",
+        "return DICTIONARY_CATALOG.findById(id)",
+        "return DICTIONARY_CATALOG.snapshot()",
+        "DICTIONARY_CATALOG.entries()",
+    ):
+        if marker not in dictionaries_text:
+            violations.append(
+                f"{relative(DICTIONARIES)} omits immutable dictionary "
+                f"marker: {marker}")
+    for legacy in (
+        "static final DictInfo dicts[]",
+        "setDataKey(",
+        "return dicts;",
+    ):
+        if legacy in dictionaries_text:
+            violations.append(
+                f"{relative(DICTIONARIES)} exposes mutable dictionary "
+                f"state: {legacy}")
+
+    dictionary_catalog_text = DICTIONARY_CATALOG.read_text(
+        encoding="utf-8")
+    for marker in (
+        "final class DictionaryCatalog",
+        "private final List<DictInfo> entries",
+        "Collections.unmodifiableList(copy)",
+        "dictionary IDs must be non-empty and unique",
+        "entries.toArray(new DictInfo[0])",
+        '"OnyxDictWindowed"',
+        '"Wikipedia"',
+    ):
+        if marker not in dictionary_catalog_text:
+            violations.append(
+                f"{relative(DICTIONARY_CATALOG)} omits immutable catalog "
+                f"marker: {marker}")
+
+    dictionary_catalog_test_text = DICTIONARY_CATALOG_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "legacyCatalogPreservesEveryIntegrationDefinition",
+        "publicArrayApiReturnsIndependentSnapshots",
+        "catalogLookupAndEntryListAreStable",
+        "definitionsAreImmutableAndDuplicateIdsAreRejected",
+        "assertEquals(19, catalog.entries().size())",
+    ):
+        if marker not in dictionary_catalog_test_text:
+            violations.append(
+                f"{relative(DICTIONARY_CATALOG_TEST)} omits dictionary "
                 f"regression: {marker}")
 
     backlight_timeout_policy_text = BACKLIGHT_TIMEOUT_POLICY.read_text(

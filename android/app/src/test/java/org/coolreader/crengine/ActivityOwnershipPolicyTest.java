@@ -15,6 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import org.coolreader.Dictionaries;
 import org.coolreader.plugins.litres.LitresPlugin;
 import org.junit.Test;
 
@@ -201,6 +202,40 @@ public class ActivityOwnershipPolicyTest {
 					"OptionsDialog retains parallel style arrays",
 					field.getName().equals("styleCodes")
 							|| field.getName().equals("styleTitles"));
+		}
+	}
+
+	@Test
+	public void dictionaryDefinitionsHaveOneImmutableCatalog()
+			throws Exception {
+		Field catalog =
+				Dictionaries.class.getDeclaredField("DICTIONARY_CATALOG");
+		assertTrue(Modifier.isStatic(catalog.getModifiers()));
+		assertTrue(Modifier.isPrivate(catalog.getModifiers()));
+		assertTrue(Modifier.isFinal(catalog.getModifiers()));
+
+		for (Field field :
+				Dictionaries.DictInfo.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(
+					"Dictionary definition must be immutable: "
+							+ field.getName(),
+					Modifier.isFinal(field.getModifiers()));
+		}
+		for (Field field : Dictionaries.class.getDeclaredFields()) {
+			assertFalse(
+					"Dictionaries exposes mutable static array "
+							+ field.getName(),
+					Modifier.isStatic(field.getModifiers())
+							&& field.getType().isArray());
+		}
+
+		Class<?> catalogClass =
+				Class.forName("org.coolreader.DictionaryCatalog");
+		for (Field field : catalogClass.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
 		}
 	}
 
