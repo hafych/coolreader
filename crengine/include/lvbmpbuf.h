@@ -44,8 +44,12 @@ tag_draw_buf
 /** \brief Init drawing structure using existing buffer (C API)*/
 void lvdrawbufInit( draw_buf_t * buf, int bitsPerPixel, int width, int height, unsigned char * data );
 
-/** \brief Init drawing structure and allocate new buffer (C API)*/
-void lvdrawbufAlloc( draw_buf_t * buf, int bitsPerPixel, int width, int height );
+/**
+ * \brief Init an empty drawing structure and allocate its buffer (C API)
+ * \return true on success; false leaves the structure unchanged
+ */
+bool lvdrawbufAlloc(
+        draw_buf_t * buf, int bitsPerPixel, int width, int height);
 
 /** \brief Free buffer allocated by lvdrawbufAlloc (C API) */
 void lvdrawbufFree( draw_buf_t * buf );

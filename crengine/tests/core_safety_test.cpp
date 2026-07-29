@@ -5386,6 +5386,32 @@ static int testSvgDecoderOwnership() {
 #endif
 
 static int testDrawBufferStorageOwnership() {
+    draw_buf_t legacy = {};
+    if (lvdrawbufAlloc(&legacy, 3, 8, 2)
+            || legacy.data != NULL
+            || legacy.height != 0
+            || legacy.bitsPerPixel != 0
+            || legacy.bytesPerRow != 0)
+        return fail("legacy draw buffer published an invalid layout");
+    if (!lvdrawbufAlloc(&legacy, 2, 9, 3)
+            || legacy.data == NULL
+            || legacy.height != 3
+            || legacy.bitsPerPixel != 2
+            || legacy.bytesPerRow != 3)
+        return fail("legacy draw buffer did not publish its owned layout");
+    lvdrawbufFill(&legacy, 0x5A);
+    for (int i = 0; i < legacy.height * legacy.bytesPerRow; ++i) {
+        if (legacy.data[i] != 0x5A)
+            return fail("legacy draw buffer fill lost owned bytes");
+    }
+    lvdrawbufFree(&legacy);
+    lvdrawbufFree(&legacy);
+    if (legacy.data != NULL
+            || legacy.height != 0
+            || legacy.bitsPerPixel != 0
+            || legacy.bytesPerRow != 0)
+        return fail("legacy draw buffer teardown is not idempotent");
+
     LVColorDrawBuf ownedColor(3, 2, 32);
     lUInt32 colorValue = 1;
     for (int y = 0; y < ownedColor.GetHeight(); ++y) {

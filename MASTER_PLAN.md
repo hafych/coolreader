@@ -119,7 +119,8 @@ DRM или ограничений доступа, подбор/получени�
   statistic input и parser format detection; parser selection, draw-buffer
   source и owned/borrowed
   color/gray pixel backing, ZIP decoder/entry
-  factories and bounded stream fragments, cached-stream slots, parser
+  factories and bounded stream fragments, cached-stream slots, transactional
+  legacy C bitmap-buffer publication, parser
   read/charset buffers, debug compare-stream/tinyDOM fixture scratch, RTF
   text/destination
   ownership, TCR dictionary/index/decoded buffers, unpacked 8/16/32-bit pixel

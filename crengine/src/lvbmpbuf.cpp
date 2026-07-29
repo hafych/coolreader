@@ -28,7 +28,35 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits>
+#include <memory>
 #include "../include/lvbmpbuf.h"
+
+namespace {
+
+bool calculateDrawBufferLayout(
+        int bitsPerPixel, int width, int height,
+        int &bytesPerRow, size_t &byteCount)
+{
+    if (bitsPerPixel <= 0 || bitsPerPixel > 8
+            || 8 % bitsPerPixel != 0
+            || width <= 0 || height <= 0)
+        return false;
+    const size_t pixelsPerByte = static_cast<size_t>(
+            8 / bitsPerPixel);
+    const size_t rowBytes =
+            (static_cast<size_t>(width) + pixelsPerByte - 1)
+            / pixelsPerByte;
+    if (rowBytes > static_cast<size_t>(std::numeric_limits<int>::max())
+            || rowBytes > std::numeric_limits<size_t>::max()
+                    / static_cast<size_t>(height))
+        return false;
+    bytesPerRow = static_cast<int>(rowBytes);
+    byteCount = rowBytes * static_cast<size_t>(height);
+    return true;
+}
+
+} // namespace
 
 void lvdrawbufInit( draw_buf_t * buf, int bitsPerPixel, int width, int height, lUInt8 * data )
 {
@@ -39,17 +67,32 @@ void lvdrawbufInit( draw_buf_t * buf, int bitsPerPixel, int width, int height, l
    buf->bytesPerRow = (width + (pixelsPerByte-1))/pixelsPerByte;
 }
 
-void lvdrawbufAlloc( draw_buf_t * buf, int bitsPerPixel, int width, int height )
+bool lvdrawbufAlloc(
+        draw_buf_t *buf, int bitsPerPixel, int width, int height)
 {
-   int pixelsPerByte = (8 / bitsPerPixel);
-   buf->height = height;
-   buf->bitsPerPixel = bitsPerPixel;
-   buf->bytesPerRow = (width + (pixelsPerByte-1))/pixelsPerByte;
-   buf->data = (lUInt8 *) malloc(buf->bytesPerRow*height);
+    if (buf == NULL)
+        return false;
+    int bytesPerRow = 0;
+    size_t byteCount = 0;
+    if (!calculateDrawBufferLayout(
+                bitsPerPixel, width, height,
+                bytesPerRow, byteCount))
+        return false;
+    std::unique_ptr<lUInt8, decltype(&std::free)> candidate(
+            static_cast<lUInt8 *>(std::malloc(byteCount)), &std::free);
+    if (!candidate)
+        return false;
+    buf->height = height;
+    buf->bitsPerPixel = bitsPerPixel;
+    buf->bytesPerRow = bytesPerRow;
+    buf->data = candidate.release();
+    return true;
 }
 
 void lvdrawbufFree( draw_buf_t * buf )
 {
+   if (buf == NULL)
+      return;
    buf->height = 0;
    buf->bitsPerPixel = 0;
    buf->bytesPerRow = 0;

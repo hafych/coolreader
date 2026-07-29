@@ -271,6 +271,13 @@ allocator-specific result returned by `qSmoothScaleImage()` is held by a
 scoped `std::unique_ptr` with the matching platform deleter. A failed decode
 does not run the smooth post-processing pass over a partial snapshot.
 
+The legacy C-style `draw_buf_t` allocation boundary validates bit depth,
+dimensions, row layout and total byte multiplication before allocation. It
+holds malloc-backed bytes in an allocator-matched `unique_ptr`, reports failure
+without publishing partial metadata and releases ownership only into a
+complete layout. Native coverage rejects an invalid layout, verifies owned
+bytes and repeats teardown.
+
 `LVColorDrawBuf` and `LVGrayDrawBuf` keep their public raw scanline API as a
 non-owning view, while directly allocated pixel backing lives in a private
 `std::vector`. Windows DIB backing retains its handle representation but is

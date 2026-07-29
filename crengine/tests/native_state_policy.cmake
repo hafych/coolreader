@@ -9,6 +9,7 @@ file(READ "${SOURCE_ROOT}/crengine/include/lvtextfm.h" FORMATTER_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/lvrend.cpp" RENDER_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/mathml_table_ext.h" MATHML_TABLE_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/lvbmpbuf.cpp" BITMAP_SOURCE)
+file(READ "${SOURCE_ROOT}/crengine/include/lvbmpbuf.h" BITMAP_HEADER)
 file(READ "${SOURCE_ROOT}/crengine/src/crskin.cpp" SKIN_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/src/crtest.cpp" CRTEST_SOURCE)
 file(READ "${SOURCE_ROOT}/crengine/include/crgui.h" GUI_HEADER)
@@ -542,6 +543,41 @@ forbid_source_text(
   "${MATHML_TABLE_SOURCE}"
   "delete row1->cells.remove"
   "discarded MathML cells must use owning-container erasure"
+)
+require_source_text(
+  "${BITMAP_HEADER}"
+  "bool lvdrawbufAlloc("
+  "legacy bitmap allocation must report publication failure"
+)
+require_source_text(
+  "${BITMAP_SOURCE}"
+  "bool calculateDrawBufferLayout("
+  "legacy bitmap allocation must validate its byte layout"
+)
+require_source_text(
+  "${BITMAP_SOURCE}"
+  "std::unique_ptr<lUInt8, decltype(&std::free)> candidate("
+  "legacy bitmap bytes must remain scoped before publication"
+)
+require_source_text(
+  "${BITMAP_SOURCE}"
+  "buf->data = candidate.release()"
+  "legacy bitmap ownership must transfer only after layout completion"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "legacy draw buffer did not publish its owned layout"
+  "legacy bitmap ownership must retain publication coverage"
+)
+require_source_text(
+  "${CORE_SAFETY_SOURCE}"
+  "legacy draw buffer teardown is not idempotent"
+  "legacy bitmap ownership must retain repeated teardown coverage"
+)
+forbid_source_text(
+  "${BITMAP_SOURCE}"
+  "buf->data = (lUInt8 *) malloc"
+  "legacy bitmap allocation must not publish a raw malloc result"
 )
 require_source_text(
   "${BITMAP_SOURCE}"
