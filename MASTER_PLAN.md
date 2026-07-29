@@ -345,6 +345,19 @@ DRM или ограничений доступа, подбор/получени�
   action, in-flight flag и неограниченную timestamp map; каждый command
   completion может освободить только свой repeat token, а duration считается
   по monotonic event time с bounded device tolerance и без wall-clock jumps.
+  Временный scroll-режим selection adjustment и TTS теперь принадлежит
+  synchronized `ReaderViewModeState`: exact identity leases допускают
+  overlapping owners, только первый переход включает scroll и только последний
+  matching release восстанавливает configured mode. Повторное применение
+  настроек сохраняет effective snapshot для FIFO native apply, readback не
+  записывает временный режим в persistent setting, а replacement/close/destroy
+  инвалидируют stale leases. Все toggle-команды сериализованы Engine queue.
+  Неанимированный page up/down в scroll mode больше не читает `DocView` из GUI:
+  captured book+interaction ставят position read и `GO_POS` в одну document
+  operation общей Engine queue. `ReaderScrollPageCommand` вычисляет шаг 7/8
+  viewport widened arithmetic, нормализует направление и clamps document
+  boundaries; общий command executor повторно проверяет exact request до/после
+  native mutation и перед render/save completion.
   Touch long/double timeouts используют отдельный closeable gate и reader
   scheduler; replacement/drag/`ACTION_CANCEL`/focus loss/book close/destroy
   отменяют exact owner, stale selection completion проверяет handler identity и

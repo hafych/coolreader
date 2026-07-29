@@ -119,7 +119,24 @@ command completion releases only its exact press/repeat token; release,
 cancellation, focus loss, book close and destruction invalidate it. Long-press
 duration uses monotonic `KeyEvent` time with a bounded device down-time
 tolerance, so clock jumps or a stale completion cannot trigger or unblock a
-replacement press. Touch long-press and double-tap timeouts use a separate
+replacement press.
+Temporary scroll mode for selection adjustment and TTS is owned by one
+synchronized `ReaderViewModeState`. Each consumer receives an exact identity
+lease; the first lease queues the transition to scroll and only the final
+matching release queues restoration of the configured mode. Settings apply
+captures the effective FIFO snapshot, native settings readback republishes the
+configured value, and document replacement, close or reader destruction
+invalidates outstanding leases. Duplicate dismiss and stale cleanup therefore
+cannot restore another consumer's mode or persist a temporary override.
+Non-animated page up/down in scroll mode uses the same serialized command
+boundary. `ReaderView` captures the book and interaction before queueing a
+single operation that reads native position and executes `GO_POS`; it no
+longer calls `DocView.getPositionProps()` on the GUI thread. The pure
+`ReaderScrollPageCommand` computes seven eighths of the viewport with widened
+arithmetic and clamps both document boundaries. The shared Engine executor
+revalidates the exact request before and after the operation and again before
+render/save completion.
+Touch long-press and double-tap timeouts use a separate
 closeable gate plus reader-owned scheduler. Gesture replacement, drag-mode
 entry, `ACTION_CANCEL`, focus loss, book close and reader destruction cancel
 the exact timeout, and late selection inspection verifies both its handler

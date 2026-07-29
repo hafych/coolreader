@@ -3622,10 +3622,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						if (isPageMode()) {
 							doEngineCommand(ReaderCommand.DCMD_PAGEDOWN, param, onFinishHandler);
 						} else {
-							PositionProperties currPos = doc.getPositionProps(null, false);
-							int offset = currPos.pageHeight * 7/8;
-							int destPos = currPos.y + offset;
-							doEngineCommand(ReaderCommand.DCMD_GO_POS, destPos, onFinishHandler);
+							doScrollPageCommand(
+									1, onFinishHandler);
 						}
 					}
 				}
@@ -3639,10 +3637,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						if (isPageMode()) {
 							doEngineCommand(ReaderCommand.DCMD_PAGEUP, param, onFinishHandler);
 						} else {
-							PositionProperties currPos = doc.getPositionProps(null, false);
-							int offset = currPos.pageHeight * 7/8;
-							int destPos = currPos.y - offset;
-							doEngineCommand(ReaderCommand.DCMD_GO_POS, destPos, onFinishHandler);
+							doScrollPageCommand(
+									-1, onFinishHandler);
 						}
 					}
 				}
@@ -3963,6 +3959,71 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				== ReaderEngineCommandPolicy.Scope.DOCUMENT
 				&& !isRenderRequestCurrent(renderRequest))
 			return;
+		postEngineCommand(
+				commandScope,
+				movesDocument,
+				expectedBook,
+				interaction,
+				renderRequest,
+				doneHandler,
+				() -> doc.doCommand(cmd.nativeId, param));
+	}
+
+	private void doScrollPageCommand(
+			final int direction,
+			final Runnable doneHandler) {
+		BackgroundThread.ensureGUI();
+		if (direction == 0 || !mServiceLifecycle.isActive())
+			return;
+		final BookInfo expectedBook = mBookInfo;
+		final DocumentLoadLifecycle.Interaction interaction =
+				documentLoadLifecycle.interaction();
+		final ReaderRenderRequest renderRequest =
+				ReaderRenderRequest.fromInteraction(
+						expectedBook, interaction);
+		if (!isRenderRequestCurrent(renderRequest))
+			return;
+		postEngineCommand(
+				ReaderEngineCommandPolicy.Scope.DOCUMENT,
+				true,
+				expectedBook,
+				interaction,
+				renderRequest,
+				doneHandler,
+				() -> {
+					PositionProperties position =
+							doc.getPositionProps(
+									null, false);
+					Integer destination =
+							ReaderScrollPageCommand
+									.destination(
+											position,
+											direction);
+					return destination != null
+							&& isEngineCommandRequestCurrent(
+									ReaderEngineCommandPolicy
+											.Scope.DOCUMENT,
+									renderRequest)
+							&& doc.doCommand(
+									ReaderCommand
+											.DCMD_GO_POS
+											.nativeId,
+									destination);
+				});
+	}
+
+	private interface NativeCommandOperation {
+		boolean execute();
+	}
+
+	private void postEngineCommand(
+			final ReaderEngineCommandPolicy.Scope commandScope,
+			final boolean movesDocument,
+			final BookInfo expectedBook,
+			final DocumentLoadLifecycle.Interaction interaction,
+			final ReaderRenderRequest renderRequest,
+			final Runnable doneHandler,
+			final NativeCommandOperation operation) {
 		post(new Task() {
 			boolean res;
 
@@ -3971,7 +4032,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				if (!isEngineCommandRequestCurrent(
 						commandScope, renderRequest))
 					return;
-				res = doc.doCommand(cmd.nativeId, param);
+				res = operation.execute();
 				if (!isEngineCommandRequestCurrent(
 						commandScope, renderRequest))
 					return;

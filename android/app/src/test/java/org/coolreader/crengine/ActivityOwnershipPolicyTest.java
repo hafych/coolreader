@@ -433,6 +433,7 @@ public class ActivityOwnershipPolicyTest {
 				"ttsInitializationLifecycle",
 				"documentLoadLifecycle",
 				"readerSurfaceState",
+				"readerViewModeState",
 				"einkRefreshScheduler",
 				"keyDoubleClickState",
 				"keyDoubleClickScheduler",
@@ -725,6 +726,52 @@ public class ActivityOwnershipPolicyTest {
 								ReaderCommand.class);
 		assertTrue(Modifier.isStatic(
 				commandMovement.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderScrollPageCommand.class
+						.getModifiers()));
+		assertTrue(Modifier.isPrivate(
+				ReaderScrollPageCommand.class
+						.getDeclaredConstructors()[0]
+						.getModifiers()));
+		for (Field field :
+				ReaderScrollPageCommand.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		Method scrollDestination =
+				ReaderScrollPageCommand.class
+						.getDeclaredMethod(
+								"destination",
+								PositionProperties.class,
+								int.class);
+		assertTrue(Modifier.isStatic(
+				scrollDestination.getModifiers()));
+		assertEquals(
+				Integer.class,
+				scrollDestination.getReturnType());
+		Method scrollPageCommand =
+				ReaderView.class.getDeclaredMethod(
+						"doScrollPageCommand",
+						int.class,
+						Runnable.class);
+		assertTrue(Modifier.isPrivate(
+				scrollPageCommand.getModifiers()));
+		boolean foundSharedCommandQueue = false;
+		for (Method method :
+				ReaderView.class.getDeclaredMethods()) {
+			if (!method.getName().equals(
+					"postEngineCommand"))
+				continue;
+			foundSharedCommandQueue = true;
+			assertTrue(Modifier.isPrivate(
+					method.getModifiers()));
+		}
+		assertTrue(foundSharedCommandQueue);
 		Method engineCommandGuard =
 				ReaderView.class.getDeclaredMethod(
 						"isEngineCommandRequestCurrent",
@@ -734,6 +781,35 @@ public class ActivityOwnershipPolicyTest {
 				engineCommandGuard.getModifiers()));
 		assertFalse(Modifier.isStatic(
 				engineCommandGuard.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderViewModeState.class.getModifiers()));
+		for (Field field :
+				ReaderViewModeState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		assertSynchronizedMethod(
+				ReaderViewModeState.class,
+				"configure",
+				boolean.class);
+		assertSynchronizedMethod(
+				ReaderViewModeState.class,
+				"acquireScrollMode");
+		assertSynchronizedMethod(
+				ReaderViewModeState.class,
+				"release",
+				ReaderViewModeState.Lease.class);
+		assertSynchronizedMethod(
+				ReaderViewModeState.class,
+				"reset");
+		assertSynchronizedMethod(
+				ReaderViewModeState.class,
+				"snapshot");
+		assertSynchronizedMethod(
+				ReaderViewModeState.class,
+				"close");
 		Method documentInteractionGuard =
 				ReaderView.class.getDeclaredMethod(
 						"isDocumentInteractionCurrent",

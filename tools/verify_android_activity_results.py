@@ -814,6 +814,9 @@ READER_RENDER_REQUEST = (
 READER_ENGINE_COMMAND_POLICY = (
     SOURCE / "crengine" / "ReaderEngineCommandPolicy.java"
 )
+READER_SCROLL_PAGE_COMMAND = (
+    SOURCE / "crengine" / "ReaderScrollPageCommand.java"
+)
 READER_PAGE_CACHE_CLOSE = (
     SOURCE / "crengine" / "ReaderPageCacheClose.java"
 )
@@ -876,6 +879,18 @@ READER_ENGINE_COMMAND_POLICY_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderEngineCommandPolicyTest.java"
+)
+READER_SCROLL_PAGE_COMMAND_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderScrollPageCommandTest.java"
 )
 READER_PAGE_CACHE_CLOSE_TEST = (
     ROOT
@@ -2891,7 +2906,7 @@ def main() -> None:
         "final ReaderCommand cmd, final int param, "
         "final Runnable doneHandler) {")
     engine_command_end = reader_view_text.find(
-        "\n\tprivate boolean isEngineCommandRequestCurrent(",
+        "\n\tprivate void doScrollPageCommand(",
         engine_command_start)
     if engine_command_start < 0 or engine_command_end < 0:
         violations.append(
@@ -2900,38 +2915,114 @@ def main() -> None:
         engine_command_text = reader_view_text[
             engine_command_start:engine_command_end
         ]
-        work_index = engine_command_text.find(
-            "public void work()")
-        native_command_index = engine_command_text.find(
-            "res = doc.doCommand(cmd.nativeId, param)",
-            work_index)
-        work_guard_index = engine_command_text.find(
-            "isEngineCommandRequestCurrent(",
-            work_index)
-        post_native_guard_index = engine_command_text.find(
-            "isEngineCommandRequestCurrent(",
-            native_command_index)
-        done_index = engine_command_text.find(
-            "public void done()")
-        done_guard_index = engine_command_text.find(
-            "isEngineCommandRequestCurrent(",
-            done_index)
-        invalidation_index = engine_command_text.find(
-            "invalidImages = true", done_index)
         for marker in (
             "ReaderEngineCommandPolicy.scopeOf(cmd)",
             "ReaderEngineCommandPolicy.movesDocument(cmd)",
             "ReaderEngineCommandPolicy.Scope.DOCUMENT",
             "ReaderRenderRequest.fromInteraction(",
-            "drawPage(doneHandler, false)",
-            "doneHandler,\n"
-            "\t\t\t\t\t\t\t\tfalse,\n"
-            "\t\t\t\t\t\t\t\trenderRequest",
+            "postEngineCommand(",
+            "() -> doc.doCommand(cmd.nativeId, param)",
         ):
             if marker not in engine_command_text:
                 violations.append(
                     f"{relative(READER_VIEW)} engine command omits "
                     f"scope marker: {marker}")
+
+    scroll_command_start = reader_view_text.find(
+        "\n\tprivate void doScrollPageCommand(")
+    scroll_command_end = reader_view_text.find(
+        "\n\tprivate interface NativeCommandOperation",
+        scroll_command_start)
+    if scroll_command_start < 0 or scroll_command_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits owned scroll-page command")
+    else:
+        scroll_command_text = reader_view_text[
+            scroll_command_start:scroll_command_end
+        ]
+        for marker in (
+            "ReaderRenderRequest.fromInteraction(",
+            "isRenderRequestCurrent(renderRequest)",
+            "postEngineCommand(",
+            "doc.getPositionProps(",
+            "ReaderScrollPageCommand",
+            ".destination(",
+            "isEngineCommandRequestCurrent(",
+            "ReaderCommand\n"
+            "\t\t\t\t\t\t\t\t\t\t\t.DCMD_GO_POS",
+        ):
+            if marker not in scroll_command_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} scroll-page command omits "
+                    f"document marker: {marker}")
+
+    page_command_start = reader_view_text.find(
+        "\n\t\t\tcase DCMD_PAGEDOWN:")
+    page_command_end = reader_view_text.find(
+        "\n\t\t\tcase DCMD_BEGIN:",
+        page_command_start)
+    if page_command_start < 0 or page_command_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits page command dispatch")
+    else:
+        page_command_text = reader_view_text[
+            page_command_start:page_command_end
+        ]
+        for marker in (
+            "doScrollPageCommand(\n"
+            "\t\t\t\t\t\t\t\t\t1, onFinishHandler)",
+            "doScrollPageCommand(\n"
+            "\t\t\t\t\t\t\t\t\t-1, onFinishHandler)",
+        ):
+            if marker not in page_command_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} page command omits queued "
+                    f"scroll marker: {marker}")
+        if "doc.getPositionProps(" in page_command_text:
+            violations.append(
+                f"{relative(READER_VIEW)} reads native scroll position "
+                "from GUI page-command dispatch")
+
+    command_post_start = reader_view_text.find(
+        "\n\tprivate void postEngineCommand(")
+    command_post_end = reader_view_text.find(
+        "\n\tprivate boolean isEngineCommandRequestCurrent(",
+        command_post_start)
+    if command_post_start < 0 or command_post_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits shared engine-command queue")
+    else:
+        command_post_text = reader_view_text[
+            command_post_start:command_post_end
+        ]
+        work_index = command_post_text.find(
+            "public void work()")
+        native_command_index = command_post_text.find(
+            "res = operation.execute()",
+            work_index)
+        work_guard_index = command_post_text.find(
+            "isEngineCommandRequestCurrent(",
+            work_index)
+        post_native_guard_index = command_post_text.find(
+            "isEngineCommandRequestCurrent(",
+            native_command_index)
+        done_index = command_post_text.find(
+            "public void done()")
+        done_guard_index = command_post_text.find(
+            "isEngineCommandRequestCurrent(",
+            done_index)
+        invalidation_index = command_post_text.find(
+            "invalidImages = true", done_index)
+        for marker in (
+            "drawPage(doneHandler, false)",
+            "doneHandler,\n"
+            "\t\t\t\t\t\t\t\tfalse,\n"
+            "\t\t\t\t\t\t\t\trenderRequest",
+        ):
+            if marker not in command_post_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} shared engine command "
+                    f"omits completion marker: {marker}")
         if not (
                 work_index >= 0
                 and work_guard_index > work_index
@@ -3251,7 +3342,12 @@ def main() -> None:
         "ReaderEngineCommandPolicy.class",
         '"scopeOf"',
         '"movesDocument"',
+        "ReaderScrollPageCommand.class",
+        '"doScrollPageCommand"',
+        '"postEngineCommand"',
         '"isEngineCommandRequestCurrent"',
+        "ReaderViewModeState.class",
+        '"readerViewModeState"',
         "ReaderPageCacheClose.class",
         '"initialCurrent"',
         '"publishSerialized"',
@@ -3550,6 +3646,42 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_ENGINE_COMMAND_POLICY_TEST)} omits "
                 f"engine-command regression: {marker}")
+
+    reader_scroll_page_command_text = (
+        READER_SCROLL_PAGE_COMMAND.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderScrollPageCommand",
+        "private static final int STEP_NUMERATOR = 7",
+        "private static final int STEP_DENOMINATOR = 8",
+        "private ReaderScrollPageCommand()",
+        "static Integer destination(",
+        "long pageHeight = Math.max(",
+        "long destination =",
+        "long maxScroll = Math.max(",
+        "Math.min(destination, maxScroll)",
+        "Math.min(\n"
+        "\t\t\t\tdestination, Integer.MAX_VALUE)",
+    ):
+        if marker not in reader_scroll_page_command_text:
+            violations.append(
+                f"{relative(READER_SCROLL_PAGE_COMMAND)} omits safe "
+                f"scroll-page marker: {marker}")
+
+    reader_scroll_page_command_test_text = (
+        READER_SCROLL_PAGE_COMMAND_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "scrollsSevenEighthsOfViewport",
+        "clampsAtDocumentBoundaries",
+        "directionMagnitudeDoesNotChangeStep",
+        "widenedArithmeticCannotWrapDestination",
+        "missingPositionAndDirectionAreRejected",
+    ):
+        if marker not in reader_scroll_page_command_test_text:
+            violations.append(
+                f"{relative(READER_SCROLL_PAGE_COMMAND_TEST)} omits "
+                f"scroll-page regression: {marker}")
 
     reader_page_cache_close_text = (
         READER_PAGE_CACHE_CLOSE.read_text(encoding="utf-8")
