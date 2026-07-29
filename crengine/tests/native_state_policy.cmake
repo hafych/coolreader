@@ -7172,6 +7172,61 @@ forbid_source_text(
   "PocketBook GUI internals must not regress to legacy Unicode-width characters"
 )
 require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "void drawRegion(int x, int y, int w, int h);"
+  "PocketBook buffer publication must not hide the base draw overload"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "const char *_strings3x3[9];"
+  "PocketBook theme strings must preserve SDK const ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "getDocView()->LoadDocument(_stream, U\"\");"
+  "PocketBook dictionary streams must provide the current content path"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "const char *keypress[32] = {};"
+  "PocketBook key mappings must preserve SDK const ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "if (par1 == IV_KEY_POWER)"
+  "PocketBook power-key filtering must use the current SDK identifier"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "const char *translation = GetLangText(label);"
+  "PocketBook translations must preserve SDK const ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "virtual void draw(int x, int y, int w, int h)"
+  "PocketBook buffer publication must not hide the base draw overload"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "getImage(L\""
+  "PocketBook skin images must not use platform wchar literals"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "getWindowSkin( L\""
+  "PocketBook skin identifiers must not use platform wchar literals"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "char *keypress[32], *keypresslong[32];"
+  "PocketBook key mapping publication must preserve SDK const ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "par1 == KEY_POWER"
+  "PocketBook key filtering must not use the retired SDK identifier"
+)
+require_source_text(
   "${NANOX_SOURCE}"
   "setOwnedScreen( std::unique_ptr<CRGUIScreen>("
   "NanoX window managers must adopt a newly created screen"

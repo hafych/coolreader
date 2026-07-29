@@ -223,17 +223,18 @@ char key_buffer[KEY_BUFFER_LEN];
 class CRPocketBookScreen : public CRGUIScreenBase {
 private:
     bool _forceSoft;
-    CRGUIWindowBase *m_mainWindow;
 #if GRAY_BACKBUFFER_BITS == 4
     std::unique_ptr<lUInt8[]> _buf4bpp;
 #endif
 public:
     static CRPocketBookScreen * instance;
 protected:
-    virtual void draw(int x, int y, int w, int h);
-    virtual void update( const lvRect & rc2, bool full );
+    void drawRegion(int x, int y, int w, int h);
+    void update(
+            const lvRect & rc2,
+            bool full ) override;
 public:
-    virtual ~CRPocketBookScreen()
+    ~CRPocketBookScreen() override
     {
         instance = NULL;
     }
@@ -255,7 +256,10 @@ public:
     void MakeSnapShot()
     {
         ClearScreen();
-        draw(0, 0, _front->GetWidth(), _front->GetHeight());
+        drawRegion(
+                0, 0,
+                _front->GetWidth(),
+                _front->GetHeight());
         PageSnapshot();
     }
     bool setForceSoftUpdate(bool force)
@@ -345,15 +349,39 @@ public:
         instance = NULL;
     }
 
-    void getPocketBookCommand(char *name, int &commandId, int &commandParam) {
+    void getPocketBookCommand(
+            const char *name,
+            int &commandId,
+            int &commandParam)
+    {
+        if (!name) {
+            commandId = -1;
+            commandParam = 0;
+            return;
+        }
         int index = _pbTable.get(lString8(name));
+        if (index < 0
+                || index >= static_cast<int>(
+                        sizeof(pbActions)
+                        / sizeof(pbActions[0]))) {
+            commandId = -1;
+            commandParam = 0;
+            CRLog::warn(
+                    "Unknown PocketBook command: %s",
+                    name ? name : "(null)");
+            return;
+        }
         commandId = pbActions[index].commandId;
         commandParam = pbActions[index].commandParam;
         CRLog::trace("getPocketBookCommand(%s), index = %d, commandId = %d, commandParam=%d",
                      name, index, commandId, commandParam);
     }
 
-    int getPocketBookCommandIndex(char *name) {
+    int getPocketBookCommandIndex(
+            const char *name)
+    {
+        if (!name)
+            return -1;
         return _pbTable.get(lString8(name));
     }
 
@@ -491,7 +519,8 @@ void tocHandler(long long position)
 
 int main_handler(int type, int par1, int par2);
 
-void CRPocketBookScreen::draw(int x, int y, int w, int h)
+void CRPocketBookScreen::drawRegion(
+        int x, int y, int w, int h)
 {
 #if (GRAY_BACKBUFFER_BITS == 4)
     lUInt8 * line = _front->GetScanLine(y);
@@ -535,10 +564,16 @@ void CRPocketBookScreen::update( const lvRect & rc2, bool full )
         full = false;
 
     if ( full ) {
-        draw(0, 0, _front->GetWidth(), _front->GetHeight());
+        drawRegion(
+                0, 0,
+                _front->GetWidth(),
+                _front->GetHeight());
         FullUpdate();
     } else {
-        draw(0, rc.top, _front->GetWidth(), rc.height());
+        drawRegion(
+                0, rc.top,
+                _front->GetWidth(),
+                rc.height());
         if (!isDocWnd && rc.height() < 300)
             PartialUpdateBW(rc.left, rc.top, rc.right, rc.bottom);
         else
@@ -986,7 +1021,7 @@ public:
 class CRPocketBookDocView : public V3DocViewWin {
 private:
     ibitmap *_bm3x3;
-    char *_strings3x3[9];
+    const char *_strings3x3[9];
     int _quick_menuactions[9];
     PocketBookToc _toc;
     std::unique_ptr<CRPbDictionaryDialog> _dictDlg;
@@ -1013,7 +1048,9 @@ private:
 protected:
     ibitmap * getQuickMenuBitmap() {
         if (_bm3x3 == NULL) {
-            LVImageSourceRef img = _wm->getSkin()->getImage(L"cr3_pb_quickmenu.png");
+            LVImageSourceRef img =
+                    _wm->getSkin()->getImage(
+                            U"cr3_pb_quickmenu.png");
             if ( !img.isNull() ) {
                 _bm3x3 = NewBitmap(img->GetWidth(), img->GetHeight());
                 LVGrayDrawBuf tmpBuf( img->GetWidth(), img->GetHeight() );
@@ -1028,13 +1065,20 @@ protected:
             lString8 menuTextId(PB_QUICK_MENU_TEXT_ID);
             for (int i = 0; i < 9; i++) {
                 menuTextId[PB_QUICK_MENU_TEXT_ID_IDX] = '0' + i;
-                _strings3x3[i] = GetThemeString((char *)menuTextId.c_str(), (char *)def_menutext[i]);
+                _strings3x3[i] = GetThemeString(
+                        menuTextId.c_str(),
+                        def_menutext[i]);
             }
             lString8 menuActionId(PB_QUICK_MENU_ACTION_ID);
             for (int i = 0; i < 9; i++) {
                 menuActionId[PB_QUICK_MENU_ACTION_ID_IDX] = '0' + i;
-                char *action = GetThemeString((char *)menuActionId.c_str(), (char *)def_menuaction[i]);
-                _quick_menuactions[i] = CRPocketBookWindowManager::instance->getPocketBookCommandIndex(action);
+                const char *action = GetThemeString(
+                        menuActionId.c_str(),
+                        def_menuaction[i]);
+                _quick_menuactions[i] =
+                        CRPocketBookWindowManager::instance
+                                ->getPocketBookCommandIndex(
+                                        action);
             }
         }
         return _bm3x3;
@@ -1074,7 +1118,11 @@ protected:
     {
         if (params >= 0 && params < 9) {
             int index = _quick_menuactions[params];
-            if (pbActions[index].commandId >= 0) {
+            if (index >= 0
+                    && index < static_cast<int>(
+                            sizeof(pbActions)
+                            / sizeof(pbActions[0]))
+                    && pbActions[index].commandId >= 0) {
                 _wm->postCommand(pbActions[index].commandId, pbActions[index].commandParam);
             }
         } else
@@ -1087,7 +1135,10 @@ protected:
     void draw()
     {
         if (m_goToPage != -1) {
-            CRRectSkinRef skin = _wm->getSkin()->getWindowSkin( L"#dialog" )->getClientSkin();
+            CRRectSkinRef skin =
+                    _wm->getSkin()
+                            ->getWindowSkin(U"#dialog")
+                            ->getClientSkin();
             LVDrawBuf * buf = _wm->getScreen()->getCanvas().get();
             lString32 text =
                     lString32::itoa(m_goToPage + 1);
@@ -1167,7 +1218,7 @@ public:
                 _wm->activateWindow(
                         std::make_unique<CRPocketBookQuickMenuWindow>(
                                 _wm, getQuickMenuBitmap(),
-                                (const char **)_strings3x3));
+                                _strings3x3));
             }
             return true;
         case PB_CMD_ROTATE:
@@ -1961,14 +2012,14 @@ void CRPbDictionaryView::translate(
     setDirty();
     _selectedIndex = PB_DICT_DEACTIVATE;
     _stream = LVCreateStringStream( CRViewDialog::makeFb2Xml( body ) );
-    getDocView()->LoadDocument(_stream);
+    getDocView()->LoadDocument(_stream, U"");
     CRLog::trace("CRPbDictionaryView::translate() end");
 }
 
 void CRPbDictionaryView::setTranslation(lString8 translation)
 {
     _stream = LVCreateStringStream( translation );
-    getDocView()->LoadDocument(_stream);
+    getDocView()->LoadDocument(_stream, U"");
 }
 
 void CRPbDictionaryView::reconfigure( int flags )
@@ -2450,7 +2501,8 @@ static void loadPocketBookKeyMaps(CRGUIWindowManager & winman)
     CRGUIAcceleratorTable pbTable;
     int commandId, commandParam;
 
-    char *keypress[32], *keypresslong[32];
+    const char *keypress[32] = {};
+    const char *keypresslong[32] = {};
     GetKeyMapping(keypress, keypresslong);
 
     for (int i = 0; i < 32; i++) {
@@ -2781,7 +2833,7 @@ int main_handler(int type, int par1, int par2)
         CRPocketBookDocView::instance->onAutoRotation(par1);
         break;
     case EVT_KEYPRESS:
-        if (par1 == KEY_POWER) {
+        if (par1 == IV_KEY_POWER) {
             return 0;
         }
         if (CRPocketBookWindowManager::instance->hasKeyMapping(par1, KEY_FLAG_LONG_PRESS) < 0) {
@@ -2794,7 +2846,7 @@ int main_handler(int type, int par1, int par2)
         break;
     case EVT_KEYREPEAT:
     case EVT_KEYRELEASE:
-        if (par1 == KEY_POWER) {
+        if (par1 == IV_KEY_POWER) {
             return 0;
         }
         if (keyPressed == par1) {
@@ -2828,9 +2880,12 @@ int main_handler(int type, int par1, int par2)
 
 const char* TR(const char *label) 
 {
-    char* tr = GetLangText(const_cast<char*> (label));
-    CRLog::trace("Translation for %s is %s", label, tr);
-    return tr;
+    const char *translation = GetLangText(label);
+    CRLog::trace(
+            "Translation for %s is %s",
+            label,
+            translation ? translation : "(null)");
+    return translation ? translation : label;
 }
 
 int main(int argc, char **argv)
