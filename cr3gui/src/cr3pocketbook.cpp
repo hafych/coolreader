@@ -189,7 +189,7 @@ private:
     bool _forceSoft;
     CRGUIWindowBase *m_mainWindow;
 #if GRAY_BACKBUFFER_BITS == 4
-    lUInt8 *_buf4bpp;
+    std::unique_ptr<lUInt8[]> _buf4bpp;
 #endif
 public:
     static CRPocketBookScreen * instance;
@@ -200,9 +200,6 @@ public:
     virtual ~CRPocketBookScreen()
     {
         instance = NULL;
-#if GRAY_BACKBUFFER_BITS == 4
-        delete [] _buf4bpp;
-#endif
     }
 
     CRPocketBookScreen( int width, int height )
@@ -211,9 +208,11 @@ public:
         instance = this;
 #if GRAY_BACKBUFFER_BITS == 4
         if (width > height)
-            _buf4bpp = new lUInt8[ (width + 1)/2 * width ];
+            _buf4bpp = std::make_unique<lUInt8[]>(
+                    (width + 1)/2 * width);
         else
-            _buf4bpp = new lUInt8[ (height + 1)/2 * height ];
+            _buf4bpp = std::make_unique<lUInt8[]>(
+                    (height + 1)/2 * height);
 #endif
     }
 
@@ -450,7 +449,7 @@ void CRPocketBookScreen::draw(int x, int y, int w, int h)
 {
 #if (GRAY_BACKBUFFER_BITS == 4)
     lUInt8 * line = _front->GetScanLine(y);
-    lUInt8 *dest = _buf4bpp;
+    lUInt8 *dest = _buf4bpp.get();
     int limit = x + w -1;
     int scanline = (w + 1)/2;
 
@@ -464,7 +463,7 @@ void CRPocketBookScreen::draw(int x, int y, int w, int h)
         line += _front->GetRowSize();
         dest += scanline;
     }
-    Stretch(_buf4bpp, IMAGE_GRAY4, w, h, scanline, x, y, w, h, 0);
+    Stretch(_buf4bpp.get(), IMAGE_GRAY4, w, h, scanline, x, y, w, h, 0);
 #else
     Stretch(_front->GetScanLine(y), PB_BUFFER_GRAYS, w, h, _front->GetRowSize(), x, y, w, h, 0);
 #endif

@@ -6966,6 +6966,46 @@ forbid_source_text(
   "_screen = new CRJinkeScreen"
   "NanoX GUI screen creation must not bypass the owner"
 )
+require_source_text(
+  "${NANOX_SOURCE}"
+  "std::unique_ptr<unsigned char[]> bmpFileBuffer("
+  "NanoX bitmap staging buffers must use scoped array ownership"
+)
+require_source_text(
+  "${NANOX_SOURCE}"
+  "unsigned char *BmpFileBuf = bmpFileBuffer.get();"
+  "NanoX bitmap rendering must borrow from its scoped staging buffer"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "BmpFileBuf=new unsigned char["
+  "NanoX bitmap staging buffers must not use raw array ownership"
+)
+forbid_source_text(
+  "${NANOX_SOURCE}"
+  "delete[] BmpFileBuf"
+  "NanoX bitmap staging teardown must remain automatic"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "std::unique_ptr<lUInt8[]> _buf4bpp;"
+  "PocketBook 4bpp buffers must use object-scoped array ownership"
+)
+require_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "_buf4bpp.get()"
+  "PocketBook rendering must borrow from its owned 4bpp buffer"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "lUInt8 *_buf4bpp;"
+  "PocketBook screens must not retain raw 4bpp buffer ownership"
+)
+forbid_source_text(
+  "${POCKETBOOK_SOURCE}"
+  "delete [] _buf4bpp"
+  "PocketBook 4bpp buffer teardown must remain automatic"
+)
 forbid_source_text(
   "${GUI_PLATFORM_OWNERSHIP_SOURCE}"
   "_screen ="

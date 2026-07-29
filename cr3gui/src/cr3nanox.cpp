@@ -40,6 +40,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <memory>
+#include <new>
 #include "cr3jinke.h"
 #include <crengine.h>
 #include <crgui.h>
@@ -257,7 +258,7 @@ int GrBitmapEx_Apollo_FOUR(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int
     int BmpBufBytsPerLine=0,BytesPerLine=0;
 
     unsigned char char1,char2,char3,char4,BmpChar1;
-    unsigned char *Screen_Buf=NULL,*BmpFileBuf=NULL,*BufPtr=NULL,*HeaderBuf=NULL;
+    unsigned char *Screen_Buf=NULL,*BufPtr=NULL,*HeaderBuf=NULL;
     int GrayLevel=8;//256 gray level
     int BmpWidth=0,BmpHeight=0,PixesPerByte=0,BmpPanelNumbers=0,Bmpheadersize=0;
 
@@ -290,12 +291,15 @@ int GrBitmapEx_Apollo_FOUR(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int
     lpHeader.BmpInfo.biClrImportant=0;
     
     Bmpheadersize=HeaderLen;
-    BmpFileBuf=new unsigned char[BmpHeight*BytesPerLine+Bmpheadersize];
+    std::unique_ptr<unsigned char[]> bmpFileBuffer(
+            new (std::nothrow)
+                    unsigned char[BmpHeight*BytesPerLine+Bmpheadersize]);
 
-    if(!BmpFileBuf)
+    if(!bmpFileBuffer)
     {
         return 1;
     }
+    unsigned char *BmpFileBuf = bmpFileBuffer.get();
     memset(BmpFileBuf,0x0,BmpHeight*BytesPerLine+Bmpheadersize);
     HeaderBuf=BmpFileBuf;   
     Screen_Buf=BmpFileBuf+Bmpheadersize;
@@ -347,7 +351,6 @@ int GrBitmapEx_Apollo_FOUR(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int
     ImageId=GrLoadImageFromBuffer(BmpFileBuf,lpHeader.FileHeader.bfSize,GR_BACKGROUND_TOPLEFT);
     GrDrawImageToFit(id,gc,x,y,BmpWidth,BmpHeight,ImageId);
     GrFreeImage(ImageId);
-    delete[] BmpFileBuf;
     return 0;
 }
 
@@ -363,7 +366,7 @@ int GrBitmapEx_Apollo_NEW(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int 
 
 
     unsigned char char1,char2,char3,char4,BmpChar1;
-    unsigned char *Screen_Buf=NULL,*BmpFileBuf=NULL,*BufPtr=NULL,*HeaderBuf=NULL,*pimg = NULL;
+    unsigned char *Screen_Buf=NULL,*BufPtr=NULL,*HeaderBuf=NULL,*pimg = NULL;
     int GrayLevel=8;//256 gray level
     int BmpWidth=0,BmpHeight=0,PixesPerByte=0,BmpPanelNumbers=0,Bmpheadersize=0;
     BmpWidth=min(width,src_width);
@@ -398,12 +401,15 @@ int GrBitmapEx_Apollo_NEW(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int 
     lpHeader.BmpInfo.biClrImportant=0;
     
     Bmpheadersize=HeaderLen;
-    BmpFileBuf=new unsigned char[BmpHeight*BytesPerLine+Bmpheadersize];
+    std::unique_ptr<unsigned char[]> bmpFileBuffer(
+            new (std::nothrow)
+                    unsigned char[BmpHeight*BytesPerLine+Bmpheadersize]);
 
-    if(!BmpFileBuf)
+    if(!bmpFileBuffer)
     {
         return 1;
     }
+    unsigned char *BmpFileBuf = bmpFileBuffer.get();
     memset(BmpFileBuf,0xFF,BmpHeight*BytesPerLine+Bmpheadersize);
     HeaderBuf=BmpFileBuf;   
     Screen_Buf=BmpFileBuf+Bmpheadersize;
@@ -442,7 +448,6 @@ int GrBitmapEx_Apollo_NEW(GR_WINDOW_ID id,GR_GC_ID gc,int x,int y,int width,int 
     printf("x=%d,y=%d,BmpWidth=%d,BmpHeight=%d\n",x,y,BmpWidth,BmpHeight);
     GrFreeImage(ImageId);
 
-    delete[] BmpFileBuf;
     return 0;
 }
 
