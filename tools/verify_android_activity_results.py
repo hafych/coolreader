@@ -23,6 +23,7 @@ PAGE_FLIP_GEOMETRY = SOURCE / "crengine" / "PageFlipGeometry.java"
 PAGE_CURVE_TABLES = SOURCE / "crengine" / "PageCurveTables.java"
 BACKGROUND_THREAD = SOURCE / "crengine" / "BackgroundThread.java"
 DEFERRED_TASK_QUEUE = SOURCE / "crengine" / "DeferredTaskQueue.java"
+BLOCKING_RESULT = SOURCE / "crengine" / "BlockingResult.java"
 FREEZABLE_REGISTRY = SOURCE / "crengine" / "FreezableRegistry.java"
 PAGE_FLIP_GEOMETRY_TEST = (
     ROOT
@@ -59,6 +60,18 @@ DEFERRED_TASK_QUEUE_TEST = (
     / "coolreader"
     / "crengine"
     / "DeferredTaskQueueTest.java"
+)
+BLOCKING_RESULT_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "BlockingResultTest.java"
 )
 FREEZABLE_REGISTRY_TEST = (
     ROOT
@@ -298,6 +311,9 @@ def main() -> None:
         "backgroundTasks.attach(",
         "backgroundTasks.attach(null)",
         "guiTasks.attach(",
+        "final BlockingResult<T> result = new BlockingResult<>()",
+        "result.complete(null)",
+        "result.await()",
     ):
         if marker not in background_thread_text:
             violations.append(
@@ -308,6 +324,8 @@ def main() -> None:
         "postedGUI",
         "delayedTaskId",
         "mStopped",
+        "ReaderView.Sync",
+        "new Sync<",
     ):
         if marker in background_thread_text:
             violations.append(
@@ -338,6 +356,33 @@ def main() -> None:
             violations.append(
                 f"{relative(DEFERRED_TASK_QUEUE_TEST)} omits regression "
                 f"marker: {marker}")
+
+    blocking_result_text = BLOCKING_RESULT.read_text(encoding="utf-8")
+    for marker in (
+        "final class BlockingResult<T>",
+        "synchronized void complete(T value)",
+        "synchronized T await()",
+        "while (!completed)",
+        "notifyAll()",
+        "Thread.currentThread().interrupt()",
+    ):
+        if marker not in blocking_result_text:
+            violations.append(
+                f"{relative(BLOCKING_RESULT)} omits blocking handoff "
+                f"marker: {marker}")
+
+    blocking_result_test_text = BLOCKING_RESULT_TEST.read_text(
+        encoding="utf-8")
+    for marker in (
+        "awaitBlocksUntilValueIsPublished",
+        "completionReleasesEveryWaiter",
+        "interruptedWaitStillReceivesResultAndRestoresFlag",
+        "resultCanOnlyCompleteOnce",
+    ):
+        if marker not in blocking_result_test_text:
+            violations.append(
+                f"{relative(BLOCKING_RESULT_TEST)} omits blocking handoff "
+                f"regression: {marker}")
 
     toast_text = TOAST_VIEW.read_text(encoding="utf-8")
     if re.search(

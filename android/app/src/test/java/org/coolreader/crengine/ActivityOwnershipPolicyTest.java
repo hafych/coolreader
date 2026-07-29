@@ -75,6 +75,21 @@ public class ActivityOwnershipPolicyTest {
 				"GUI and background handoffs need separate queues",
 				2,
 				deferredQueueCount);
+		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
+			assertFalse(
+					"Process dispatcher handoff must not belong to ReaderView",
+					nested.getSimpleName().equals("Sync"));
+		}
+		for (Field field : BlockingResult.class.getDeclaredFields()) {
+			assertFalse(
+					"Blocking handoff state must be instance-owned: "
+							+ field.getName(),
+					Modifier.isStatic(field.getModifiers()));
+			assertTrue(
+					"Blocking handoff state must remain encapsulated: "
+							+ field.getName(),
+					Modifier.isPrivate(field.getModifiers()));
+		}
 	}
 
 	@Test

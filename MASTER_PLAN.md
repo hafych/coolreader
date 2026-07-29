@@ -130,7 +130,8 @@ DRM или ограничений доступа, подбор/получени�
   single-drain handoff process-dispatcher handlers с сохранением delay, а также
   immutable Engine process snapshot, generation-owned path corrector и
   synchronized/frozen HyphDict registry без backing-array escape и
-  immutable/testable owner lookup-таблиц page-curl.
+  immutable/testable owner lookup-таблиц page-curl, плюс one-shot
+  interrupt-preserving blocking result без зависимости dispatcher от UI.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

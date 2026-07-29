@@ -35,6 +35,10 @@ instead. Its singleton and handler references use explicit cross-thread
 publication. GUI and background tasks submitted before their handler exists
 pass through one atomic deferred-queue handoff that preserves delay and removes
 delivered entries before a later Activity generation can attach.
+Synchronous cross-thread calls use a one-shot `BlockingResult` owned by the
+dispatcher layer, not a nested `ReaderView` type. It releases every waiter,
+completes failure paths, and restores an interrupted waiter's flag after
+delivery.
 
 Database and TTS service connectors use application context for their
 process/service lifetime. UI callbacks and Activity references remain

@@ -365,6 +365,9 @@ The historical Debian changelog remains in [`changelog`](changelog).
   registry state.
 - Natural page-curl lookup curves now live behind one immutable, test-covered
   owner instead of mutable static arrays in `ReaderView`.
+- Android synchronous dispatcher handoffs no longer depend on a nested
+  `ReaderView` type, release every waiter, preserve interrupts, and complete
+  GUI failure paths instead of leaving callers blocked.
 - All first-party Clang warnings eliminated across 47 files (~700 diagnostics);
   `sign-compare` and `unused-but-set-variable` promoted to the full
   `-Werror` gate alongside the existing high-confidence classes.

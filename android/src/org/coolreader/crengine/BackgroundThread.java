@@ -22,8 +22,6 @@ package org.coolreader.crengine;
 
 import java.util.concurrent.Callable;
 
-import org.coolreader.crengine.ReaderView.Sync;
-
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -310,17 +308,17 @@ public class BackgroundThread extends Thread {
     	}
     	//L.d("executeSync called");
     	if(DBG) L.d("callBackground : posting Background task " + Thread.currentThread().getName());
-    	final Sync<T> sync = new Sync<T>();
+		final BlockingResult<T> result = new BlockingResult<>();
     	postBackground(() -> {
 			if(DBG) L.d("callBackground : inside background thread " + Thread.currentThread().getName());
 			try {
-				sync.set( task.call() );
+				result.complete(task.call());
 			} catch ( Exception e ) {
-				sync.set( null );
+				result.complete(null);
 			}
 		});
     	if(DBG) L.d("callBackground : calling get " + Thread.currentThread().getName());
-    	T res = sync.get();
+		T res = result.await();
     	if(DBG) L.d("callBackground : returned from get " + Thread.currentThread().getName());
     	//L.d("executeSync done");
     	return res;
@@ -338,28 +336,22 @@ public class BackgroundThread extends Thread {
     		}
     	}
     	if(DBG) L.d("callGUI : posting GUI task " + Thread.currentThread().getName());
-    	final Sync<T> sync = new Sync<T>();
+		final BlockingResult<T> result = new BlockingResult<>();
     	postGUI(() -> {
 			if(DBG) L.d("callGUI : inside GUI thread " + Thread.currentThread().getName());
-			T result = null;
+			T value = null;
 			try {
 				L.d("callGUI : calling source callable " + Thread.currentThread().getName());
-				result = task.call();
+				value = task.call();
 			} catch ( Exception e ) {
 				if(DBG) L.e("exception in postGUI", e);
-				throw new RuntimeException(e);
 			}
-			try {
-				if(DBG) L.d("callGUI : calling sync.set " + Thread.currentThread().getName());
-				sync.set( result );
-				if(DBG) L.d("callGUI : returned from sync.set " + Thread.currentThread().getName());
-			} catch ( Exception e ) {
-				if(DBG) L.e("exception in postGUI", e);
-				throw new RuntimeException(e);
-			}
+			if(DBG) L.d("callGUI : calling result.complete " + Thread.currentThread().getName());
+			result.complete(value);
+			if(DBG) L.d("callGUI : returned from result.complete " + Thread.currentThread().getName());
 		});
     	if(DBG) L.d("callGUI : calling get " + Thread.currentThread().getName());
-    	T res = sync.get();
+		T res = result.await();
     	if(DBG) L.d("callGUI : returned from get " + Thread.currentThread().getName());
     	return res;
     }
