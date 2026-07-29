@@ -27,15 +27,15 @@ static bool initialized = false;
 
 bool AddBookmarkDialog::editBookmark( QWidget * parent, CR3View * docView, CRBookmark * bm )
 {
-    AddBookmarkDialog * dlg = new AddBookmarkDialog( parent, docView, bm );
-    if ( !dlg->_bm ) {
-        delete dlg;
+    std::unique_ptr<AddBookmarkDialog> dialog(
+            new AddBookmarkDialog(parent, docView, bm));
+    if ( !dialog->_bm )
         return false;
-    }
-    dlg->setModal( true );
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
+    dialog->setModal( true );
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+    dialog.release();
     return true;
 }
 
@@ -81,15 +81,15 @@ AddBookmarkDialog::~AddBookmarkDialog() = default;
 
 bool AddBookmarkDialog::showDlg( QWidget * parent, CR3View * docView )
 {
-    AddBookmarkDialog * dlg = new AddBookmarkDialog( parent, docView, NULL );
-    if ( !dlg->_bm ) {
-        delete dlg;
+    std::unique_ptr<AddBookmarkDialog> dialog(
+            new AddBookmarkDialog(parent, docView, nullptr));
+    if ( !dialog->_bm )
         return false;
-    }
-    dlg->setModal( true );
-    dlg->show();
-    dlg->raise();
-    dlg->activateWindow();
+    dialog->setModal( true );
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+    dialog.release();
     return true;
 }
 
@@ -115,8 +115,8 @@ void AddBookmarkDialog::on_buttonBox_accepted()
 
 void AddBookmarkDialog::on_buttonBox_rejected()
 {
-    if (!_edit && !_docview->getDocView()->removeBookmark( _bm ))
-        delete _bm;
+    if (!_edit)
+        _docview->getDocView()->removeBookmark(_bm);
     close();
 }
 

@@ -753,6 +753,29 @@ forbid_source_text(
   "SearchDialog::_instance = NULL;"
   "modern Qt search-dialog observation must not return to manual invalidation"
 )
+string(REGEX MATCHALL "std::unique_ptr<AddBookmarkDialog> dialog"
+  MODERN_QT_BOOKMARK_DIALOG_CANDIDATES "${MODERN_QT_UI_SOURCE}")
+list(LENGTH MODERN_QT_BOOKMARK_DIALOG_CANDIDATES
+  MODERN_QT_BOOKMARK_DIALOG_CANDIDATE_COUNT)
+if(NOT MODERN_QT_BOOKMARK_DIALOG_CANDIDATE_COUNT EQUAL 2)
+  message(FATAL_ERROR
+    "modern Qt bookmark dialogs must retain transactional publication")
+endif()
+require_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "Borrowed from the document history for the dialog lifetime."
+  "modern Qt bookmark editing must document its history borrow"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "delete _bm"
+  "modern Qt bookmark editing must not delete history-owned records"
+)
+forbid_source_text(
+  "${MODERN_QT_UI_SOURCE}"
+  "AddBookmarkDialog * dlg = new AddBookmarkDialog"
+  "modern Qt bookmark dialogs must not return to raw construction"
+)
 
 # --- value-owned rectangle clipping ---
 require_source_text(
