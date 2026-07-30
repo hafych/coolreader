@@ -975,11 +975,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //	}
 
 	private boolean isTouchScreenEnabled = true;
-	private boolean selectionModeActive = false;
+	private final SelectionModeState selectionModeState =
+			new SelectionModeState();
 
 	public void toggleSelectionMode() {
-		selectionModeActive = !selectionModeActive;
-		mActivity.showToast(selectionModeActive ? R.string.action_toggle_selection_mode_on : R.string.action_toggle_selection_mode_off);
+		boolean active = selectionModeState.toggle();
+		mActivity.showToast(
+				active
+						? R.string.action_toggle_selection_mode_on
+						: R.string.action_toggle_selection_mode_off);
 	}
 
 	private final ReaderImageViewerState imageViewerState =
@@ -1393,6 +1397,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		tapGestureScheduler.cancel();
 		tapBounceState.close();
 		tapHandlerState.close();
+		selectionModeState.close();
 	}
 
 	public class TapHandler {
@@ -1823,7 +1828,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							updateSelection(start_x, start_y, start_x, start_y, true);
 						else
 							updateSelection(start_x, start_y, x, y, true);
-						selectionModeActive = false;
+						selectionModeState.consume();
 						state = STATE_DONE;
 						return cancel();
 					case STATE_FLIP_TRACKING:
@@ -1853,7 +1858,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								inputSettings);
 						firstDown = Utils.timeStamp();
 						tapBounceState.recordTap(firstDown);
-						if (selectionModeActive) {
+						if (selectionModeState.isActive()) {
 							startSelection();
 						} else {
 							state = STATE_DOWN_1;

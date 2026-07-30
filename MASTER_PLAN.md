@@ -149,7 +149,10 @@ DRM или ограничений доступа, подбор/получени�
   `TapHandlerState`: install-if-absent не заменяет живой gesture, только current
   owner может поставить replacement, async timeout/selection проверяют ту же
   identity, close очищает handler; raw `currentTapHandler` удалён. Явные
-  зависимости
+  one-shot selection mode также принадлежит synchronized terminal
+  `SelectionModeState`: toggle не потребляет armed intent, успешный selection
+  completion снимает его exact once, cancel сохраняет, destroy disarm/close;
+  raw `selectionModeActive` удалён. Явные зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic
