@@ -11,6 +11,41 @@ import static org.junit.Assert.assertTrue;
 
 public class ViewportResizeStateTest {
 	@Test
+	public void resizeUsesNormalDelayBeforeFirstResume() {
+		ViewportResizeState state =
+				new ViewportResizeState(100, 100);
+
+		assertEquals(300, state.resizeDelayMillis(0));
+		assertEquals(300, state.resizeDelayMillis(Long.MAX_VALUE));
+	}
+
+	@Test
+	public void recentResumeUsesLongDelayWithinExactWindow() {
+		ViewportResizeState state =
+				new ViewportResizeState(100, 100);
+
+		assertTrue(state.recordResume(5_000));
+		assertEquals(1000, state.resizeDelayMillis(5_000));
+		assertEquals(1000, state.resizeDelayMillis(5_999));
+		assertEquals(300, state.resizeDelayMillis(6_000));
+	}
+
+	@Test
+	public void monotonicTimingAvoidsOverflowAndHandlesRegression() {
+		ViewportResizeState state =
+				new ViewportResizeState(100, 100);
+
+		assertTrue(state.recordResume(Long.MAX_VALUE - 500));
+		assertEquals(
+				1000,
+				state.resizeDelayMillis(Long.MAX_VALUE));
+		assertEquals(
+				1000,
+				state.resizeDelayMillis(Long.MAX_VALUE - 501));
+		assertEquals(300, state.resizeDelayMillis(-1));
+	}
+
+	@Test
 	public void latestRequestWinsByIdentityWithItsOwnSize() {
 		ViewportResizeState state =
 				new ViewportResizeState(100, 100);
@@ -181,6 +216,7 @@ public class ViewportResizeStateTest {
 		assertFalse(state.complete(request));
 		assertNull(state.request(200, 300));
 		assertNull(state.requestCurrent());
+		assertFalse(state.recordResume(1_000));
 		assertSize(100, 100, state.requestedSize());
 		assertNull(state.appliedSize());
 	}

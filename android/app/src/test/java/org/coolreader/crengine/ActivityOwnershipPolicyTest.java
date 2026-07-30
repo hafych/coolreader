@@ -579,6 +579,11 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
 			assertTrue(Modifier.isFinal(field.getModifiers()));
 		}
+		for (Field field : ReaderView.class.getDeclaredFields()) {
+			assertFalse(
+					"Viewport resume timing must belong to its owner",
+					field.getName().equals("lastAppResumeTs"));
+		}
 		Field animation =
 				ReaderView.class.getDeclaredField("currentAnimation");
 		assertFalse(Modifier.isStatic(animation.getModifiers()));

@@ -12,9 +12,14 @@ package org.coolreader.crengine;
 
 final class ViewportResizeState {
 	private static final int FALLBACK_SIZE = 80;
+	private static final int NORMAL_DELAY_MILLIS = 300;
+	private static final int POST_RESUME_DELAY_MILLIS = 1000;
+	private static final long POST_RESUME_WINDOW_MILLIS = 1000L;
+	private static final long NO_RESUME_UPTIME = -1L;
 
 	private volatile Size requestedSize;
 	private volatile Size appliedSize;
+	private long lastResumeUptime = NO_RESUME_UPTIME;
 	private Request current;
 	private Request applying;
 	private boolean appliedNeedsCompletion;
@@ -22,6 +27,25 @@ final class ViewportResizeState {
 
 	ViewportResizeState(int width, int height) {
 		requestedSize = normalizedSize(width, height);
+	}
+
+	synchronized boolean recordResume(long uptimeMillis) {
+		if (closed || uptimeMillis < 0)
+			return false;
+		lastResumeUptime = uptimeMillis;
+		return true;
+	}
+
+	synchronized int resizeDelayMillis(long nowUptimeMillis) {
+		if (lastResumeUptime == NO_RESUME_UPTIME
+				|| nowUptimeMillis < 0)
+			return NORMAL_DELAY_MILLIS;
+		if (nowUptimeMillis < lastResumeUptime)
+			return POST_RESUME_DELAY_MILLIS;
+		return nowUptimeMillis - lastResumeUptime
+				< POST_RESUME_WINDOW_MILLIS
+						? POST_RESUME_DELAY_MILLIS
+						: NORMAL_DELAY_MILLIS;
 	}
 
 	synchronized Request request(int width, int height) {
