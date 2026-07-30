@@ -520,6 +520,7 @@ public class ActivityOwnershipPolicyTest {
 				"pageInvalidationState",
 				"pageAnimationState",
 				"readerSettingsState",
+				"dimmingState",
 				"imageViewerState",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
@@ -788,6 +789,9 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains mutable settings backing",
 					field.getName().equals("mSettings"));
+			assertFalse(
+					"ReaderView retains non-published dimming alpha",
+					field.getName().equals("dimmingAlpha"));
 			for (String legacy : new String[]{
 					"hiliteTapZoneOnTap",
 					"doubleTapSelectionEnabled",
@@ -956,6 +960,25 @@ public class ActivityOwnershipPolicyTest {
 				tapInputSettings.getType());
 		assertTrue(Modifier.isPrivate(
 				tapInputSettings.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderDimmingState.class.getModifiers()));
+		Field dimmingAlpha =
+				ReaderDimmingState.class.getDeclaredField(
+						"alpha");
+		assertTrue(Modifier.isPrivate(
+				dimmingAlpha.getModifiers()));
+		assertTrue(Modifier.isVolatile(
+				dimmingAlpha.getModifiers()));
+		assertEquals(int.class, dimmingAlpha.getType());
+		Method updateDimming =
+				ReaderDimmingState.class.getDeclaredMethod(
+						"update", int.class);
+		assertTrue(Modifier.isSynchronized(
+				updateDimming.getModifiers()));
+		assertEquals(
+				ReaderDimmingState.class,
+				ReaderView.class.getDeclaredField(
+						"dimmingState").getType());
 		Field currentBook =
 				ReaderView.class.getDeclaredField(
 						"mBookInfo");

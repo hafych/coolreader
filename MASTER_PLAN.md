@@ -515,6 +515,10 @@ DRM или ограничений доступа, подбор/получени�
   до конца жеста вместе с highlight, bounce, page-swipe и brightness-flick
   policy. Число страниц за полный свайп ограничено поддерживаемым диапазоном
   `0..20`, поэтому повреждённая настройка не создаёт нулевой divisor.
+  GUI backlight → Surface renderer dimming boundary также принадлежит
+  `ReaderDimmingState`: alpha нормализуется в `32..255`, serialized update
+  доступен renderer-у через volatile publication, duplicate не создаёт лишнюю
+  перерисовку, а прежнего non-published `dimmingAlpha` в `ReaderView` больше нет.
   Прямое применение settings из startup, GUI update и document load теперь
   переносит immutable `ReaderSettingsApplyRequest`: owner хранит interaction и
   snapshot языка без mutable `BookInfo`, поэтому stream reconciliation может

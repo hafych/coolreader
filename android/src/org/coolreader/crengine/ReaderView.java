@@ -387,6 +387,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private final ReaderSettingsState readerSettingsState =
 			new ReaderSettingsState(new Properties());
+	private final ReaderDimmingState dimmingState =
+			new ReaderDimmingState();
 	private final CloseableTaskGate settingsSyncLifecycle =
 			new CloseableTaskGate();
 
@@ -8270,7 +8272,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void dimRect(Canvas canvas, Rect dst) {
 		if (DeviceInfo.EINK_SCREEN)
 			return; // no backlight
-		int alpha = dimmingAlpha;
+		int alpha = dimmingState.alpha();
 		if (alpha != 255) {
 			Paint p = new Paint();
 			p.setColor((255 - alpha) << 24);
@@ -8462,15 +8464,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		canvas.drawRect(rc1, Utils.createSolidPaint(0x40000000 | textColor));
 	}
 
-	private int dimmingAlpha = 255; // no dimming
-
 	public void setDimmingAlpha(int alpha) {
-		if (alpha > 255)
-			alpha = 255;
-		if (alpha < 32)
-			alpha = 32;
-		if (dimmingAlpha != alpha) {
-			dimmingAlpha = alpha;
+		if (dimmingState.update(alpha)) {
 			mEngine.execute(new Task() {
 				@Override
 				public void work() throws Exception {
