@@ -571,8 +571,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void stopTracking() {
 		keyRepeatState.cancel();
 		cancelKeyDoubleClick();
-		if (currentTapHandler != null)
-			currentTapHandler.cancel();
+		TapHandler handler = tapHandlerState.current();
+		if (handler != null)
+			handler.cancel();
 	}
 
 	private void cancelKeyDoubleClick() {
@@ -1359,7 +1360,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			DelayedExecutor.createGUI("tap-gesture");
 	private final TapBounceState tapBounceState =
 			new TapBounceState();
-	private TapHandler currentTapHandler = null;
+	private final TapHandlerState<TapHandler> tapHandlerState =
+			new TapHandlerState<>();
 
 	private void scheduleTapGestureTimeout(
 			TapHandler handler,
@@ -1371,7 +1373,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return;
 		tapGestureScheduler.postDelayed(() -> {
 			if (!tapGestureLifecycle.complete(owner)
-					|| currentTapHandler != handler
+					|| !tapHandlerState.isCurrent(handler)
 					|| !mServiceLifecycle.isActive())
 				return;
 			timeout.run();
@@ -1390,7 +1392,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		tapGestureLifecycle.close();
 		tapGestureScheduler.cancel();
 		tapBounceState.close();
-		currentTapHandler = null;
+		tapHandlerState.close();
 	}
 
 	public class TapHandler {
@@ -1436,7 +1438,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		/// cancel current action and reset touch tracking state
 		private boolean cancel() {
-			if (currentTapHandler != this)
+			if (!tapHandlerState.isCurrent(this))
 				return true;
 			cancelTapGestureTimeout();
 			if (state == STATE_INITIAL)
@@ -1458,7 +1460,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			state = STATE_DONE;
 			unhiliteTapZone();
-			currentTapHandler = new TapHandler();
+			tapHandlerState.replace(
+					this,
+					new TapHandler());
 			return true;
 		}
 
@@ -1520,13 +1524,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		/// perform action and reset touch tracking state
 		private boolean performAction(final ReaderAction action, boolean checkForLinks) {
-			if (currentTapHandler != this)
+			if (!tapHandlerState.isCurrent(this))
 				return true;
 			cancelTapGestureTimeout();
 			log.d("performAction on touch: " + action);
 			state = STATE_DONE;
 
-			currentTapHandler = new TapHandler();
+			tapHandlerState.replace(
+					this,
+					new TapHandler());
 
 			if (!checkForLinks) {
 				onAction(action);
@@ -1660,7 +1666,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private boolean startSelection() {
-			if (currentTapHandler != this)
+			if (!tapHandlerState.isCurrent(this))
 				return true;
 			cancelTapGestureTimeout();
 			state = STATE_SELECTION;
@@ -1693,7 +1699,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 
 				public void done() {
-					if (currentTapHandler != TapHandler.this
+					if (!tapHandlerState.isCurrent(
+							TapHandler.this)
 							|| !isDocumentInteractionCurrent(
 									gestureBook,
 									gestureInteraction))
@@ -1728,7 +1735,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private boolean trackDoubleTap() {
 			state = STATE_WAIT_FOR_DOUBLE_CLICK;
 			scheduleTapGestureTimeout(this, () -> {
-				if (currentTapHandler == TapHandler.this && state == STATE_WAIT_FOR_DOUBLE_CLICK)
+				if (tapHandlerState.isCurrent(TapHandler.this)
+						&& state == STATE_WAIT_FOR_DOUBLE_CLICK)
 					performAction(shortTapAction, false);
 			}, DOUBLE_CLICK_INTERVAL);
 			return true;
@@ -1736,7 +1744,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		private boolean trackLongTap() {
 			scheduleTapGestureTimeout(this, () -> {
-				if (currentTapHandler == TapHandler.this && state == STATE_DOWN_1) {
+				if (tapHandlerState.isCurrent(TapHandler.this)
+						&& state == STATE_DOWN_1) {
 					if (longTapAction == ReaderAction.START_SELECTION)
 						startSelection();
 					else
@@ -10016,7 +10025,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return imageViewer.onTouchEvent(event);
 
 		if (isAutoScrollActive()) {
-			//if (currentTapHandler != null && currentTapHandler.isInitialState()) {
 			if (event.getAction() == MotionEvent.ACTION_DOWN) {
 				int x = (int) event.getX();
 				int y = (int) event.getY();
@@ -10031,10 +10039,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return true;
 		}
 
-		if (currentTapHandler == null)
-			currentTapHandler = new TapHandler();
-		currentTapHandler.checkExpiration();
-		return currentTapHandler.onTouchEvent(event);
+		TapHandler handler = tapHandlerState.current();
+		if (handler == null) {
+			handler = tapHandlerState.installIfAbsent(
+					new TapHandler());
+		}
+		if (handler == null)
+			return false;
+		handler.checkExpiration();
+		handler = tapHandlerState.current();
+		return handler != null
+				&& handler.onTouchEvent(event);
 	}
 
 	@Override

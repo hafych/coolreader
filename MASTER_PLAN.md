@@ -145,7 +145,11 @@ DRM или ограничений доступа, подбор/получени�
   timestamp вынесен в synchronized terminal `TapBounceState`: explicit
   no-tap sentinel не отбрасывает первый tap при свежем uptime, exact monotonic
   boundary и clock regression overflow-safe, а `firstTapTimeStamp` удалён.
-  Явные зависимости
+  Exact active `TapHandler` теперь принадлежит synchronized terminal
+  `TapHandlerState`: install-if-absent не заменяет живой gesture, только current
+  owner может поставить replacement, async timeout/selection проверяют ту же
+  identity, close очищает handler; raw `currentTapHandler` удалён. Явные
+  зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic
