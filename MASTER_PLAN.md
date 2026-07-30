@@ -506,6 +506,12 @@ DRM или ограничений доступа, подбор/получени�
   consumers получают отдельную копию. Старые snapshots не меняются после
   replacement, native readback публикует merged generation целиком, а
   cold/warm brightness pair обновляется одной атомарной publication.
+  Параллельные settings-derived поля input routing также удалены:
+  `ReaderInputSettings` захватывает одну reader-settings generation для
+  tap/key/selection mapping, а `TapHandler` удерживает тот же immutable snapshot
+  до конца жеста вместе с highlight, bounce, page-swipe и brightness-flick
+  policy. Число страниц за полный свайп ограничено поддерживаемым диапазоном
+  `0..20`, поэтому повреждённая настройка не создаёт нулевой divisor.
   Прямое применение settings из startup, GUI update и document load теперь
   переносит immutable `ReaderSettingsApplyRequest`: owner хранит interaction и
   snapshot языка без mutable `BookInfo`, поэтому stream reconciliation может

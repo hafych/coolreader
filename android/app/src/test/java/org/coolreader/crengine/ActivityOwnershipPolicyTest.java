@@ -777,6 +777,24 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains mutable settings backing",
 					field.getName().equals("mSettings"));
+			for (String legacy : new String[]{
+					"hiliteTapZoneOnTap",
+					"doubleTapSelectionEnabled",
+					"mBounceTapInterval",
+					"mGesturePageFlipsPerFullSwipe",
+					"secondaryTapActionType",
+					"isBacklightControlFlick",
+					"isWarmBacklightControlFlick",
+					"isColdWarmBacklightControlTogether",
+					"enableVolumeKeys",
+					"mSelectionAction",
+					"mMultiSelectionAction",
+					"flgHighlightBookmarks"}) {
+				assertFalse(
+						"ReaderView retains parallel input setting "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
 			assertFalse(
 					"ReaderView retains numeric position-save generations",
 					field.getName().equals(
@@ -894,6 +912,39 @@ public class ActivityOwnershipPolicyTest {
 				ReaderSettingsState.class,
 				ReaderView.class.getDeclaredField(
 						"readerSettingsState").getType());
+		assertTrue(Modifier.isFinal(
+				ReaderInputSettings.class.getModifiers()));
+		for (Field field :
+				ReaderInputSettings.class.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+			assertFalse(
+					"input settings must not retain mutable Properties",
+					field.getType() == Properties.class);
+		}
+		assertEquals(
+				ReaderSettingsState.Snapshot.class,
+				ReaderInputSettings.class
+						.getDeclaredField("settings")
+						.getType());
+		Class<?> tapHandler = null;
+		for (Class<?> nested :
+				ReaderView.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals("TapHandler")) {
+				tapHandler = nested;
+				break;
+			}
+		}
+		assertTrue(tapHandler != null);
+		Field tapInputSettings =
+				tapHandler.getDeclaredField("inputSettings");
+		assertEquals(
+				ReaderInputSettings.class,
+				tapInputSettings.getType());
+		assertTrue(Modifier.isPrivate(
+				tapInputSettings.getModifiers()));
 		Field currentBook =
 				ReaderView.class.getDeclaredField(
 						"mBookInfo");

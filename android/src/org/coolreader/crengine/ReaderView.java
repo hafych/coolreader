@@ -422,15 +422,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		return findTapZoneAction(
 				zone,
 				tapActionType,
-				readerSettingsState.snapshot());
+				ReaderInputSettings.capture(
+						readerSettingsState.snapshot()));
 	}
 
 	private ReaderAction findTapZoneAction(
 			int zone,
 			int tapActionType,
-			ReaderSettingsState.Snapshot inputSettings) {
+			ReaderInputSettings inputSettings) {
 		ReaderAction action = ReaderAction.NONE;
-		boolean isSecondaryAction = (secondaryTapActionType == tapActionType);
+		boolean isSecondaryAction =
+				inputSettings.secondaryTapActionType()
+						== tapActionType;
 		if (tapActionType == TAP_ACTION_TYPE_SHORT) {
 			action = findTapAction(
 					zone,
@@ -442,7 +445,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						zone,
 						ReaderAction.LONG,
 						inputSettings);
-			else if (doubleTapSelectionEnabled || tapActionType == TAP_ACTION_TYPE_LONGPRESS)
+			else if (inputSettings
+							.isDoubleTapSelectionEnabled()
+					|| tapActionType
+							== TAP_ACTION_TYPE_LONGPRESS)
 				action = ReaderAction.START_SELECTION;
 		}
 		return action;
@@ -451,21 +457,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private static ReaderAction findTapAction(
 			int zone,
 			int type,
-			ReaderSettingsState.Snapshot settings) {
+			ReaderInputSettings settings) {
 		return ReaderAction.findById(
-				settings.getProperty(
-						ReaderAction.getTapZoneProp(
-								zone, type)));
+				settings.tapActionId(zone, type));
 	}
 
 	private static ReaderAction findKeyAction(
 			int keyCode,
 			int type,
-			ReaderSettingsState.Snapshot settings) {
+			ReaderInputSettings settings) {
 		return ReaderAction.findById(
-				settings.getProperty(
-						ReaderAction.getKeyProp(
-								keyCode, type)));
+				settings.keyActionId(keyCode, type));
 	}
 
 	public FileInfo getOpenedFileInfo() {
@@ -729,17 +731,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		return false;
 	}
 
-	private int mSelectionAction = SELECTION_ACTION_TOOLBAR;
-	private int mMultiSelectionAction = SELECTION_ACTION_TOOLBAR;
-
 	private void onSelectionComplete(
 			Selection sel, BookInfo expectedBook,
 			DocumentLoadLifecycle.Interaction interaction) {
 		if (!isDocumentInteractionCurrent(
 				expectedBook, interaction))
 			return;
-		int iSelectionAction;
-		iSelectionAction = isMultiSelection(sel) ? mMultiSelectionAction : mSelectionAction;
+		ReaderInputSettings inputSettings =
+				ReaderInputSettings.capture(
+						readerSettingsState.snapshot());
+		int iSelectionAction =
+				inputSettings.selectionAction(
+						isMultiSelection(sel));
 
 		switch (iSelectionAction) {
 			case SELECTION_ACTION_TOOLBAR:
@@ -965,14 +968,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //		clearSelection();
 //	}
 
-	private int isBacklightControlFlick = 1;
-	private int isWarmBacklightControlFlick = 2;
-	private boolean isColdWarmBacklightControlTogether = false;
 	private boolean isTouchScreenEnabled = true;
-	private boolean doubleTapSelectionEnabled = false;
-	private int mBounceTapInterval = 150;
-	private int mGesturePageFlipsPerFullSwipe;
-	private int secondaryTapActionType = TAP_ACTION_TYPE_LONGPRESS;
 	private boolean selectionModeActive = false;
 
 	public void toggleSelectionMode() {
@@ -1413,6 +1409,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		ReaderAction shortTapAction = ReaderAction.NONE;
 		ReaderAction longTapAction = ReaderAction.NONE;
 		ReaderAction doubleTapAction = ReaderAction.NONE;
+		private ReaderInputSettings inputSettings;
 		long firstDown;
 
 		/// handle unexpected event for state: stop tracking
@@ -1477,9 +1474,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private void updatePageFlipTracking(final int x, final int y) {
 			if (!mOpened)
 				return;
+			final int pageFlipsPerFullSwipe =
+					inputSettings.pageFlipsPerFullSwipe();
+			if (pageFlipsPerFullSwipe <= 1)
+				return;
 			final int swipeDistance =
 					isPageMode() ? x - start_x : y - start_y;
-			final int distanceForFlip = surface.getWidth() / mGesturePageFlipsPerFullSwipe;
+			final int distanceForFlip =
+					Math.max(
+							1,
+							surface.getWidth()
+									/ pageFlipsPerFullSwipe);
 			int pagesToFlip = swipeDistance / distanceForFlip;
 			if (pagesToFlip == 0) {
 				return; // Nothing to do
@@ -1494,6 +1499,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					pagesToFlip++;
 				}
 			}
+		}
+
+		private boolean isBacklightFlickEdge(
+				int flick, int dragThreshold) {
+			int edgeWidth = dragThreshold * 170 / 100;
+			return (flick == BACKLIGHT_CONTROL_FLICK_LEFT
+							&& start_x < edgeWidth)
+					|| (flick
+									== BACKLIGHT_CONTROL_FLICK_RIGHT
+							&& start_x > width - edgeWidth);
 		}
 
 		/// perform action and reset touch tracking state
@@ -1735,10 +1750,23 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (state == STATE_INITIAL && event.getAction() != MotionEvent.ACTION_DOWN)
 				return unexpectedEvent(); // ignore unexpected event
 
-			if (!doubleTapSelectionEnabled && secondaryTapActionType != TAP_ACTION_TYPE_DOUBLE) {
+			if (state == STATE_INITIAL)
+				inputSettings =
+						ReaderInputSettings.capture(
+								readerSettingsState
+										.snapshot());
+
+			if (!inputSettings.isDoubleTapSelectionEnabled()
+					&& inputSettings
+							.secondaryTapActionType()
+							!= TAP_ACTION_TYPE_DOUBLE) {
 				// filter bounce (only when double taps not enabled)
 				if (event.getAction() == MotionEvent.ACTION_DOWN) {
-					if (state == STATE_INITIAL && Utils.timeInterval(firstTapTimeStamp) < mBounceTapInterval)
+					if (state == STATE_INITIAL
+							&& Utils.timeInterval(
+									firstTapTimeStamp)
+									< inputSettings
+											.bounceTapIntervalMs())
 						return unexpectedEvent(); // ignore bounced taps
 				}
 			}
@@ -1750,15 +1778,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (event.getAction() == MotionEvent.ACTION_UP) {
 				long duration = Utils.timeInterval(firstDown);
 				switch (state) {
-						case STATE_DOWN_1:
-							if (hiliteTapZoneOnTap) {
-								TapHighlightState.Show highlight =
-										showTapHighlight(
-												x, y, width, height);
-								scheduleUnhilite(
-										highlight,
-										LONG_KEYPRESS_TIME);
-							}
+					case STATE_DOWN_1:
+						if (inputSettings
+								.isTapZoneHighlightEnabled()) {
+							TapHighlightState.Show highlight =
+									showTapHighlight(
+											x, y, width, height);
+							scheduleUnhilite(
+									highlight,
+									LONG_KEYPRESS_TIME);
+						}
 						if (duration > LONG_KEYPRESS_TIME) {
 							if (longTapAction == ReaderAction.START_SELECTION)
 								return startSelection();
@@ -1798,8 +1827,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						width = surface.getWidth();
 						height = surface.getHeight();
 						int zone = getTapZone(x, y, width, height);
-						ReaderSettingsState.Snapshot inputSettings =
-								readerSettingsState.snapshot();
 						shortTapAction = findTapZoneAction(
 								zone,
 								TAP_ACTION_TYPE_SHORT,
@@ -1843,22 +1870,41 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					case STATE_DOWN_1:
 						if (distance < dragThreshold)
 							return true;
-						if ((!DeviceInfo.EINK_SCREEN || DeviceInfo.EINK_HAVE_FRONTLIGHT) && isBacklightControlFlick != BACKLIGHT_CONTROL_FLICK_NONE && ady > adx) {
+						int backlightControlFlick =
+								inputSettings
+										.backlightControlFlick();
+						if ((!DeviceInfo.EINK_SCREEN
+								|| DeviceInfo.EINK_HAVE_FRONTLIGHT)
+								&& backlightControlFlick
+										!= BACKLIGHT_CONTROL_FLICK_NONE
+								&& ady > adx) {
 							// backlight control enabled
-							if (start_x < dragThreshold * 170 / 100 && isBacklightControlFlick == 1
-									|| start_x > width - dragThreshold * 170 / 100 && isBacklightControlFlick == 2) {
+							if (isBacklightFlickEdge(
+									backlightControlFlick,
+									dragThreshold)) {
 								// brightness
 								cancelTapGestureTimeout();
 								state = STATE_BRIGHTNESS;
-								brightness_type = isColdWarmBacklightControlTogether ? BRIGHTNESS_TYPE_BOTH : BRIGHTNESS_TYPE_COMMON;
+								brightness_type =
+										inputSettings
+												.isColdWarmBacklightControlTogether()
+												? BRIGHTNESS_TYPE_BOTH
+												: BRIGHTNESS_TYPE_COMMON;
 								startBrightnessControl(start_x, start_y, brightness_type);
 								return true;
 							}
 						}
-						if (DeviceInfo.EINK_HAVE_NATURAL_BACKLIGHT && isWarmBacklightControlFlick != BACKLIGHT_CONTROL_FLICK_NONE && ady > adx) {
+						int warmBacklightControlFlick =
+								inputSettings
+										.warmBacklightControlFlick();
+						if (DeviceInfo.EINK_HAVE_NATURAL_BACKLIGHT
+								&& warmBacklightControlFlick
+										!= BACKLIGHT_CONTROL_FLICK_NONE
+								&& ady > adx) {
 							// warm backlight control enabled
-							if (start_x < dragThreshold * 170 / 100 && isWarmBacklightControlFlick == 1
-									|| start_x > width - dragThreshold * 170 / 100 && isWarmBacklightControlFlick == 2) {
+							if (isBacklightFlickEdge(
+									warmBacklightControlFlick,
+									dragThreshold)) {
 								// warm backlight brightness
 								cancelTapGestureTimeout();
 								state = STATE_BRIGHTNESS;
@@ -1869,7 +1915,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						}
 						int dir = isPageMode()
 								? x - start_x : y - start_y;
-						if (mGesturePageFlipsPerFullSwipe == 1) {
+						int pageFlipsPerFullSwipe =
+								inputSettings
+										.pageFlipsPerFullSwipe();
+						if (pageFlipsPerFullSwipe == 1) {
 							ReaderPageAnimationState.Snapshot
 									animationSettings =
 											pageAnimationState
@@ -1887,7 +1936,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							cancelTapGestureTimeout();
 							state = STATE_FLIPPING;
 						}
-						if (mGesturePageFlipsPerFullSwipe > 1) {
+						if (pageFlipsPerFullSwipe > 1) {
 							cancelTapGestureTimeout();
 							state = STATE_FLIP_TRACKING;
 							updatePageFlipTracking(start_x, start_y);
@@ -2127,8 +2176,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	private boolean flgHighlightBookmarks = false;
-
 	public void clearSelection() {
 		clearSelection(
 				mBookInfo, documentLoadLifecycle.interaction());
@@ -2173,8 +2220,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				expectedBook, interaction))
 			return;
 		int count = expectedBook.getBookmarkCount();
-		final Bookmark[] list = (count > 0 && flgHighlightBookmarks) ? new Bookmark[count] : null;
-		for (int i = 0; i < count && flgHighlightBookmarks; i++)
+		boolean highlightEnabled =
+				!"0".equals(
+						readerSettingsState.getProperty(
+								PROP_APP_HIGHLIGHT_BOOKMARKS,
+								"0"));
+		final Bookmark[] list =
+				count > 0 && highlightEnabled
+						? new Bookmark[count]
+						: null;
+		for (int i = 0; i < count && highlightEnabled; i++)
 			list[i] = expectedBook.getBookmark(i);
 		mEngine.post(new Task() {
 			public void work() throws Exception {
@@ -4627,43 +4682,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				null, () -> mActivity.showToast("Error while opening manual"));
 	}
 
-	private boolean hiliteTapZoneOnTap = false;
-	private boolean enableVolumeKeys = true;
 	static private final int DEF_PAGE_FLIP_MS = 300;
 
 	public void applyAppSetting(String key, String value) {
 		boolean flg = "1".equals(value);
-		if (key.equals(PROP_APP_TAP_ZONE_HILIGHT)) {
-			hiliteTapZoneOnTap = flg;
-		} else if (key.equals(PROP_APP_DOUBLE_TAP_SELECTION)) {
-			doubleTapSelectionEnabled = flg;
-		} else if (key.equals(PROP_APP_BOUNCE_TAP_INTERVAL)) {
-			mBounceTapInterval = Utils.parseInt(value, -1, 50, 250);
-		} else if (key.equals(PROP_APP_GESTURE_PAGE_FLIPPING)) {
-			mGesturePageFlipsPerFullSwipe = Integer.valueOf(value);
-		} else if (key.equals(PROP_PAGE_VIEW_MODE)) {
+		if (key.equals(PROP_PAGE_VIEW_MODE)) {
 			readerViewModeState.configure(flg);
-		} else if (key.equals(PROP_APP_SECONDARY_TAP_ACTION_TYPE)) {
-			secondaryTapActionType = flg ? TAP_ACTION_TYPE_DOUBLE : TAP_ACTION_TYPE_LONGPRESS;
-		} else if (key.equals(PROP_APP_FLICK_BACKLIGHT_CONTROL)) {
-			isBacklightControlFlick = "1".equals(value) ? 1 : ("2".equals(value) ? 2 : 0);
-		} else if (key.equals(PROP_APP_FLICK_WARMLIGHT_CONTROL)) {
-			isWarmBacklightControlFlick = "1".equals(value) ? 1 : ("2".equals(value) ? 2 : 0);
-		} else if (key.equals(PROP_APP_FLICK_BACKLIGHT_CONTROL_TOGETHER)) {
-			isColdWarmBacklightControlTogether = flg;
 		} else if (PROP_APP_HIGHLIGHT_BOOKMARKS.equals(key)) {
-			flgHighlightBookmarks = !"0".equals(value);
 			clearSelection();
 		} else if (PROP_APP_VIEW_AUTOSCROLL_SPEED.equals(key)) {
 			autoScrollSpeed = Utils.parseInt(value, 1500, 200, 10000);
 		} else if (PROP_PAGE_ANIMATION.equals(key)) {
 			pageAnimationState.configure(value);
-		} else if (PROP_CONTROLS_ENABLE_VOLUME_KEYS.equals(key)) {
-			enableVolumeKeys = flg;
-		} else if (PROP_APP_SELECTION_ACTION.equals(key)) {
-			mSelectionAction = Utils.parseInt(value, SELECTION_ACTION_TOOLBAR);
-		} else if (PROP_APP_MULTI_SELECTION_ACTION.equals(key)) {
-			mMultiSelectionAction = Utils.parseInt(value, SELECTION_ACTION_TOOLBAR);
 		} else if (PROP_APP_VIEW_ANIM_DURATION.equals(key)) {
 			animationTiming.resetSamples(Utils.parseInt(value, 50));
 		} else {
@@ -9771,6 +9801,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return false;
 		}
 
+		ReaderInputSettings inputSettings =
+				ReaderInputSettings.capture(
+						readerSettingsState.snapshot());
 		if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
 			if (isAutoScrollActive()) {
 				if (keyCode == KeyEvent.KEYCODE_VOLUME_UP)
@@ -9779,7 +9812,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					changeAutoScrollSpeed(-1);
 				return true;
 			}
-			if (!enableVolumeKeys) {
+			if (!inputSettings.areVolumeKeysEnabled()) {
 				return false;
 			}
 		}
@@ -9788,8 +9821,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return true; // autoscroll will be stopped in onKeyUp
 
 		keyCode = overrideKey(keyCode);
-		ReaderSettingsState.Snapshot inputSettings =
-				readerSettingsState.snapshot();
 		ReaderAction action = findKeyAction(
 				keyCode,
 				ReaderAction.NORMAL,
@@ -9876,10 +9907,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		ImageViewer imageViewer = currentImageViewer;
 		if (imageViewer != null && imageViewer.isActive())
 			return imageViewer.onKeyUp(keyCode, event);
+		ReaderInputSettings inputSettings =
+				ReaderInputSettings.capture(
+						readerSettingsState.snapshot());
 		if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
 			if (isAutoScrollActive())
 				return true;
-			if (!enableVolumeKeys)
+			if (!inputSettings.areVolumeKeysEnabled())
 				return false;
 		}
 		if (isAutoScrollActive()) {
@@ -9904,8 +9938,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		keyCode = overrideKey(keyCode);
 		boolean isLongPress =
 				keyRelease.isLongPress();
-		ReaderSettingsState.Snapshot inputSettings =
-				readerSettingsState.snapshot();
 		ReaderAction action = findKeyAction(
 				keyCode,
 				ReaderAction.NORMAL,
