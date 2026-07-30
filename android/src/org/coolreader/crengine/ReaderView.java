@@ -147,7 +147,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (readerSurfaceState.isClosed())
 				return super.onTrackballEvent(event);
 			log.d("onTrackballEvent(" + event + ")");
-			if (mSettings.getBool(PROP_APP_TRACKBALL_DISABLED, false)) {
+			if (readerSettingsState.getBool(
+					PROP_APP_TRACKBALL_DISABLED, false)) {
 				log.d("trackball is disabled in settings");
 				return true;
 			}
@@ -380,7 +381,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private volatile BookInfo mBookInfo;
 
-	private Properties mSettings = new Properties();
+	private final ReaderSettingsState readerSettingsState =
+			new ReaderSettingsState(new Properties());
 	private final CloseableTaskGate settingsSyncLifecycle =
 			new CloseableTaskGate();
 
@@ -401,7 +403,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public int getOrientation() {
-		int angle = mSettings.getInt(PROP_APP_SCREEN_ORIENTATION, 0);
+		int angle = readerSettingsState.getInt(
+				PROP_APP_SCREEN_ORIENTATION, 0);
 		if (angle == 4)
 			angle = mActivity.getOrientationFromSensor();
 		return angle;
@@ -416,17 +419,53 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public ReaderAction findTapZoneAction(int zone, int tapActionType) {
+		return findTapZoneAction(
+				zone,
+				tapActionType,
+				readerSettingsState.snapshot());
+	}
+
+	private ReaderAction findTapZoneAction(
+			int zone,
+			int tapActionType,
+			ReaderSettingsState.Snapshot inputSettings) {
 		ReaderAction action = ReaderAction.NONE;
 		boolean isSecondaryAction = (secondaryTapActionType == tapActionType);
 		if (tapActionType == TAP_ACTION_TYPE_SHORT) {
-			action = ReaderAction.findForTap(zone, mSettings);
+			action = findTapAction(
+					zone,
+					ReaderAction.NORMAL,
+					inputSettings);
 		} else {
 			if (isSecondaryAction)
-				action = ReaderAction.findForLongTap(zone, mSettings);
+				action = findTapAction(
+						zone,
+						ReaderAction.LONG,
+						inputSettings);
 			else if (doubleTapSelectionEnabled || tapActionType == TAP_ACTION_TYPE_LONGPRESS)
 				action = ReaderAction.START_SELECTION;
 		}
 		return action;
+	}
+
+	private static ReaderAction findTapAction(
+			int zone,
+			int type,
+			ReaderSettingsState.Snapshot settings) {
+		return ReaderAction.findById(
+				settings.getProperty(
+						ReaderAction.getTapZoneProp(
+								zone, type)));
+	}
+
+	private static ReaderAction findKeyAction(
+			int keyCode,
+			int type,
+			ReaderSettingsState.Snapshot settings) {
+		return ReaderAction.findById(
+				settings.getProperty(
+						ReaderAction.getKeyProp(
+								keyCode, type)));
 	}
 
 	public FileInfo getOpenedFileInfo() {
@@ -1759,9 +1798,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						width = surface.getWidth();
 						height = surface.getHeight();
 						int zone = getTapZone(x, y, width, height);
-						shortTapAction = findTapZoneAction(zone, TAP_ACTION_TYPE_SHORT);
-						longTapAction = findTapZoneAction(zone, TAP_ACTION_TYPE_LONGPRESS);
-						doubleTapAction = findTapZoneAction(zone, TAP_ACTION_TYPE_DOUBLE);
+						ReaderSettingsState.Snapshot inputSettings =
+								readerSettingsState.snapshot();
+						shortTapAction = findTapZoneAction(
+								zone,
+								TAP_ACTION_TYPE_SHORT,
+								inputSettings);
+						longTapAction = findTapZoneAction(
+								zone,
+								TAP_ACTION_TYPE_LONGPRESS,
+								inputSettings);
+						doubleTapAction = findTapZoneAction(
+								zone,
+								TAP_ACTION_TYPE_DOUBLE,
+								inputSettings);
 						firstDown = Utils.timeStamp();
 						firstTapTimeStamp = firstDown;
 						if (selectionModeActive) {
@@ -2450,11 +2500,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public boolean isNightMode() {
-		return mSettings.getBool(PROP_NIGHT_MODE, false);
+		return readerSettingsState.getBool(
+				PROP_NIGHT_MODE, false);
 	}
 
 	public String getSetting(String name) {
-		return mSettings.getProperty(name);
+		return readerSettingsState.getProperty(name);
 	}
 
 	public void setSetting(String name, String value, boolean invalidateImages, boolean save, boolean apply) {
@@ -3947,7 +3998,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (ttsToolbar == toolbar)
 				ttsToolbar = null;
 		});
-		toolbar.setAppSettings(mSettings, null);
+		toolbar.setAppSettings(
+				readerSettingsState.copy(), null);
 		toolbar.initAudiobookWordTimings(null);
 	}
 
@@ -4453,24 +4505,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return;
 				Properties merged =
 						snapshot.merge(
-								mSettings, nativeSettings);
+								readerSettingsState.copy(),
+								nativeSettings);
 				if (merged == null)
 					return;
 				merged.setBool(
 						PROP_PAGE_VIEW_MODE,
 						readerViewModeState
 								.isConfiguredPageMode());
-				mSettings = merged;
-				Properties published =
-						new Properties(merged);
+				ReaderSettingsState.Snapshot published =
+						readerSettingsState.replace(merged);
 				if (save) {
 					mActivity.setSettings(
-							published,
+							published.copy(),
 							saveDelayed ? 5000 : 0,
 							false);
 				} else {
 					mActivity.setSettings(
-							published, -1, false);
+							published.copy(), -1, false);
 				}
 			}
 
@@ -4485,7 +4537,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public Properties getSettings() {
-		return new Properties(mSettings);
+		return readerSettingsState.copy();
 	}
 
 	static public int stringToInt(String value, int defValue) {
@@ -4624,14 +4676,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		log.v("setAppSettings()"); //|| keyCode == KeyEvent.KEYCODE_DPAD_LEFT
 		BackgroundThread.ensureGUI();
 		if (oldSettings == null)
-			oldSettings = mSettings;
+			oldSettings = readerSettingsState.copy();
 		Properties changedSettings = newSettings.diff(oldSettings);
 		for (Map.Entry<Object, Object> entry : changedSettings.entrySet()) {
 			String key = (String) entry.getKey();
 			String value = (String) entry.getValue();
 			applyAppSetting(key, value);
 			if (PROP_APP_FULLSCREEN.equals(key)) {
-				boolean flg = mSettings.getBool(PROP_APP_FULLSCREEN, false);
+				boolean flg =
+						readerSettingsState.getBool(
+								PROP_APP_FULLSCREEN,
+								false);
 				newSettings.setBool(PROP_SHOW_BATTERY, flg);
 				newSettings.setBool(PROP_SHOW_TIME, flg);
 			} else if (PROP_APP_SCREEN_ORIENTATION.equals(key)
@@ -4678,21 +4733,26 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	 */
 	public void updateSettings(Properties newSettings) {
 		log.v("updateSettings() " + newSettings.toString());
-		log.v("oldNightMode=" + mSettings.getProperty(PROP_NIGHT_MODE) + " newNightMode=" + newSettings.getProperty(PROP_NIGHT_MODE));
+		log.v("oldNightMode="
+				+ readerSettingsState.getProperty(
+						PROP_NIGHT_MODE)
+				+ " newNightMode="
+				+ newSettings.getProperty(PROP_NIGHT_MODE));
 		BackgroundThread.ensureGUI();
 		settingsSyncLifecycle.cancel();
-		final Properties currSettings = new Properties(mSettings);
+		final Properties currSettings =
+				readerSettingsState.copy();
 		if (null != ttsToolbar) {
 			// ignore all non TTS options if TTS is active...
 			ttsToolbar.setAppSettings(newSettings, currSettings);
 			Properties changedSettings = newSettings.diff(currSettings);
 			currSettings.setAll(changedSettings);
-			mSettings = currSettings;
+			readerSettingsState.replace(currSettings);
 		} else {
 			setAppSettings(newSettings, currSettings);
 			Properties changedSettings = newSettings.diff(currSettings);
 			currSettings.setAll(changedSettings);
-			mSettings = currSettings;
+			readerSettingsState.replace(currSettings);
 			final ReaderViewModeState.Snapshot viewModeSnapshot =
 					readerViewModeState.snapshot();
 			final ReaderSettingsApplyRequest applyRequest =
@@ -4773,11 +4833,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				settingsApplyRequest;
 
 		public CreateViewTask(Properties props) {
-			this.props = props;
+			this.props = new Properties(props);
 			Properties oldSettings = new Properties(); // may be changed by setAppSettings
-			setAppSettings(props, oldSettings);
-			props.setAll(oldSettings);
-			mSettings = props;
+			setAppSettings(this.props, oldSettings);
+			this.props.setAll(oldSettings);
+			readerSettingsState.replace(this.props);
 			viewModeSnapshot = readerViewModeState.snapshot();
 			settingsApplyRequest =
 					ReaderSettingsApplyRequest.capture(
@@ -6135,7 +6195,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (!isRenderRequestCurrent(renderRequest))
 			return null;
 		alog.d("highliteTapZone(" + startX + ", " + startY + ")");
-		int txcolor = mSettings.getColor(PROP_FONT_COLOR, Color.BLACK);
+		int txcolor = readerSettingsState.getColor(
+				PROP_FONT_COLOR, Color.BLACK);
 		final int color = (txcolor & 0xFFFFFF) | (HILITE_RECT_ALPHA << 24);
 		TapHighlightState.Show show;
 		synchronized (tapHighlightState) {
@@ -6513,20 +6574,33 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (x >= 0 && y >= 0) {
 				updateBrightnessControl(x, y, type);
 			}
+			Properties updatedSettings =
+					readerSettingsState.copy();
 			switch (type) {
 				case BRIGHTNESS_TYPE_COMMON:
-					mSettings.setInt(PROP_APP_SCREEN_BACKLIGHT, currentBrightnessValue);
+					updatedSettings.setInt(
+							PROP_APP_SCREEN_BACKLIGHT,
+							currentBrightnessValue);
 					break;
 				case BRIGHTNESS_TYPE_BOTH:
-					mSettings.setInt(PROP_APP_SCREEN_BACKLIGHT, currentBrightnessValue);
-					mSettings.setInt(PROP_APP_SCREEN_WARM_BACKLIGHT, currentBrightnessWarmValue);
+					updatedSettings.setInt(
+							PROP_APP_SCREEN_BACKLIGHT,
+							currentBrightnessValue);
+					updatedSettings.setInt(
+							PROP_APP_SCREEN_WARM_BACKLIGHT,
+							currentBrightnessWarmValue);
 					break;
 				case BRIGHTNESS_TYPE_WARM:
-					mSettings.setInt(PROP_APP_SCREEN_WARM_BACKLIGHT, currentBrightnessWarmValue);
+					updatedSettings.setInt(
+							PROP_APP_SCREEN_WARM_BACKLIGHT,
+							currentBrightnessWarmValue);
 					break;
 				default:
 					return;
 			}
+			ReaderSettingsState.Snapshot publishedSettings =
+					readerSettingsState.replace(
+							updatedSettings);
 			if (showBrightnessFlickToast && currentBrightnessValueIndex >= 0) {
 				String s = BacklightOptions.titleAt(
 						currentBrightnessValueIndex,
@@ -6535,7 +6609,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				mActivity.showToast(s);
 			}
 			if (!DeviceInfo.EINK_SCREEN)
-				saveSettings(mSettings);
+				saveSettings(publishedSettings.copy());
 			currentBrightnessValue = -1;
 			currentBrightnessWarmValue = -1;
 			currentBrightnessValueIndex = -1;
@@ -7784,7 +7858,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			profileNumber = bookInfo.getFileInfo().getProfileId();
 			mBookInfo = bookInfo;
 			positionPersistenceState.replace(bookInfo);
-			//Properties oldSettings = new Properties(mSettings);
 			// TODO: enable storing of profile per book
 			mActivity.setCurrentProfile(profileNumber);
 			Bookmark lastPos = null;
@@ -7804,7 +7877,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					bookView.draw(false);
 			});
 			//init();
-			settings = new Properties(mSettings);
+			settings = readerSettingsState.copy();
 			viewModeSnapshot = readerViewModeState.snapshot();
 		}
 
@@ -8311,7 +8384,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		int h = canvas.getHeight();
 		int mins = Math.min(w, h) * 7 / 10;
 		int ph = mins / 20;
-		int textColor = mSettings.getColor(PROP_FONT_COLOR, 0x000000);
+		int textColor = readerSettingsState.getColor(
+				PROP_FONT_COLOR, 0x000000);
 		int fontSize = 15;			// 15pt
 		float factor = mActivity.getDensityFactor();
 		Rect rc = new Rect(w / 2 - mins / 2, h / 2 - ph / 2, w / 2 + mins / 2, h / 2 + ph / 2);
@@ -8343,8 +8417,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		int ph = Math.min(w, h)/100;
 		if (ph < 5)
 			ph = 5;
-		int textColor = mSettings.getColor(PROP_FONT_COLOR, 0x000000);
-		int pageHeaderPos = mSettings.getInt(PROP_STATUS_LOCATION, VIEWER_STATUS_PAGE_HEADER);
+		ReaderSettingsState.Snapshot settings =
+				readerSettingsState.snapshot();
+		int textColor = settings.getColor(
+				PROP_FONT_COLOR, 0x000000);
+		int pageHeaderPos = settings.getInt(
+				PROP_STATUS_LOCATION,
+				VIEWER_STATUS_PAGE_HEADER);
 		Rect rc;
 		if (VIEWER_STATUS_PAGE_FOOTER == pageHeaderPos)
 			rc = new Rect(0, h - ph, w - 1, h - 2);
@@ -9527,7 +9606,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void switchFontFace(int direction) {
-		String currentFontFace = mSettings.getProperty(PROP_FONT_FACE, "");
+		String currentFontFace =
+				readerSettingsState.getProperty(
+						PROP_FONT_FACE, "");
 		String selected = FontFaceSwitcher.select(
 				currentFontFace,
 				Engine.getFontFaceList(),
@@ -9707,10 +9788,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return true; // autoscroll will be stopped in onKeyUp
 
 		keyCode = overrideKey(keyCode);
-		ReaderAction action = ReaderAction.findForKey(keyCode, mSettings);
-		ReaderAction longAction = ReaderAction.findForLongKey(keyCode, mSettings);
-		//ReaderAction dblAction = ReaderAction.findForDoubleKey( keyCode, mSettings );
-
+		ReaderSettingsState.Snapshot inputSettings =
+				readerSettingsState.snapshot();
+		ReaderAction action = findKeyAction(
+				keyCode,
+				ReaderAction.NORMAL,
+				inputSettings);
+		ReaderAction longAction = findKeyAction(
+				keyCode,
+				ReaderAction.LONG,
+				inputSettings);
 		if (event.getRepeatCount() == 0) {
 			KeyDoubleClickState.PressResult<ReaderAction>
 					pending =
@@ -9817,9 +9904,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		keyCode = overrideKey(keyCode);
 		boolean isLongPress =
 				keyRelease.isLongPress();
-		ReaderAction action = ReaderAction.findForKey(keyCode, mSettings);
-		ReaderAction longAction = ReaderAction.findForLongKey(keyCode, mSettings);
-		ReaderAction dblAction = ReaderAction.findForDoubleKey(keyCode, mSettings);
+		ReaderSettingsState.Snapshot inputSettings =
+				readerSettingsState.snapshot();
+		ReaderAction action = findKeyAction(
+				keyCode,
+				ReaderAction.NORMAL,
+				inputSettings);
+		ReaderAction longAction = findKeyAction(
+				keyCode,
+				ReaderAction.LONG,
+				inputSettings);
+		ReaderAction dblAction = findKeyAction(
+				keyCode,
+				ReaderAction.DOUBLE,
+				inputSettings);
 		stopTracking();
 
 /*		if ( keyCode>=KeyEvent.KEYCODE_0 && keyCode<=KeyEvent.KEYCODE_9 && tracked ) {

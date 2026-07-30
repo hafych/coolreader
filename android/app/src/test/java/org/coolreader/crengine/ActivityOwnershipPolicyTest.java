@@ -508,6 +508,7 @@ public class ActivityOwnershipPolicyTest {
 				"positionPersistenceState",
 				"pageInvalidationState",
 				"pageAnimationState",
+				"readerSettingsState",
 				"imageViewerState",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
@@ -774,6 +775,9 @@ public class ActivityOwnershipPolicyTest {
 					field.getName().equals(
 							"pageFlipAnimationSpeedMs"));
 			assertFalse(
+					"ReaderView retains mutable settings backing",
+					field.getName().equals("mSettings"));
+			assertFalse(
 					"ReaderView retains numeric position-save generations",
 					field.getName().equals(
 							"lastSavePositionTaskId"));
@@ -851,6 +855,45 @@ public class ActivityOwnershipPolicyTest {
 					"settings request must not retain mutable BookInfo",
 					field.getType() == BookInfo.class);
 		}
+		assertTrue(Modifier.isFinal(
+				ReaderSettingsState.class.getModifiers()));
+		Field settingsSnapshot =
+				ReaderSettingsState.class.getDeclaredField(
+						"snapshot");
+		assertTrue(Modifier.isPrivate(
+				settingsSnapshot.getModifiers()));
+		assertTrue(Modifier.isVolatile(
+				settingsSnapshot.getModifiers()));
+		assertEquals(
+				ReaderSettingsState.Snapshot.class,
+				settingsSnapshot.getType());
+		Method replaceSettings =
+				ReaderSettingsState.class.getDeclaredMethod(
+						"replace", Properties.class);
+		assertTrue(Modifier.isSynchronized(
+				replaceSettings.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderSettingsState.Snapshot.class
+						.getModifiers()));
+		Field snapshotValues =
+				ReaderSettingsState.Snapshot.class
+						.getDeclaredField("values");
+		assertTrue(Modifier.isPrivate(
+				snapshotValues.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				snapshotValues.getModifiers()));
+		assertEquals(
+				Properties.class,
+				snapshotValues.getType());
+		assertTrue(Modifier.isPrivate(
+				ReaderSettingsState.Snapshot.class
+						.getDeclaredConstructor(
+								Properties.class)
+						.getModifiers()));
+		assertEquals(
+				ReaderSettingsState.class,
+				ReaderView.class.getDeclaredField(
+						"readerSettingsState").getType());
 		Field currentBook =
 				ReaderView.class.getDeclaredField(
 						"mBookInfo");

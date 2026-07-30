@@ -500,6 +500,12 @@ DRM или ограничений доступа, подбор/получени�
   настройки не теряются. `updateSettings`, replacement и close отменяют
   request, destroy закрывает owner, а поздний callback не публикует настройки
   в уже уничтоженную Activity.
+  Кэш reader settings больше не хранится в mutable non-published `mSettings`:
+  `ReaderSettingsState` clone-ит candidate до публикации одного immutable
+  volatile snapshot, typed reads не выпускают backing `Properties`, а legacy
+  consumers получают отдельную копию. Старые snapshots не меняются после
+  replacement, native readback публикует merged generation целиком, а
+  cold/warm brightness pair обновляется одной атомарной publication.
   Прямое применение settings из startup, GUI update и document load теперь
   переносит immutable `ReaderSettingsApplyRequest`: owner хранит interaction и
   snapshot языка без mutable `BookInfo`, поэтому stream reconciliation может
