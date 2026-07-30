@@ -766,20 +766,19 @@ public class ActivityOwnershipPolicyTest {
 					"Animation synchronization must use its owner",
 					field.getName().equals(
 							"animationUpdateLock"));
+			assertFalse(
+					"Image viewer identity must belong to its owner",
+					field.getName().equals(
+							"currentImageViewer"));
 		}
-		Field imageViewer =
-				ReaderView.class.getDeclaredField(
-						"currentImageViewer");
-		assertFalse(Modifier.isStatic(imageViewer.getModifiers()));
-		assertTrue(Modifier.isPrivate(imageViewer.getModifiers()));
-		assertTrue(Modifier.isVolatile(imageViewer.getModifiers()));
 		for (Field field :
 				ReaderImageViewerState.class.getDeclaredFields()) {
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
 		}
 		for (String methodName : new String[]{
-				"replace",
+				"startIfIdle",
+				"current",
 				"isActive",
 				"snapshot",
 				"snapshotForBuffer",

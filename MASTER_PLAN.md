@@ -450,9 +450,11 @@ DRM или ограничений доступа, подбор/получени�
   а completion перерисовывает только исходную document/surface generation без
   recapture текущей книги через общий `redraw()`.
   Полноэкранный image viewer теперь также принадлежит captured
-  book+interaction и synchronized `ReaderImageViewerState`: GUI-жесты и
-  Engine-render обмениваются только копиями `ImageInfo`, replacement/close
-  принимает только exact session, а stale render не публикует bitmap.
+  book+interaction и synchronized `ReaderImageViewerState`: exact fully-built
+  viewer identity и initial geometry публикуются одним переходом, GUI-жесты и
+  Engine-render обмениваются только копиями `ImageInfo`, competing start
+  отклоняется, finish/close принимает только exact viewer, а stale render не
+  публикует bitmap; параллельный `currentImageViewer` удалён.
   Закрытие native image сериализовано общей Engine queue; смена документа
   закрывает viewer до ротации interaction, а destroy восстанавливает ориентацию,
   permanently закрывает state и ставит native close до `DocView` teardown.

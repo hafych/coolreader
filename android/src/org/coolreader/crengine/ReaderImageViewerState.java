@@ -14,41 +14,44 @@ package org.coolreader.crengine;
  *
  * Native image operations are serialized by the Engine queue, while gestures
  * update the requested geometry on the GUI thread. This owner provides copied
- * snapshots at that boundary and exact session identity for replacement and
- * teardown.
+ * snapshots at that boundary and exact viewer identity for publication and
+ * teardown. The fully constructed viewer and its initial geometry become
+ * visible in one synchronized transition.
  */
-final class ReaderImageViewerState {
-	static final class Session {
-		private Session() {
-		}
-	}
-
-	private Session current;
+final class ReaderImageViewerState<T> {
+	private T current;
 	private ImageInfo image;
 	private boolean closed;
 
-	synchronized Session replace(ImageInfo initialImage) {
-		if (closed || initialImage == null)
-			return null;
-		Session session = new Session();
-		current = session;
+	synchronized boolean startIfIdle(
+			T viewer, ImageInfo initialImage) {
+		if (closed || current != null
+				|| viewer == null || initialImage == null)
+			return false;
+		current = viewer;
 		image = new ImageInfo(initialImage);
-		return session;
+		return true;
 	}
 
-	synchronized boolean isActive(Session session) {
-		return session != null && current == session && !closed;
+	synchronized T current() {
+		return closed ? null : current;
 	}
 
-	synchronized ImageInfo snapshot(Session session) {
-		if (!isActive(session))
+	synchronized boolean isActive(T viewer) {
+		return !closed
+				&& viewer != null
+				&& current == viewer;
+	}
+
+	synchronized ImageInfo snapshot(T viewer) {
+		if (!isActive(viewer))
 			return null;
 		return new ImageInfo(image);
 	}
 
 	synchronized ImageInfo snapshotForBuffer(
-			Session session, int width, int height) {
-		if (!isActive(session))
+			T viewer, int width, int height) {
+		if (!isActive(viewer))
 			return null;
 		ImageInfo updated = new ImageInfo(image);
 		updated.bufWidth = Math.max(1, width);
@@ -58,8 +61,8 @@ final class ReaderImageViewerState {
 	}
 
 	synchronized boolean update(
-			Session session, ImageInfo updatedImage) {
-		if (!isActive(session) || updatedImage == null)
+			T viewer, ImageInfo updatedImage) {
+		if (!isActive(viewer) || updatedImage == null)
 			return false;
 		if (image.equals(updatedImage))
 			return false;
@@ -67,17 +70,21 @@ final class ReaderImageViewerState {
 		return true;
 	}
 
-	synchronized boolean finish(Session session) {
-		if (!isActive(session))
+	synchronized boolean finish(T viewer) {
+		if (!isActive(viewer))
 			return false;
 		current = null;
 		image = null;
 		return true;
 	}
 
-	synchronized void close() {
+	synchronized T close() {
+		if (closed)
+			return null;
 		closed = true;
+		T stopped = current;
 		current = null;
 		image = null;
+		return stopped;
 	}
 }

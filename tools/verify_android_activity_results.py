@@ -2503,8 +2503,8 @@ def main() -> None:
                 f"{relative(READER_VIEW)} retains parallel progress field: "
                 f"{legacy}")
     for marker in (
-        "private volatile ViewAnimationControl currentAnimation",
-        "private final Object animationUpdateLock",
+        "private final ReaderAnimationState<",
+        "ViewAnimationControl, AnimationUpdate> animationState",
         "private final DelayedExecutor animationScheduler",
         "private final AutoScrollSessionState<AutoScrollAnimation>",
         "private final DelayedExecutor autoScrollScheduler",
@@ -2538,7 +2538,7 @@ def main() -> None:
         "keyRepeatState.close()",
         "private final CloseableTaskGate tapGestureLifecycle",
         "private final DelayedExecutor tapGestureScheduler",
-        "private volatile int autoScrollSpeed",
+        "private final AutoScrollSpeedState autoScrollSpeedState",
         "private final DelayedExecutor gcTask",
         "private void cancelDelayedReaderWork()",
         "animationScheduler.cancel()",
@@ -2566,7 +2566,7 @@ def main() -> None:
         "tapGestureLifecycle.close()",
         "tapGestureScheduler.cancel()",
         "gcTask.cancel()",
-        "synchronized (animationUpdateLock)",
+        "synchronized (animationState)",
         "autoScrollSessions.beginInitialization(this)",
         "autoScrollSessions.markReady(this)",
         "autoScrollSessions.readySession()",
@@ -2660,10 +2660,10 @@ def main() -> None:
         "\t\treaderViewModeState.close();\n"
         "\t\tcancelDelayedReaderWork();",
         "viewer.close(false)",
-        "private final ReaderImageViewerState imageViewerState",
-        "private volatile ImageViewer currentImageViewer",
-        "imageViewerState.snapshot(session)",
-        "imageViewerState.finish(session)",
+        "private final ReaderImageViewerState<ImageViewer> imageViewerState",
+        "imageViewerState.startIfIdle(",
+        "imageViewerState.snapshot(this)",
+        "imageViewerState.finish(this)",
         "imageViewerState.snapshotForBuffer(",
         "ReaderPageCacheClose.begin(",
         "private ReaderPageCacheClose<BitmapInfo>",
@@ -2695,7 +2695,7 @@ def main() -> None:
         "void clearSelection(",
         "private void highlightBookmarks(",
         "scheduleAnimation(this)",
-        "currentAnimation == animation",
+        "animationState.isCurrent(animation)",
         "private BookInfo bookInfo",
         "private boolean enqueueDocumentLoad(",
         "closeDescriptorQuietly(parcelFileDescriptor)",
@@ -2737,7 +2737,7 @@ def main() -> None:
         "tapGestureLifecycle.cancel()",
         "tapGestureScheduler.postDelayed(",
         "private void closeGestureTimeouts()",
-        "currentTapHandler != handler",
+        "tapHandlerState.isCurrent(handler)",
         "== MotionEvent.ACTION_CANCEL",
         "gestureInteraction",
     ):
@@ -2745,6 +2745,19 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits reader-owned delayed work "
                 f"marker: {marker}")
+    for legacy in (
+        "private volatile ViewAnimationControl currentAnimation",
+        "private final Object animationUpdateLock",
+        "private AnimationUpdate currentAnimationUpdate",
+        "private volatile int autoScrollSpeed",
+        "private TapHandler currentTapHandler",
+        "private boolean selectionModeActive",
+        "private volatile ImageViewer currentImageViewer",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains parallel owner state: "
+                f"{legacy}")
 
     position_schedule_start = reader_view_text.find(
         "\n\tprivate void scheduleSaveCurrentPositionBookmark(\n"
@@ -2950,7 +2963,8 @@ def main() -> None:
 
     image_prepare_start = reader_view_text.find(
         "\n\t\tpublic BitmapInfo prepareImage(\n"
-        "\t\t\t\tReaderRenderRequest renderRequest)")
+        "\t\t\t\tReaderRenderRequest renderRequest,\n"
+        "\t\t\t\tViewportResizeState.Size viewport)")
     image_prepare_end = reader_view_text.find(
         "\n\t}\n\n\tprivate void startImageViewer",
         image_prepare_start)
@@ -3016,7 +3030,7 @@ def main() -> None:
         "\t\t\tboolean isPartially,\n"
         "\t\t\tReaderRenderRequest renderRequest)")
     draw_submit_end = reader_view_text.find(
-        "\n\tprivate int internalDX", draw_submit_start)
+        "\n\tprivate byte[] findCoverPage()", draw_submit_start)
     if draw_submit_start < 0 or draw_submit_end < 0:
         violations.append(
             f"{relative(READER_VIEW)} omits owned draw submission")
@@ -3471,7 +3485,7 @@ def main() -> None:
         "settingsSyncLifecycle.cancel()",
         "settingsSyncLifecycle.close()",
         "snapshot.merge(",
-        "new Properties(merged)",
+        "readerSettingsState.replace(merged)",
     ):
         if marker not in reader_view_text:
             violations.append(
@@ -4405,12 +4419,27 @@ def main() -> None:
         encoding="utf-8")
     for marker in (
         "final class ViewportResizeState",
-        "private volatile Size size",
+        "private volatile Size requestedSize",
+        "private volatile Size appliedSize",
         "private Request current",
+        "private Request applying",
+        "private boolean appliedNeedsCompletion",
         "private boolean closed",
+        "synchronized boolean recordResume(long uptimeMillis)",
+        "synchronized int resizeDelayMillis(long nowUptimeMillis)",
         "synchronized Request request(int width, int height)",
         "synchronized Request requestCurrent()",
+        "Size requestedSize()",
+        "Size appliedSize()",
+        "Size appliedOrRequestedSize()",
+        "synchronized boolean requestedIsApplied()",
         "synchronized boolean isCurrent(Request request)",
+        "synchronized boolean completeIfApplied(Request request)",
+        "synchronized boolean beginApply(Request request)",
+        "synchronized boolean finishApply(Request request)",
+        "synchronized boolean cancelApply(Request request)",
+        "synchronized boolean publishApplied(Size size)",
+        "synchronized boolean completeCurrentApplied()",
         "synchronized boolean complete(Request request)",
         "synchronized boolean close()",
         "private static Size normalizedSize(",
@@ -4433,6 +4462,11 @@ def main() -> None:
         "currentSizeCanBeRescheduledWithoutParallelFields",
         "invalidDimensionsUseStablePositiveFallbacks",
         "completionClearsOnlyItsExactRequest",
+        "nativeApplyPublishesOneImmutableSizePair",
+        "inFlightResizePreventsFalseAppliedCompletion",
+        "equivalentLatestRequestClaimsInFlightCompletion",
+        "failedApplyReleasesOnlyItsExactInFlightRequest",
+        "lazyApplyPublishesRequestedFallbackWithoutARequest",
         "closePermanentlyRejectsQueuedAndNewRequests",
         "Integer.MIN_VALUE",
         "Integer.MAX_VALUE",
@@ -4512,9 +4546,11 @@ def main() -> None:
     for marker in (
         "private final VMRuntimeHack runtime = new VMRuntimeHack()",
         "private final BitmapFactory factory = new BitmapFactory(runtime)",
-        "private long hackMemorySize",
+        "private final ReaderSurfaceMemoryState surfaceMemoryState",
         "bmp.getRowBytes(), bmp.getHeight()",
-        "BitmapMemoryAccounting.surfaceBytes(width, height)",
+        "surfaceMemoryState.resize(width, height)",
+        "surfaceMemoryState.clear()",
+        "applySurfaceMemoryChange(",
     ):
         if marker not in reader_view_text:
             violations.append(

@@ -988,29 +988,29 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						: R.string.action_toggle_selection_mode_off);
 	}
 
-	private final ReaderImageViewerState imageViewerState =
-			new ReaderImageViewerState();
-	private volatile ImageViewer currentImageViewer;
+	private final ReaderImageViewerState<ImageViewer> imageViewerState =
+			new ReaderImageViewerState<>();
 
 	private class ImageViewer extends SimpleOnGestureListener {
-		private final ReaderImageViewerState.Session session;
 		private final BookInfo expectedBook;
 		private final DocumentLoadLifecycle.Interaction interaction;
 		private final GestureDetector detector;
 		private final int oldOrientation;
 
 		ImageViewer(
-				ReaderImageViewerState.Session session,
 				BookInfo expectedBook,
 				DocumentLoadLifecycle.Interaction interaction) {
-			this.session = session;
 			this.expectedBook = expectedBook;
 			this.interaction = interaction;
 			oldOrientation = lockOrientation();
 			detector = new GestureDetector(this);
-			ImageInfo image = imageViewerState.snapshot(session);
-			if (image == null)
-				return;
+		}
+
+		private ImageInfo prepareInitialImage(
+				ImageInfo initialImage) {
+			if (initialImage == null)
+				return null;
+			ImageInfo image = new ImageInfo(initialImage);
 			if (image.height > 0
 					&& image.width > 0
 					&& image.bufHeight / image.height >= 2
@@ -1019,7 +1019,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				image.scaledWidth *= 2;
 			}
 			centerIfLessThanScreen(image);
-			imageViewerState.update(session, image);
+			return image;
+		}
+
+		private void abandonStart() {
+			unlockOrientation();
 		}
 
 		private int lockOrientation() {
@@ -1061,7 +1065,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return;
 			centerIfLessThanScreen(image);
 			fixScreenBounds(image);
-			if (imageViewerState.update(session, image))
+			if (imageViewerState.update(this, image))
 				drawPage(
 						null,
 						false,
@@ -1070,7 +1074,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void zoomIn() {
-			ImageInfo image = imageViewerState.snapshot(session);
+			ImageInfo image = imageViewerState.snapshot(this);
 			if (image == null || image.width <= 0 || image.height <= 0)
 				return;
 			if (image.scaledHeight >= image.height) {
@@ -1090,7 +1094,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void zoomOut() {
-			ImageInfo image = imageViewerState.snapshot(session);
+			ImageInfo image = imageViewerState.snapshot(this);
 			if (image == null || image.width <= 0 || image.height <= 0)
 				return;
 			if (image.scaledHeight > image.height) {
@@ -1110,7 +1114,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public int getStep() {
-			ImageInfo image = imageViewerState.snapshot(session);
+			ImageInfo image = imageViewerState.snapshot(this);
 			if (image == null)
 				return 0;
 			int max = image.bufHeight;
@@ -1120,7 +1124,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void moveBy(int dx, int dy) {
-			ImageInfo image = imageViewerState.snapshot(session);
+			ImageInfo image = imageViewerState.snapshot(this);
 			if (image == null)
 				return;
 			image.x += dx;
@@ -1206,7 +1210,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		@Override
 		public boolean onSingleTapConfirmed(MotionEvent e) {
 			log.v("onSingleTapConfirmed()");
-			ImageInfo image = imageViewerState.snapshot(session);
+			ImageInfo image = imageViewerState.snapshot(this);
 			if (image == null)
 				return false;
 
@@ -1250,10 +1254,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private void close(boolean redraw) {
-			if (!imageViewerState.finish(session))
+			if (!imageViewerState.finish(this))
 				return;
-			if (currentImageViewer == this)
-				currentImageViewer = null;
 			unlockOrientation();
 			post(new Task() {
 				@Override
@@ -1286,7 +1288,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return null;
 			ImageInfo img =
 					imageViewerState.snapshotForBuffer(
-							session,
+							this,
 							viewport.width(),
 							viewport.height());
 			if (img == null || !isActive())
@@ -1316,8 +1318,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		private boolean isActive() {
-			return currentImageViewer == this
-					&& imageViewerState.isActive(session)
+			return imageViewerState.isActive(this)
 					&& readerNativeLifecycle.isInitialized()
 					&& mOpened
 					&& isDocumentInteractionCurrent(
@@ -1330,18 +1331,23 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BookInfo expectedBook,
 			DocumentLoadLifecycle.Interaction interaction) {
 		BackgroundThread.ensureGUI();
-		if (currentImageViewer != null
+		if (image == null
+				|| imageViewerState.current() != null
 				|| !isDocumentInteractionCurrent(
 						expectedBook, interaction))
 			return;
-		ReaderImageViewerState.Session session =
-				imageViewerState.replace(image);
-		if (session == null)
-			return;
 		ImageViewer viewer =
 				new ImageViewer(
-						session, expectedBook, interaction);
-		currentImageViewer = viewer;
+						expectedBook, interaction);
+		ImageInfo initialImage =
+				viewer.prepareInitialImage(image);
+		if (!isDocumentInteractionCurrent(
+				expectedBook, interaction)
+				|| !imageViewerState.startIfIdle(
+						viewer, initialImage)) {
+			viewer.abandonStart();
+			return;
+		}
 		drawPage(
 				null,
 				false,
@@ -1350,12 +1356,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private boolean isImageViewMode() {
-		ImageViewer viewer = currentImageViewer;
+		ImageViewer viewer = imageViewerState.current();
 		return viewer != null && viewer.isActive();
 	}
 
 	private void stopImageViewer() {
-		ImageViewer viewer = currentImageViewer;
+		ImageViewer viewer = imageViewerState.current();
 		if (viewer != null)
 			viewer.close(false);
 	}
@@ -5614,7 +5620,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (!isRenderRequestCurrent(renderRequest))
 			return null;
 
-		ImageViewer imageViewer = currentImageViewer;
+		ImageViewer imageViewer = imageViewerState.current();
 		if (imageViewer != null && imageViewer.isActive()) {
 			BitmapInfo image =
 					imageViewer.prepareImage(
@@ -9775,7 +9781,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		mActivity.onUserActivity();
 
-		ImageViewer imageViewer = currentImageViewer;
+		ImageViewer imageViewer = imageViewerState.current();
 		if (imageViewer != null && imageViewer.isActive())
 			return imageViewer.onKeyDown(keyCode, event);
 
@@ -9896,7 +9902,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			keyCode = event.getScanCode();
 		mActivity.onUserActivity();
 		keyCode = translateKeyCode(keyCode);
-		ImageViewer imageViewer = currentImageViewer;
+		ImageViewer imageViewer = imageViewerState.current();
 		if (imageViewer != null && imageViewer.isActive())
 			return imageViewer.onKeyUp(keyCode, event);
 		ReaderInputSettings inputSettings =
@@ -10007,7 +10013,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return true;
 		mActivity.onUserActivity();
 
-		ImageViewer imageViewer = currentImageViewer;
+		ImageViewer imageViewer = imageViewerState.current();
 		if (imageViewer != null && imageViewer.isActive())
 			return imageViewer.onTouchEvent(event);
 
