@@ -633,6 +633,7 @@ public class ActivityOwnershipPolicyTest {
 				"animationScheduler",
 				"autoScrollScheduler",
 				"autoScrollSessions",
+				"autoScrollSpeedState",
 				"gcTask",
 				"animationUpdateLock",
 				"swapTaskLifecycle",
@@ -940,11 +941,21 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isPrivate(
 					method.getModifiers()));
 		}
-		Field autoScrollSpeed =
-				ReaderView.class.getDeclaredField(
-						"autoScrollSpeed");
-		assertTrue(Modifier.isVolatile(
-				autoScrollSpeed.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				AutoScrollSpeedState.class.getModifiers()));
+		Field speed =
+				AutoScrollSpeedState.class.getDeclaredField(
+						"speed");
+		assertTrue(Modifier.isPrivate(speed.getModifiers()));
+		assertTrue(Modifier.isVolatile(speed.getModifiers()));
+		assertSynchronizedMethod(
+				AutoScrollSpeedState.class,
+				"configure",
+				int.class);
+		assertSynchronizedMethod(
+				AutoScrollSpeedState.class,
+				"change",
+				int.class);
 		for (Field field : ReaderView.class.getDeclaredFields()) {
 			assertFalse(
 					"ReaderView retains a racy autoscroll pointer",
@@ -954,6 +965,14 @@ public class ActivityOwnershipPolicyTest {
 					"ReaderView retains a racy swap task pointer",
 					field.getName().equals(
 							"currentSwapTask"));
+			assertFalse(
+					"Autoscroll speed must belong to its owner",
+					field.getName().equals(
+							"autoScrollSpeed"));
+			assertFalse(
+					"Disabled notification generation must not remain",
+					field.getName().equals(
+							"autoScrollNotificationId"));
 			assertFalse(
 					"ReaderView retains numeric highlight generations",
 					field.getName().equals("nextHiliteId"));

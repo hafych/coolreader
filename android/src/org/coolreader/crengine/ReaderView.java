@@ -3199,8 +3199,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		});
 	}
 
-	private volatile int autoScrollSpeed = 1500; // chars / minute
-	private int autoScrollNotificationId = 0;
+	private final AutoScrollSpeedState autoScrollSpeedState =
+			new AutoScrollSpeedState();
 	private final AutoScrollSessionState<AutoScrollAnimation>
 			autoScrollSessions = new AutoScrollSessionState<>();
 	private final DelayedExecutor autoScrollScheduler =
@@ -3224,7 +3224,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (stopped == null)
 			return;
 		log.d("stopAutoScroll()");
-		//notifyAutoscroll("Autoscroll is stopped");
 		if (initialized)
 			stopped.finishStop();
 		else
@@ -3261,45 +3260,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			startAutoScroll();
 	}
 
-	private final static boolean AUTOSCROLL_SPEED_NOTIFICATION_ENABLED = false;
-
-	private void notifyAutoscroll(final String msg) {
-		if (DeviceInfo.EINK_SCREEN)
-			return; // disable toast for eink
-		if (AUTOSCROLL_SPEED_NOTIFICATION_ENABLED) {
-			final int myId = ++autoScrollNotificationId;
-			BackgroundThread.instance().postGUI(() -> {
-				if (myId == autoScrollNotificationId)
-					mActivity.showToast(msg);
-			}, 1000);
-		}
-	}
-
-	private void notifyAutoscrollSpeed() {
-		final String msg = mActivity.getString(R.string.lbl_autoscroll_speed).replace("$1", String.valueOf(autoScrollSpeed));
-		notifyAutoscroll(msg);
-	}
-
 	private void changeAutoScrollSpeed(int delta) {
-		if (autoScrollSpeed < 300)
-			delta *= 10;
-		else if (autoScrollSpeed < 500)
-			delta *= 20;
-		else if (autoScrollSpeed < 1000)
-			delta *= 40;
-		else if (autoScrollSpeed < 2000)
-			delta *= 80;
-		else if (autoScrollSpeed < 5000)
-			delta *= 200;
-		else
-			delta *= 300;
-		autoScrollSpeed += delta;
-		if (autoScrollSpeed < 200)
-			autoScrollSpeed = 200;
-		if (autoScrollSpeed > 10000)
-			autoScrollSpeed = 10000;
-		setSetting(PROP_APP_VIEW_AUTOSCROLL_SPEED, String.valueOf(autoScrollSpeed), false, true, false);
-		notifyAutoscrollSpeed();
+		int speed = autoScrollSpeedState.change(delta);
+		setSetting(
+				PROP_APP_VIEW_AUTOSCROLL_SPEED,
+				String.valueOf(speed),
+				false, true, false);
 	}
 
 	class AutoScrollAnimation {
@@ -3397,7 +3363,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private int calcProgressPercent() {
 			long duration = Utils.timeInterval(pageTurnStart);
 			return AnimationTiming.autoscrollProgress(
-					duration, charCount, autoScrollSpeed);
+					duration, charCount,
+					autoScrollSpeedState.speed());
 		}
 
 		private boolean onTimer() {
@@ -4708,7 +4675,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		} else if (PROP_APP_HIGHLIGHT_BOOKMARKS.equals(key)) {
 			clearSelection();
 		} else if (PROP_APP_VIEW_AUTOSCROLL_SPEED.equals(key)) {
-			autoScrollSpeed = Utils.parseInt(value, 1500, 200, 10000);
+			autoScrollSpeedState.configure(
+					Utils.parseInt(
+							value,
+							AutoScrollSpeedState.DEFAULT_SPEED,
+							AutoScrollSpeedState.MIN_SPEED,
+							AutoScrollSpeedState.MAX_SPEED));
 		} else if (PROP_PAGE_ANIMATION.equals(key)) {
 			pageAnimationState.configure(value);
 		} else if (PROP_APP_VIEW_ANIM_DURATION.equals(key)) {

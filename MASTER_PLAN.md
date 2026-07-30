@@ -152,7 +152,11 @@ DRM или ограничений доступа, подбор/получени�
   one-shot selection mode также принадлежит synchronized terminal
   `SelectionModeState`: toggle не потребляет armed intent, успешный selection
   completion снимает его exact once, cancel сохраняет, destroy disarm/close;
-  raw `selectionModeActive` удалён. Явные зависимости
+  raw `selectionModeActive` удалён. Cross-thread autoscroll speed перенесён в
+  `AutoScrollSpeedState`: volatile snapshot и synchronized tiered update
+  сохраняют legacy thresholds, widened delta saturates в 200..10000, settings
+  используют те же bounds; compile-time-disabled notification generation и
+  `autoScrollNotificationId` удалены. Явные зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic
