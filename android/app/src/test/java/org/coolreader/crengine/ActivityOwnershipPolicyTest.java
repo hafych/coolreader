@@ -635,7 +635,7 @@ public class ActivityOwnershipPolicyTest {
 				"autoScrollSessions",
 				"autoScrollSpeedState",
 				"gcTask",
-				"animationUpdateLock",
+				"animationState",
 				"swapTaskLifecycle",
 				"swapTaskScheduler",
 				"tapHighlightState",
@@ -724,6 +724,24 @@ public class ActivityOwnershipPolicyTest {
 					Modifier.isSynchronized(
 							method.getModifiers()));
 		}
+		assertTrue(Modifier.isFinal(
+				ReaderAnimationState.class.getModifiers()));
+		for (Field field :
+				ReaderAnimationState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Method method :
+				ReaderAnimationState.class
+						.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize animation ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
 		for (Field field : ReaderView.class.getDeclaredFields()) {
 			assertFalse(
 					"Viewport resume timing must belong to its owner",
@@ -737,12 +755,18 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"Selection mode must belong to its owner",
 					field.getName().equals("selectionModeActive"));
+			assertFalse(
+					"Animation identity must belong to its owner",
+					field.getName().equals("currentAnimation"));
+			assertFalse(
+					"Animation updates must belong to their owner",
+					field.getName().equals(
+							"currentAnimationUpdate"));
+			assertFalse(
+					"Animation synchronization must use its owner",
+					field.getName().equals(
+							"animationUpdateLock"));
 		}
-		Field animation =
-				ReaderView.class.getDeclaredField("currentAnimation");
-		assertFalse(Modifier.isStatic(animation.getModifiers()));
-		assertTrue(Modifier.isPrivate(animation.getModifiers()));
-		assertTrue(Modifier.isVolatile(animation.getModifiers()));
 		Field imageViewer =
 				ReaderView.class.getDeclaredField(
 						"currentImageViewer");

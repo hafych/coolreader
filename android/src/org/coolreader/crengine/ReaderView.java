@@ -237,11 +237,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 					AutoScrollAnimation autoScroll =
 							autoScrollSessions.readySession();
+					ViewAnimationControl animation =
+							animationState.current();
 					if (autoScroll != null
 							&& autoScroll.isReadySession()) {
 						autoScroll.draw(canvas);
-					} else if (currentAnimation != null) {
-						currentAnimation.draw(canvas);
+					} else if (animation != null) {
+						animation.draw(canvas);
 					} else {
 						Rect dst = new Rect(0, 0, canvas.getWidth(), canvas.getHeight());
 						Rect src = new Rect(0, 0, currentPage.bitmap.getWidth(), currentPage.bitmap.getHeight());
@@ -3494,7 +3496,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				int page1 = currPos.pageNumber;
 				int page2 = currPos.pageNumber + 1;
 				if (page2 < 0 || page2 >= currPos.pageCount) {
-					currentAnimation = null;
+					animationState.reset();
 					return false;
 				}
 				image1 = preparePageImage(
@@ -5837,7 +5839,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return;
 			}
 			invalidateTapHighlight();
-			if (currentAnimation != null) {
+			if (animationState.current() != null) {
 				log.d("skipping drawPage request while scroll animation is in progress");
 				return;
 			}
@@ -6086,14 +6088,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 
-	private volatile ViewAnimationControl currentAnimation = null;
+	private final ReaderAnimationState<
+			ViewAnimationControl, AnimationUpdate> animationState =
+				new ReaderAnimationState<>();
 
 	private void cancelDocumentAnimation() {
 		animationScheduler.cancel();
-		synchronized (animationUpdateLock) {
-			currentAnimationUpdate = null;
-			currentAnimation = null;
-		}
+		animationState.reset();
 	}
 
 	private final ReaderPageAnimationState pageAnimationState =
@@ -6122,7 +6123,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			BackgroundThread.ensureBackground();
 			if (isDocumentInteractionCurrent(
 					expectedBook, interaction)
-					&& currentAnimation == null) {
+					&& animationState.current() == null) {
 				PositionProperties currPos = doc.getPositionProps(null, false);
 				if (currPos == null)
 					return;
@@ -6147,7 +6148,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 									fromX, w, dir2,
 									expectedBook, interaction,
 									animationSettings);
-					if (currentAnimation == animation
+					if (animationState.isCurrent(animation)
 							&& isDocumentInteractionCurrent(
 									expectedBook, interaction)) {
 						invalidateTapHighlight();
@@ -6169,7 +6170,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 									dir > 0 ? h * 7 / 8 : -(h * 7 / 8),
 									expectedBook, interaction,
 									animationSettings);
-					if (currentAnimation == animation
+					if (animationState.isCurrent(animation)
 							&& isDocumentInteractionCurrent(
 									expectedBook, interaction)) {
 						invalidateTapHighlight();
@@ -6662,7 +6663,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (!isDocumentInteractionCurrent(
 					expectedBook, interaction))
 				return;
-			if (currentAnimation != null)
+			if (animationState.current() != null)
 				return;
 			PositionProperties currPos = doc.getPositionProps(null, false);
 			ViewAnimationControl animation;
@@ -6686,7 +6687,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						expectedBook, interaction,
 						animationSettings);
 			}
-			if (currentAnimation == animation
+			if (animationState.isCurrent(animation)
 					&& isDocumentInteractionCurrent(
 							expectedBook, interaction)) {
 				invalidateTapHighlight();
@@ -6702,7 +6703,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private final BookInfo expectedBook;
 		private final DocumentLoadLifecycle.Interaction interaction;
 
-		//ViewAnimationControl myAnimation;
 		public void set(int x, int y) {
 			this.x = x;
 			this.y = y;
@@ -6713,26 +6713,27 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			this.y = y;
 			this.expectedBook = mBookInfo;
 			this.interaction = documentLoadLifecycle.interaction();
-			//this.myAnimation = currentAnimation;
-			scheduleUpdate();
 		}
 
 		private void scheduleUpdate() {
 			BackgroundThread.instance().postBackground(() -> {
-				alog.d("updating(" + x + ", " + y + ")");
 				ViewAnimationControl animation = null;
-				synchronized (animationUpdateLock) {
-
-					if (currentAnimation != null
-							&& currentAnimationUpdate == AnimationUpdate.this
+				synchronized (animationState) {
+					alog.d("updating(" + x + ", " + y + ")");
+					ViewAnimationControl candidate =
+							animationState.current();
+					if (candidate != null
+							&& animationState.isPendingUpdate(
+									AnimationUpdate.this)
 							&& isDocumentInteractionCurrent(
 									expectedBook, interaction)) {
-						animation = currentAnimation;
-						currentAnimationUpdate = null;
+						animation = candidate;
+						animationState.clearPendingUpdate(
+								AnimationUpdate.this);
 						animation.update(x, y);
-					} else if (currentAnimationUpdate
-							== AnimationUpdate.this) {
-						currentAnimationUpdate = null;
+					} else {
+						animationState.clearPendingUpdate(
+								AnimationUpdate.this);
 					}
 				}
 				if (animation != null)
@@ -6742,19 +6743,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	}
 
-	private final Object animationUpdateLock = new Object();
-	private AnimationUpdate currentAnimationUpdate;
-
 	private void updateAnimation(final int x, final int y) {
 		if (!mOpened)
 			return;
 		alog.d("updateAnimation(" + x + ", " + y + ")");
-		synchronized (animationUpdateLock) {
-			if (currentAnimationUpdate != null)
-				currentAnimationUpdate.set(x, y);
-			else
-				currentAnimationUpdate = new AnimationUpdate(x, y);
+		AnimationUpdate update;
+		boolean schedule = false;
+		synchronized (animationState) {
+			update = animationState.pendingUpdate();
+			if (update != null) {
+				update.set(x, y);
+			} else {
+				update = new AnimationUpdate(x, y);
+				schedule =
+						animationState.installPendingUpdate(update);
+			}
 		}
+		if (schedule)
+			update.scheduleUpdate();
 		try {
 			// give a chance to background thread to process event faster
 			Thread.sleep(0);
@@ -6772,7 +6778,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return;
 		alog.d("stopAnimation(" + x + ", " + y + ")");
 		BackgroundThread.instance().executeBackground(() -> {
-			ViewAnimationControl animation = currentAnimation;
+			ViewAnimationControl animation =
+					animationState.current();
 			if (animation != null
 					&& isDocumentInteractionCurrent(
 							expectedBook, interaction))
@@ -6786,7 +6793,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void scheduleAnimation(
 			final ViewAnimationControl animation) {
 		animationScheduler.post(() -> {
-			if (currentAnimation == animation)
+			if (animationState.isCurrent(animation))
 				animation.animate();
 		});
 	}
@@ -6870,7 +6877,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				if (canvas != null && surface.getHolder() != null) {
 					//log.v("before unlockCanvasAndPost");
 					holder.unlockCanvasAndPost(canvas);
-					if ( rc == null && currentAnimation != null ) {
+					if (rc == null
+							&& animationState.current() != null) {
 						long endTs = android.os.SystemClock.uptimeMillis();
 						updateAnimationDurationStats(endTs - startTs);
 					}
@@ -6919,7 +6927,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		final boolean isCurrentAnimation() {
-			return currentAnimation == this && ownsDocument();
+			return animationState.isCurrent(this)
+					&& ownsDocument();
 		}
 
 		final ReaderRenderRequest renderRequest() {
@@ -6932,10 +6941,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public void close() {
-			boolean wasCurrent = currentAnimation == this;
+			boolean wasCurrent =
+					animationState.finish(this);
 			if (wasCurrent) {
 				animationScheduler.cancel();
-				currentAnimation = null;
 			}
 			if (ownsDocument()) {
 				scheduleSaveCurrentPositionBookmark(
@@ -6947,7 +6956,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						expectedBook, interaction);
 			}
 
-			if (wasCurrent || currentAnimation == null)
+			if (wasCurrent || animationState.current() == null)
 				scheduleGc();
 		}
 
@@ -7012,7 +7021,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			this.imageEnd = endImage;
 			if (!ownsDocument())
 				return;
-			currentAnimation = this;
+			animationState.installIfIdle(this);
 		}
 
 		@Override
@@ -7185,7 +7194,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			page2 = image2.position.pageNumber;
 			if (!ownsDocument())
 				return;
-			currentAnimation = this;
 			divPaint = new Paint();
 			divPaint.setStyle(Paint.Style.FILL);
 			divPaint.setColor(mActivity.isNightMode() ? Color.argb(96, 64, 64, 64) : Color.argb(128, 128, 128, 128));
@@ -7209,6 +7217,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 			long duration = android.os.SystemClock.uptimeMillis() - start;
 			log.d("PageViewAnimation -- created in " + duration + " millis");
+			animationState.installIfIdle(this);
 		}
 
 		private void drawGradient(Canvas canvas, Rect rc, Paint[] paints, int startIndex, int endIndex) {
@@ -9027,6 +9036,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void cancelDelayedReaderWork() {
 		cancelDocumentAnimation();
+		animationState.close();
 		gcTask.cancel();
 		closeSwapTasks();
 		closeTapHighlight();

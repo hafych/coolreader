@@ -156,7 +156,13 @@ DRM или ограничений доступа, подбор/получени�
   `AutoScrollSpeedState`: volatile snapshot и synchronized tiered update
   сохраняют legacy thresholds, widened delta saturates в 200..10000, settings
   используют те же bounds; compile-time-disabled notification generation и
-  `autoScrollNotificationId` удалены. Явные зависимости
+  `autoScrollNotificationId` удалены. Active page animation и coalesced
+  pointer update объединены в synchronized terminal `ReaderAnimationState`:
+  exact identity запрещает конкурентную замену, finish/reset атомарно
+  инвалидируют stale update, update может ожидать background publication,
+  а полностью инициализированная animation публикуется без `this` escape;
+  `currentAnimation`/`currentAnimationUpdate`/`animationUpdateLock` удалены.
+  Явные зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic
@@ -286,10 +292,10 @@ DRM или ограничений доступа, подбор/получени�
   successful claim очищает slot до delegate, stale generations и повторный
   запуск не проходят, reentrant reschedule сохраняет нового владельца.
   Animation/GC delayed executors теперь private final у одного `ReaderView`;
-  animation handoff использует instance lock и volatile active reference вместо
-  process-wide class monitor, а `destroy()` безусловно отменяет оба executor и
-  очищает pending animation state до native teardown; неиспользуемый volatile
-  animation serial без readers/writers удалён.
+  animation handoff и coalesced pointer update принадлежат synchronized exact
+  owner, а `destroy()` безусловно отменяет оба executor и terminal-закрывает
+  animation state до native teardown; неиспользуемый volatile animation serial
+  без readers/writers удалён.
   Page-animation mode/duration также объединены в
   `ReaderPageAnimationState`: GUI публикует один immutable volatile snapshot,
   command/gesture захватывают его до background-hop, а каждая scroll/page
