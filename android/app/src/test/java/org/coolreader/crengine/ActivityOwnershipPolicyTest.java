@@ -700,6 +700,57 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isFinal(
 					field.getModifiers()));
 		}
+		assertTrue(Modifier.isFinal(
+				ReaderSettingsApplyRequest.class
+						.getModifiers()));
+		for (Field field :
+				ReaderSettingsApplyRequest.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+			assertFalse(
+					"settings request must not retain mutable BookInfo",
+					field.getType() == BookInfo.class);
+		}
+		Field currentBook =
+				ReaderView.class.getDeclaredField(
+						"mBookInfo");
+		assertTrue(Modifier.isPrivate(
+				currentBook.getModifiers()));
+		assertTrue(Modifier.isVolatile(
+				currentBook.getModifiers()));
+		Method applySettings =
+				ReaderView.class.getDeclaredMethod(
+						"applySettings",
+						Properties.class,
+						ReaderViewModeState.Snapshot.class,
+						ReaderSettingsApplyRequest.class);
+		assertTrue(Modifier.isPrivate(
+				applySettings.getModifiers()));
+		Class<?> createViewTask = null;
+		for (Class<?> nested :
+				ReaderView.class.getDeclaredClasses()) {
+			if (nested.getSimpleName().equals(
+					"CreateViewTask")) {
+				createViewTask = nested;
+				break;
+			}
+		}
+		assertTrue(createViewTask != null);
+		Field createSettingsRequest =
+				createViewTask.getDeclaredField(
+						"settingsApplyRequest");
+		assertEquals(
+				ReaderSettingsApplyRequest.class,
+				createSettingsRequest.getType());
+		assertTrue(Modifier.isPrivate(
+				createSettingsRequest.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				createSettingsRequest.getModifiers()));
 		int pagePreparationMethods = 0;
 		for (Method method : ReaderView.class.getDeclaredMethods()) {
 			if (!method.getName().equals("preparePageImage"))
@@ -810,6 +861,16 @@ public class ActivityOwnershipPolicyTest {
 				loadDocumentTask.getDeclaredField("bookInfo");
 		assertEquals(BookInfo.class, taskBook.getType());
 		assertTrue(Modifier.isPrivate(taskBook.getModifiers()));
+		Field loadSettingsRequest =
+				loadDocumentTask.getDeclaredField(
+						"settingsApplyRequest");
+		assertEquals(
+				ReaderSettingsApplyRequest.class,
+				loadSettingsRequest.getType());
+		assertTrue(Modifier.isPrivate(
+				loadSettingsRequest.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				loadSettingsRequest.getModifiers()));
 		Field activityDocumentLoads =
 				CoolReader.class.getDeclaredField(
 						"documentLoadLifecycle");

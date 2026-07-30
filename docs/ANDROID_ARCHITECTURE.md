@@ -263,6 +263,15 @@ native value is applied only while the current GUI value and key presence still
 match the request baseline, preserving newer same-key and unrelated settings.
 `updateSettings`, replacement and close cancel the request, destruction closes
 the owner, and a late callback cannot publish settings to a destroyed Activity.
+Forward settings application from startup, GUI updates and document loading
+uses an immutable `ReaderSettingsApplyRequest`. It captures the interaction and
+book-language string without retaining mutable `BookInfo`; stream
+reconciliation may therefore rebind the book identity while keeping the same
+native document owner. Background application no longer reads mutable book
+metadata or recaptures a replacement document through an ownerless redraw.
+After native settings apply it derives one exact `ReaderRenderRequest` for the
+still-current interaction, while the cross-thread current-book identity itself
+is published through a volatile reference.
 
 Selection and search preserve the same captured book/interaction pair from a
 native gesture update through selection-toolbar actions, asynchronous search

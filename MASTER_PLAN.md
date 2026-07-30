@@ -485,6 +485,13 @@ DRM или ограничений доступа, подбор/получени�
   настройки не теряются. `updateSettings`, replacement и close отменяют
   request, destroy закрывает owner, а поздний callback не публикует настройки
   в уже уничтоженную Activity.
+  Прямое применение settings из startup, GUI update и document load теперь
+  переносит immutable `ReaderSettingsApplyRequest`: owner хранит interaction и
+  snapshot языка без mutable `BookInfo`, поэтому stream reconciliation может
+  перепривязать book identity той же native-сессии. Background apply больше не
+  читает mutable metadata и не recapture-ит replacement через ownerless draw;
+  completion выводит exact `ReaderRenderRequest`, а current-book identity
+  публикуется volatile.
   Selection/search chain также сохраняет captured book+interaction от native
   gesture update до toolbar, search-history callback, двухпроходного
   forward/backward find, find-next popup, clear и bookmark highlight. Native

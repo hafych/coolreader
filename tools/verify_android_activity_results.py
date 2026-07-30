@@ -811,6 +811,9 @@ READER_SETTINGS_SYNC_SNAPSHOT = (
 READER_RENDER_REQUEST = (
     SOURCE / "crengine" / "ReaderRenderRequest.java"
 )
+READER_SETTINGS_APPLY_REQUEST = (
+    SOURCE / "crengine" / "ReaderSettingsApplyRequest.java"
+)
 READER_POSITION_SNAPSHOT = (
     SOURCE / "crengine" / "ReaderPositionSnapshot.java"
 )
@@ -870,6 +873,18 @@ READER_RENDER_REQUEST_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderRenderRequestTest.java"
+)
+READER_SETTINGS_APPLY_REQUEST_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderSettingsApplyRequestTest.java"
 )
 READER_POSITION_SNAPSHOT_TEST = (
     ROOT
@@ -3002,6 +3017,58 @@ def main() -> None:
                 f"{relative(READER_VIEW)} lets a stale document request "
                 "replace the current draw owner")
 
+    settings_apply_start = reader_view_text.find(
+        "\n\tprivate void applySettings(\n"
+        "\t\t\tProperties props,\n"
+        "\t\t\tReaderViewModeState.Snapshot viewModeSnapshot,\n"
+        "\t\t\tReaderSettingsApplyRequest applyRequest)")
+    settings_apply_end = reader_view_text.find(
+        "\n\tpublic static boolean eq(", settings_apply_start)
+    if settings_apply_start < 0 or settings_apply_end < 0:
+        violations.append(
+            f"{relative(READER_VIEW)} omits interaction-owned settings "
+            "application")
+    else:
+        settings_apply_text = reader_view_text[
+            settings_apply_start:settings_apply_end
+        ]
+        for marker in (
+            "applyRequest.bookLanguage(\n"
+            "\t\t\t\t\t\t\t\tdocumentLoadLifecycle)",
+            "doc.applySettings(props)",
+            "applyRequest.renderRequest(\n"
+            "\t\t\t\t\t\t\t\tmBookInfo,\n"
+            "\t\t\t\t\t\t\t\tdocumentLoadLifecycle)",
+            "&& !applyRequest.isCurrent(\n"
+            "\t\t\t\t\t\tdocumentLoadLifecycle)",
+            "props.remove(PROP_TEXTLANG_MAIN_LANG)",
+            "drawPage(null, false, renderRequest)",
+        ):
+            if marker not in settings_apply_text:
+                violations.append(
+                    f"{relative(READER_VIEW)} settings apply omits exact "
+                    f"ownership marker: {marker}")
+        if (
+                "mBookInfo.getFileInfo()" in settings_apply_text
+                or "\n\t\tdrawPage();" in settings_apply_text):
+            violations.append(
+                f"{relative(READER_VIEW)} settings apply recaptures "
+                "mutable document metadata or render ownership")
+    for marker in (
+        "private volatile BookInfo mBookInfo",
+        "ReaderSettingsApplyRequest.capture(\n"
+        "\t\t\t\t\t\t\tmBookInfo,\n"
+        "\t\t\t\t\t\t\tdocumentLoadLifecycle)",
+        "private final ReaderSettingsApplyRequest\n"
+        "\t\t\t\tsettingsApplyRequest",
+        "ReaderSettingsApplyRequest.fromInteraction(\n"
+        "\t\t\t\t\t\t\tbookInfo, loadInteraction)",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits captured settings owner: "
+                f"{marker}")
+
     replace_load_start = reader_view_text.find(
         "\n\tprivate DocumentLoadLifecycle.Request "
         "replaceDocumentLoad()")
@@ -3899,6 +3966,45 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_RENDER_REQUEST_TEST)} omits render "
                 f"ownership regression: {marker}")
+
+    reader_settings_apply_request_text = (
+        READER_SETTINGS_APPLY_REQUEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderSettingsApplyRequest",
+        "private final DocumentLoadLifecycle.Interaction interaction",
+        "private final String bookLanguage",
+        "static ReaderSettingsApplyRequest capture(",
+        "static ReaderSettingsApplyRequest fromInteraction(",
+        "static ReaderSettingsApplyRequest fromSnapshot(",
+        "boolean isCurrent(DocumentLoadLifecycle lifecycle)",
+        "String bookLanguage(DocumentLoadLifecycle lifecycle)",
+        "ReaderRenderRequest renderRequest(",
+        "lifecycle.isInteractionActive(interaction)",
+    ):
+        if marker not in reader_settings_apply_request_text:
+            violations.append(
+                f"{relative(READER_SETTINGS_APPLY_REQUEST)} omits "
+                f"settings ownership marker: {marker}")
+    if "private final BookInfo" in reader_settings_apply_request_text:
+        violations.append(
+            f"{relative(READER_SETTINGS_APPLY_REQUEST)} retains mutable "
+            "book metadata across background settings apply")
+
+    reader_settings_apply_request_test_text = (
+        READER_SETTINGS_APPLY_REQUEST_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "immutableLanguageSnapshotIsRetained",
+        "replacementInvalidatesLanguageAndRenderHandoff",
+        "streamReconciliationCanRebindBookWithinSameInteraction",
+        "initialEmptyReaderCanProduceExactNullBookRender",
+        "missingOrClosedInteractionCannotBeCaptured",
+    ):
+        if marker not in reader_settings_apply_request_test_text:
+            violations.append(
+                f"{relative(READER_SETTINGS_APPLY_REQUEST_TEST)} omits "
+                f"settings ownership regression: {marker}")
 
     reader_position_snapshot_text = (
         READER_POSITION_SNAPSHOT.read_text(encoding="utf-8")

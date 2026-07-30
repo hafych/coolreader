@@ -374,7 +374,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private final EinkScreen mEinkScreen;
 	private final DocumentLoadLifecycle documentLoadLifecycle;
 
-	private BookInfo mBookInfo;
+	private volatile BookInfo mBookInfo;
 
 	private Properties mSettings = new Properties();
 	private final CloseableTaskGate settingsSyncLifecycle =
@@ -4244,7 +4244,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void applySettings(
 			Properties props,
-			ReaderViewModeState.Snapshot viewModeSnapshot) {
+			ReaderViewModeState.Snapshot viewModeSnapshot,
+			ReaderSettingsApplyRequest applyRequest) {
 		props = new Properties(props); // make a copy
 		props.remove(PROP_TXT_OPTION_PREFORMATTED);
 		props.remove(PROP_EMBEDDED_STYLES);
@@ -4273,6 +4274,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		props.setBool(
 				PROP_PAGE_VIEW_MODE,
 				viewModeSnapshot.isPageMode());
+		final boolean hadConfiguredMainLanguage =
+				props.containsKey(PROP_TEXTLANG_MAIN_LANG);
+		final String configuredMainLanguage =
+				props.getProperty(PROP_TEXTLANG_MAIN_LANG);
+		boolean appliedBookLanguage = false;
 
 		if (!inDisabledFullRefresh()) {
 			// If this function is called when new settings loaded from the cloud are applied,
@@ -4284,39 +4290,73 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			mActivity.setScreenUpdateInterval(updInterval, surface);
 		}
 
-		if (null != mBookInfo) {
-			FileInfo fileInfo = mBookInfo.getFileInfo();
-			final String bookLanguage = fileInfo.getLanguage();
+		final String bookLanguage =
+				applyRequest != null
+						? applyRequest.bookLanguage(
+								documentLoadLifecycle)
+						: null;
+		if (bookLanguage != null) {
 			final String fontFace = props.getProperty(PROP_FONT_FACE);
-			if (null != bookLanguage && bookLanguage.length() > 0) {
-				if (props.getBool(PROP_TEXTLANG_EMBEDDED_LANGS_ENABLED, false))
+			if (bookLanguage.length() > 0) {
+				if (props.getBool(PROP_TEXTLANG_EMBEDDED_LANGS_ENABLED, false)) {
 					props.setProperty(PROP_TEXTLANG_MAIN_LANG, bookLanguage);
+					appliedBookLanguage = true;
+				}
 				final String langDescr = Engine.getHumanReadableLocaleName(bookLanguage);
 				if (null != langDescr && langDescr.length() > 0) {
 					Engine.font_lang_compat compat = Engine.checkFontLanguageCompatibility(fontFace, bookLanguage);
 					log.d("Checking font \"" + fontFace + "\" for compatibility with language \"" + bookLanguage + "\" fcLangCode=" + langDescr + ": compat=" + compat);
 					switch (compat) {
 						case font_lang_compat_invalid_tag:
-							log.w("Can't find compatible language code in embedded FontConfig catalog: language=\"" + bookLanguage + "\", filename=\"" + fileInfo + "\"");
+							log.w("Can't find compatible language code in embedded FontConfig catalog: language=\"" + bookLanguage + "\"");
 							break;
 						case font_lang_compat_none:
-							BackgroundThread.instance().executeGUI(() -> mActivity.showToast(R.string.font_not_compat_with_language, fontFace, langDescr));
+							BackgroundThread.instance().executeGUI(() -> {
+								if (applyRequest.isCurrent(
+										documentLoadLifecycle))
+									mActivity.showToast(
+											R.string.font_not_compat_with_language,
+											fontFace, langDescr);
+							});
 							break;
 						case font_lang_compat_partial:
-							BackgroundThread.instance().executeGUI(() -> mActivity.showToast(R.string.font_compat_partial_with_language, fontFace, langDescr));
+							BackgroundThread.instance().executeGUI(() -> {
+								if (applyRequest.isCurrent(
+										documentLoadLifecycle))
+									mActivity.showToast(
+											R.string.font_compat_partial_with_language,
+											fontFace, langDescr);
+							});
 							break;
 						case font_lang_compat_full:
 							// good, do nothing
 							break;
 					}
 				} else {
-						log.d("Invalid language tag: \"" + bookLanguage + "\", filename=\"" + fileInfo + "\"");
+						log.d("Invalid language tag: \"" + bookLanguage + "\"");
 				}
 			}
 		}
+		if (appliedBookLanguage
+				&& !applyRequest.isCurrent(
+						documentLoadLifecycle)) {
+			if (hadConfiguredMainLanguage)
+				props.setProperty(
+						PROP_TEXTLANG_MAIN_LANG,
+						configuredMainLanguage);
+			else
+				props.remove(PROP_TEXTLANG_MAIN_LANG);
+		}
 		doc.applySettings(props);
 		//syncViewSettings(props, save, saveDelayed);
-		drawPage();
+		ReaderRenderRequest renderRequest =
+				applyRequest != null
+						? applyRequest.renderRequest(
+								mBookInfo,
+								documentLoadLifecycle)
+						: null;
+		if (renderRequest != null)
+			drawPage(null, false, renderRequest);
 	}
 
 	public static boolean eq(Object obj1, Object obj2) {
@@ -4619,9 +4659,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			mSettings = currSettings;
 			final ReaderViewModeState.Snapshot viewModeSnapshot =
 					readerViewModeState.snapshot();
+			final ReaderSettingsApplyRequest applyRequest =
+					ReaderSettingsApplyRequest.capture(
+							mBookInfo,
+							documentLoadLifecycle);
 			BackgroundThread.instance().postBackground(
 					() -> applySettings(
-							currSettings, viewModeSnapshot));
+							currSettings,
+							viewModeSnapshot,
+							applyRequest));
 		}
 	}
 
@@ -4671,6 +4717,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		Properties props = new Properties();
 		private final ReaderViewModeState.Snapshot
 				viewModeSnapshot;
+		private final ReaderSettingsApplyRequest
+				settingsApplyRequest;
 
 		public CreateViewTask(Properties props) {
 			this.props = props;
@@ -4679,6 +4727,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			props.setAll(oldSettings);
 			mSettings = props;
 			viewModeSnapshot = readerViewModeState.snapshot();
+			settingsApplyRequest =
+					ReaderSettingsApplyRequest.capture(
+							mBookInfo,
+							documentLoadLifecycle);
 		}
 
 		public void work() throws Exception {
@@ -4706,7 +4758,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			String css = mEngine.loadResourceUtf8(R.raw.fb2);
 			if (css != null && css.length() > 0)
 				doc.setStylesheet(css);
-			applySettings(props, viewModeSnapshot);
+			applySettings(
+					props,
+					viewModeSnapshot,
+					settingsApplyRequest);
 			if (!readerNativeLifecycle.markInitialized())
 				return;
 			log.i("CreateViewTask - finished");
@@ -7503,6 +7558,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private final DocumentLoadLifecycle.Interaction
 				loadInteraction;
 		private final ReaderRenderRequest renderRequest;
+		private final ReaderSettingsApplyRequest
+				settingsApplyRequest;
 		private BookInfo bookInfo;
 		private final DocumentSource documentSource;
 		private String filename;
@@ -7560,6 +7617,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				// Should we use another fileInfo flag or a new flag?
 				mEngine.scanBookProperties(fileInfo);
 			}
+			this.settingsApplyRequest =
+					ReaderSettingsApplyRequest.fromInteraction(
+							bookInfo, loadInteraction);
 			String language = fileInfo.getLanguage();
 			log.v("update hyphenation language: " + language + " for " + fileInfo.getTitle());
 			this.filename = documentSource != null
@@ -7617,7 +7677,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			log.v("LoadDocumentTask : switching current profile");
 			applySettings(
 					settings,
-					viewModeSnapshot); // enforce settings reload
+					viewModeSnapshot,
+					settingsApplyRequest); // enforce settings reload
 			log.i("Switching done");
 			if (!documentLoadLifecycle.isActive(loadOwner)) {
 				closeParcelFileDescriptor();
