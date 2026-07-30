@@ -492,6 +492,13 @@ DRM или ограничений доступа, подбор/получени�
   читает mutable metadata и не recapture-ит replacement через ownerless draw;
   completion выводит exact `ReaderRenderRequest`, а current-book identity
   публикуется volatile.
+  Page background также вынесен из четырёх cross-thread полей в synchronized
+  `ReaderBackgroundState`: Surface/toolbar render держит один immutable
+  texture/bitmap/tiled/color snapshot до конца Canvas draw, publication
+  возвращает старый bitmap для recycle только после выхода всех текущих
+  readers, а unchanged/late publication освобождает лишь candidate. Destroy
+  закрывает owner сразу после Surface callbacks и освобождает последний bitmap;
+  redundant startup texture write и destroy-time leak удалены.
   Selection/search chain также сохраняет captured book+interaction от native
   gesture update до toolbar, search-history callback, двухпроходного
   forward/backward find, find-next popup, clear и bookmark highlight. Native

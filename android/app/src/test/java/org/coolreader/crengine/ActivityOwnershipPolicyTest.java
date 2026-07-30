@@ -412,6 +412,83 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void backgroundRenderStateOwnsBitmapLifetime()
+			throws Exception {
+		Field owner =
+				ReaderView.class.getDeclaredField(
+						"backgroundState");
+		assertFalse(Modifier.isStatic(owner.getModifiers()));
+		assertTrue(Modifier.isPrivate(owner.getModifiers()));
+		assertTrue(Modifier.isFinal(owner.getModifiers()));
+		assertEquals(
+				ReaderBackgroundState.class,
+				owner.getType());
+
+		assertTrue(Modifier.isFinal(
+				ReaderBackgroundState.class.getModifiers()));
+		for (Field field :
+				ReaderBackgroundState.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Class<?> valueType : new Class<?>[]{
+				ReaderBackgroundState.Snapshot.class,
+				ReaderBackgroundState.Publication.class}) {
+			assertTrue(Modifier.isFinal(
+					valueType.getModifiers()));
+			for (Field field :
+					valueType.getDeclaredFields()) {
+				assertFalse(Modifier.isStatic(
+						field.getModifiers()));
+				assertTrue(Modifier.isPrivate(
+						field.getModifiers()));
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+			}
+		}
+		for (Method method : new Method[]{
+				ReaderBackgroundState.class
+						.getDeclaredMethod(
+								"needsReplacement",
+								Object.class,
+								boolean.class,
+								int.class),
+				ReaderBackgroundState.class
+						.getDeclaredMethod(
+								"replace",
+								Object.class,
+								Object.class,
+								boolean.class,
+								int.class),
+				ReaderBackgroundState.class
+						.getDeclaredMethod(
+								"render",
+								ReaderBackgroundState
+										.Renderer.class),
+				ReaderBackgroundState.class
+						.getDeclaredMethod("close")}) {
+			assertTrue(Modifier.isSynchronized(
+					method.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"currentBackgroundTexture",
+				"currentBackgroundTextureBitmap",
+				"currentBackgroundTextureTiled",
+				"currentBackgroundColor"}) {
+			for (Field field :
+					ReaderView.class.getDeclaredFields()) {
+				assertFalse(
+						"ReaderView retains parallel background field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
 	public void delayedWorkBelongsToOneReaderGeneration()
 			throws Exception {
 		for (String name : new String[]{

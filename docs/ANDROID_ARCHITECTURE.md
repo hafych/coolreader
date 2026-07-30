@@ -272,6 +272,15 @@ metadata or recaptures a replacement document through an ownerless redraw.
 After native settings apply it derives one exact `ReaderRenderRequest` for the
 still-current interaction, while the cross-thread current-book identity itself
 is published through a volatile reference.
+Page-background rendering now uses one synchronized
+`ReaderBackgroundState` instead of separate texture, bitmap, tiling and color
+fields. Surface and toolbar drawing consume one immutable snapshot while
+holding its render boundary; replacement can return the previous bitmap for
+recycling only after every in-flight Canvas draw has left that boundary.
+Unchanged or post-close publication returns only its unused candidate. Reader
+destruction closes the background owner immediately after Surface callbacks,
+then recycles its final bitmap; the redundant pre-settings texture write and
+the destroy-time bitmap leak are removed.
 
 Selection and search preserve the same captured book/interaction pair from a
 native gesture update through selection-toolbar actions, asynchronous search

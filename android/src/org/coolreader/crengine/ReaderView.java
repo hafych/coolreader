@@ -4684,34 +4684,50 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private void setBackgroundTexture(BackgroundTextureInfo texture, int color) {
 		log.v("setBackgroundTexture(" + texture + ", " + color + ")");
-		if (!currentBackgroundTexture.equals(texture) || currentBackgroundColor != color) {
-			log.d("setBackgroundTexture( " + texture + " )");
-			currentBackgroundColor = color;
-			currentBackgroundTexture = texture;
-			byte[] data = mEngine.getImageData(currentBackgroundTexture);
-			doc.setPageBackgroundTexture(
-					data,
-					texture.isTiled() ? 1 : 0);
-			currentBackgroundTextureTiled = texture.isTiled();
-			if (data != null && data.length > 0) {
-				if (currentBackgroundTextureBitmap != null)
-					currentBackgroundTextureBitmap.recycle();
-				try {
-					currentBackgroundTextureBitmap = android.graphics.BitmapFactory.decodeByteArray(data, 0, data.length);
-				} catch (Exception e) {
-					log.e("Exception while decoding image data", e);
-					currentBackgroundTextureBitmap = null;
-				}
-			} else {
-				currentBackgroundTextureBitmap = null;
+		boolean tiled = texture.isTiled();
+		if (!backgroundState.needsReplacement(
+				texture, tiled, color))
+			return;
+		log.d("setBackgroundTexture( " + texture + " )");
+		byte[] data = mEngine.getImageData(texture);
+		if (!backgroundState.needsReplacement(
+				texture, tiled, color))
+			return;
+		doc.setPageBackgroundTexture(
+				data, tiled ? 1 : 0);
+		Bitmap candidate = null;
+		if (data != null && data.length > 0) {
+			try {
+				candidate =
+						android.graphics.BitmapFactory
+								.decodeByteArray(
+										data, 0,
+										data.length);
+			} catch (Exception e) {
+				log.e(
+						"Exception while decoding image data",
+						e);
 			}
 		}
+		ReaderBackgroundState.Publication<Bitmap>
+				publication =
+						backgroundState.replace(
+								texture, candidate,
+								tiled, color);
+		recycleBackgroundBitmap(
+				publication.releasable());
 	}
 
-	BackgroundTextureInfo currentBackgroundTexture = Engine.NO_TEXTURE;
-	Bitmap currentBackgroundTextureBitmap = null;
-	boolean currentBackgroundTextureTiled = false;
-	int currentBackgroundColor = 0;
+	private final ReaderBackgroundState<
+			BackgroundTextureInfo, Bitmap> backgroundState =
+					new ReaderBackgroundState<>(
+							Engine.NO_TEXTURE,
+							null, false, 0);
+
+	private void recycleBackgroundBitmap(Bitmap bitmap) {
+		if (bitmap != null && !bitmap.isRecycled())
+			bitmap.recycle();
+	}
 
 	class CreateViewTask extends Task {
 		Properties props = new Properties();
@@ -4738,13 +4754,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (!readerNativeLifecycle.isActive())
 				return;
 			log.d("CreateViewTask - in background thread");
-//			List<BackgroundTextureInfo> textures =
-//					mEngine.getAvailableTextures();
-//			byte[] data = mEngine.getImageData(textures[3]);
-			byte[] data = mEngine.getImageData(currentBackgroundTexture);
-			doc.setPageBackgroundTexture(
-					data,
-					currentBackgroundTexture.isTiled() ? 1 : 0);
 
 			//File historyDir = activity.getDir("settings", Context.MODE_PRIVATE);
 			//historyDir.mkdirs();
@@ -8048,12 +8057,23 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	protected void drawPageBackground(Canvas canvas, Rect dst, int side) {
-		Bitmap bmp = currentBackgroundTextureBitmap;
+		backgroundState.render(background ->
+				drawPageBackground(
+						canvas, dst, side, background));
+	}
+
+	private void drawPageBackground(
+			Canvas canvas,
+			Rect dst,
+			int side,
+			ReaderBackgroundState.Snapshot<
+					BackgroundTextureInfo, Bitmap> background) {
+		Bitmap bmp = background.bitmap();
 		if (bmp != null) {
 			int h = bmp.getHeight();
 			int w = bmp.getWidth();
 			Rect src = new Rect(0, 0, w, h);
-			if (currentBackgroundTextureTiled) {
+			if (background.isTiled()) {
 				// TILED
 				for (int x = 0; x < dst.width(); x += w) {
 					int ww = w;
@@ -8107,7 +8127,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				drawDimmedBitmap(canvas, bmp, src, dst);
 			}
 		} else {
-			canvas.drawColor(currentBackgroundColor | 0xFF000000);
+			canvas.drawColor(
+					background.color() | 0xFF000000);
 		}
 	}
 
@@ -8749,6 +8770,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	public void destroy() {
 		log.i("ReaderView.destroy() is called");
 		closeSurfaceCallbacks();
+		recycleBackgroundBitmap(
+				backgroundState.close());
 		stopTts();
 		stopImageViewer();
 		imageViewerState.close();
@@ -8767,7 +8790,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return;
 			log.i("ReaderView.destroyInternal() calling");
 			doc.destroy();
-			currentBackgroundTexture = Engine.NO_TEXTURE;
 		});
 	}
 

@@ -814,6 +814,9 @@ READER_RENDER_REQUEST = (
 READER_SETTINGS_APPLY_REQUEST = (
     SOURCE / "crengine" / "ReaderSettingsApplyRequest.java"
 )
+READER_BACKGROUND_STATE = (
+    SOURCE / "crengine" / "ReaderBackgroundState.java"
+)
 READER_POSITION_SNAPSHOT = (
     SOURCE / "crengine" / "ReaderPositionSnapshot.java"
 )
@@ -885,6 +888,18 @@ READER_SETTINGS_APPLY_REQUEST_TEST = (
     / "coolreader"
     / "crengine"
     / "ReaderSettingsApplyRequestTest.java"
+)
+READER_BACKGROUND_STATE_TEST = (
+    ROOT
+    / "android"
+    / "app"
+    / "src"
+    / "test"
+    / "java"
+    / "org"
+    / "coolreader"
+    / "crengine"
+    / "ReaderBackgroundStateTest.java"
 )
 READER_POSITION_SNAPSHOT_TEST = (
     ROOT
@@ -2694,7 +2709,10 @@ def main() -> None:
         "readerSurfaceState.markSurfaceCreated()",
         "readerSurfaceState.markSurfaceDestroyed()",
         "readerSurfaceState.isDrawable()",
-        "closeSurfaceCallbacks();\n\t\tstopTts();",
+        "closeSurfaceCallbacks();\n"
+        "\t\trecycleBackgroundBitmap(\n"
+        "\t\t\t\tbackgroundState.close());\n"
+        "\t\tstopTts();",
         "private void initializeNativeDocument()",
         "readerNativeLifecycle.claimCreate()",
         "readerNativeLifecycle.markCreated()",
@@ -3068,6 +3086,35 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits captured settings owner: "
                 f"{marker}")
+
+    for marker in (
+        "private final ReaderBackgroundState<\n"
+        "\t\t\tBackgroundTextureInfo, Bitmap> backgroundState",
+        "backgroundState.needsReplacement(",
+        "backgroundState.replace(",
+        "recycleBackgroundBitmap(\n"
+        "\t\t\t\tpublication.releasable())",
+        "backgroundState.render(background ->",
+        "ReaderBackgroundState.Snapshot<\n"
+        "\t\t\t\t\tBackgroundTextureInfo, Bitmap> background",
+        "closeSurfaceCallbacks();\n"
+        "\t\trecycleBackgroundBitmap(\n"
+        "\t\t\t\tbackgroundState.close());",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits atomic background "
+                f"ownership marker: {marker}")
+    for legacy in (
+        "currentBackgroundTexture",
+        "currentBackgroundTextureBitmap",
+        "currentBackgroundTextureTiled",
+        "currentBackgroundColor",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains parallel background "
+                f"state: {legacy}")
 
     replace_load_start = reader_view_text.find(
         "\n\tprivate DocumentLoadLifecycle.Request "
@@ -4005,6 +4052,42 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_SETTINGS_APPLY_REQUEST_TEST)} omits "
                 f"settings ownership regression: {marker}")
+
+    reader_background_state_text = (
+        READER_BACKGROUND_STATE.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "final class ReaderBackgroundState<TTexture, TBitmap>",
+        "interface Renderer<TTexture, TBitmap>",
+        "static final class Snapshot<TTexture, TBitmap>",
+        "static final class Publication<TBitmap>",
+        "synchronized boolean needsReplacement(",
+        "synchronized Publication<TBitmap> replace(",
+        "synchronized boolean render(",
+        "renderer.render(current)",
+        "synchronized TBitmap close()",
+        "TBitmap previous = current.bitmap",
+        "previous != bitmap ? previous : null",
+    ):
+        if marker not in reader_background_state_text:
+            violations.append(
+                f"{relative(READER_BACKGROUND_STATE)} omits background "
+                f"lifetime marker: {marker}")
+
+    reader_background_state_test_text = (
+        READER_BACKGROUND_STATE_TEST.read_text(encoding="utf-8")
+    )
+    for marker in (
+        "initialSnapshotIsRenderedAsOneValue",
+        "replacementPublishesAllFieldsAndReleasesPreviousBitmap",
+        "unchangedConfigurationRejectsCandidateWithoutReplacingCurrent",
+        "replacementWaitsUntilInFlightRenderReleasesSnapshot",
+        "closeReleasesCurrentAndRejectsLateRenderOrPublication",
+    ):
+        if marker not in reader_background_state_test_text:
+            violations.append(
+                f"{relative(READER_BACKGROUND_STATE_TEST)} omits "
+                f"background ownership regression: {marker}")
 
     reader_position_snapshot_text = (
         READER_POSITION_SNAPSHOT.read_text(encoding="utf-8")
