@@ -662,16 +662,38 @@ public class ActivityOwnershipPolicyTest {
 				"keyDoubleClickScheduler",
 				"keyRepeatState",
 				"tapGestureLifecycle",
-				"tapGestureScheduler"}) {
+				"tapGestureScheduler",
+				"tapBounceState"}) {
 			Field field = ReaderView.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
 			assertTrue(Modifier.isFinal(field.getModifiers()));
 		}
+		assertTrue(Modifier.isFinal(
+				TapBounceState.class.getModifiers()));
+		for (Field field :
+				TapBounceState.class.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			if (Modifier.isStatic(field.getModifiers()))
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+		}
+		for (Method method :
+				TapBounceState.class.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize bounce history",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
 		for (Field field : ReaderView.class.getDeclaredFields()) {
 			assertFalse(
 					"Viewport resume timing must belong to its owner",
 					field.getName().equals("lastAppResumeTs"));
+			assertFalse(
+					"Tap bounce timing must belong to its owner",
+					field.getName().equals("firstTapTimeStamp"));
 		}
 		Field animation =
 				ReaderView.class.getDeclaredField("currentAnimation");

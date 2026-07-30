@@ -1357,8 +1357,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			new CloseableTaskGate();
 	private final DelayedExecutor tapGestureScheduler =
 			DelayedExecutor.createGUI("tap-gesture");
+	private final TapBounceState tapBounceState =
+			new TapBounceState();
 	private TapHandler currentTapHandler = null;
-	private long firstTapTimeStamp;
 
 	private void scheduleTapGestureTimeout(
 			TapHandler handler,
@@ -1388,6 +1389,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		keyDoubleClickScheduler.cancel();
 		tapGestureLifecycle.close();
 		tapGestureScheduler.cancel();
+		tapBounceState.close();
 		currentTapHandler = null;
 	}
 
@@ -1768,10 +1770,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				// filter bounce (only when double taps not enabled)
 				if (event.getAction() == MotionEvent.ACTION_DOWN) {
 					if (state == STATE_INITIAL
-							&& Utils.timeInterval(
-									firstTapTimeStamp)
-									< inputSettings
-											.bounceTapIntervalMs())
+							&& tapBounceState.shouldReject(
+									Utils.timeStamp(),
+									inputSettings
+											.bounceTapIntervalMs()))
 						return unexpectedEvent(); // ignore bounced taps
 				}
 			}
@@ -1841,7 +1843,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								TAP_ACTION_TYPE_DOUBLE,
 								inputSettings);
 						firstDown = Utils.timeStamp();
-						firstTapTimeStamp = firstDown;
+						tapBounceState.recordTap(firstDown);
 						if (selectionModeActive) {
 							startSelection();
 						} else {

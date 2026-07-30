@@ -141,7 +141,11 @@ DRM или ограничений доступа, подбор/получени�
   Current/previous `ViewGroup` также принадлежат synchronized terminal
   `ActivityFrameState`: identity-no-op не портит history, `null` не становится
   content view, а destroy очищает обе UI-ссылки и запрещает stale переходы;
-  параллельные `mCurrentFrame`/`mPreviousFrame` удалены. Явные зависимости
+  параллельные `mCurrentFrame`/`mPreviousFrame` удалены. Межжестовый bounce
+  timestamp вынесен в synchronized terminal `TapBounceState`: explicit
+  no-tap sentinel не отбрасывает первый tap при свежем uptime, exact monotonic
+  boundary и clock regression overflow-safe, а `firstTapTimeStamp` удалён.
+  Явные зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic
