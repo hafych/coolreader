@@ -507,6 +507,7 @@ public class ActivityOwnershipPolicyTest {
 				"positionSaveScheduler",
 				"positionPersistenceState",
 				"pageInvalidationState",
+				"pageAnimationState",
 				"imageViewerState",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
@@ -628,6 +629,49 @@ public class ActivityOwnershipPolicyTest {
 				animationRenderRequest.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				animationRenderRequest.getModifiers()));
+		Field capturedAnimationSettings =
+				viewAnimationBase.getDeclaredField(
+						"animationSettings");
+		assertEquals(
+				ReaderPageAnimationState.Snapshot.class,
+				capturedAnimationSettings.getType());
+		assertTrue(Modifier.isPrivate(
+				capturedAnimationSettings.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				capturedAnimationSettings.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderPageAnimationState.class
+						.getModifiers()));
+		assertEquals(
+				ReaderPageAnimationState.class,
+				ReaderView.class.getDeclaredField(
+						"pageAnimationState").getType());
+		for (Field field :
+				ReaderPageAnimationState.class
+						.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			if (field.getName().equals("snapshot")) {
+				assertTrue(Modifier.isVolatile(
+						field.getModifiers()));
+			} else {
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+			}
+		}
+		assertTrue(Modifier.isFinal(
+				ReaderPageAnimationState.Snapshot.class
+						.getModifiers()));
+		for (Field field :
+				ReaderPageAnimationState.Snapshot.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
 		for (Class<?> owner : new Class<?>[]{
 				viewAnimationBase, animationUpdate}) {
 			Field expectedBook =
@@ -721,6 +765,14 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"ReaderView retains parallel applied viewport height",
 					field.getName().equals("internalDY"));
+			assertFalse(
+					"ReaderView retains parallel page animation mode",
+					field.getName().equals(
+							"pageFlipAnimationMode"));
+			assertFalse(
+					"ReaderView retains parallel page animation duration",
+					field.getName().equals(
+							"pageFlipAnimationSpeedMs"));
 			assertFalse(
 					"ReaderView retains numeric position-save generations",
 					field.getName().equals(

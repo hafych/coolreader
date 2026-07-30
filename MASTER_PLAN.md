@@ -252,6 +252,11 @@ DRM или ограничений доступа, подбор/получени�
   process-wide class monitor, а `destroy()` безусловно отменяет оба executor и
   очищает pending animation state до native teardown; неиспользуемый volatile
   animation serial без readers/writers удалён.
+  Page-animation mode/duration также объединены в
+  `ReaderPageAnimationState`: GUI публикует один immutable volatile snapshot,
+  command/gesture захватывают его до background-hop, а каждая scroll/page
+  animation сохраняет то же поколение до close, поэтому смена настройки больше
+  не смешивает geometry mode и live duration внутри уже активной animation.
   Coalesced `DrawPageTask` теперь использует exact closeable token вместо
   numeric generation и immutable identity `ReaderRenderRequest` с captured
   book+interaction (включая initial null-book generation). Только current

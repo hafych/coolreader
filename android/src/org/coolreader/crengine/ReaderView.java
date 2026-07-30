@@ -1820,11 +1820,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						int dir = isPageMode()
 								? x - start_x : y - start_y;
 						if (mGesturePageFlipsPerFullSwipe == 1) {
-							if (pageFlipAnimationSpeedMs == 0 || DeviceInfo.EINK_SCREEN) {
+							ReaderPageAnimationState.Snapshot
+									animationSettings =
+											pageAnimationState
+													.snapshot();
+							if (!animationSettings.isEnabled()
+									|| DeviceInfo.EINK_SCREEN) {
 								// no animation
 								return performAction(dir < 0 ? ReaderAction.PAGE_DOWN : ReaderAction.PAGE_UP, false);
 							}
-							startAnimation(start_x, start_y, width, height, x, y);
+							startAnimation(
+									start_x, start_y,
+									width, height, x, y,
+									animationSettings);
 							updateAnimation(x, y);
 							cancelTapGestureTimeout();
 							state = STATE_FLIPPING;
@@ -3738,9 +3746,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				break;
 			case DCMD_PAGEDOWN:
 				if (isBookLoaded()) {
-					boolean animationEnabled = pageFlipAnimationMode != PAGE_ANIMATION_NONE;
-					if (animationEnabled && param == 1 && !DeviceInfo.EINK_SCREEN) {
-						animatePageFlip(1, onFinishHandler);
+					ReaderPageAnimationState.Snapshot
+							animationSettings =
+									pageAnimationState.snapshot();
+					if (animationSettings.isEnabled()
+							&& param == 1
+							&& !DeviceInfo.EINK_SCREEN) {
+						animatePageFlip(
+								1, onFinishHandler,
+								animationSettings);
 					} else {
 						if (isPageMode()) {
 							doEngineCommand(ReaderCommand.DCMD_PAGEDOWN, param, onFinishHandler);
@@ -3753,9 +3767,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				break;
 			case DCMD_PAGEUP:
 				if (isBookLoaded()) {
-					boolean animationEnabled = pageFlipAnimationMode != PAGE_ANIMATION_NONE;
-					if (animationEnabled && param == 1 && !DeviceInfo.EINK_SCREEN) {
-						animatePageFlip(-1, onFinishHandler);
+					ReaderPageAnimationState.Snapshot
+							animationSettings =
+									pageAnimationState.snapshot();
+					if (animationSettings.isEnabled()
+							&& param == 1
+							&& !DeviceInfo.EINK_SCREEN) {
+						animatePageFlip(
+								-1, onFinishHandler,
+								animationSettings);
 					} else {
 						if (isPageMode()) {
 							doEngineCommand(ReaderCommand.DCMD_PAGEUP, param, onFinishHandler);
@@ -4585,8 +4605,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		} else if (PROP_APP_VIEW_AUTOSCROLL_SPEED.equals(key)) {
 			autoScrollSpeed = Utils.parseInt(value, 1500, 200, 10000);
 		} else if (PROP_PAGE_ANIMATION.equals(key)) {
-			pageFlipAnimationMode = Utils.parseInt(value, PAGE_ANIMATION_SLIDE2, PAGE_ANIMATION_NONE, PAGE_ANIMATION_MAX);
-			pageFlipAnimationSpeedMs = pageFlipAnimationMode != PAGE_ANIMATION_NONE ? DEF_PAGE_FLIP_MS : 0;
+			pageAnimationState.configure(value);
 		} else if (PROP_CONTROLS_ENABLE_VOLUME_KEYS.equals(key)) {
 			enableVolumeKeys = flg;
 		} else if (PROP_APP_SELECTION_ACTION.equals(key)) {
@@ -5997,13 +6016,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	private int pageFlipAnimationSpeedMs = DEF_PAGE_FLIP_MS; // if 0 : no animation
-	private int pageFlipAnimationMode = PAGE_ANIMATION_SLIDE2; //PAGE_ANIMATION_PAPER; // if 0 : no animation
+	private final ReaderPageAnimationState pageAnimationState =
+			new ReaderPageAnimationState(
+					PAGE_ANIMATION_NONE,
+					PAGE_ANIMATION_SLIDE2,
+					PAGE_ANIMATION_NONE,
+					PAGE_ANIMATION_MAX,
+					DEF_PAGE_FLIP_MS);
 
 	//	private void animatePageFlip( final int dir ) {
 //		animatePageFlip(dir, null);
 //	}
-	private void animatePageFlip(final int dir, final Runnable onFinishHandler) {
+	private void animatePageFlip(
+			final int dir,
+			final Runnable onFinishHandler,
+			final ReaderPageAnimationState.Snapshot
+					animationSettings) {
 		final BookInfo expectedBook = mBookInfo;
 		final DocumentLoadLifecycle.Interaction interaction =
 				documentLoadLifecycle.interaction();
@@ -6028,16 +6056,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //							dir2 = 2;
 //						else if ( dir2==-1 )
 //							dir2 = -2;
-				int speed = pageFlipAnimationSpeedMs;
+				int speed = animationSettings.durationMs();
 				if (onFinishHandler != null)
-					speed = pageFlipAnimationSpeedMs / 2;
+					speed = animationSettings.durationMs() / 2;
 				if (currPos.pageMode != 0) {
 					int fromX = dir2 > 0 ? w : 0;
 					int toX = dir2 > 0 ? 0 : w;
 					ViewAnimationControl animation =
 							new PageViewAnimation(
 									fromX, w, dir2,
-									expectedBook, interaction);
+									expectedBook, interaction,
+									animationSettings);
 					if (currentAnimation == animation
 							&& isDocumentInteractionCurrent(
 									expectedBook, interaction)) {
@@ -6058,7 +6087,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					ViewAnimationControl animation =
 							new ScrollViewAnimation(
 									dir > 0 ? h * 7 / 8 : -(h * 7 / 8),
-									expectedBook, interaction);
+									expectedBook, interaction,
+									animationSettings);
 					if (currentAnimation == animation
 							&& isDocumentInteractionCurrent(
 									expectedBook, interaction)) {
@@ -6517,7 +6547,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private static final boolean showBrightnessFlickToast = false;
 
 
-	private void startAnimation(final int startX, final int startY, final int maxX, final int maxY, final int newX, final int newY) {
+	private void startAnimation(
+			final int startX,
+			final int startY,
+			final int maxX,
+			final int maxY,
+			final int newX,
+			final int newY,
+			final ReaderPageAnimationState.Snapshot
+					animationSettings) {
 		final BookInfo expectedBook = mBookInfo;
 		final DocumentLoadLifecycle.Interaction interaction =
 				documentLoadLifecycle.interaction();
@@ -6545,12 +6583,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 //						sx = 0;
 				animation = new PageViewAnimation(
 						sx, maxX, dir,
-						expectedBook, interaction);
+						expectedBook, interaction,
+						animationSettings);
 			} else {
 				int dir = newX < startX || newY < startY ? -1 : 1;
 				animation = new ScrollViewAnimation(
 						dir * currPos.pageHeight * 7 / 8,
-						expectedBook, interaction);
+						expectedBook, interaction,
+						animationSettings);
 			}
 			if (currentAnimation == animation
 					&& isDocumentInteractionCurrent(
@@ -6757,6 +6797,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private final BookInfo expectedBook;
 		private final DocumentLoadLifecycle.Interaction interaction;
 		private final ReaderRenderRequest renderRequest;
+		private final ReaderPageAnimationState.Snapshot
+				animationSettings;
 
 		public boolean isStarted() {
 			return started;
@@ -6764,10 +6806,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		ViewAnimationBase(
 				BookInfo expectedBook,
-				DocumentLoadLifecycle.Interaction interaction) {
+				DocumentLoadLifecycle.Interaction interaction,
+				ReaderPageAnimationState.Snapshot
+						animationSettings) {
 			//startTimeStamp = android.os.SystemClock.uptimeMillis();
 			this.expectedBook = expectedBook;
 			this.interaction = interaction;
+			this.animationSettings = animationSettings;
 			this.renderRequest =
 					ReaderRenderRequest.fromInteraction(
 							expectedBook, interaction);
@@ -6785,6 +6830,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		final ReaderRenderRequest renderRequest() {
 			return renderRequest;
+		}
+
+		final ReaderPageAnimationState.Snapshot
+				animationSettings() {
+			return animationSettings;
 		}
 
 		public void close() {
@@ -6833,8 +6883,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		ScrollViewAnimation(
 				int offset, BookInfo expectedBook,
-				DocumentLoadLifecycle.Interaction interaction) {
-			super(expectedBook, interaction);
+				DocumentLoadLifecycle.Interaction interaction,
+				ReaderPageAnimationState.Snapshot
+						animationSettings) {
+			super(
+					expectedBook, interaction,
+					animationSettings);
 			if (!ownsDocument())
 				return;
 			log.v("ScrollViewAnimation -- creating: drawing two pages to buffer");
@@ -6889,7 +6943,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				close();
 				return;
 			}
-			if (duration > 0 && pageFlipAnimationSpeedMs != 0) {
+			if (duration > 0
+					&& animationSettings().isEnabled()) {
 				int steps = (int) (duration / getAvgAnimationDrawDuration()) + 2;
 				for (int i = 1; i < steps; i++) {
 					this.progress = AnimationTiming.scrollStep(
@@ -6913,10 +6968,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (!started) {
 				started = true;
 			}
-			if (pageFlipAnimationSpeedMs == 0) {
+			if (!animationSettings().isEnabled()) {
 				progress = 1.0;
 			}else {
-				//int duration = pageFlipAnimationSpeedMs;
 				//long frameDur = getAvgAnimationDrawDuration();
 				/* just move 12px per frame */
 				int absOffset = offset < 0 ? 0-offset : offset;
@@ -6988,15 +7042,23 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		PageViewAnimation(
 				int startX, int maxX, int direction,
 				BookInfo expectedBook,
-				DocumentLoadLifecycle.Interaction interaction) {
-			super(expectedBook, interaction);
+				DocumentLoadLifecycle.Interaction interaction,
+				ReaderPageAnimationState.Snapshot
+						animationSettings) {
+			super(
+					expectedBook, interaction,
+					animationSettings);
 			this.startX = startX;
 			this.maxX = maxX;
 			this.direction = direction;
 			this.currShift = 0;
 			this.destShift = 0;
-			this.naturalPageFlip = (pageFlipAnimationMode == PAGE_ANIMATION_PAPER);
-			this.flipTwoPages = (pageFlipAnimationMode == PAGE_ANIMATION_SLIDE2);
+			this.naturalPageFlip =
+					animationSettings.mode()
+							== PAGE_ANIMATION_PAPER;
+			this.flipTwoPages =
+					animationSettings.mode()
+							== PAGE_ANIMATION_SLIDE2;
 			if (!ownsDocument())
 				return;
 
@@ -7215,7 +7277,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				close();
 				return;
 			}
-			if (duration > 0 && pageFlipAnimationSpeedMs != 0) {
+			if (duration > 0
+					&& animationSettings().isEnabled()) {
 				int steps = (int) (duration / getAvgAnimationDrawDuration()) + 2;
 				int x0 = currShift;
 				int x1 = destShift;
@@ -7303,18 +7366,27 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				close();
 				return;
 			}
-			alog.v("PageViewAnimation.animate(" + currShift + " => " + destShift + ") speed=" + pageFlipAnimationSpeedMs);
+			int animationDurationMs =
+					animationSettings().durationMs();
+			alog.v("PageViewAnimation.animate("
+					+ currShift + " => " + destShift
+					+ ") speed=" + animationDurationMs);
 			//log.d("animate() is called");
 			if (currShift != destShift) {
 				started = true;
-				if (pageFlipAnimationSpeedMs == 0)
+				if (animationDurationMs == 0)
 					currShift = destShift;
 				else {
 					int delta = currShift - destShift;
 					if (delta < 0)
 						delta = -delta;
 					long avgDraw = getAvgAnimationDrawDuration();
-					int maxStep = pageFlipAnimationSpeedMs > 0 ? (int) (maxX * 1000 / avgDraw / pageFlipAnimationSpeedMs) : maxX;
+					int maxStep =
+							animationDurationMs > 0
+									? (int) (maxX * 1000
+											/ avgDraw
+											/ animationDurationMs)
+									: maxX;
 					int step;
 					if (delta > maxStep * 2)
 						step = maxStep;
