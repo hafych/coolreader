@@ -716,6 +716,12 @@ public class ActivityOwnershipPolicyTest {
 					"ReaderView retains parallel requested height",
 					field.getName().equals("requestedHeight"));
 			assertFalse(
+					"ReaderView retains parallel applied viewport width",
+					field.getName().equals("internalDX"));
+			assertFalse(
+					"ReaderView retains parallel applied viewport height",
+					field.getName().equals("internalDY"));
+			assertFalse(
 					"ReaderView retains numeric position-save generations",
 					field.getName().equals(
 							"lastSavePositionTaskId"));
@@ -1405,12 +1411,20 @@ public class ActivityOwnershipPolicyTest {
 		}
 		assertTrue(Modifier.isFinal(
 				ViewportResizeState.class.getModifiers()));
-		Field viewportSize =
-				ViewportResizeState.class.getDeclaredField("size");
-		assertTrue(Modifier.isPrivate(
-				viewportSize.getModifiers()));
-		assertTrue(Modifier.isVolatile(
-				viewportSize.getModifiers()));
+		for (String fieldName : new String[]{
+				"requestedSize",
+				"appliedSize"}) {
+			Field viewportSize =
+					ViewportResizeState.class.getDeclaredField(
+							fieldName);
+			assertTrue(Modifier.isPrivate(
+					viewportSize.getModifiers()));
+			assertTrue(Modifier.isVolatile(
+					viewportSize.getModifiers()));
+			assertEquals(
+					ViewportResizeState.Size.class,
+					viewportSize.getType());
+		}
 		for (Field field :
 				ViewportResizeState.class.getDeclaredFields()) {
 			assertTrue(Modifier.isPrivate(

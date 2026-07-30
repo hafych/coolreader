@@ -177,10 +177,13 @@ DRM или ограничений доступа, подбор/получени�
   только на latest request, page/reload/close invalidation и destroy исключают
   stale callbacks.
   Requested viewport и delayed native resize объединены в
-  `ViewportResizeState`: immutable volatile size snapshot заменяет parallel
-  width/height, exact latest request контролирует background apply и GUI done,
-  invalid dimensions получают positive fallback, owned scheduler заменяет
-  pending delay, а destroy закрывает state до native teardown.
+  `ViewportResizeState`: immutable volatile requested/applied snapshots заменяют
+  обе parallel пары width/height, exact latest request и in-flight apply token
+  контролируют background native resize и GUI done, stale native completion
+  публикует только фактический applied snapshot, pending completion не теряется
+  в промежутке background→GUI и может завершить новый request только при точном
+  совпадении размеров, invalid dimensions получают positive fallback, owned
+  scheduler заменяет pending delay, а destroy закрывает state до native teardown.
   Surface created/visible/focused/closed объединены в synchronized
   `ReaderSurfaceState` вместо отдельного boolean: оба порядка visible/create
   дают один ready refresh, delayed E-Ink focus refresh принадлежит exact token

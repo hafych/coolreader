@@ -1227,14 +1227,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		public BitmapInfo prepareImage(
-				ReaderRenderRequest renderRequest) {
+				ReaderRenderRequest renderRequest,
+				ViewportResizeState.Size viewport) {
 			// called from background thread
 			if (!isActive()
 					|| !isRenderRequestCurrent(renderRequest))
 				return null;
 			ImageInfo img =
 					imageViewerState.snapshotForBuffer(
-							session, internalDX, internalDY);
+							session,
+							viewport.width(),
+							viewport.height());
 			if (img == null || !isActive())
 				return null;
 			if (mCurrentPageInfo != null) {
@@ -1248,7 +1251,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return null;
 			BitmapInfo bi = new BitmapInfo();
 			bi.imageInfo = new ImageInfo(img);
-			bi.bitmap = factory.get(internalDX, internalDY);
+			bi.bitmap = factory.get(
+					viewport.width(), viewport.height());
 			bi.position = currpos;
 			if (!doc.drawImage(bi.bitmap, bi.imageInfo)
 					|| !isActive()
@@ -1480,9 +1484,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							gestureBook,
 							gestureInteraction))
 						return;
+					ViewportResizeState.Size viewport =
+							viewportResizeState
+									.appliedOrRequestedSize();
 					image = new ImageInfo();
-					image.bufWidth = internalDX;
-					image.bufHeight = internalDY;
+					image.bufWidth = viewport.width();
+					image.bufHeight = viewport.height();
 					image.bufDpi = mActivity.getDensityDpi();
 					if (doc.checkImage(start_x, start_y, image)) {
 						return;
@@ -1606,9 +1613,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							gestureBook,
 							gestureInteraction))
 						return;
+					ViewportResizeState.Size viewport =
+							viewportResizeState
+									.appliedOrRequestedSize();
 					image = new ImageInfo();
-					image.bufWidth = internalDX;
-					image.bufHeight = internalDY;
+					image.bufWidth = viewport.width();
+					image.bufHeight = viewport.height();
 					image.bufDpi = mActivity.getDensityDpi();
 					if (!doc.checkImage(start_x, start_y, image))
 						image = null;
@@ -5431,6 +5441,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			pageInvalidationState =
 					new ReaderPageInvalidationState();
 
+	private ViewportResizeState.Size ensureAppliedViewportSize() {
+		BackgroundThread.ensureBackground();
+		ViewportResizeState.Size applied =
+				viewportResizeState.appliedSize();
+		if (applied != null)
+			return applied;
+		ViewportResizeState.Size requested =
+				viewportResizeState.requestedSize();
+		log.d("Applying initial viewport size "
+				+ requested.width() + ","
+				+ requested.height());
+		doc.resize(requested.width(), requested.height());
+		viewportResizeState.publishApplied(requested);
+		return requested;
+	}
+
 	/**
 	 * Prepare and cache page image.
 	 * Cache is represented by two slots: mCurrentPageInfo and mNextPageInfo.
@@ -5462,32 +5488,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 		}
 
-		if (internalDX == 0 || internalDY == 0) {
-			ViewportResizeState.Size requested =
-					viewportResizeState.size();
-			internalDX = requested.width();
-			internalDY = requested.height();
-			doc.resize(internalDX, internalDY);
-			if (!isRenderRequestCurrent(renderRequest))
-				return null;
-//			internalDX=200;
-//			internalDY=300;
-//			doc.resize(internalDX, internalDY);
-//			BackgroundThread.instance().postGUI(new Runnable() {
-//				@Override
-//				public void run() {
-//					log.d("invalidating view due to resize");
-//					//ReaderView.this.invalidate();
-//					drawPage(null, false);
-//					//redraw();
-//				}
-//			});
-		}
+		ViewportResizeState.Size viewport =
+				ensureAppliedViewportSize();
+		if (!isRenderRequestCurrent(renderRequest))
+			return null;
 
 		ImageViewer imageViewer = currentImageViewer;
 		if (imageViewer != null && imageViewer.isActive()) {
 			BitmapInfo image =
-					imageViewer.prepareImage(renderRequest);
+					imageViewer.prepareImage(
+							renderRequest, viewport);
 			return isRenderRequestCurrent(renderRequest)
 					? image : null;
 		}
@@ -5523,13 +5533,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			BitmapInfo bi = new BitmapInfo();
 			bi.position = currpos;
-			ViewportResizeState.Size requested =
-					viewportResizeState.size();
 			bi.bitmap = factory.get(
-					internalDX > 0
-							? internalDX : requested.width(),
-					internalDY > 0
-							? internalDY : requested.height());
+					viewport.width(), viewport.height());
 			applyBatteryStatusToDocument();
 			doc.getPageImage(bi.bitmap);
 			return publishCurrentPageCandidate(
@@ -5567,8 +5572,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							candidate.position = nextpos;
 							candidate.bitmap =
 									factory.get(
-											internalDX,
-											internalDY);
+											viewport.width(),
+											viewport.height());
 							applyBatteryStatusToDocument();
 							doc.getPageImage(candidate.bitmap);
 						}
@@ -5612,8 +5617,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							candidate.position = nextpos;
 							candidate.bitmap =
 									factory.get(
-											internalDX,
-											internalDY);
+											viewport.width(),
+											viewport.height());
 							applyBatteryStatusToDocument();
 							doc.getPageImage(candidate.bitmap);
 						}
@@ -5711,7 +5716,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				log.d("skipping drawPage request while scroll animation is in progress");
 				return;
 			}
-			log.e("DrawPageTask.work(" + internalDX + "," + internalDY + ")");
+			ViewportResizeState.Size viewport =
+					viewportResizeState
+							.appliedOrRequestedSize();
+			log.e("DrawPageTask.work("
+					+ viewport.width() + ","
+					+ viewport.height() + ")");
 			bi = preparePageImage(0, renderRequest);
 			if (bi != null
 					&& drawTaskLifecycle.isActive(owner)
@@ -5785,10 +5795,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private void checkSize() {
-		ViewportResizeState.Size requested =
-				viewportResizeState.size();
-		if (requested.width() == internalDX
-				&& requested.height() == internalDY)
+		if (viewportResizeState.requestedIsApplied())
 			return;
 		scheduleResize(viewportResizeState.requestCurrent());
 	}
@@ -5797,12 +5804,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			ViewportResizeState.Request request) {
 		if (request == null)
 			return;
-		ViewportResizeState.Size requested = request.size();
-		if (requested.width() == internalDX
-				&& requested.height() == internalDY) {
-			viewportResizeState.complete(request);
+		if (viewportResizeState.completeIfApplied(request))
 			return;
-		}
 		if (getActivity().isDialogActive()) {
 			log.d("checkSize() : dialog is active, skipping resize");
 			return;
@@ -5829,18 +5832,25 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return;
 			}
 			post(new Task() {
+				private boolean applied;
+
 				public void work() {
 					BackgroundThread.ensureBackground();
-					if (!viewportResizeState.isCurrent(request)) {
+					if (!viewportResizeState.beginApply(request)) {
 						log.d("skipping duplicate resize request");
 						return;
 					}
 					ViewportResizeState.Size requested =
 							request.size();
-					internalDX = requested.width();
-					internalDY = requested.height();
-					log.d("ResizeTask: resizeInternal(" + internalDX + "," + internalDY + ")");
-					doc.resize(internalDX, internalDY);
+					log.d("ResizeTask: resizeInternal("
+							+ requested.width() + ","
+							+ requested.height() + ")");
+					doc.resize(
+							requested.width(),
+							requested.height());
+					applied =
+							viewportResizeState.finishApply(
+									request);
 //	    		        if ( mOpened ) {
 //	    					log.d("ResizeTask: done, drawing page");
 //	    			        drawPage();
@@ -5848,7 +5858,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				}
 
 				public void done() {
-					if (!viewportResizeState.complete(request))
+					if (!applied
+							|| !viewportResizeState
+									.completeCurrentApplied())
 						return;
 					clearImageCache();
 					drawPage(null, false);
@@ -5857,6 +5869,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 				@Override
 				public void fail(Exception e) {
+					viewportResizeState.cancelApply(request);
 					viewportResizeState.complete(request);
 					super.fail(e);
 				}
@@ -7473,9 +7486,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				doneHandler, isPartially, renderRequest));
 	}
 
-	private int internalDX = 0;
-	private int internalDY = 0;
-
 	private byte[] findCoverPage() {
 		log.d("document is loaded succesfull, checking coverpage data");
 		byte[] coverpageBytes = doc.getCoverPageData();
@@ -7733,12 +7743,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 				coverPageBytes = findCoverPage();
 				log.v("requesting page image, to render");
-				if (internalDX == 0 || internalDY == 0) {
-					internalDX = surface.getWidth();
-					internalDY = surface.getHeight();
-					log.d("LoadDocument task: no size defined, resizing using widget size");
-					doc.resize(internalDX, internalDY);
-				}
 				preparePageImage(0, renderRequest);
 				log.v("updating loaded book info");
 				updateLoadedBookInfo(
@@ -8895,14 +8899,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		public void OnLoadFileEnd() {
 			log.d("readerCallback.OnLoadFileEnd");
-			if (internalDX == 0 && internalDY == 0) {
-				ViewportResizeState.Size requested =
-						viewportResizeState.size();
-				internalDX = requested.width();
-				internalDY = requested.height();
-				log.d("OnLoadFileEnd: resizeInternal(" + internalDX + "," + internalDY + ")");
-				doc.resize(internalDX, internalDY);
-			}
+			ensureAppliedViewportSize();
 		}
 
 		public void OnLoadFileError(String message) {

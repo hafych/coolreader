@@ -13,19 +13,22 @@ package org.coolreader.crengine;
 final class ViewportResizeState {
 	private static final int FALLBACK_SIZE = 80;
 
-	private volatile Size size;
+	private volatile Size requestedSize;
+	private volatile Size appliedSize;
 	private Request current;
+	private Request applying;
+	private boolean appliedNeedsCompletion;
 	private boolean closed;
 
 	ViewportResizeState(int width, int height) {
-		size = normalizedSize(width, height);
+		requestedSize = normalizedSize(width, height);
 	}
 
 	synchronized Request request(int width, int height) {
 		if (closed)
 			return null;
 		Size requested = normalizedSize(width, height);
-		size = requested;
+		requestedSize = requested;
 		current = new Request(requested);
 		return current;
 	}
@@ -33,16 +36,83 @@ final class ViewportResizeState {
 	synchronized Request requestCurrent() {
 		if (closed)
 			return null;
-		current = new Request(size);
+		current = new Request(requestedSize);
 		return current;
 	}
 
-	Size size() {
-		return size;
+	Size requestedSize() {
+		return requestedSize;
+	}
+
+	Size appliedSize() {
+		return appliedSize;
+	}
+
+	Size appliedOrRequestedSize() {
+		Size applied = appliedSize;
+		return applied != null ? applied : requestedSize;
+	}
+
+	synchronized boolean requestedIsApplied() {
+		return applying == null
+				&& !appliedNeedsCompletion
+				&& sameSize(requestedSize, appliedSize);
 	}
 
 	synchronized boolean isCurrent(Request request) {
 		return !closed && request != null && current == request;
+	}
+
+	synchronized boolean completeIfApplied(Request request) {
+		if (!isCurrent(request)
+				|| applying != null
+				|| appliedNeedsCompletion
+				|| !sameSize(request.size, appliedSize))
+			return false;
+		current = null;
+		return true;
+	}
+
+	synchronized boolean beginApply(Request request) {
+		if (!isCurrent(request) || applying != null)
+			return false;
+		applying = request;
+		return true;
+	}
+
+	synchronized boolean finishApply(Request request) {
+		if (closed || request == null || applying != request)
+			return false;
+		appliedSize = request.size;
+		applying = null;
+		appliedNeedsCompletion = true;
+		return true;
+	}
+
+	synchronized boolean cancelApply(Request request) {
+		if (request == null || applying != request)
+			return false;
+		applying = null;
+		return true;
+	}
+
+	synchronized boolean publishApplied(Size size) {
+		if (closed || size == null || applying != null)
+			return false;
+		appliedSize = size;
+		return true;
+	}
+
+	synchronized boolean completeCurrentApplied() {
+		if (closed
+				|| applying != null
+				|| !appliedNeedsCompletion
+				|| current == null
+				|| !sameSize(current.size, appliedSize))
+			return false;
+		current = null;
+		appliedNeedsCompletion = false;
+		return true;
 	}
 
 	synchronized boolean complete(Request request) {
@@ -57,7 +127,16 @@ final class ViewportResizeState {
 			return false;
 		closed = true;
 		current = null;
+		applying = null;
+		appliedNeedsCompletion = false;
 		return true;
+	}
+
+	private static boolean sameSize(Size first, Size second) {
+		return first != null
+				&& second != null
+				&& first.width == second.width
+				&& first.height == second.height;
 	}
 
 	private static Size normalizedSize(int width, int height) {
