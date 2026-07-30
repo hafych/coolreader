@@ -915,6 +915,57 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isFinal(
 					field.getModifiers()));
 		}
+		assertTrue(Modifier.isFinal(
+				ReaderPageBitmapLifetime.class
+						.getModifiers()));
+		for (Field field :
+				ReaderPageBitmapLifetime.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (String fieldName : new String[]{
+				"releaser",
+				"readers",
+				"deferred"}) {
+			assertTrue(Modifier.isFinal(
+					ReaderPageBitmapLifetime.class
+							.getDeclaredField(fieldName)
+							.getModifiers()));
+		}
+		assertSynchronizedMethod(
+				ReaderPageBitmapLifetime.class,
+				"beginRead");
+		assertSynchronizedMethod(
+				ReaderPageBitmapLifetime.class,
+				"finishRead",
+				ReaderPageBitmapLifetime.Read.class);
+		assertSynchronizedMethod(
+				ReaderPageBitmapLifetime.class,
+				"retire",
+				Object.class);
+		assertSynchronizedMethod(
+				ReaderPageBitmapLifetime.class,
+				"close");
+		assertTrue(Modifier.isFinal(
+				ReaderPageBitmapLifetime.Read.class
+						.getModifiers()));
+		assertTrue(Modifier.isPrivate(
+				ReaderPageBitmapLifetime.Read.class
+						.getDeclaredConstructors()[0]
+						.getModifiers()));
+		Field pageBitmapLifetime =
+				ReaderView.class.getDeclaredField(
+						"pageBitmapLifetime");
+		assertEquals(
+				ReaderPageBitmapLifetime.class,
+				pageBitmapLifetime.getType());
+		assertTrue(Modifier.isPrivate(
+				pageBitmapLifetime.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				pageBitmapLifetime.getModifiers()));
 		Class<?> loadDocumentTask = null;
 		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
 			if (nested.getSimpleName().equals("LoadDocumentTask")) {

@@ -292,6 +292,13 @@ DRM или ограничений доступа, подбор/получени�
   deduplication и больше не обнуляют cache replacement-книги. Close также
   ставит native boundary для ещё не опубликованной загрузки, а выход из
   image-viewer при смене документа не создаёт новый draw request.
+  Возврат page bitmap в reuse-pool теперь дополнительно принадлежит
+  `ReaderPageBitmapLifetime`: весь GUI Canvas draw держит exact read token,
+  cache replacement/invalidation/close только retire-ят identity, а release
+  откладывается и дедуплицируется до выхода последнего reader. Публикация и
+  отсоединение cache-слотов используют тот же monitor, scroll animation больше
+  не сохраняет raw bitmap borrow, autoscroll проверяет release до dereference,
+  а destroy закрывает новые reads до native teardown.
   Autoscroll теперь принадлежит synchronized identity-owned
   `AutoScrollSessionState` и отдельному cancelable GUI scheduler: background
   init публикует render-ready только точному owner, stop/destroy не допускают

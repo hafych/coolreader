@@ -213,6 +213,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 
 		protected void doDraw(Canvas canvas) {
+			BitmapInfo currentPage;
+			synchronized (pageBitmapLifetime) {
+				currentPage = mCurrentPageInfo;
+			}
 			try {
 				log.d("doDraw() called");
 				ReaderProgressState.Snapshot progress =
@@ -226,8 +230,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							progress.getPosition(),
 							progress.getTitle());
 				} else if (readerNativeLifecycle.isInitialized()
-						&& mCurrentPageInfo != null
-						&& mCurrentPageInfo.bitmap != null) {
+						&& currentPage != null
+						&& currentPage.bitmap != null) {
 					log.d("onDraw() -- drawing page image");
 
 					AutoScrollAnimation autoScroll =
@@ -239,7 +243,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						currentAnimation.draw(canvas);
 					} else {
 						Rect dst = new Rect(0, 0, canvas.getWidth(), canvas.getHeight());
-						Rect src = new Rect(0, 0, mCurrentPageInfo.bitmap.getWidth(), mCurrentPageInfo.bitmap.getHeight());
+						Rect src = new Rect(0, 0, currentPage.bitmap.getWidth(), currentPage.bitmap.getHeight());
 						if (dontStretchWhileDrawing) {
 							if (dst.right > src.right)
 								dst.right = src.right;
@@ -260,7 +264,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						}
 						if (dst.width() != canvas.getWidth() || dst.height() != canvas.getHeight())
 							canvas.drawColor(Color.rgb(32, 32, 32));
-						drawDimmedBitmap(canvas, mCurrentPageInfo.bitmap, src, dst);
+						drawDimmedBitmap(canvas, currentPage.bitmap, src, dst);
 					}
 					if (isCloudSyncProgressActive()) {
 						// draw progressbar on top
@@ -3559,6 +3563,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			alog.v("AutoScrollAnimation.draw(" + progress + ")");
 			if (progress != 0 && progress < startAnimationProgress)
 				return; // don't draw page w/o started animation
+			if (image1 == null
+					|| image2 == null
+					|| image1.isReleased()
+					|| image2.isReleased())
+				return;
 			int scrollPercent = 10000 * (progress - startAnimationProgress) / (MAX_PROGRESS - startAnimationProgress);
 			if (scrollPercent < 0)
 				scrollPercent = 0;
@@ -3568,8 +3577,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				// scroll
 				drawPageProgress(canvas, scrollPercent, new Rect(0, 0, w, h), new Rect(0, 0, w, h));
 			} else {
-				if (image1.isReleased() || image2.isReleased())
-					return;
 				if (pageCount == 2) {
 					if (scrollPercent < 5000) {
 						// < 50%
@@ -5418,13 +5425,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		ImageInfo imageInfo;
 
 		void recycle() {
+			pageBitmapLifetime.retire(this);
+		}
+
+		private synchronized void releaseNow() {
+			if (bitmap == null)
+				return;
 			factory.release(bitmap);
 			bitmap = null;
 			position = null;
 			imageInfo = null;
 		}
 
-		boolean isReleased() {
+		synchronized boolean isReleased() {
 			return bitmap == null;
 		}
 
@@ -5435,6 +5448,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	}
 
+	private final ReaderPageBitmapLifetime<BitmapInfo>
+			pageBitmapLifetime =
+					new ReaderPageBitmapLifetime<>(
+							BitmapInfo::releaseNow);
 	private BitmapInfo mCurrentPageInfo;
 	private BitmapInfo mNextPageInfo;
 	private final ReaderPageInvalidationState
@@ -5477,14 +5494,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (!isRenderRequestCurrent(renderRequest))
 				return null;
 			if (pageInvalidationState.claim()) {
-				BitmapInfo current = mCurrentPageInfo;
-				BitmapInfo next = mNextPageInfo;
-				mCurrentPageInfo = null;
-				mNextPageInfo = null;
-				if (current != null)
-					current.recycle();
-				if (next != null && next != current)
-					next.recycle();
+				synchronized (pageBitmapLifetime) {
+					BitmapInfo current = mCurrentPageInfo;
+					BitmapInfo next = mNextPageInfo;
+					mCurrentPageInfo = null;
+					mNextPageInfo = null;
+					if (current != null)
+						current.recycle();
+					if (next != null && next != current)
+						next.recycle();
+				}
 			}
 		}
 
@@ -5521,14 +5540,16 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					if (!isRenderRequestCurrent(
 							renderRequest))
 						return null;
-					if (mNextPageInfo == currposBitmap) {
-						// reorder pages
-						BitmapInfo tmp = mNextPageInfo;
-						mNextPageInfo = mCurrentPageInfo;
-						mCurrentPageInfo = tmp;
+					synchronized (pageBitmapLifetime) {
+						if (mNextPageInfo == currposBitmap) {
+							// reorder pages
+							BitmapInfo tmp = mNextPageInfo;
+							mNextPageInfo = mCurrentPageInfo;
+							mCurrentPageInfo = tmp;
+						}
+						// found ready page image
+						return mCurrentPageInfo;
 					}
-					// found ready page image
-					return mCurrentPageInfo;
 				}
 			}
 			BitmapInfo bi = new BitmapInfo();
@@ -5648,13 +5669,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				candidate.recycle();
 				return null;
 			}
-			BitmapInfo previous = mCurrentPageInfo;
-			mCurrentPageInfo = candidate;
-			if (previous != null
-					&& previous != candidate
-					&& previous != mNextPageInfo)
-				previous.recycle();
-			return candidate;
+			synchronized (pageBitmapLifetime) {
+				BitmapInfo previous = mCurrentPageInfo;
+				mCurrentPageInfo = candidate;
+				if (previous != null
+						&& previous != candidate
+						&& previous != mNextPageInfo)
+					previous.recycle();
+				return candidate;
+			}
 		}
 	}
 
@@ -5666,13 +5689,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				candidate.recycle();
 				return null;
 			}
-			BitmapInfo previous = mNextPageInfo;
-			mNextPageInfo = candidate;
-			if (previous != null
-					&& previous != candidate
-					&& previous != mCurrentPageInfo)
-				previous.recycle();
-			return candidate;
+			synchronized (pageBitmapLifetime) {
+				BitmapInfo previous = mNextPageInfo;
+				mNextPageInfo = candidate;
+				if (previous != null
+						&& previous != candidate
+						&& previous != mCurrentPageInfo)
+					previous.recycle();
+				return candidate;
+			}
 		}
 	}
 
@@ -6182,10 +6207,15 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (dirty == null || dirty.isEmpty())
 			return;
 		drawCallback(canvas -> {
+			BitmapInfo currentPage;
+			synchronized (pageBitmapLifetime) {
+				currentPage = mCurrentPageInfo;
+			}
 			if (!readerNativeLifecycle.isInitialized()
 					|| !isRenderRequestCurrent(
 							renderRequest)
-					|| mCurrentPageInfo == null)
+					|| currentPage == null
+					|| currentPage.bitmap == null)
 				return;
 			log.d("onDraw() -- drawing page image");
 			Rect dst =
@@ -6196,11 +6226,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			Rect src =
 					new Rect(
 							0, 0,
-							mCurrentPageInfo.bitmap.getWidth(),
-							mCurrentPageInfo.bitmap.getHeight());
+							currentPage.bitmap.getWidth(),
+							currentPage.bitmap.getHeight());
 			drawDimmedBitmap(
 					canvas,
-					mCurrentPageInfo.bitmap,
+					currentPage.bitmap,
 					src,
 					dst);
 			TapHighlightState.Show current =
@@ -6657,6 +6687,22 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	private void drawCallback(DrawCanvasCallback callback, Rect rc, boolean isPartially) {
 		if (!readerSurfaceState.isDrawable())
 			return;
+		ReaderPageBitmapLifetime.Read pageRead =
+				pageBitmapLifetime.beginRead();
+		if (pageRead == null)
+			return;
+		try {
+			drawCallbackWithPageRead(
+					callback, rc, isPartially);
+		} finally {
+			pageBitmapLifetime.finishRead(pageRead);
+		}
+	}
+
+	private void drawCallbackWithPageRead(
+			DrawCanvasCallback callback,
+			Rect rc,
+			boolean isPartially) {
 		//synchronized(surfaceLock) { }
 		//log.v("draw() - in thread " + Thread.currentThread().getName());
 		final SurfaceHolder holder = surface.getHolder();
@@ -6782,8 +6828,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		double progress;
 		int pageHeight;
 		int pageWidth;
-		Bitmap imgStart;
-		Bitmap imgEnd;
+		BitmapInfo imageStart;
+		BitmapInfo imageEnd;
 
 		ScrollViewAnimation(
 				int offset, BookInfo expectedBook,
@@ -6814,8 +6860,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				log.v("ScrollViewAnimation -- not started: image is null");
 				return;
 			}
-			this.imgStart = startImage.bitmap;
-			this.imgEnd = endImage.bitmap;
+			this.imageStart = startImage;
+			this.imageEnd = endImage;
 			if (!ownsDocument())
 				return;
 			currentAnimation = this;
@@ -6887,9 +6933,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		public void draw(Canvas canvas) {
 			if (!isCurrentAnimation()
-					|| imgStart == null || imgEnd == null) {
+					|| imageStart == null
+					|| imageEnd == null
+					|| imageStart.isReleased()
+					|| imageEnd.isReleased()) {
 				return;
 			}
+			Bitmap imgStart = imageStart.bitmap;
+			Bitmap imgEnd = imageEnd.bitmap;
 			int h = this.pageHeight;
 			int w = this.pageWidth;
 			int yBoundary = (int) (this.pageHeight * progress);
@@ -8726,20 +8777,24 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private ReaderPageCacheClose<BitmapInfo>
 			beginPageCacheClose() {
-		return ReaderPageCacheClose.begin(
-				mCurrentPageInfo,
-				mNextPageInfo);
+		synchronized (pageBitmapLifetime) {
+			return ReaderPageCacheClose.begin(
+					mCurrentPageInfo,
+					mNextPageInfo);
+		}
 	}
 
 	private void publishSerializedPageCacheClose(
 			ReaderPageCacheClose<BitmapInfo> close) {
-		BitmapInfo current = mCurrentPageInfo;
-		BitmapInfo next = mNextPageInfo;
-		if (!close.publishSerialized(current, next))
-			return;
-		mCurrentPageInfo = null;
-		mNextPageInfo = null;
-		pageInvalidationState.invalidate();
+		synchronized (pageBitmapLifetime) {
+			BitmapInfo current = mCurrentPageInfo;
+			BitmapInfo next = mNextPageInfo;
+			if (!close.publishSerialized(current, next))
+				return;
+			mCurrentPageInfo = null;
+			mNextPageInfo = null;
+			pageInvalidationState.invalidate();
+		}
 	}
 
 	private void finishPageCacheClose(
@@ -8822,6 +8877,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		timeTickLifecycle.close();
 		positionPersistenceState.close();
 		pageInvalidationState.close();
+		pageBitmapLifetime.close();
 		documentLoadLifecycle.close();
 		closeGestureTimeouts();
 		synchronized (viewportResizeState) {
