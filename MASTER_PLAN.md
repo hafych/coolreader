@@ -137,8 +137,11 @@ DRM или ограничений доступа, подбор/получени�
   `lastAppResumeTs` удалён. Initial-start/interface-ready переходы объединены
   в synchronized terminal `ActivityStartupState`: one-shot initial intent
   сохраняется при раннем возврате для уже открытой книги, а три параллельных
-  флага `isFirstStart`/`justCreated`/`isInterfaceCreated` удалены. Явные
-  зависимости
+  флага `isFirstStart`/`justCreated`/`isInterfaceCreated` удалены.
+  Current/previous `ViewGroup` также принадлежат synchronized terminal
+  `ActivityFrameState`: identity-no-op не портит history, `null` не становится
+  content view, а destroy очищает обе UI-ссылки и запрещает stale переходы;
+  параллельные `mCurrentFrame`/`mPreviousFrame` удалены. Явные зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic

@@ -120,6 +120,47 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void activityFrameHistoryBelongsToTerminalOwner()
+			throws Exception {
+		Class<?> frameState =
+				Class.forName(
+						"org.coolreader.ActivityFrameState");
+		assertTrue(Modifier.isFinal(
+				frameState.getModifiers()));
+		for (Field field : frameState.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Method method : frameState.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize frame history",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		Field owner =
+				CoolReader.class.getDeclaredField(
+						"frameState");
+		assertFalse(Modifier.isStatic(owner.getModifiers()));
+		assertTrue(Modifier.isPrivate(owner.getModifiers()));
+		assertTrue(Modifier.isFinal(owner.getModifiers()));
+		assertEquals(frameState, owner.getType());
+		for (String legacy : new String[]{
+				"mCurrentFrame",
+				"mPreviousFrame"}) {
+			for (Field field :
+					CoolReader.class.getDeclaredFields()) {
+				assertFalse(
+						"CoolReader retains parallel frame field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
 	public void servicesRetainNoMutableStaticGraphFields() {
 		for (Field field : Services.class.getDeclaredFields()) {
 			if (!Modifier.isStatic(field.getModifiers()))

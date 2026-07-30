@@ -158,6 +158,8 @@ public class CoolReader extends BaseActivity {
 			new ActivityLifecycleState();
 	private final ActivityStartupState startupState =
 			new ActivityStartupState();
+	private final ActivityFrameState<ViewGroup> frameState =
+			new ActivityFrameState<>();
 	private final DocumentLoadLifecycle documentLoadLifecycle =
 			new DocumentLoadLifecycle();
 	private final BookInfoDialogSession bookInfoDialogRequests =
@@ -177,9 +179,6 @@ public class CoolReader extends BaseActivity {
 			new ExternalDocumentValidator();
 	//View startupView;
 	//CRDB mDB;
-	private ViewGroup mCurrentFrame;
-	private ViewGroup mPreviousFrame;
-
 	/*
 	  Commented until the appearance of free implementation of the binding to the Google Drive (R)
 	private final SyncOptions mGoogleDriveSyncOpts = new SyncOptions();
@@ -379,6 +378,7 @@ public class CoolReader extends BaseActivity {
 		log.i("CoolReader.onDestroy() entered");
 		activityLifecycle.close();
 		startupState.close();
+		frameState.close();
 		if (mReaderView != null) {
 			mReaderView.stopTtsForDocumentChange();
 			if (!CLOSE_BOOK_ON_STOP)
@@ -1355,42 +1355,42 @@ public class CoolReader extends BaseActivity {
 
 	protected boolean allowLowBrightness() {
 		// override to force higher brightness in non-reading mode (to avoid black screen on some devices when brightness level set to small value)
-		return mCurrentFrame == mReaderFrame;
+		return frameState.isCurrent(mReaderFrame);
 	}
 
 
 	public ViewGroup getPreviousFrame() {
-		return mPreviousFrame;
+		return frameState.previous();
 	}
 
 	public boolean isPreviousFrameHome() {
-		return mPreviousFrame != null && mPreviousFrame == mHomeFrame;
+		return frameState.isPrevious(mHomeFrame);
 	}
 
 	private void setCurrentFrame(ViewGroup newFrame) {
-		if (mCurrentFrame != newFrame) {
-			mPreviousFrame = mCurrentFrame;
-			log.i("New current frame: " + newFrame.getClass().toString());
-			mCurrentFrame = newFrame;
-			setContentView(mCurrentFrame);
-			mCurrentFrame.requestFocus();
-			if (mCurrentFrame != mReaderFrame)
-				releaseBacklightControl();
-			if (mCurrentFrame == mHomeFrame) {
-				// update recent books
-				mHomeFrame.refreshRecentBooks();
-				setLastLocationRoot();
-				mCurrentFrame.invalidate();
-			}
-			if (mCurrentFrame == mBrowserFrame) {
-				// update recent books directory
-				mBrowser.refreshDirectory(mScanner.getRecentDir(), null);
-			} else {
-				if (null != mBrowser)
-					mBrowser.stopCurrentScan();
-			}
-			onUserActivity();
+		if (!frameState.moveTo(newFrame))
+			return;
+		log.i("New current frame: "
+				+ newFrame.getClass().toString());
+		setContentView(newFrame);
+		newFrame.requestFocus();
+		if (newFrame != mReaderFrame)
+			releaseBacklightControl();
+		if (newFrame == mHomeFrame) {
+			// update recent books
+			mHomeFrame.refreshRecentBooks();
+			setLastLocationRoot();
+			newFrame.invalidate();
 		}
+		if (newFrame == mBrowserFrame) {
+			// update recent books directory
+			mBrowser.refreshDirectory(
+					mScanner.getRecentDir(), null);
+		} else {
+			if (null != mBrowser)
+				mBrowser.stopCurrentScan();
+		}
+		onUserActivity();
 	}
 
 	public void showReader() {
