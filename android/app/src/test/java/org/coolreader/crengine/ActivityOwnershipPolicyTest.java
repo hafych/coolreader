@@ -34,15 +34,15 @@ import java.text.DateFormat;
 
 public class ActivityOwnershipPolicyTest {
 	@Test
-	public void activityTeardownIsAtomicallyPublished()
+	public void activityLifecycleIsAtomicallyPublished()
 			throws Exception {
-		Class<?> terminationState =
+		Class<?> lifecycleState =
 				Class.forName(
-						"org.coolreader.ActivityTerminationState");
+						"org.coolreader.ActivityLifecycleState");
 		assertTrue(Modifier.isFinal(
-				terminationState.getModifiers()));
+				lifecycleState.getModifiers()));
 		for (Field field :
-				terminationState.getDeclaredFields()) {
+				lifecycleState.getDeclaredFields()) {
 			assertFalse(Modifier.isStatic(
 					field.getModifiers()));
 			assertTrue(Modifier.isPrivate(
@@ -52,11 +52,11 @@ public class ActivityOwnershipPolicyTest {
 		}
 		Field owner =
 				CoolReader.class.getDeclaredField(
-						"terminationState");
+						"activityLifecycle");
 		assertFalse(Modifier.isStatic(owner.getModifiers()));
 		assertTrue(Modifier.isPrivate(owner.getModifiers()));
 		assertTrue(Modifier.isFinal(owner.getModifiers()));
-		assertEquals(terminationState, owner.getType());
+		assertEquals(lifecycleState, owner.getType());
 		for (Field field :
 				CoolReader.class.getDeclaredFields()) {
 			assertFalse(
@@ -65,6 +65,9 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"CoolReader retains unused stopped flag",
 					field.getName().equals("stopped"));
+			assertFalse(
+					"CoolReader retains racy activity visibility flag",
+					field.getName().equals("activityIsRunning"));
 		}
 	}
 

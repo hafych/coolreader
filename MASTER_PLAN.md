@@ -127,8 +127,10 @@ DRM или ограничений доступа, подбор/получени�
   Выполнено: Activity-owned service graph и immutable dependency snapshot,
   generation-scoped callback cancellation, application-context service
   connectors. `CoolReader` teardown теперь первой операцией закрывает
-  Activity-owned atomic `ActivityTerminationState`, поэтому callbacks видят
-  начало destroy до очистки UI/services; legacy package-visible `mDestroyed`
+  Activity-owned atomic `ActivityLifecycleState`, поэтому callbacks видят
+  начало destroy до очистки UI/services, а resumed/paused видимость безопасно
+  публикуется фоновому auto-save timer без ручного data-racy
+  `activityIsRunning`; close терминален. Legacy package-visible `mDestroyed`
   и неиспользуемый `stopped` удалены. Явные зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
