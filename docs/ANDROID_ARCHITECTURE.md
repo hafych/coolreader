@@ -50,15 +50,20 @@ an already-removed callback cannot run merely because a newer callback exists.
 Reader TTS startup uses the gate's begin-if-idle mode: repeated play commands
 share one pending initialization, stop cancels its exact token, and reader
 destruction closes startup permanently. Success and failure complete only that
-request; a stale success cannot open a toolbar, and each toolbar close callback
-clears only its own identity. `CoolReader` captures the exact service accessor
-and engine package in an Activity-owned `TtsInitializationSession`, then
-delivers results on the GUI thread only after claiming that exact request while
-its captured service generation is active. Replacement transfers the prior
-failure callback as one-shot cancellation so the reader gate cannot remain
-pending; stop, engine change and Activity teardown detach all terminal
-callbacks. Binder-connect and engine-result listeners are static weak-Activity
-adapters, so a service queue cannot retain destroyed UI. The
+request; a stale success cannot open a toolbar. The active dialog identity
+belongs to a terminal `ReaderTtsToolbarState`: installation is begin-if-idle,
+the exact dialog remains current while asynchronous service shutdown is in
+flight, and only its close callback can finish ownership. Reader destruction
+closes the owner permanently and releases the retained UI reference, so a stale
+close cannot clear a replacement or resurrect a toolbar. `CoolReader` captures
+the exact service accessor and engine package in an Activity-owned
+`TtsInitializationSession`, then delivers results on the GUI thread only after
+claiming that exact request while its captured service generation is active.
+Replacement transfers the prior failure callback as one-shot cancellation so
+the reader gate cannot remain pending; stop, engine change and Activity
+teardown detach all terminal callbacks. Binder-connect and engine-result
+listeners are static weak-Activity adapters, so a service queue cannot retain
+destroyed UI. The
 application-context TTS connector
 serializes binder registration, binder publication and pending callbacks under
 one lock, snapshots callbacks before delivery, reports bind failure and clears

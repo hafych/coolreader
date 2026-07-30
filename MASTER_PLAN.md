@@ -382,6 +382,11 @@ DRM или ограничений доступа, подбор/получени�
   через `WeakReference`, поэтому очередь сервиса не удерживает уничтоженный UI;
   TTS connector держит registration/binder/pending callbacks под одним lock,
   сообщает bind failure и очищает очередь при unbind.
+  Активный TTS toolbar также принадлежит synchronized terminal
+  `ReaderTtsToolbarState`: полностью созданный dialog публикуется только при
+  idle owner, остаётся exact current до завершения асинхронного service shutdown,
+  stale close не очищает replacement, а reader destroy освобождает UI-ссылку и
+  запрещает новую публикацию; raw `ttsToolbar` удалён.
   DB connector теперь также владеет exact platform registration через
   `ServiceBindingState`: concurrent waiters разделяют только текущую очередь,
   bind failure/null binding/binding death очищают её и разрешают retry, unbind

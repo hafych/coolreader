@@ -3984,11 +3984,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private final CloseableTaskGate ttsInitializationLifecycle =
 			new CloseableTaskGate();
-	private TTSToolbarDlg ttsToolbar;
+	private final ReaderTtsToolbarState<TTSToolbarDlg>
+			ttsToolbarState = new ReaderTtsToolbarState<>();
 
 	private void startTts() {
 		BackgroundThread.ensureGUI();
-		if (ttsToolbar != null) {
+		if (ttsToolbarState.current() != null) {
 			log.i("DCMD_TTS_PLAY: skipping re-init of active TTS");
 			return;
 		}
@@ -4040,11 +4041,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				ttsDocumentHandler(
 						expectedBook, interaction),
 				ttsAccessor);
-		ttsToolbar = toolbar;
-		toolbar.setOnCloseListener(() -> {
-			if (ttsToolbar == toolbar)
-				ttsToolbar = null;
-		});
+		if (!ttsToolbarState.startIfIdle(toolbar)) {
+			toolbar.stopAndCloseForDocumentChange();
+			return;
+		}
+		toolbar.setOnCloseListener(
+				() -> ttsToolbarState.finish(toolbar));
 		toolbar.setAppSettings(
 				readerSettingsState.copy(), null);
 		toolbar.initAudiobookWordTimings(null);
@@ -4150,7 +4152,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		BackgroundThread.ensureGUI();
 		ttsInitializationLifecycle.cancel();
 		mActivity.cancelTtsInitialization();
-		TTSToolbarDlg toolbar = ttsToolbar;
+		TTSToolbarDlg toolbar = ttsToolbarState.current();
 		if (toolbar != null) {
 			log.i("DCMD_TTS_STOP: stopping TTS");
 			toolbar.stopAndCloseForDocumentChange();
@@ -4162,16 +4164,17 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void pauseTTS() {
-		if (ttsToolbar != null)
-			ttsToolbar.pause();
+		TTSToolbarDlg toolbar = ttsToolbarState.current();
+		if (toolbar != null)
+			toolbar.pause();
 	}
 
 	public boolean isTTSActive() {
-		return ttsToolbar != null;
+		return ttsToolbarState.current() != null;
 	}
 
 	public TTSToolbarDlg getTTSToolbar() {
-		return ttsToolbar;
+		return ttsToolbarState.current();
 	}
 
 	public void doEngineCommand(final ReaderCommand cmd, final int param) {
@@ -4769,9 +4772,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		settingsSyncLifecycle.cancel();
 		final Properties currSettings =
 				readerSettingsState.copy();
-		if (null != ttsToolbar) {
+		TTSToolbarDlg toolbar = ttsToolbarState.current();
+		if (toolbar != null) {
 			// ignore all non TTS options if TTS is active...
-			ttsToolbar.setAppSettings(newSettings, currSettings);
+			toolbar.setAppSettings(newSettings, currSettings);
 			Properties changedSettings = newSettings.diff(currSettings);
 			currSettings.setAll(changedSettings);
 			readerSettingsState.replace(currSettings);
@@ -9008,6 +9012,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		recycleBackgroundBitmap(
 				backgroundState.close());
 		stopTts();
+		ttsToolbarState.close();
 		stopImageViewer();
 		imageViewerState.close();
 		resetTemporaryViewMode();

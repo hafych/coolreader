@@ -655,6 +655,7 @@ public class ActivityOwnershipPolicyTest {
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
 				"ttsInitializationLifecycle",
+				"ttsToolbarState",
 				"documentLoadLifecycle",
 				"readerSurfaceState",
 				"readerViewModeState",
@@ -770,6 +771,9 @@ public class ActivityOwnershipPolicyTest {
 					"Image viewer identity must belong to its owner",
 					field.getName().equals(
 							"currentImageViewer"));
+			assertFalse(
+					"TTS toolbar identity must belong to its owner",
+					field.getName().equals("ttsToolbar"));
 		}
 		for (Field field :
 				ReaderImageViewerState.class.getDeclaredFields()) {
@@ -795,6 +799,21 @@ public class ActivityOwnershipPolicyTest {
 							Modifier.isSynchronized(
 									method.getModifiers()));
 			}
+		}
+		assertTrue(Modifier.isFinal(
+				ReaderTtsToolbarState.class.getModifiers()));
+		for (Field field :
+				ReaderTtsToolbarState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+		for (Method method :
+				ReaderTtsToolbarState.class.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize TTS toolbar ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
 		}
 		for (Field field :
 				ReaderPositionPersistenceState.class

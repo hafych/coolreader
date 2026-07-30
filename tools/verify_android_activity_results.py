@@ -2502,6 +2502,9 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} retains parallel progress field: "
                 f"{legacy}")
+    if "private TTSToolbarDlg ttsToolbar;" in reader_view_text:
+        violations.append(
+            f"{relative(READER_VIEW)} retains raw TTS toolbar identity")
     for marker in (
         "private final ReaderAnimationState<",
         "ViewAnimationControl, AnimationUpdate> animationState",
@@ -2519,6 +2522,7 @@ def main() -> None:
         "private final CloseableTaskGate selectionUpdateLifecycle",
         "private final CloseableTaskGate drawTaskLifecycle",
         "private final CloseableTaskGate ttsInitializationLifecycle",
+        "private final ReaderTtsToolbarState<TTSToolbarDlg>",
         "private final DocumentLoadLifecycle documentLoadLifecycle",
         "private final ReaderSurfaceState readerSurfaceState",
         "private final ReaderNativeLifecycle readerNativeLifecycle",
@@ -2631,6 +2635,10 @@ def main() -> None:
         "ttsInitializationLifecycle.beginIfIdle()",
         "ttsInitializationLifecycle.complete(owner)",
         "ttsInitializationLifecycle.cancel()",
+        "ttsToolbarState.startIfIdle(toolbar)",
+        "ttsToolbarState.current()",
+        "ttsToolbarState.finish(toolbar)",
+        "ttsToolbarState.close()",
         "private void finishTtsInitialization(",
         "private TtsDocumentHandler ttsDocumentHandler(",
         "private final ReaderViewModeState readerViewModeState",
@@ -2654,7 +2662,8 @@ def main() -> None:
         "stopTts();\n\t\tresetTemporaryViewMode();\n"
         "\t\ttimeTickLifecycle.cancel();\n"
         "\t\tif (cancelDocumentLoad)",
-        "stopTts();\n\t\tstopImageViewer();\n"
+        "stopTts();\n\t\tttsToolbarState.close();\n"
+        "\t\tstopImageViewer();\n"
         "\t\timageViewerState.close();\n"
         "\t\tresetTemporaryViewMode();\n"
         "\t\treaderViewModeState.close();\n"
@@ -2701,7 +2710,7 @@ def main() -> None:
         "closeDescriptorQuietly(parcelFileDescriptor)",
         "closeCurrentDocument(false)",
         "pos, bookInfo, loadOwner,\n\t\t\t\t\t\t\t\tloadInteraction)",
-        "if (ttsToolbar == toolbar)",
+        "() -> ttsToolbarState.finish(toolbar)",
         "readerSurfaceState.changeVisibility(visible)",
         "readerSurfaceState.changeFocus(",
         "einkRefreshScheduler.postDelayed(",
