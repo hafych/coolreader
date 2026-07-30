@@ -134,7 +134,11 @@ DRM или ограничений доступа, подбор/получени�
   и неиспользуемый `stopped` удалены. `ViewportResizeState` теперь владеет
   post-resume resize timing и считает окно 300/1000 мс по монотонному uptime,
   поэтому перевод настенных часов не искажает задержку; параллельный
-  `lastAppResumeTs` удалён. Явные зависимости
+  `lastAppResumeTs` удалён. Initial-start/interface-ready переходы объединены
+  в synchronized terminal `ActivityStartupState`: one-shot initial intent
+  сохраняется при раннем возврате для уже открытой книги, а три параллельных
+  флага `isFirstStart`/`justCreated`/`isInterfaceCreated` удалены. Явные
+  зависимости
   `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic

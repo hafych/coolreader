@@ -72,6 +72,54 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void activityStartupTransitionsBelongToOneOwner()
+			throws Exception {
+		Class<?> startupState =
+				Class.forName(
+						"org.coolreader.ActivityStartupState");
+		assertTrue(Modifier.isFinal(
+				startupState.getModifiers()));
+		for (Field field : startupState.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (String name : new String[]{
+				"takeInitialStart",
+				"markInterfaceReady",
+				"isInterfaceReady",
+				"shouldValidateSettings",
+				"close"}) {
+			Method method =
+					startupState.getDeclaredMethod(name);
+			assertTrue(
+					name + " must serialize startup state",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		Field owner =
+				CoolReader.class.getDeclaredField(
+						"startupState");
+		assertFalse(Modifier.isStatic(owner.getModifiers()));
+		assertTrue(Modifier.isPrivate(owner.getModifiers()));
+		assertTrue(Modifier.isFinal(owner.getModifiers()));
+		assertEquals(startupState, owner.getType());
+		for (String legacy : new String[]{
+				"isFirstStart",
+				"justCreated",
+				"isInterfaceCreated"}) {
+			for (Field field :
+					CoolReader.class.getDeclaredFields()) {
+				assertFalse(
+						"CoolReader retains parallel startup flag "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
 	public void servicesRetainNoMutableStaticGraphFields() {
 		for (Field field : Services.class.getDeclaredFields()) {
 			if (!Modifier.isStatic(field.getModifiers()))

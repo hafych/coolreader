@@ -156,6 +156,8 @@ public class CoolReader extends BaseActivity {
 	private ServiceLifecycle mServiceLifecycle;
 	private final ActivityLifecycleState activityLifecycle =
 			new ActivityLifecycleState();
+	private final ActivityStartupState startupState =
+			new ActivityStartupState();
 	private final DocumentLoadLifecycle documentLoadLifecycle =
 			new DocumentLoadLifecycle();
 	private final BookInfoDialogSession bookInfoDialogRequests =
@@ -221,10 +223,6 @@ public class CoolReader extends BaseActivity {
 
 	private BatteryStatus initialBatteryStatus =
 			BatteryStatus.unavailable();
-
-	private boolean isFirstStart = true;
-	private boolean justCreated = false;
-	private boolean isInterfaceCreated = false;
 
 	private String ttsEnginePackage = "";
 	private TTSControlServiceAccessor ttsControlServiceAccessor = null;
@@ -338,10 +336,6 @@ public class CoolReader extends BaseActivity {
 					attempt);
 		}
 
-		isFirstStart = true;
-		justCreated = true;
-		isInterfaceCreated = false;
-
 		ServiceDependencies dependencies = getServiceDependencies();
 		mEngine = dependencies.getEngine();
 		mScanner = dependencies.getScanner();
@@ -384,6 +378,7 @@ public class CoolReader extends BaseActivity {
 
 		log.i("CoolReader.onDestroy() entered");
 		activityLifecycle.close();
+		startupState.close();
 		if (mReaderView != null) {
 			mReaderView.stopTtsForDocumentChange();
 			if (!CLOSE_BOOK_ON_STOP)
@@ -1215,7 +1210,7 @@ public class CoolReader extends BaseActivity {
 
 				showNotifications();
 
-				isInterfaceCreated = true;
+				startupState.markInterfaceReady();
 			});
 		}
 
@@ -1224,15 +1219,11 @@ public class CoolReader extends BaseActivity {
 			return;
 		}
 
-		if (!isFirstStart)
+		if (!startupState.takeInitialStart())
 			return;
-		isFirstStart = false;
 
-		if (justCreated) {
-			justCreated = false;
-			if (!processIntent(getIntent()))
-				showLastLocation();
-		}
+		if (!processIntent(getIntent()))
+			showLastLocation();
 		log.i("CoolReader.onStart() exiting");
 	}
 
@@ -1319,7 +1310,7 @@ public class CoolReader extends BaseActivity {
 		}
 		// Show/Hide soft navbar after OptionDialog is closed.
 		applyFullscreen(getWindow());
-		if (!justCreated && isInterfaceCreated) {
+		if (startupState.shouldValidateSettings()) {
 			// Only after onStart()!
 			/*
 			  Commented until the appearance of free implementation of the binding to the Google Drive (R)
@@ -1432,7 +1423,7 @@ public class CoolReader extends BaseActivity {
 		if (null != mBrowser)
 			mBrowser.stopCurrentScan();
 		setCurrentFrame(mHomeFrame);
-		if (isInterfaceCreated) {
+		if (startupState.isInterfaceReady()) {
 			/*
 			  Commented until the appearance of free implementation of the binding to the Google Drive (R)
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
