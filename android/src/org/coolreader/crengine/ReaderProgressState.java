@@ -23,14 +23,54 @@ final class ReaderProgressState {
 			return Change.NONE;
 		}
 		snapshot = new Snapshot(
-				true, position, titleResource, title);
+				true,
+				position,
+				titleResource,
+				title,
+				previous.cloudPosition);
 		return previous.active ? Change.UPDATE : Change.FIRST;
 	}
 
 	synchronized boolean hide() {
-		if (!snapshot.active)
+		Snapshot previous = snapshot;
+		if (!previous.active)
 			return false;
-		snapshot = Snapshot.HIDDEN;
+		snapshot = new Snapshot(
+				false,
+				-1,
+				0,
+				null,
+				previous.cloudPosition);
+		return true;
+	}
+
+	synchronized Change showCloud(int position) {
+		int normalizedPosition =
+				Math.max(0, Math.min(10000, position));
+		Snapshot previous = snapshot;
+		if (previous.cloudPosition == normalizedPosition)
+			return Change.NONE;
+		snapshot = new Snapshot(
+				previous.active,
+				previous.position,
+				previous.titleResource,
+				previous.title,
+				normalizedPosition);
+		return previous.cloudPosition >= 0
+				? Change.UPDATE
+				: Change.FIRST;
+	}
+
+	synchronized boolean hideCloud() {
+		Snapshot previous = snapshot;
+		if (previous.cloudPosition < 0)
+			return false;
+		snapshot = new Snapshot(
+				previous.active,
+				previous.position,
+				previous.titleResource,
+				previous.title,
+				-1);
 		return true;
 	}
 
@@ -40,22 +80,25 @@ final class ReaderProgressState {
 
 	static final class Snapshot {
 		private static final Snapshot HIDDEN =
-				new Snapshot(false, -1, 0, null);
+				new Snapshot(false, -1, 0, null, -1);
 
 		private final boolean active;
 		private final int position;
 		private final int titleResource;
 		private final String title;
+		private final int cloudPosition;
 
 		private Snapshot(
 				boolean active,
 				int position,
 				int titleResource,
-				String title) {
+				String title,
+				int cloudPosition) {
 			this.active = active;
 			this.position = position;
 			this.titleResource = titleResource;
 			this.title = title;
+			this.cloudPosition = cloudPosition;
 		}
 
 		boolean isActive() {
@@ -72,6 +115,14 @@ final class ReaderProgressState {
 
 		String getTitle() {
 			return title;
+		}
+
+		boolean isCloudActive() {
+			return cloudPosition >= 0;
+		}
+
+		int getCloudPosition() {
+			return cloudPosition;
 		}
 	}
 }

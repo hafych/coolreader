@@ -234,7 +234,10 @@ DRM или ограничений доступа, подбор/получени�
   Основной load/format progress `ReaderView` также вынесен в synchronized
   snapshot owner: initial state явно hidden, zero-position остаётся active,
   duplicate show и hide идемпотентны, а renderer получает согласованные
-  position/resource/title одного поколения.
+  position/resource/title одного поколения. Независимый cloud-sync progress
+  теперь публикуется тем же immutable snapshot вместо отдельного non-volatile
+  `int`: оба канала сохраняют состояние друг друга при concurrent transitions,
+  cloud `0%` явно active, а позиция нормализуется в диапазон `0..10000`.
   Horizontal `ProgressDialog` больше не создаёт пустой implicit-Looper Handler:
   number/percent views связаны явно и синхронно получают JVM-tested,
   locale-aware `ProgressDisplayState` с clamped progress и safe zero max.

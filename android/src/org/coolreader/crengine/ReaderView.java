@@ -267,16 +267,20 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							canvas.drawColor(Color.rgb(32, 32, 32));
 						drawDimmedBitmap(canvas, currentPage.bitmap, src, dst);
 					}
-					if (isCloudSyncProgressActive()) {
+					if (progress.isCloudActive()) {
 						// draw progressbar on top
-						doDrawCloudSyncProgress(canvas, currentCloudSyncProgressPosition);
+						doDrawCloudSyncProgress(
+								canvas,
+								progress.getCloudPosition());
 					}
 				} else {
 					log.d("onDraw() -- drawing empty screen");
 					drawPageBackground(canvas);
-					if (isCloudSyncProgressActive()) {
+					if (progress.isCloudActive()) {
 						// draw progressbar on top
-						doDrawCloudSyncProgress(canvas, currentCloudSyncProgressPosition);
+						doDrawCloudSyncProgress(
+								canvas,
+								progress.getCloudPosition());
 					}
 				}
 			} catch (Exception e) {
@@ -1770,10 +1774,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 						return unexpectedEvent(); // ignore bounced taps
 				}
 			}
-
-			// Uncomment to disable user interaction during cloud sync
-			//if (isCloudSyncProgressActive())
-			//	return unexpectedEvent();
 
 			if (event.getAction() == MotionEvent.ACTION_UP) {
 				long duration = Utils.timeInterval(firstDown);
@@ -7724,7 +7724,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	private final ReaderProgressState progressState =
 			new ReaderProgressState();
-	private int currentCloudSyncProgressPosition = -1;
 
 	private final EinkRefreshLeaseTracker einkRefreshLeases =
 			new EinkRefreshLeaseTracker();
@@ -7776,10 +7775,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	public void showCloudSyncProgress(int progress) {
-		log.v("showClodSyncProgress(" + progress + ")");
-		if (currentCloudSyncProgressPosition != progress) {
-			currentCloudSyncProgressPosition = progress;
-			if (DeviceInfo.EINK_SCREEN)
+		log.v("showCloudSyncProgress(" + progress + ")");
+		ReaderProgressState.Change change =
+				progressState.showCloud(progress);
+		if (change != ReaderProgressState.Change.NONE) {
+			if (DeviceInfo.EINK_SCREEN
+					&& change
+							== ReaderProgressState.Change.FIRST)
 				requestDisableFullRefresh(2);
 			bookView.draw(true);
 		}
@@ -7787,16 +7789,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 	public void hideCloudSyncProgress() {
 		log.v("hideCloudSyncProgress()");
-		if (currentCloudSyncProgressPosition != -1) {
-			currentCloudSyncProgressPosition = -1;
+		if (progressState.hideCloud()) {
 			if (DeviceInfo.EINK_SCREEN)
 				releaseDisableFullRefresh(2);
 			bookView.draw(false);
 		}
-	}
-
-	private boolean isCloudSyncProgressActive() {
-		return currentCloudSyncProgressPosition > 0;
 	}
 
 	private class LoadDocumentTask extends Task {

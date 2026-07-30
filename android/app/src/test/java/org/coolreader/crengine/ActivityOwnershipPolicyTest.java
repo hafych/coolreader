@@ -396,12 +396,23 @@ public class ActivityOwnershipPolicyTest {
 				"show", int.class, int.class, String.class);
 		Method hide =
 				ReaderProgressState.class.getDeclaredMethod("hide");
+		Method showCloud =
+				ReaderProgressState.class.getDeclaredMethod(
+						"showCloud", int.class);
+		Method hideCloud =
+				ReaderProgressState.class.getDeclaredMethod(
+						"hideCloud");
 		assertTrue(Modifier.isSynchronized(show.getModifiers()));
 		assertTrue(Modifier.isSynchronized(hide.getModifiers()));
+		assertTrue(Modifier.isSynchronized(
+				showCloud.getModifiers()));
+		assertTrue(Modifier.isSynchronized(
+				hideCloud.getModifiers()));
 		for (String legacy : new String[]{
 				"currentProgressPosition",
 				"currentProgressTitleId",
-				"currentProgressTitle"}) {
+				"currentProgressTitle",
+				"currentCloudSyncProgressPosition"}) {
 			for (Field field : ReaderView.class.getDeclaredFields()) {
 				assertFalse(
 						"ReaderView retains parallel progress field "
