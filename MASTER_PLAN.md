@@ -126,7 +126,11 @@ DRM или ограничений доступа, подбор/получени�
   lifecycle-aware компоненты без статического состояния Activity/Service.
   Выполнено: Activity-owned service graph и immutable dependency snapshot,
   generation-scoped callback cancellation, application-context service
-  connectors, явные зависимости `CoolReader`/`ReaderView`/диалогов и bounded
+  connectors. `CoolReader` teardown теперь первой операцией закрывает
+  Activity-owned atomic `ActivityTerminationState`, поэтому callbacks видят
+  начало destroy до очистки UI/services; legacy package-visible `mDestroyed`
+  и неиспользуемый `stopped` удалены. Явные зависимости
+  `CoolReader`/`ReaderView`/диалогов и bounded
   widened page-flip lookup geometry с отдельным JVM regression, method-scoped
   heap diagnostics, удаление мёртвого process-wide date formatter и atomic
   single-drain handoff process-dispatcher handlers с сохранением delay, а также

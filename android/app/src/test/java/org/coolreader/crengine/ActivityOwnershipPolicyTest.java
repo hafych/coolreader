@@ -34,6 +34,41 @@ import java.text.DateFormat;
 
 public class ActivityOwnershipPolicyTest {
 	@Test
+	public void activityTeardownIsAtomicallyPublished()
+			throws Exception {
+		Class<?> terminationState =
+				Class.forName(
+						"org.coolreader.ActivityTerminationState");
+		assertTrue(Modifier.isFinal(
+				terminationState.getModifiers()));
+		for (Field field :
+				terminationState.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		Field owner =
+				CoolReader.class.getDeclaredField(
+						"terminationState");
+		assertFalse(Modifier.isStatic(owner.getModifiers()));
+		assertTrue(Modifier.isPrivate(owner.getModifiers()));
+		assertTrue(Modifier.isFinal(owner.getModifiers()));
+		assertEquals(terminationState, owner.getType());
+		for (Field field :
+				CoolReader.class.getDeclaredFields()) {
+			assertFalse(
+					"CoolReader retains legacy destroyed flag",
+					field.getName().equals("mDestroyed"));
+			assertFalse(
+					"CoolReader retains unused stopped flag",
+					field.getName().equals("stopped"));
+		}
+	}
+
+	@Test
 	public void servicesRetainNoMutableStaticGraphFields() {
 		for (Field field : Services.class.getDeclaredFields()) {
 			if (!Modifier.isStatic(field.getModifiers()))

@@ -154,6 +154,8 @@ public class CoolReader extends BaseActivity {
 	private FileSystemFolders mFileSystemFolders;
 	private GenresCollection mGenresCollection;
 	private ServiceLifecycle mServiceLifecycle;
+	private final ActivityTerminationState terminationState =
+			new ActivityTerminationState();
 	private final DocumentLoadLifecycle documentLoadLifecycle =
 			new DocumentLoadLifecycle();
 	private final BookInfoDialogSession bookInfoDialogRequests =
@@ -378,12 +380,11 @@ public class CoolReader extends BaseActivity {
 
 	public final static boolean CLOSE_BOOK_ON_STOP = false;
 
-	boolean mDestroyed = false;
-
 	@Override
 	protected void onDestroy() {
 
 		log.i("CoolReader.onDestroy() entered");
+		terminationState.close();
 		if (mReaderView != null) {
 			mReaderView.stopTtsForDocumentChange();
 			if (!CLOSE_BOOK_ON_STOP)
@@ -421,8 +422,6 @@ public class CoolReader extends BaseActivity {
 			mBrowser.onClose();
 			mBrowser = null;
 		}
-		mDestroyed = true;
-
 		//if ( mReaderView!=null )
 		//	mReaderView.close();
 
@@ -856,7 +855,7 @@ public class CoolReader extends BaseActivity {
 	protected void onNewIntent(Intent intent) {
 		super.onNewIntent(intent);
 		log.i("onNewIntent : " + intent);
-		if (mDestroyed) {
+		if (terminationState.isClosed()) {
 			log.e("engine is already destroyed");
 			return;
 		}
@@ -1195,7 +1194,7 @@ public class CoolReader extends BaseActivity {
 		if (mHomeFrame == null) {
 			waitForCRDBService(() -> {
 				if (!mServiceLifecycle.isActive()
-						|| mDestroyed)
+						|| terminationState.isClosed())
 					return;
 				mHistory.loadFromDB(getDB(), 200);
 
@@ -1234,20 +1233,14 @@ public class CoolReader extends BaseActivity {
 			if (!processIntent(getIntent()))
 				showLastLocation();
 		}
-		stopped = false;
-
 		log.i("CoolReader.onStart() exiting");
 	}
-
-
-	private boolean stopped = false;
 
 	@Override
 	protected void onStop() {
 		log.i("CoolReader.onStop() entering");
 		// Donations support code
 		super.onStop();
-		stopped = true;
 		// will close book at onDestroy()
 		if (CLOSE_BOOK_ON_STOP)
 			mReaderView.close();
@@ -2205,7 +2198,7 @@ public class CoolReader extends BaseActivity {
 			String query,
 			long delayMillis) {
 		ServiceLifecycle lifecycle = mServiceLifecycle;
-		if (mDestroyed
+		if (terminationState.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive()) {
 			dictionaryLookupScheduler.cancel();
@@ -2289,7 +2282,7 @@ public class CoolReader extends BaseActivity {
 			return;
 		}
 		ServiceLifecycle lifecycle = mServiceLifecycle;
-		if (mDestroyed
+		if (terminationState.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive())
 			return;
@@ -2348,7 +2341,7 @@ public class CoolReader extends BaseActivity {
 			FileInfo argument,
 			int attempt) {
 		ServiceLifecycle lifecycle = mServiceLifecycle;
-		if (mDestroyed
+		if (terminationState.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive())
 			return false;
@@ -2491,7 +2484,7 @@ public class CoolReader extends BaseActivity {
 			TTSControlServiceAccessor.Callback callback,
 			Runnable failureCallback) {
 		ServiceLifecycle lifecycle = mServiceLifecycle;
-		if (mDestroyed
+		if (terminationState.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive()) {
 			postRejectedTtsInitialization(failureCallback);
@@ -2539,7 +2532,7 @@ public class CoolReader extends BaseActivity {
 		if (failureCallback == null)
 			return;
 		BackgroundThread.instance().executeGUI(() -> {
-			if (!mDestroyed)
+			if (terminationState.isActive())
 				failureCallback.run();
 		});
 	}
@@ -2549,7 +2542,7 @@ public class CoolReader extends BaseActivity {
 		if (cancellation == null)
 			return;
 		BackgroundThread.instance().executeGUI(() -> {
-			if (!mDestroyed
+			if (terminationState.isActive()
 					&& cancellation.getLifecycle().isActive())
 				cancellation.run();
 		});
@@ -2564,7 +2557,7 @@ public class CoolReader extends BaseActivity {
 					TtsInitializationSession.Outcome.FAILED);
 			return;
 		}
-		if (mDestroyed
+		if (terminationState.isClosed()
 				|| !request.getLifecycle().isActive()
 				|| !ttsInitializationRequests.isActive(request))
 			return;
@@ -2588,7 +2581,7 @@ public class CoolReader extends BaseActivity {
 		TtsInitializationSession.Completion completion =
 				ttsInitializationRequests.complete(request);
 		if (completion == null
-				|| mDestroyed
+				|| terminationState.isClosed()
 				|| !request.getLifecycle().isActive())
 			return;
 		switch (outcome) {
@@ -3255,7 +3248,7 @@ public class CoolReader extends BaseActivity {
 			return;
 		waitForCRDBService(() -> {
 			if (!mServiceLifecycle.isActive()
-					|| mDestroyed
+					|| terminationState.isClosed()
 					|| !bookInfoDialogRequests.isActive(owner))
 				return;
 			CRDBService.LocalBinder db = getDB();
@@ -3265,7 +3258,7 @@ public class CoolReader extends BaseActivity {
 			}
 			mHistory.getOrCreateBookInfo(db, item, bookInfo -> {
 				if (!mServiceLifecycle.isActive()
-						|| mDestroyed
+						|| terminationState.isClosed()
 						|| !bookInfoDialogRequests.complete(owner))
 					return;
 				BookInfo dialogBook =
