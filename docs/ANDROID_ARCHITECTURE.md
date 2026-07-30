@@ -439,7 +439,8 @@ only after the captured nullable-safe binder accepts save and flush; failure,
 replacement and a newer request invalidate only their matching pending token.
 Document load replaces the state with its exact book, stale animation cleanup
 can invalidate only that same identity, and reader destruction closes the owner
-permanently.
+permanently. Stream-to-database reconciliation rebinds the owner when it
+publishes the resolved `BookInfo` identity.
 Interactive selection previews and their terminal update share one
 `CloseableTaskGate`. Every drag sample replaces the prior identity token, and
 both native work and GUI completion must still own that token. A stale
@@ -641,6 +642,16 @@ completion for the same document. Replacement and close cancel the draw gate;
 stale completion or failure cannot call the handler, schedule GC, or hide the
 next load's progress. `destroy()` closes the gate before native teardown and
 permanently rejects late render, callback and GC work.
+Page preparation itself now has no nullable/ownerless overload. Selection,
+tap-highlight show/hide, autoscroll, gesture animations, document load,
+error-document rendering and position restore all pass their captured
+`ReaderRenderRequest`. Current and offset bitmaps are revalidated after native
+movement/render and published through one lifecycle-locked helper only after
+the native position has been restored, so interaction rotation cannot occur
+between the final check and cache-slot assignment. A stale candidate is
+recycled without replacing either shared slot. Invalidation claim and cache
+clearing use the same lock, and an existing current bitmap remains available
+until its validated replacement is published.
 Page-cache invalidation is a separate synchronized
 `ReaderPageInvalidationState`, replacing the cross-thread `invalidImages`
 boolean. GUI settings, native callbacks and Engine operations install a fresh

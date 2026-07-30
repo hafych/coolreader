@@ -604,6 +604,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (!isDocumentInteractionCurrent(
 				expectedBook, interaction))
 			return;
+		final ReaderRenderRequest renderRequest =
+				ReaderRenderRequest.fromInteraction(
+						expectedBook, interaction);
 		final Selection sel = new Selection();
 		final CloseableTaskGate.Token owner =
 				selectionUpdateLifecycle.replace();
@@ -627,7 +630,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					return;
 				if (!sel.isEmpty()) {
 					pageInvalidationState.invalidate();
-					BitmapInfo bi = preparePageImage(0);
+					BitmapInfo bi =
+							preparePageImage(
+									0, renderRequest);
 					if (bi != null) {
 						bookView.draw(true);
 					}
@@ -1225,8 +1230,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				ReaderRenderRequest renderRequest) {
 			// called from background thread
 			if (!isActive()
-					|| renderRequest != null
-							&& !isRenderRequestCurrent(renderRequest))
+					|| !isRenderRequestCurrent(renderRequest))
 				return null;
 			ImageInfo img =
 					imageViewerState.snapshotForBuffer(
@@ -1235,14 +1239,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return null;
 			if (mCurrentPageInfo != null) {
 				if (img.equals(mCurrentPageInfo.imageInfo)
-						&& (renderRequest == null
-						|| isRenderRequestCurrent(
-								renderRequest)))
+						&& isRenderRequestCurrent(
+								renderRequest))
 					return mCurrentPageInfo;
 			}
 			PositionProperties currpos = doc.getPositionProps(null, false);
-			if (renderRequest != null
-					&& !isRenderRequestCurrent(renderRequest))
+			if (!isRenderRequestCurrent(renderRequest))
 				return null;
 			BitmapInfo bi = new BitmapInfo();
 			bi.imageInfo = new ImageInfo(img);
@@ -1250,16 +1252,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			bi.position = currpos;
 			if (!doc.drawImage(bi.bitmap, bi.imageInfo)
 					|| !isActive()
-					|| renderRequest != null
-							&& !isRenderRequestCurrent(renderRequest)) {
+					|| !isRenderRequestCurrent(renderRequest)) {
 				bi.recycle();
 				return null;
 			}
-			BitmapInfo previous = mCurrentPageInfo;
-			mCurrentPageInfo = bi;
-			if (previous != null)
-				previous.recycle();
-			return mCurrentPageInfo;
+			return publishCurrentPageCandidate(
+					bi, renderRequest);
 		}
 
 		private boolean isActive() {
@@ -3162,6 +3160,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	class AutoScrollAnimation {
 		private final BookInfo expectedBook;
 		private final DocumentLoadLifecycle.Interaction interaction;
+		private final ReaderRenderRequest renderRequest;
 
 		boolean isScrollView;
 		BitmapInfo image1;
@@ -3189,6 +3188,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				DocumentLoadLifecycle.Interaction interaction) {
 			this.expectedBook = expectedBook;
 			this.interaction = interaction;
+			this.renderRequest =
+					ReaderRenderRequest.fromInteraction(
+							expectedBook, interaction);
 			progress = startProgress;
 			startAnimationProgress = AUTOSCROLL_START_ANIMATION_PERCENT * 100;
 
@@ -3357,7 +3359,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			isScrollView = currPos.pageMode == 0;
 			log.v("initPageTurn(charCount = " + charCount + ")");
 			if (isScrollView) {
-				image1 = preparePageImage(0);
+				image1 = preparePageImage(
+						0, renderRequest);
 				if (image1 == null || !isCurrentSession()) {
 					log.v("ScrollViewAnimation -- not started: image is null");
 					return false;
@@ -3369,7 +3372,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				if (pos1 < 0)
 					pos1 = 0;
 				nextPos = pos1;
-				image2 = preparePageImage(pos1 - pos0);
+				image2 = preparePageImage(
+						pos1 - pos0, renderRequest);
 				if (image2 == null || !isCurrentSession()) {
 					log.v("ScrollViewAnimation -- not started: image is null");
 					return false;
@@ -3381,10 +3385,12 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					currentAnimation = null;
 					return false;
 				}
-				image1 = preparePageImage(0);
+				image1 = preparePageImage(
+						0, renderRequest);
 				if (!isCurrentSession())
 					return false;
-				image2 = preparePageImage(1);
+				image2 = preparePageImage(
+						1, renderRequest);
 				if (page1 == page2) {
 					log.v("PageViewAnimation -- cannot start animation: not moved");
 					return false;
@@ -5371,24 +5377,25 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	 * @param offset is kind of page: 0==current, -1=previous, 1=next page
 	 * @return page image and properties, null if requested page is unavailable (e.g. requested next/prev page is out of document range)
 	 */
-	private BitmapInfo preparePageImage(int offset) {
-		return preparePageImage(offset, null);
-	}
-
 	private BitmapInfo preparePageImage(
 			int offset, ReaderRenderRequest renderRequest) {
 		BackgroundThread.ensureBackground();
-		if (renderRequest != null
-				&& !isRenderRequestCurrent(renderRequest))
+		if (!isRenderRequestCurrent(renderRequest))
 			return null;
 		log.v("preparePageImage( " + offset + ")");
-		if (pageInvalidationState.claim()) {
-			if (mCurrentPageInfo != null)
-				mCurrentPageInfo.recycle();
-			mCurrentPageInfo = null;
-			if (mNextPageInfo != null)
-				mNextPageInfo.recycle();
-			mNextPageInfo = null;
+		synchronized (documentLoadLifecycle) {
+			if (!isRenderRequestCurrent(renderRequest))
+				return null;
+			if (pageInvalidationState.claim()) {
+				BitmapInfo current = mCurrentPageInfo;
+				BitmapInfo next = mNextPageInfo;
+				mCurrentPageInfo = null;
+				mNextPageInfo = null;
+				if (current != null)
+					current.recycle();
+				if (next != null && next != current)
+					next.recycle();
+			}
 		}
 
 		if (internalDX == 0 || internalDY == 0) {
@@ -5397,8 +5404,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			internalDX = requested.width();
 			internalDY = requested.height();
 			doc.resize(internalDX, internalDY);
-			if (renderRequest != null
-					&& !isRenderRequestCurrent(renderRequest))
+			if (!isRenderRequestCurrent(renderRequest))
 				return null;
 //			internalDX=200;
 //			internalDY=300;
@@ -5418,17 +5424,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (imageViewer != null && imageViewer.isActive()) {
 			BitmapInfo image =
 					imageViewer.prepareImage(renderRequest);
-			return renderRequest == null
-					|| isRenderRequestCurrent(renderRequest)
-							? image
-							: null;
+			return isRenderRequestCurrent(renderRequest)
+					? image : null;
 		}
 
 		PositionProperties currpos = doc.getPositionProps(null, false);
 		if (currpos == null
-				|| renderRequest != null
-						&& !isRenderRequestCurrent(
-								renderRequest))
+				|| !isRenderRequestCurrent(renderRequest))
 			return null;
 
 		boolean isPageView = currpos.pageMode != 0;
@@ -5441,22 +5443,19 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (offset == 0) {
 			// Current page requested
 			if (currposBitmap != null) {
-				if (renderRequest != null
-						&& !isRenderRequestCurrent(
-								renderRequest))
-					return null;
-				if (mNextPageInfo == currposBitmap) {
-					// reorder pages
-					BitmapInfo tmp = mNextPageInfo;
-					mNextPageInfo = mCurrentPageInfo;
-					mCurrentPageInfo = tmp;
+				synchronized (documentLoadLifecycle) {
+					if (!isRenderRequestCurrent(
+							renderRequest))
+						return null;
+					if (mNextPageInfo == currposBitmap) {
+						// reorder pages
+						BitmapInfo tmp = mNextPageInfo;
+						mNextPageInfo = mCurrentPageInfo;
+						mCurrentPageInfo = tmp;
+					}
+					// found ready page image
+					return mCurrentPageInfo;
 				}
-				// found ready page image
-				return mCurrentPageInfo;
-			}
-			if (mCurrentPageInfo != null) {
-				mCurrentPageInfo.recycle();
-				mCurrentPageInfo = null;
 			}
 			BitmapInfo bi = new BitmapInfo();
 			bi.position = currpos;
@@ -5469,14 +5468,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 							? internalDY : requested.height());
 			applyBatteryStatusToDocument();
 			doc.getPageImage(bi.bitmap);
-			if (renderRequest != null
-					&& !isRenderRequestCurrent(renderRequest)) {
-				bi.recycle();
-				return null;
-			}
-			mCurrentPageInfo = bi;
-			//log.v("Prepared new current page image " + mCurrentPageInfo);
-			return mCurrentPageInfo;
+			return publishCurrentPageCandidate(
+					bi, renderRequest);
 		}
 		if (isPageView) {
 			// PAGES: one of next or prev pages requested, offset is specified as param
@@ -5484,66 +5477,134 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			int cmd2 = offset > 0 ? ReaderCommand.DCMD_PAGEUP.nativeId : ReaderCommand.DCMD_PAGEDOWN.nativeId;
 			if (offset < 0)
 				offset = -offset;
-			if (doc.doCommand(cmd1, offset)) {
-				// can move to next page
-				PositionProperties nextpos = doc.getPositionProps(null, false);
-				BitmapInfo nextposBitmap = null;
-				if (mCurrentPageInfo != null && mCurrentPageInfo.position != null && mCurrentPageInfo.position.equals(nextpos))
-					nextposBitmap = mCurrentPageInfo;
-				else if (mNextPageInfo != null && mNextPageInfo.position != null && mNextPageInfo.position.equals(nextpos))
-					nextposBitmap = mNextPageInfo;
-				if (nextposBitmap == null) {
-					// existing image not found in cache, overriding mNextPageInfo
-					if (mNextPageInfo != null)
-						mNextPageInfo.recycle();
-					mNextPageInfo = null;
-					BitmapInfo bi = new BitmapInfo();
-					bi.position = nextpos;
-					bi.bitmap = factory.get(internalDX, internalDY);
-					applyBatteryStatusToDocument();
-					doc.getPageImage(bi.bitmap);
-					mNextPageInfo = bi;
-					nextposBitmap = bi;
-					//log.v("Prepared new current page image " + mNextPageInfo);
-				}
-				// return back to previous page
-				doc.doCommand(cmd2, offset);
-				return nextposBitmap;
-			} else {
+			if (!doc.doCommand(cmd1, offset))
 				// cannot move to page: out of document range
 				return null;
+			BitmapInfo nextposBitmap = null;
+			BitmapInfo candidate = null;
+			try {
+				// can move to next page
+				if (isRenderRequestCurrent(renderRequest)) {
+					PositionProperties nextpos =
+							doc.getPositionProps(null, false);
+					if (nextpos != null
+							&& isRenderRequestCurrent(
+									renderRequest)) {
+						if (mCurrentPageInfo != null
+								&& mCurrentPageInfo.position != null
+								&& mCurrentPageInfo.position.equals(nextpos))
+							nextposBitmap = mCurrentPageInfo;
+						else if (mNextPageInfo != null
+								&& mNextPageInfo.position != null
+								&& mNextPageInfo.position.equals(nextpos))
+							nextposBitmap = mNextPageInfo;
+						if (nextposBitmap == null) {
+							candidate = new BitmapInfo();
+							candidate.position = nextpos;
+							candidate.bitmap =
+									factory.get(
+											internalDX,
+											internalDY);
+							applyBatteryStatusToDocument();
+							doc.getPageImage(candidate.bitmap);
+						}
+					}
+				}
+			} finally {
+				// return back to previous page even after replacement
+				doc.doCommand(cmd2, offset);
 			}
+			if (candidate != null) {
+				return publishNextPageCandidate(
+						candidate, renderRequest);
+			}
+			return isRenderRequestCurrent(renderRequest)
+					? nextposBitmap : null;
 		} else {
 			// SCROLL next or prev page requested, with pixel offset specified
 			int y = currpos.y + offset;
-			if (doc.doCommand(ReaderCommand.DCMD_GO_POS.nativeId, y)) {
-				PositionProperties nextpos = doc.getPositionProps(null, false);
-				BitmapInfo nextposBitmap = null;
-				if (mCurrentPageInfo != null && mCurrentPageInfo.position != null && mCurrentPageInfo.position.equals(nextpos))
-					nextposBitmap = mCurrentPageInfo;
-				else if (mNextPageInfo != null && mNextPageInfo.position != null && mNextPageInfo.position.equals(nextpos))
-					nextposBitmap = mNextPageInfo;
-				if (nextposBitmap == null) {
-					// existing image not found in cache, overriding mNextPageInfo
-					if (mNextPageInfo != null)
-						mNextPageInfo.recycle();
-					mNextPageInfo = null;
-					BitmapInfo bi = new BitmapInfo();
-					bi.position = nextpos;
-					bi.bitmap = factory.get(internalDX, internalDY);
-					applyBatteryStatusToDocument();
-					doc.getPageImage(bi.bitmap);
-					mNextPageInfo = bi;
-					nextposBitmap = bi;
-				}
-				// return back to prev position
-				doc.doCommand(ReaderCommand.DCMD_GO_POS.nativeId, currpos.y);
-				return nextposBitmap;
-			} else {
+			if (!doc.doCommand(
+					ReaderCommand.DCMD_GO_POS.nativeId, y))
 				return null;
+			BitmapInfo nextposBitmap = null;
+			BitmapInfo candidate = null;
+			try {
+				if (isRenderRequestCurrent(renderRequest)) {
+					PositionProperties nextpos =
+							doc.getPositionProps(null, false);
+					if (nextpos != null
+							&& isRenderRequestCurrent(
+									renderRequest)) {
+						if (mCurrentPageInfo != null
+								&& mCurrentPageInfo.position != null
+								&& mCurrentPageInfo.position.equals(nextpos))
+							nextposBitmap = mCurrentPageInfo;
+						else if (mNextPageInfo != null
+								&& mNextPageInfo.position != null
+								&& mNextPageInfo.position.equals(nextpos))
+							nextposBitmap = mNextPageInfo;
+						if (nextposBitmap == null) {
+							candidate = new BitmapInfo();
+							candidate.position = nextpos;
+							candidate.bitmap =
+									factory.get(
+											internalDX,
+											internalDY);
+							applyBatteryStatusToDocument();
+							doc.getPageImage(candidate.bitmap);
+						}
+					}
+				}
+			} finally {
+				// return back to previous position even after replacement
+				doc.doCommand(
+						ReaderCommand.DCMD_GO_POS.nativeId,
+						currpos.y);
 			}
+			if (candidate != null) {
+				return publishNextPageCandidate(
+						candidate, renderRequest);
+			}
+			return isRenderRequestCurrent(renderRequest)
+					? nextposBitmap : null;
 		}
 
+	}
+
+	private BitmapInfo publishCurrentPageCandidate(
+			BitmapInfo candidate,
+			ReaderRenderRequest renderRequest) {
+		synchronized (documentLoadLifecycle) {
+			if (!isRenderRequestCurrent(renderRequest)) {
+				candidate.recycle();
+				return null;
+			}
+			BitmapInfo previous = mCurrentPageInfo;
+			mCurrentPageInfo = candidate;
+			if (previous != null
+					&& previous != candidate
+					&& previous != mNextPageInfo)
+				previous.recycle();
+			return candidate;
+		}
+	}
+
+	private BitmapInfo publishNextPageCandidate(
+			BitmapInfo candidate,
+			ReaderRenderRequest renderRequest) {
+		synchronized (documentLoadLifecycle) {
+			if (!isRenderRequestCurrent(renderRequest)) {
+				candidate.recycle();
+				return null;
+			}
+			BitmapInfo previous = mNextPageInfo;
+			mNextPageInfo = candidate;
+			if (previous != null
+					&& previous != candidate
+					&& previous != mCurrentPageInfo)
+				previous.recycle();
+			return candidate;
+		}
 	}
 
 	private final CloseableTaskGate drawTaskLifecycle =
@@ -5936,6 +5997,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			final int startY,
 			final int maxX,
 			final int maxY) {
+		final ReaderRenderRequest renderRequest =
+				ReaderRenderRequest.capture(
+						mBookInfo, documentLoadLifecycle);
+		if (!isRenderRequestCurrent(renderRequest))
+			return null;
 		alog.d("highliteTapZone(" + startX + ", " + startY + ")");
 		int txcolor = mSettings.getColor(PROP_FONT_COLOR, Color.BLACK);
 		final int color = (txcolor & 0xFFFFFF) | (HILITE_RECT_ALPHA << 24);
@@ -5950,7 +6016,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		if (show == null)
 			return null;
 		BackgroundThread.instance().executeBackground(() -> {
-			if (!tapHighlightState.isCurrent(show))
+			if (!tapHighlightState.isCurrent(show)
+					|| !isRenderRequestCurrent(
+							renderRequest))
 				return;
 
 			if (isAutoScrollActive()) {
@@ -5959,11 +6027,13 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 
 			BackgroundThread.ensureBackground();
-			final BitmapInfo pageImage = preparePageImage(0);
+			final BitmapInfo pageImage =
+					preparePageImage(0, renderRequest);
 			if (pageImage != null && pageImage.bitmap != null && pageImage.position != null) {
 				TapHighlightState.Transition transition =
 						tapHighlightState.applyShow(show);
-				drawTapHighlightTransition(transition);
+				drawTapHighlightTransition(
+						transition, renderRequest);
 			} else {
 				invalidateTapHighlight();
 			}
@@ -6000,32 +6070,44 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			TapHighlightState.Hide hide) {
 		if (hide == null)
 			return;
+		final ReaderRenderRequest renderRequest =
+				ReaderRenderRequest.capture(
+						mBookInfo, documentLoadLifecycle);
 		BackgroundThread.instance().executeBackground(() -> {
 			TapHighlightState.Transition transition =
 					tapHighlightState.applyHide(hide);
 			if (transition == null
-					|| !transition.hasVisualChange())
+					|| !transition.hasVisualChange()
+					|| !isRenderRequestCurrent(
+							renderRequest))
 				return;
 			BackgroundThread.ensureBackground();
-			BitmapInfo pageImage = preparePageImage(0);
+			BitmapInfo pageImage =
+					preparePageImage(0, renderRequest);
 			if (pageImage != null
 					&& pageImage.bitmap != null
 					&& pageImage.position != null) {
-				drawTapHighlightTransition(transition);
+				drawTapHighlightTransition(
+						transition, renderRequest);
 			}
 		});
 	}
 
 	private void drawTapHighlightTransition(
-			TapHighlightState.Transition transition) {
+			TapHighlightState.Transition transition,
+			ReaderRenderRequest renderRequest) {
 		if (transition == null
-				|| !transition.hasVisualChange())
+				|| !transition.hasVisualChange()
+				|| !isRenderRequestCurrent(
+						renderRequest))
 			return;
 		Rect dirty = tapHighlightDirtyRect(transition);
 		if (dirty == null || dirty.isEmpty())
 			return;
 		drawCallback(canvas -> {
 			if (!readerNativeLifecycle.isInitialized()
+					|| !isRenderRequestCurrent(
+							renderRequest)
 					|| mCurrentPageInfo == null)
 				return;
 			log.d("onDraw() -- drawing page image");
@@ -6551,6 +6633,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		boolean started;
 		private final BookInfo expectedBook;
 		private final DocumentLoadLifecycle.Interaction interaction;
+		private final ReaderRenderRequest renderRequest;
 
 		public boolean isStarted() {
 			return started;
@@ -6562,6 +6645,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			//startTimeStamp = android.os.SystemClock.uptimeMillis();
 			this.expectedBook = expectedBook;
 			this.interaction = interaction;
+			this.renderRequest =
+					ReaderRenderRequest.fromInteraction(
+							expectedBook, interaction);
 			cancelGc();
 		}
 
@@ -6572,6 +6658,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 
 		final boolean isCurrentAnimation() {
 			return currentAnimation == this && ownsDocument();
+		}
+
+		final ReaderRenderRequest renderRequest() {
+			return renderRequest;
 		}
 
 		public void close() {
@@ -6636,8 +6726,11 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			this.pageHeight = currPos.pageHeight;
 			this.pageWidth = currPos.pageWidth;
 			this.progress = 0.0;
-			BitmapInfo startImage = preparePageImage(0);
-			BitmapInfo endImage = preparePageImage(offset);
+			BitmapInfo startImage =
+					preparePageImage(0, renderRequest());
+			BitmapInfo endImage =
+					preparePageImage(
+							offset, renderRequest());
 			if (startImage == null || endImage == null
 					|| startImage.bitmap == null
 					|| endImage.bitmap == null) {
@@ -6793,8 +6886,10 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 				return;
 			}
 			this.pageCount = currPos.pageMode;
-			image1 = preparePageImage(0);
-			image2 = preparePageImage(direction);
+			image1 = preparePageImage(
+					0, renderRequest());
+			image2 = preparePageImage(
+					direction, renderRequest());
 			if (image1 == null || image2 == null) {
 				log.v("PageViewAnimation -- cannot start animation: page image is null");
 				return;
@@ -7051,8 +7146,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			close();
 			// preparing images for next page flip
 			if (ownsDocument()) {
-				preparePageImage(0);
-				preparePageImage(direction);
+				preparePageImage(0, renderRequest());
+				preparePageImage(
+						direction, renderRequest());
 			}
 			//if ( started )
 			//	drawPage();
@@ -7406,6 +7502,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		private final DocumentLoadLifecycle.Request loadOwner;
 		private final DocumentLoadLifecycle.Interaction
 				loadInteraction;
+		private final ReaderRenderRequest renderRequest;
 		private BookInfo bookInfo;
 		private final DocumentSource documentSource;
 		private String filename;
@@ -7446,6 +7543,9 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			this.loadOwner = loadOwner;
 			this.loadInteraction =
 					documentLoadLifecycle.interaction();
+			this.renderRequest =
+					ReaderRenderRequest.fromInteraction(
+							bookInfo, loadInteraction);
 			this.bookInfo = bookInfo;
 			this.documentSource = documentSource;
 			this.parcelFileDescriptor = parcelFileDescriptor;
@@ -7569,7 +7669,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					log.d("LoadDocument task: no size defined, resizing using widget size");
 					doc.resize(internalDX, internalDY);
 				}
-				preparePageImage(0);
+				preparePageImage(0, renderRequest);
 				log.v("updating loaded book info");
 				updateLoadedBookInfo(
 						bookInfo, null != docBuffer,
@@ -7656,7 +7756,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			mOpened = true;
 			highlightBookmarks();
 			hideProgress();
-			drawPage();
+			drawPage(null, false, renderRequest);
 			mActivity.showReader();
 			if (doneHandler != null)
 				doneHandler.run();
@@ -7778,6 +7878,7 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			}
 			bookInfo = new BookInfo(resolvedBook);
 			mBookInfo = bookInfo;
+			positionPersistenceState.replace(bookInfo);
 			FileInfo fileInfo = bookInfo.getFileInfo();
 			filename = fileInfo.getPathName();
 			path = fileInfo.arcname != null
@@ -7832,8 +7933,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 								R.string.error_while_opening,
 								filename));
 				doc.requestRender();
-				preparePageImage(0);
-				drawPage();
+				preparePageImage(0, renderRequest);
+				drawPage(null, false, renderRequest);
 				BackgroundThread.instance().postGUI(
 						this::finishFailure);
 			});
@@ -8078,11 +8179,14 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			if (!isOwnedDocumentLoadCurrent(
 					expectedBook, loadOwner))
 				return;
-			preparePageImage(0);
+			ReaderRenderRequest renderRequest =
+					ReaderRenderRequest.fromInteraction(
+							expectedBook, interaction);
+			preparePageImage(0, renderRequest);
 			if (!isOwnedDocumentLoadCurrent(
 					expectedBook, loadOwner))
 				return;
-			drawPage();
+			drawPage(null, false, renderRequest);
 			updateCurrentPositionStatus(
 					expectedBook, interaction);
 		}

@@ -214,7 +214,8 @@ DRM или ограничений доступа, подбор/получени�
   request связан с identity книги и immutable position (включая null),
   фиксируется только после успешных save/flush через один captured binder,
   replacement и stale animation reset не очищают состояние другой книги, а
-  destroy permanently закрывает owner.
+  stream reconciliation перепривязывает resolved `BookInfo`, destroy
+  permanently закрывает owner.
   Selection preview/end также используют один exact `CloseableTaskGate` token:
   каждый drag sample заменяет owner, stale terminal callback не открывает
   toolbar и не очищает selection нового жеста, clear/reload/close отменяют
@@ -257,6 +258,14 @@ DRM или ограничений доступа, подбор/получени�
   completion той же книги, но replacement/close отменяют gate, а stale
   completion/failure не вызывает handler и не скрывает progress новой загрузки.
   Destroy закрывает render/callback owner до native teardown.
+  Ownerless `preparePageImage(int)` удалён: selection/tap highlight,
+  autoscroll/gesture animations, load/error document и position restore
+  передают captured `ReaderRenderRequest`. Current/offset bitmap candidates
+  проверяются после native move/render/restore и публикуются через
+  lifecycle-locked helper, поэтому interaction rotation не попадает между
+  финальной проверкой и cache-slot assignment, а stale candidate только
+  освобождается. Invalidation claim/очистка используют тот же lock, а current
+  bitmap остаётся доступен до validated replacement.
   Page-cache invalidation вынесена из cross-thread `invalidImages` в
   synchronized `ReaderPageInvalidationState`: GUI/native/Engine requests
   устанавливают identity, preparation claim-ит точное поколение, повторные

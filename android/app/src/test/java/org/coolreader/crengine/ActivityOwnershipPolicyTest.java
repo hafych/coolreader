@@ -541,6 +541,16 @@ public class ActivityOwnershipPolicyTest {
 		assertTrue(viewAnimationBase != null);
 		assertTrue(animationUpdate != null);
 		assertTrue(autoScrollAnimation != null);
+		Field animationRenderRequest =
+				viewAnimationBase.getDeclaredField(
+						"renderRequest");
+		assertEquals(
+				ReaderRenderRequest.class,
+				animationRenderRequest.getType());
+		assertTrue(Modifier.isPrivate(
+				animationRenderRequest.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				animationRenderRequest.getModifiers()));
 		for (Class<?> owner : new Class<?>[]{
 				viewAnimationBase, animationUpdate}) {
 			Field expectedBook =
@@ -579,6 +589,16 @@ public class ActivityOwnershipPolicyTest {
 				DocumentLoadLifecycle.Interaction.class,
 				autoScrollAnimation.getDeclaredField(
 						"interaction").getType());
+		Field autoScrollRenderRequest =
+				autoScrollAnimation.getDeclaredField(
+						"renderRequest");
+		assertEquals(
+				ReaderRenderRequest.class,
+				autoScrollRenderRequest.getType());
+		assertTrue(Modifier.isPrivate(
+				autoScrollRenderRequest.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				autoScrollRenderRequest.getModifiers()));
 		for (String methodName : new String[]{
 				"ownsDocument",
 				"isCurrentSession",
@@ -680,6 +700,20 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isFinal(
 					field.getModifiers()));
 		}
+		int pagePreparationMethods = 0;
+		for (Method method : ReaderView.class.getDeclaredMethods()) {
+			if (!method.getName().equals("preparePageImage"))
+				continue;
+			pagePreparationMethods++;
+			assertEquals(2, method.getParameterTypes().length);
+			assertEquals(
+					int.class,
+					method.getParameterTypes()[0]);
+			assertEquals(
+					ReaderRenderRequest.class,
+					method.getParameterTypes()[1]);
+		}
+		assertEquals(1, pagePreparationMethods);
 		assertTrue(Modifier.isFinal(
 				ReaderPositionSnapshot.class.getModifiers()));
 		assertTrue(Modifier.isPrivate(

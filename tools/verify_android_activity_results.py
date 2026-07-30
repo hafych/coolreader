@@ -2551,7 +2551,8 @@ def main() -> None:
         "tapHighlightState.applyShow(show)",
         "tapHighlightState.applyHide(hide)",
         "tapHighlightScheduler.postDelayed(",
-        "drawTapHighlightTransition(transition)",
+        "drawTapHighlightTransition(\n"
+        "\t\t\t\t\t\ttransition, renderRequest)",
         "viewportResizeState.request(width, height)",
         "viewportResizeState.requestCurrent()",
         "viewportResizeState.isCurrent(request)",
@@ -2875,25 +2876,44 @@ def main() -> None:
         page_prepare_text = reader_view_text[
             page_prepare_start:page_prepare_end
         ]
+        single_argument_page_prepare = re.findall(
+            r'(?<!["A-Za-z0-9_])preparePageImage'
+            r'\(\s*[-A-Za-z0-9_ +]+\)',
+            reader_view_text,
+        )
+        if single_argument_page_prepare:
+            violations.append(
+                f"{relative(READER_VIEW)} retains page preparation "
+                "without exact render identity: "
+                + ", ".join(single_argument_page_prepare)
+            )
         render_index = page_prepare_text.find(
             "doc.getPageImage(bi.bitmap)")
-        validation_index = page_prepare_text.find(
-            "!isRenderRequestCurrent(renderRequest)",
+        publication_call_index = page_prepare_text.find(
+            "publishCurrentPageCandidate(",
             render_index)
-        recycle_index = page_prepare_text.find(
-            "bi.recycle()",
-            validation_index)
-        publication_index = page_prepare_text.find(
-            "mCurrentPageInfo = bi",
-            validation_index)
         if not (
                 render_index >= 0
-                and validation_index > render_index
-                and recycle_index > validation_index
-                and publication_index > recycle_index):
+                and publication_call_index > render_index
+                and "private BitmapInfo publishCurrentPageCandidate("
+                    in page_prepare_text
+                and "private BitmapInfo publishNextPageCandidate("
+                    in page_prepare_text
+                and "synchronized (documentLoadLifecycle)"
+                    in page_prepare_text
+                and page_prepare_text.find(
+                    "pageInvalidationState.claim()"
+                ) > page_prepare_text.find(
+                    "synchronized (documentLoadLifecycle)"
+                )
+                and "mCurrentPageInfo = candidate"
+                    in page_prepare_text
+                and "mNextPageInfo = candidate"
+                    in page_prepare_text
+                and "candidate.recycle()" in page_prepare_text):
             violations.append(
-                f"{relative(READER_VIEW)} does not revalidate and recycle "
-                "a stale bitmap before cache publication")
+                f"{relative(READER_VIEW)} does not atomically revalidate "
+                "and publish page-cache candidates")
 
     image_prepare_start = reader_view_text.find(
         "\n\t\tpublic BitmapInfo prepareImage(\n"
@@ -2914,7 +2934,7 @@ def main() -> None:
             "!isRenderRequestCurrent(renderRequest)",
             image_render_index)
         image_publication_index = image_prepare_text.find(
-            "mCurrentPageInfo = bi",
+            "publishCurrentPageCandidate(",
             image_validation_index)
         image_session_validation_index = image_prepare_text.find(
             "!isActive()",
