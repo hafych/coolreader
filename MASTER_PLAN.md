@@ -140,7 +140,11 @@ DRM или ограничений доступа, подбор/получени�
   generation-owned immutable Nook EPD reflection bindings без mutable
   process-wide vendor cache, плюс ReaderView-owned bitmap pool/VMRuntime
   tracker с immutable reflection bindings, synchronized long accounting и
-  widened row-stride/surface byte sizes, а также immutable ReaderAction
+  widened row-stride/surface byte sizes. Surface accounting теперь заменяется
+  exact previous/current transition на каждом resize, а `surfaceDestroyed` и
+  reader destroy идемпотентно освобождают последнюю publication через
+  `ReaderSurfaceMemoryState`, вместо первого-размера-only `hackMemorySize`.
+  Также immutable ReaderAction
   metadata/catalog copies, Activity-owned themed icon snapshots и
   SettingsManager-owned device input defaults с корректным Nook override без
   перезаписи user mappings, ReaderView-owned immutable/overflow-safe gesture

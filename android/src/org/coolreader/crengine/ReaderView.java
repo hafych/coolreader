@@ -5459,6 +5459,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 	}
 
 	private final VMRuntimeHack runtime = new VMRuntimeHack();
+	private final ReaderSurfaceMemoryState surfaceMemoryState =
+			new ReaderSurfaceMemoryState();
 
 	private static final class BitmapFactory {
 		public static final int MAX_FREE_LIST_SIZE = 2;
@@ -6031,8 +6033,6 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		}
 	}
 
-	private long hackMemorySize;
-
 	private void applyEinkFocusRefresh(
 			ReaderSurfaceState.FocusRefresh refresh) {
 		BackgroundThread.ensureGUI();
@@ -6057,12 +6057,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 			return;
 		log.i("surfaceChanged(" + width + ", " + height + ")");
 
-		if (hackMemorySize <= 0) {
-			hackMemorySize =
-					BitmapMemoryAccounting.surfaceBytes(width, height);
-			runtime.trackFree(hackMemorySize);
-		}
-
+		applySurfaceMemoryChange(
+				surfaceMemoryState.resize(width, height));
 
 		surface.invalidate();
 		//if (!isProgressActive())
@@ -6086,10 +6082,18 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		log.i("surfaceDestroyed()");
 		readerSurfaceState.markSurfaceDestroyed();
 		einkRefreshScheduler.cancel();
-		if (hackMemorySize > 0) {
-			runtime.trackAlloc(hackMemorySize);
-			hackMemorySize = 0;
-		}
+		applySurfaceMemoryChange(
+				surfaceMemoryState.clear());
+	}
+
+	private void applySurfaceMemoryChange(
+			ReaderSurfaceMemoryState.Change change) {
+		if (change == null)
+			return;
+		if (change.releasedBytes() > 0)
+			runtime.trackAlloc(change.releasedBytes());
+		if (change.acquiredBytes() > 0)
+			runtime.trackFree(change.acquiredBytes());
 	}
 
 	enum AnimationType {
@@ -9033,6 +9037,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 		surface.setOnKeyListener(null);
 		surface.setOnFocusChangeListener(null);
 		surface.getHolder().removeCallback(this);
+		applySurfaceMemoryChange(
+				surfaceMemoryState.clear());
 	}
 
 	private void cancelDelayedReaderWork() {

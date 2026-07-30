@@ -521,6 +521,7 @@ public class ActivityOwnershipPolicyTest {
 				"pageAnimationState",
 				"readerSettingsState",
 				"dimmingState",
+				"surfaceMemoryState",
 				"imageViewerState",
 				"selectionUpdateLifecycle",
 				"drawTaskLifecycle",
@@ -2931,9 +2932,57 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isFinal(field.getModifiers()));
 		}
 		Field surfaceMemory =
-				ReaderView.class.getDeclaredField("hackMemorySize");
+				ReaderView.class.getDeclaredField(
+						"surfaceMemoryState");
 		assertFalse(Modifier.isStatic(surfaceMemory.getModifiers()));
-		assertEquals(long.class, surfaceMemory.getType());
+		assertTrue(Modifier.isPrivate(
+				surfaceMemory.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				surfaceMemory.getModifiers()));
+		assertEquals(
+				ReaderSurfaceMemoryState.class,
+				surfaceMemory.getType());
+		assertTrue(Modifier.isFinal(
+				ReaderSurfaceMemoryState.class
+						.getModifiers()));
+		for (Field field :
+				ReaderSurfaceMemoryState.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+		}
+		for (Method method : new Method[]{
+				ReaderSurfaceMemoryState.class
+						.getDeclaredMethod(
+								"resize",
+								int.class,
+								int.class),
+				ReaderSurfaceMemoryState.class
+						.getDeclaredMethod("clear")}) {
+			assertTrue(Modifier.isSynchronized(
+					method.getModifiers()));
+		}
+		assertTrue(Modifier.isFinal(
+				ReaderSurfaceMemoryState.Change.class
+						.getModifiers()));
+		for (Field field :
+				ReaderSurfaceMemoryState.Change.class
+						.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertTrue(Modifier.isFinal(
+					field.getModifiers()));
+		}
+		for (Field field :
+				ReaderView.class.getDeclaredFields()) {
+			assertFalse(
+					"ReaderView retains manual surface byte state",
+					field.getName().equals("hackMemorySize"));
+		}
 
 		for (Field field : VMRuntimeHack.class.getDeclaredFields()) {
 			assertFalse(
