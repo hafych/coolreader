@@ -26,15 +26,13 @@ import android.content.ServiceConnection;
 import android.os.IBinder;
 import org.coolreader.crengine.Log;
 
-import java.util.ArrayList;
+import java.util.List;
 
 public class SyncServiceAccessor {
 	private final static String TAG = "sync2acc";
 	private final Context mContext;
-	private volatile SyncServiceBinder mServiceBinder;
-	private volatile boolean mServiceBound;
-	private final ArrayList<SyncServiceBinder.Callback> onConnectCallbacks = new ArrayList<>();
-	private boolean bindIsCalled;
+	private final SyncServiceBindingState bindingState =
+			new SyncServiceBindingState();
 	private final Object mLocker = new Object();
 
 	public interface Callback {
@@ -46,71 +44,67 @@ public class SyncServiceAccessor {
 	}
 
 	public void bind(final SyncServiceBinder.Callback boundCallback) {
-		synchronized (this) {
-			if (mServiceBinder != null && mServiceBound) {
+		SyncServiceBinder ready;
+		synchronized (mLocker) {
+			if (bindingState.isReady()) {
 				Log.v(TAG, "SyncService is already bound");
-				if (boundCallback != null)
-					boundCallback.run(mServiceBinder);
-				return;
-			}
-		}
-		//Log.v(TAG, "binding SyncService");
-		if (boundCallback != null) {
-			synchronized (mLocker) {
-				onConnectCallbacks.add(boundCallback);
-			}
-		}
-		if (!bindIsCalled) {
-			bindIsCalled = true;
-			if (mContext.bindService(new Intent(mContext, SyncService.class), mServiceConnection, Context.BIND_AUTO_CREATE)) {
-				mServiceBound = true;
-				Log.v(TAG, "binding SyncService in progress...");
+				ready = bindingState.getBinder();
 			} else {
-				Log.e(TAG, "cannot bind SyncService");
+				ready = null;
+				if (boundCallback != null)
+					bindingState.addPending(boundCallback);
+				if (!bindingState.isBindCalled()) {
+					bindingState.setBindCalled(true);
+					if (mContext.bindService(
+							new Intent(mContext, SyncService.class),
+							mServiceConnection,
+							Context.BIND_AUTO_CREATE)) {
+						bindingState.setServiceBound(true);
+						Log.v(TAG, "binding SyncService in progress...");
+					} else {
+						Log.e(TAG, "cannot bind SyncService");
+					}
+				}
 			}
 		}
+		if (ready != null && boundCallback != null)
+			boundCallback.run(ready);
 	}
 
 	public void unbind() {
 		Log.v(TAG, "unbinding SyncService");
-		if (mServiceBound) {
-			// Detach our existing connection.
-			mContext.unbindService(mServiceConnection);
-			mServiceBound = false;
-			bindIsCalled = false;
-			mServiceBinder = null;
+		boolean shouldUnbind;
+		synchronized (mLocker) {
+			shouldUnbind = bindingState.isServiceBound();
+			bindingState.unbind();
 		}
+		if (shouldUnbind)
+			mContext.unbindService(mServiceConnection);
 	}
 
 	public boolean isServiceBound() {
-		synchronized (SyncServiceAccessor.this) {
-			return mServiceBound;
+		synchronized (mLocker) {
+			return bindingState.isServiceBound();
 		}
 	}
 
 	private final ServiceConnection mServiceConnection = new ServiceConnection() {
 		public void onServiceConnected(ComponentName className, IBinder service) {
-			synchronized (SyncServiceAccessor.this) {
-				mServiceBinder = ((SyncServiceBinder)service);
-				Log.i(TAG, "connected to SyncService");
-			}
+			List<SyncServiceBinder.Callback> callbacks;
+			SyncServiceBinder binder;
 			synchronized (mLocker) {
-				if (onConnectCallbacks.size() != 0) {
-					// run once
-					for (SyncServiceBinder.Callback callback : onConnectCallbacks)
-						callback.run(mServiceBinder);
-					onConnectCallbacks.clear();
-				}
+				binder = (SyncServiceBinder) service;
+				bindingState.setBinder(binder);
+				Log.i(TAG, "connected to SyncService");
+				callbacks = bindingState.takePending();
 			}
+			for (SyncServiceBinder.Callback callback : callbacks)
+				callback.run(binder);
 		}
 
 		public void onServiceDisconnected(ComponentName className) {
-			// This is called when the connection with the service has been
-			// unexpectedly disconnected -- that is, its process crashed.
-			synchronized (SyncServiceAccessor.this) {
-				mServiceBinder = null;
-				mServiceBound = false;
-				bindIsCalled = false;
+			synchronized (mLocker) {
+				bindingState.connectionLost();
 			}
 			Log.i(TAG, "Connection to the SyncService has been lost (abnormal termination)");
 		}

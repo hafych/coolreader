@@ -1231,14 +1231,15 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 				return mList.size()==0;
 			}
 
-			private ArrayList<DataSetObserver> observers = new ArrayList<>();
+			private final DataSetObserverRegistry observers =
+					new DataSetObserverRegistry();
 
 			public void registerDataSetObserver(DataSetObserver observer) {
-				observers.add(observer);
+				observers.register(observer);
 			}
 
 			public void unregisterDataSetObserver(DataSetObserver observer) {
-				observers.remove(observer);
+				observers.unregister(observer);
 			}
 
 		};
@@ -2073,34 +2074,29 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 	}
 	
 	class OptionsListView extends BaseListView {
-		private ArrayList<OptionBase> mOptions = new ArrayList<>();
+		private final OptionsListState optionsState = new OptionsListState();
 		private ListAdapter mAdapter;
 		public void refresh()
 		{
 			//setAdapter(mAdapter);
-			for ( OptionBase item : mOptions ) {
+			for ( OptionBase item : optionsState.snapshot() ) {
 				item.refreshItem();
 			}
 			invalidate();
 		}
 		public OptionsListView add( OptionBase option ) {
-			mOptions.add(option);
+			optionsState.add(option);
 			option.optionsListView = this;
 			return this;
 		}
 		public boolean remove(int index) {
-			try {
-				mOptions.remove(index);
-				return true;
-			} catch (Exception ignored) {
-			}
-			return false;
+			return optionsState.remove(index);
 		}
 		public boolean remove( OptionBase option ) {
-			return mOptions.remove(option);
+			return optionsState.remove(option);
 		}
 		public void clear() {
-			mOptions.clear();
+			optionsState.clear();
 		}
 		public OptionsListView( Context context )
 		{
@@ -2117,11 +2113,11 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 				}
 
 				public int getCount() {
-					return mOptions.size();
+					return optionsState.size();
 				}
 
 				public Object getItem(int position) {
-					return mOptions.get(position);
+					return optionsState.get(position);
 				}
 
 				public long getItemId(int position) {
@@ -2136,13 +2132,13 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 
 				
 				public View getView(int position, View convertView, ViewGroup parent) {
-					OptionBase item = mOptions.get(position);
+					OptionBase item = optionsState.get(position);
 					return item.getView(convertView, parent);
 				}
 
 				public int getViewTypeCount() {
 					//return OPTION_VIEW_TYPE_COUNT;
-					return mOptions.size() > 0 ? mOptions.size() : 1;
+					return optionsState.size() > 0 ? optionsState.size() : 1;
 				}
 
 				public boolean hasStableIds() {
@@ -2150,17 +2146,18 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 				}
 
 				public boolean isEmpty() {
-					return mOptions.size()==0;
+					return optionsState.size()==0;
 				}
 
-				private ArrayList<DataSetObserver> observers = new ArrayList<>();
+				private final DataSetObserverRegistry observers =
+						new DataSetObserverRegistry();
 				
 				public void registerDataSetObserver(DataSetObserver observer) {
-					observers.add(observer);
+					observers.register(observer);
 				}
 
 				public void unregisterDataSetObserver(DataSetObserver observer) {
-					observers.remove(observer);
+					observers.unregister(observer);
 				}
 			};
 			setAdapter(mAdapter);
@@ -2168,8 +2165,8 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 		@Override
 		public boolean performItemClick(View view, int position, long id) {
 			try {
-				OptionBase option = mOptions.get(position);
-				if (option.enabled) {
+				OptionBase option = optionsState.get(position);
+				if (option != null && option.enabled) {
 					option.onSelect();
 					return true;
 				}
@@ -2177,7 +2174,7 @@ public class OptionsDialog extends BaseDialog implements TabContentFactory, Opti
 			return false;
 		}
 		public int size() {
-			return mOptions.size();
+			return optionsState.size();
 		}
 	}
 	

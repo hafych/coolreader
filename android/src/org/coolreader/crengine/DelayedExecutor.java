@@ -31,21 +31,25 @@ public final class DelayedExecutor {
 	public static final Logger log = L.create("dt", Log.INFO);
 	
 	private final boolean isBackground;
-	private Handler handler;
+	private final DelayedExecutorHandlerState handlerState =
+			new DelayedExecutorHandlerState();
 	private final ReplaceableTaskSlot tasks =
 			new ReplaceableTaskSlot();
 	private final String name;
 
 	private Handler getHandler() {
-		if (handler != null)
-			return handler;
-		if (isBackground)
-			handler = BackgroundThread.getBackgroundHandler();
-		else
-			handler = BackgroundThread.getGUIHandler();
-		if (handler == null)
+		Handler existing = handlerState.get();
+		if (existing != null)
+			return existing;
+		Handler created = isBackground
+				? BackgroundThread.getBackgroundHandler()
+				: BackgroundThread.getGUIHandler();
+		if (created == null)
 			throw new RuntimeException("Cannot get handler");
-		return handler;
+		Handler installed = handlerState.ensure(created);
+		if (installed == null)
+			throw new RuntimeException("Cannot get handler");
+		return installed;
 	}
 	
 	public static DelayedExecutor createBackground(String name) {

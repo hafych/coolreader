@@ -942,7 +942,11 @@ public:
                     break;
                 case GR_EVENT_TYPE_EXPOSURE:
                     CRLog::debug("GR_EVENT_TYPE_EXPOSURE");
-                    postEvent( new CRGUIUpdateEvent(true) );
+                    {
+                        std::unique_ptr<CRGUIEvent> updateEvent =
+                                std::make_unique<CRGUIUpdateEvent>(true);
+                        postEvent( updateEvent.release() );
+                    }
 /*
                     m_images->printImage("logo",0,0);
                     GrSetFontSize(m_state->fontid,32);
@@ -1061,7 +1065,11 @@ public:
                             CRLog::debug( "Unknown key code in OnKeyPressed() : %d (%04x)", keyId, keyId );
                             break;
                         }
-                        postEvent( new CRGUIKeyDownEvent(code, flags) );
+                        {
+                            std::unique_ptr<CRGUIEvent> keyEvent =
+                                    std::make_unique<CRGUIKeyDownEvent>(code, flags);
+                            postEvent( keyEvent.release() );
+                        }
 
                         if ( CRJinkeWindowManager::instance->getWindowCount()==0 ) {
                             _stopFlag = true;
@@ -1080,6 +1088,11 @@ public:
         }
     }
 
+    ~CRJinkeWindowManager() override
+    {
+        instance = NULL;
+    }
+
     // runs event loop
     int runEventLoop() override
     {
@@ -1089,6 +1102,9 @@ public:
 
 
 CRJinkeWindowManager * CRJinkeWindowManager::instance = NULL;
+/// Process-long exclusive owner after successful InitDoc open.
+/// Non-owning `instance` remains the compatibility lookup.
+static std::unique_ptr<CRJinkeWindowManager> g_windowManagerOwner;
 
 
 class CRJinkeDocView : public V3DocViewWin {
@@ -1286,7 +1302,8 @@ int InitDoc(char *fileName)
 #endif
 
     CRLog::trace("creating window manager...");
-    CRJinkeWindowManager * wm = new CRJinkeWindowManager(600,800);
+    std::unique_ptr<CRJinkeWindowManager> wm =
+            std::make_unique<CRJinkeWindowManager>(600, 800);
     CRLog::trace("loading skin...");
     if ( !wm->loadSkin(
                 U"/root/abook/crengine/skin") )
@@ -1391,7 +1408,7 @@ int InitDoc(char *fileName)
     fontDirs.add(U"/home/fonts/");
     CRLog::info("INIT...");
     if ( !InitCREngine( "/root/crengine/", fontDirs ) )
-        return 0;
+        return 0; // scoped wm owner tears down
 
 
 
@@ -1439,7 +1456,7 @@ int InitDoc(char *fileName)
 
         CRLog::trace("creating main window...");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
-                std::make_unique<CRJinkeDocView>(wm);
+                std::make_unique<CRJinkeDocView>(wm.get());
         main_win = mainWindowOwner.get();
         CRLog::trace("setting colors...");
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
@@ -1492,13 +1509,16 @@ int InitDoc(char *fileName)
         if ( !main_win->loadDocument(
                     Utf8ToUnicode(lString8(fileName))) ) {
             printf("Cannot open book file %s\n", fileName);
-            delete wm;
+            main_win = NULL;
+            // Scoped wm owner tears down on return.
             return 0;
         } else {
 #ifdef ENABLE_LEDS
             postLeds( true );
 #endif
         }
+        // Successful open: process-long exclusive owner.
+        g_windowManagerOwner = std::move(wm);
     }
 
     //_docview->setVisiblePageCount( 1 );

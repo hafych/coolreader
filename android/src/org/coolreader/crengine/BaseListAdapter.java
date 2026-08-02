@@ -19,33 +19,28 @@
 
 package org.coolreader.crengine;
 
-import java.util.ArrayList;
-
 import android.database.DataSetObserver;
 import android.widget.BaseAdapter;
 
 public abstract class BaseListAdapter extends BaseAdapter {
-	private ArrayList<DataSetObserver> observers = new ArrayList<DataSetObserver>();
+	private final DataSetObserverRegistry observers =
+			new DataSetObserverRegistry();
 	
 	public void registerDataSetObserver(DataSetObserver observer) {
-		observers.add(observer);
+		observers.register(observer);
 	}
 
 	public void unregisterDataSetObserver(DataSetObserver observer) {
-		observers.remove(observer);
+		observers.unregister(observer);
 	}
 	
 	public void notifyDataSetChanged() {
-		for (DataSetObserver observer : observers) {
-			observer.onChanged();
-		}
+		observers.notifyChanged();
 	}
 
 	public void notifyInvalidated() {
-		for (DataSetObserver observer : observers) {
-			observer.onChanged();
-			//observer.onInvalidated();
-		}
+		observers.notifyChanged();
+		//observer.onInvalidated();
 	}
 
 	

@@ -107,7 +107,10 @@ DRM или ограничений доступа, подбор/получени�
   `switch`, `non-c-typedef-for-linkage`, `misleading-indentation`,
   `reorder-ctor`, `sign-compare`, `unused-but-set-variable`,
   `unused-parameter`, `unused-private-field`.
-  Осталось: подтвердить первый зелёный CI-прогон.
+  Локально подтверждено: Clang warning gate (FB2PROPS + `USE_CLANG_WARNING_GATE=ON`)
+  собирается и прогоняет native ctest; Android NDK debug native rebuild зелёный.
+  Осталось: подтвердить полный CI-прогон на GitHub Actions runners
+  (Ubuntu 24.04 / macOS 15) и Qt6/legacy CRGUI_QT clang jobs.
 - [-] Проверить первый полный CI-прогон после закрепления Linux/Android jobs на
   Ubuntu 24.04 и macOS job на macOS 15; после зелёного прогона убрать этот пункт.
 
@@ -115,8 +118,10 @@ DRM или ограничений доступа, подбор/получени�
 
 - [-] Локальные double-clean Android rebuild и повторная desktop-упаковка
   воспроизводимы; double-runner gate и допустимая RSA-PSS разница APK
-  документированы. После первого полного прогона release workflow подтвердить
-  Linux/macOS rebuild на чистых runner и удалить пункт.
+  документированы. Локально подтверждено: `./gradlew clean :app:testDebugUnitTest
+  :app:assembleDebug` и NDK externalNativeBuildDebug зелёные; Clang warning
+  gate (FB2PROPS) + ctest зелёные. После первого полного прогона release
+  workflow подтвердить Linux/macOS rebuild на чистых runner и удалить пункт.
 
 ## P2 — развитие продукта после безопасного релиза
 
@@ -387,6 +392,52 @@ DRM или ограничений доступа, подбор/получени�
   idle owner, остаётся exact current до завершения асинхронного service shutdown,
   stale close не очищает replacement, а reader destroy освобождает UI-ссылку и
   запрещает новую публикацию; raw `ttsToolbar` удалён.
+  Текущая книга и флаг opened объединены в synchronized
+  `ReaderOpenedBookState`: load bind-ит pending identity до native open,
+  успешная publication атомарно выставляет book+opened, stream reconciliation
+  заменяет только book при сохранении opened, close снимает opened и сохраняет
+  last identity, failure clearIf-ит exact book, destroy permanently закрывает
+  owner; raw `mBookInfo`/`mOpened` удалены.
+  Двухслотовый page cache (`current`/`next`) вынесен в synchronized
+  `ReaderPageCacheState`: publication candidate-ов, promote next→current,
+  invalidation clear, begin/serialized close detach и permanent destroy
+  проходят через одного owner-а; предыдущие identity возвращаются caller-у
+  для recycle, а raw `mCurrentPageInfo`/`mNextPageInfo` удалены.
+  Battery publication вынесена в `ReaderBatteryState`: immutable
+  `BatteryStatus` публикуется volatile snapshot-ом, synchronized update
+  возвращает Change только при реальной смене, destroy permanently
+  закрывает owner; raw `batteryStatus` удалён. Touch-screen lock вынесен
+  в synchronized `TouchScreenLockState`: toggle/isEnabled/close, destroy
+  permanently disables touch; raw `isTouchScreenEnabled` удалён.
+  External open identity вынесена в Activity-owned
+  `ExternalDocumentState`: intent clear/set, resume snapshot и destroy
+  close; raw `mExternalDocumentSource` удалён. Toolbar appearance id
+  вынесен в synchronized `ToolbarAppearanceState`; raw
+  `mOptionAppearance` удалён.
+  TTS service accessor и engine package объединены в
+  `TtsServiceConnectionState`: lazy ensureAccessor, package set/get,
+  destroy close+unbind; raw `ttsControlServiceAccessor`/
+  `ttsEnginePackage` удалены. Pre-reader battery snapshot вынесен в
+  `InitialBatteryStatusState`; raw `initialBatteryStatus` BatteryStatus
+  field удалён.
+  Native `DocView` identity принадлежит `ReaderNativeLifecycle`:
+  attach до create, `doc()` access, claimDestroy+takeDoc teardown;
+  raw `private DocView doc` field в `ReaderView` удалён.
+  SAF library root store вынесен в Activity-owned
+  `LibraryRootStoreState`: one-shot install, get, destroy close; raw
+  `mLibraryRootStore` удалён.
+  Service dependencies CoolReader объединены в `ActivityServiceGraph`:
+  one-shot install из `ServiceDependencies`, accessors engine/scanner/
+  history/cover/cache/folders/genres/lifecycle, destroy close; raw
+  `mEngine`/`mScanner`/`mHistory`/`mCoverpageManager`/`mDocumentCache`/
+  `mFileSystemFolders`/`mGenresCollection`/`mServiceLifecycle` удалены.
+  Reader view/frame вынесены в `ReaderUiOwner`: install fully-built pair,
+  view/frame accessors, destroy close; raw `mReaderView`/`mReaderFrame`
+  удалены.
+  Browser shell вынесен в `BrowserUiOwner` (browser/title/toolbar/frame),
+  home root — в `HomeUiOwner`; destroy close + onClose; raw
+  `mBrowser`/`mBrowserTitleBar`/`mBrowserToolBar`/`mBrowserFrame`/
+  `mHomeFrame` удалены.
   DB connector теперь также владеет exact platform registration через
   `ServiceBindingState`: concurrent waiters разделяют только текущую очередь,
   bind failure/null binding/binding death очищают её и разрешают retry, unbind
@@ -689,6 +740,153 @@ DRM или ограничений доступа, подбор/получени�
   принадлежит resume/pause/close самого root view. `CoolReader` больше не
   управляет им напрямую и не создаёт home UI из позднего DB-bind callback после
   destroy.
+  Activity-owned `SharedPreferences` last-location/notification store
+  belongs to `ActivityPreferencesState`: lazy factory install, get only
+  while open, destroy permanently closes and drops the handle; raw
+  `mPreferences` removed.
+  Reader UI destroy order: `ReaderUiTeardown.closeForDestroy` permanently
+  closes `ReaderUiOwner` and retains the prior `ReaderView`;
+  `destroyClosedOut` runs native `destroy()` on that identity only.
+  Post-close `readerUi.view()` is always null and must not gate destroy
+  (regression: `ReaderUiTeardownTest` + CoolReader onDestroy wiring check).
+  Battery and time-tick `BroadcastReceiver` registration belong to
+  `BroadcastRegistrationState`: resume `onRegistered`, pause
+  `beginUnregister` once, destroy `close` final unregister if still
+  live; JVM regression on register/unregister/close contracts.
+  Destroy-generation `runInReader`/`runInBrowser` bail on closed Activity
+  or inactive `serviceGraph`, and install rejection destroys/onCloses the
+  unowned UI instead of throwing. Home install rejection
+  `createdHome.onClose()`; status bar updates tolerate null
+  `readerUi.frame()` after closeForDestroy. Async service work pins
+  generation via `pinServiceLifecycle()` (null-safe after graph close)
+  for options, book/catalog/folder delete, and logcat export.
+  Important: `ServiceLifecycle` can stay `isActive()` until
+  `stopServices()` while `serviceGraph.close()` already nulls
+  history/scanner — late work must null-check graph accessors, not only
+  lifecycle (folder-deletion DB cleanup, showCurrentBook, etc.).
+  Additional destroy/install null-safety: `directoryUpdated` does not
+  chain null home frame; `processIntent` reader commands skip when
+  reader UI is absent; `runInReader`/`runInBrowser` capture service
+  deps before construct; load/manual/browser tasks local-capture view/
+  browser; `showAboutDialog` and library-root remove tolerate closed
+  graph/store. JVM regression:
+  `RunInUiDestroyGenerationTest`, `ServiceLifecyclePinTest`,
+  `CoolReaderNullSafetyLogicTest`.
+  BaseActivity residual ownership: CRDB accessor belongs to
+  `CrdbServiceConnectionState` (lazy ensure, permanent close+unbind);
+  service-dependencies snapshot to `BaseServiceDependenciesState`
+  (one-shot install, close on stopServices); interface theme and
+  action-icon snapshot to synchronized `InterfaceThemeState`;
+  start/pause flags to `ActivityRunState`; settings profile id to
+  `ActivityProfileState` with clamped lazy load. E-Ink controller
+  belongs to `EinkScreenOwner`; one-shot notice visibility to
+  `NoticeDialogState`; night-mode flag to `NightModeState`. Raw
+  `mCRDBService`/`mServiceDependencies`/`currentTheme`/`actionIcons`/
+  `mIsStarted`/`mPaused`/`currentProfile`/`mEinkScreen`/
+  `noticeDialogVisible`/`mNightMode` removed. JVM regression:
+  `CrdbServiceConnectionStateTest`, `BaseServiceDependenciesStateTest`,
+  `InterfaceThemeStateTest`, `ActivityRunStateTest`,
+  `ActivityProfileStateTest`, `EinkScreenOwnerTest`,
+  `NoticeDialogStateTest`, `NightModeStateTest`,
+  `DictionariesOwnerTest`, `FullscreenStateTest`,
+  `ScreenOrientationStateTest` + ownership policy markers.
+  Dictionary helper belongs to `DictionariesOwner` with
+  `getDictionaries()` boundary (null-safe after destroy);
+  fullscreen flag to `FullscreenState`; requested orientation to
+  `ScreenOrientationState`; settings manager to
+  `SettingsManagerOwner` (require/get, permanent close). Raw
+  `mDictionaries`/`mFullscreen`/package-visible `screenOrientation`/
+  `mSettingsManager` removed. JVM: `SettingsManagerOwnerTest`.
+  Further BaseActivity residual: display metrics/font bounds to
+  `DisplayMetricsState`; cold/warm brightness + hack flag to
+  `ScreenBrightnessState`; key backlight level/disabled to
+  `KeyBacklightState`; E-Ink update mode/interval to `EinkUpdateState`;
+  system-UI visibility cache/listener to `SystemUiVisibilityState`;
+  UI language to `ActivityLanguageState`; sensor orientation to
+  `SensorOrientationState`; hardware-menu-key cache to
+  `HardwareMenuKeyState`. Raw parallel fields for all of the above
+  removed; destroy closes owners permanently. JVM regression:
+  `DisplayMetricsStateTest`, `ScreenBrightnessStateTest`,
+  `KeyBacklightStateTest`, `EinkUpdateStateTest`,
+  `SystemUiVisibilityStateTest`, `ActivityLanguageStateTest`,
+  `SensorOrientationStateTest`, `HardwareMenuKeyStateTest`.
+  Content/decor views belong to `ContentViewState`; screen-backlight
+  wake duration to `ScreenBacklightDurationState`. Raw
+  `mDecorView`/`contentView`/`screenBacklightDuration` removed. JVM:
+  `ContentViewStateTest`, `ScreenBacklightDurationStateTest`.
+  Package version belongs to `ActivityVersionState`; wake-lock session
+  (WakeLock/timer/timestamps) to `ScreenBacklightSessionState`; settings
+  Properties snapshot to `SettingsPropertiesState` (clone-on-publish,
+  `settings()` returns defensive copy). Raw `mVersion`/`wl`/
+  `backlightTimerTask`/`lastUserActivityTime`/`lastUpdateTimeStamp`/
+  `mSettings` removed. JVM: `ActivityVersionStateTest`,
+  `ScreenBacklightSessionStateTest`, `SettingsPropertiesStateTest`.
+  BaseActivity parallel mutable fields for lifecycle/display/settings/
+  backlight are now owner-backed. Services graph belongs to
+  `ServicesGraphState` (atomic install, close returns teardown snapshot);
+  History recent list/folder to `HistoryBooksState`; Engine progress
+  dialog to `EngineProgressDialogState` and key backlight to
+  `EngineKeyBacklightState`. Raw parallel fields on Services/History/
+  Engine for those paths removed. JVM: `ServicesGraphStateTest`,
+  `HistoryBooksStateTest`, `EngineProgressDialogStateTest`,
+  `EngineKeyBacklightStateTest`. FileSystemFolders favorites belong to
+  `FavoriteFoldersState`; Scanner dir-scan/hide-empty flags to
+  `ScannerScanOptionsState`; CoverpageManager size/font to
+  `CoverpageRenderOptions` and ready listeners to
+  `CoverpageListenerRegistry`. JVM: `FavoriteFoldersStateTest`,
+  `ScannerScanOptionsStateTest`, `CoverpageRenderOptionsTest`,
+  `CoverpageListenerRegistryTest`. Coverpage check/scan/ready queues and
+  exact GUI task tokens belong to `CoverpageWorkState` +
+  `CoverpageImageQueue` (stale task cannot claim next item). JVM:
+  `CoverpageWorkStateTest`, `CoverpageImageQueueTest`. CRDB accessor
+  live binding + path corrector belong to `CrdbAccessorSessionState`
+  (exact registration match for unbind/failure). JVM:
+  `CrdbAccessorSessionStateTest`. Scanner virtual root belongs to
+  `ScannerRootState`; metadata/directory scan finish flags to
+  `MetadataScanSessionState`; FileInfo files/dirs lists to
+  `FileInfoChildren`; BookInfo bookmarks list to
+  `BookInfoBookmarksState`. JVM: `ScannerRootStateTest`,
+  `MetadataScanSessionStateTest`, `FileInfoChildrenTest`,
+  `BookInfoBookmarksStateTest`. List adapters share
+  `DataSetObserverRegistry`; OptionsListView options belong to
+  `OptionsListState`; BookmarksDlg shortcut mode to `ShortcutModeState`;
+  ServiceThread queue/handler/stopped to `ServiceThreadState`;
+  FileInfoCache MRU list to `FileInfoCacheState`. JVM:
+  `DataSetObserverRegistryTest`, `OptionsListStateTest`,
+  `ShortcutModeStateTest`, `ServiceThreadStateTest`,
+  `FileInfoCacheStateTest`. TTS bind registration/binder/pending callbacks
+  belong to `TtsBindingSessionState`; SyncService bind flags to
+  `SyncServiceBindingState`; OnlineStore authors/books lists to
+  `OnlineStoreItemListState`; AsyncOperationControl flags to
+  `AsyncOperationState`; OPDS parse entries to `OpdsEntryListState`.
+  JVM: `TtsBindingSessionStateTest`, `SyncServiceBindingStateTest`,
+  `OnlineStoreItemListStateTest`, `AsyncOperationStateTest`,
+  `OpdsEntryListStateTest`. CRToolBar action/icon/overflow lists belong
+  to `ReaderActionListState`; CRRootView cover listener registration and
+  cover thumbnail size to `CoverListenerRegistrationState` /
+  `CoverSizeState`; LitresGenre children to `LitresGenreChildrenState`;
+  DelayedExecutor Handler cache to `DelayedExecutorHandlerState`;
+  FileBrowser/OnlineStore request cancel slots to `CancelActionState`.
+  JVM: `ReaderActionListStateTest`, `CoverListenerRegistrationStateTest`,
+  `CoverSizeStateTest`, `LitresGenreChildrenStateTest`,
+  `DelayedExecutorHandlerStateTest`, `CancelActionStateTest`. TOC tree
+  children belong to `TocItemChildrenState`; mount-path symlink lists to
+  `MountPathLinkListState`. JVM: `TocItemChildrenStateTest`,
+  `MountPathLinkListStateTest`. TTS toolbar close/cleanup flags and
+  on-close listener belong to `TtsToolbarSessionState`; word-timing
+  HandlerThread/Handler pair to `WordTimingCalcHandlerState`; motion
+  watchdog slot to `MotionWatchdogSlotState`. JVM:
+  `TtsToolbarSessionStateTest`, `WordTimingCalcHandlerStateTest`,
+  `MotionWatchdogSlotStateTest`. BackgroundThread bg/GUI Handler slots
+  belong to `BackgroundThreadHandlerState`; OnlineStoreLoginDialog login
+  callback and TTS init terminal pair to `CancelActionState` /
+  `TerminalCallbackPairState`; TTS toolbar audiobook File paths to
+  `TtsAudiobookFilesState`; MainDB series/folder/author id maps to
+  `StringIdCacheState`; FreezableRegistry permanent close. JVM:
+  `BackgroundThreadHandlerStateTest`, `TerminalCallbackPairStateTest`,
+  `TtsAudiobookFilesStateTest`, `StringIdCacheStateTest`. Remaining
+  monolit residual is further CoolReader/ReaderView behavior extraction
+  and native RAII.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
@@ -822,6 +1020,37 @@ DRM или ограничений доступа, подбор/получени�
   node payload transitions и reserved child publication, а также central RAII
   ownership для parser element-writer/foster graphs, DOM-backed base64 stream
   candidates и temporary DOM serialization hyphenation flags.
+  Android JNI: `DocViewNative` exclusive `LVDocView` owner, create/destroy
+  Java boundary через `unique_ptr`, image-preview buffer release into
+  drawbuf image source, bitmap accessor singleton owner, cover-scale
+  intermediate buffers, EPUB/ODT metadata `ldomDocument` owners, hyphenation
+  dictionary candidate adoption.
+  JNI bitmap lock/unlock: temporary draw buffers staged with `unique_ptr` and
+  transferred at unlock; bookmark highlight candidates scoped before
+  `LVPtrVector` adoption.
+  wx `HistList` records snapshot owner; options dialog `wxTreebook` exclusive
+  owner; process `ResourceContainer` unique_ptr; EPUB probe documents scoped.
+  wxWidgets `cr3view` timers (`render`/`clock`/`cursor`) — exclusive
+  `unique_ptr<wxTimer>`; word-selection range candidate scoped until selection
+  list adoption.
+  Legacy CRGUI PocketBook/Jinke/NanoX `InitDoc`: window manager and
+  PocketBook globals use scoped `unique_ptr` with process-long static owner
+  after successful open; failure/ALLOW_RUN_EXE paths no longer rely on
+  manual `delete wm` (and no longer leak on early engine-init failure in
+  NanoX). `::instance` remains a non-owning view cleared in destructor.
+  GUI event producers (`postCommand`, reconfigure/postponed and
+  key/command `CRGUIUpdateEvent` posts, PocketBook/NanoX/XCB posts) stage
+  events in `unique_ptr` and `release()` only at the adoption boundary;
+  native `core_safety` drives `postCommand` publish/dispatch.
+  wx `cr3view` DocView window: exclusive `unique_ptr` until
+  `activateWindow` adoption; `_docwin` non-owning. wx options dialog
+  stages OptPanel pages until treebook `InsertPage` adoption.
+  Android Activity `SharedPreferences` handle owned by
+  `ActivityPreferencesState` (lazy factory, permanent close); raw
+  `mPreferences` removed; JVM regression on ensure-once/close.
+  wx main frame: exclusive `unique_ptr` for view/hist/scroll until
+  `Create` reparent; toolbar `Destroy` after detach. Android
+  `BroadcastRegistrationState` for battery/time-tick receivers.
   Остальные участки мигрируются отдельными bounded-пакетами.
 - [x] Устранить глобальное изменяемое состояние в путях parser/render/cache либо
   явно ограничить его синхронизацией и временем жизни процесса.

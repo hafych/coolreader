@@ -192,8 +192,23 @@ public class ActivityOwnershipPolicyTest {
 	public void processDispatcherPublishesHandlerStateSafely()
 			throws Exception {
 		assertVolatileField(BackgroundThread.class, "instance");
-		assertVolatileField(BackgroundThread.class, "handler");
-		assertVolatileField(BackgroundThread.class, "guiHandler");
+		Field bgHandlerState =
+				BackgroundThread.class.getDeclaredField("handlerState");
+		assertFalse(Modifier.isStatic(bgHandlerState.getModifiers()));
+		assertTrue(Modifier.isPrivate(bgHandlerState.getModifiers()));
+		assertTrue(Modifier.isFinal(bgHandlerState.getModifiers()));
+		assertEquals(
+				BackgroundThreadHandlerState.class,
+				bgHandlerState.getType());
+		Field guiHandlerState =
+				BackgroundThread.class.getDeclaredField(
+						"guiHandlerState");
+		assertFalse(Modifier.isStatic(guiHandlerState.getModifiers()));
+		assertTrue(Modifier.isPrivate(guiHandlerState.getModifiers()));
+		assertTrue(Modifier.isFinal(guiHandlerState.getModifiers()));
+		assertEquals(
+				BackgroundThreadHandlerState.class,
+				guiHandlerState.getType());
 		int deferredQueueCount = 0;
 		for (Field field : BackgroundThread.class.getDeclaredFields()) {
 			if (field.getType() == DeferredTaskQueue.class) {
@@ -207,7 +222,9 @@ public class ActivityOwnershipPolicyTest {
 					"Legacy mutable dispatcher state remains: "
 							+ field.getName(),
 					field.getName().equals("delayedTaskId")
-							|| field.getName().equals("mStopped"));
+							|| field.getName().equals("mStopped")
+							|| field.getName().equals("handler")
+							|| field.getName().equals("guiHandler"));
 		}
 		assertEquals(
 				"GUI and background handoffs need separate queues",
@@ -238,10 +255,21 @@ public class ActivityOwnershipPolicyTest {
 		assertTrue(Modifier.isPrivate(tasks.getModifiers()));
 		assertTrue(Modifier.isFinal(tasks.getModifiers()));
 		assertEquals(ReplaceableTaskSlot.class, tasks.getType());
+		Field handlerState =
+				DelayedExecutor.class.getDeclaredField("handlerState");
+		assertFalse(Modifier.isStatic(handlerState.getModifiers()));
+		assertTrue(Modifier.isPrivate(handlerState.getModifiers()));
+		assertTrue(Modifier.isFinal(handlerState.getModifiers()));
+		assertEquals(
+				DelayedExecutorHandlerState.class,
+				handlerState.getType());
 		for (Field field : DelayedExecutor.class.getDeclaredFields()) {
 			assertFalse(
 					"DelayedExecutor retains legacy callback slot",
 					field.getName().equals("currentTask"));
+			assertFalse(
+					"DelayedExecutor retains bare Handler field",
+					field.getName().equals("handler"));
 		}
 		for (Field field :
 				ReplaceableTaskSlot.class.getDeclaredFields()) {
@@ -447,19 +475,93 @@ public class ActivityOwnershipPolicyTest {
 	@Test
 	public void batteryStatusIsAnAtomicReaderSnapshot()
 			throws Exception {
-		Field readerStatus =
-				ReaderView.class.getDeclaredField("batteryStatus");
-		assertFalse(Modifier.isStatic(readerStatus.getModifiers()));
-		assertTrue(Modifier.isPrivate(readerStatus.getModifiers()));
-		assertTrue(Modifier.isVolatile(readerStatus.getModifiers()));
-		assertEquals(BatteryStatus.class, readerStatus.getType());
+		Field batteryState =
+				ReaderView.class.getDeclaredField("batteryState");
+		assertFalse(Modifier.isStatic(batteryState.getModifiers()));
+		assertTrue(Modifier.isPrivate(batteryState.getModifiers()));
+		assertTrue(Modifier.isFinal(batteryState.getModifiers()));
+		assertEquals(
+				ReaderBatteryState.class,
+				batteryState.getType());
+		assertTrue(Modifier.isFinal(
+				ReaderBatteryState.class.getModifiers()));
+		for (Field field :
+				ReaderBatteryState.class.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			if (field.getName().equals("status")) {
+				assertTrue(Modifier.isVolatile(
+						field.getModifiers()));
+			} else if (!Modifier.isStatic(field.getModifiers())) {
+				assertFalse(Modifier.isStatic(
+						field.getModifiers()));
+			}
+		}
+		for (Method method :
+				ReaderBatteryState.class.getDeclaredMethods()) {
+			if (method.getName().equals("snapshot"))
+				continue;
+			assertTrue(
+					method.getName()
+							+ " must serialize battery ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		Field touchLock =
+				ReaderView.class.getDeclaredField(
+						"touchScreenLockState");
+		assertEquals(
+				TouchScreenLockState.class,
+				touchLock.getType());
+		assertTrue(Modifier.isPrivate(touchLock.getModifiers()));
+		assertTrue(Modifier.isFinal(touchLock.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				TouchScreenLockState.class.getModifiers()));
+		for (Method method :
+				TouchScreenLockState.class.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize touch-lock ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
 
+		Class<?> initialStatusClass = Class.forName(
+				"org.coolreader.InitialBatteryStatusState");
 		Field initialStatus =
 				CoolReader.class.getDeclaredField(
 						"initialBatteryStatus");
 		assertFalse(Modifier.isStatic(initialStatus.getModifiers()));
 		assertTrue(Modifier.isPrivate(initialStatus.getModifiers()));
-		assertEquals(BatteryStatus.class, initialStatus.getType());
+		assertTrue(Modifier.isFinal(initialStatus.getModifiers()));
+		assertEquals(initialStatusClass, initialStatus.getType());
+		for (Method method :
+				initialStatusClass.getDeclaredMethods()) {
+			if (method.getName().equals("get"))
+				continue;
+			assertTrue(
+					method.getName()
+							+ " must serialize initial battery ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		Class<?> ttsConnectionClass = Class.forName(
+				"org.coolreader.TtsServiceConnectionState");
+		Field ttsConnection =
+				CoolReader.class.getDeclaredField(
+						"ttsServiceConnection");
+		assertTrue(Modifier.isPrivate(
+				ttsConnection.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ttsConnection.getModifiers()));
+		assertEquals(ttsConnectionClass, ttsConnection.getType());
+		for (Method method :
+				ttsConnectionClass.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize TTS connection ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
 
 		for (Field field : BatteryStatus.class.getDeclaredFields()) {
 			if (Modifier.isStatic(field.getModifiers())) {
@@ -473,10 +575,12 @@ public class ActivityOwnershipPolicyTest {
 		for (String legacy : new String[]{
 				"mBatteryState",
 				"mBatteryChargingConn",
-				"mBatteryChargeLevel"}) {
+				"mBatteryChargeLevel",
+				"batteryStatus",
+				"isTouchScreenEnabled"}) {
 			for (Field field : ReaderView.class.getDeclaredFields()) {
 				assertFalse(
-						"ReaderView retains parallel battery field "
+						"ReaderView retains parallel battery/touch field "
 								+ legacy,
 						field.getName().equals(legacy));
 			}
@@ -484,10 +588,12 @@ public class ActivityOwnershipPolicyTest {
 		for (String legacy : new String[]{
 				"initialBatteryState",
 				"initialBatteryChargeConn",
-				"initialBatteryLevel"}) {
+				"initialBatteryLevel",
+				"ttsEnginePackage",
+				"ttsControlServiceAccessor"}) {
 			for (Field field : CoolReader.class.getDeclaredFields()) {
 				assertFalse(
-						"CoolReader retains parallel battery field "
+						"CoolReader retains parallel battery/TTS field "
 								+ legacy,
 						field.getName().equals(legacy));
 			}
@@ -646,9 +752,11 @@ public class ActivityOwnershipPolicyTest {
 				"positionSaveScheduler",
 				"positionPersistenceState",
 				"pageInvalidationState",
+				"pageCacheState",
 				"pageAnimationState",
 				"readerSettingsState",
 				"selectionModeState",
+				"touchScreenLockState",
 				"dimmingState",
 				"surfaceMemoryState",
 				"imageViewerState",
@@ -657,6 +765,8 @@ public class ActivityOwnershipPolicyTest {
 				"ttsInitializationLifecycle",
 				"ttsToolbarState",
 				"documentLoadLifecycle",
+				"openedBookState",
+				"batteryState",
 				"readerSurfaceState",
 				"readerViewModeState",
 				"timeTickLifecycle",
@@ -774,6 +884,18 @@ public class ActivityOwnershipPolicyTest {
 			assertFalse(
 					"TTS toolbar identity must belong to its owner",
 					field.getName().equals("ttsToolbar"));
+			assertFalse(
+					"Opened book identity must belong to its owner",
+					field.getName().equals("mBookInfo"));
+			assertFalse(
+					"Opened flag must belong to its owner",
+					field.getName().equals("mOpened"));
+			assertFalse(
+					"Page-cache current slot must belong to its owner",
+					field.getName().equals("mCurrentPageInfo"));
+			assertFalse(
+					"Page-cache next slot must belong to its owner",
+					field.getName().equals("mNextPageInfo"));
 		}
 		for (Field field :
 				ReaderImageViewerState.class.getDeclaredFields()) {
@@ -1237,13 +1359,45 @@ public class ActivityOwnershipPolicyTest {
 				ReaderDimmingState.class,
 				ReaderView.class.getDeclaredField(
 						"dimmingState").getType());
-		Field currentBook =
+		Field openedBook =
 				ReaderView.class.getDeclaredField(
-						"mBookInfo");
+						"openedBookState");
 		assertTrue(Modifier.isPrivate(
-				currentBook.getModifiers()));
-		assertTrue(Modifier.isVolatile(
-				currentBook.getModifiers()));
+				openedBook.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				openedBook.getModifiers()));
+		assertEquals(
+				ReaderOpenedBookState.class,
+				openedBook.getType());
+		assertTrue(Modifier.isFinal(
+				ReaderOpenedBookState.class.getModifiers()));
+		for (Field field :
+				ReaderOpenedBookState.class.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			if (Modifier.isStatic(field.getModifiers())) {
+				assertTrue(Modifier.isFinal(
+						field.getModifiers()));
+				continue;
+			}
+			if (field.getName().equals("snapshot")) {
+				assertTrue(Modifier.isVolatile(
+						field.getModifiers()));
+			}
+		}
+		for (Method method :
+				ReaderOpenedBookState.class.getDeclaredMethods()) {
+			if (method.getName().equals("book")
+					|| method.getName().equals("isOpened")
+					|| method.getName().equals("snapshot")) {
+				continue;
+			}
+			assertTrue(
+					method.getName()
+							+ " must serialize opened-book ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
 		Method applySettings =
 				ReaderView.class.getDeclaredMethod(
 						"applySettings",
@@ -1404,6 +1558,33 @@ public class ActivityOwnershipPolicyTest {
 				pageBitmapLifetime.getModifiers()));
 		assertTrue(Modifier.isFinal(
 				pageBitmapLifetime.getModifiers()));
+		Field pageCacheState =
+				ReaderView.class.getDeclaredField(
+						"pageCacheState");
+		assertEquals(
+				ReaderPageCacheState.class,
+				pageCacheState.getType());
+		assertTrue(Modifier.isPrivate(
+				pageCacheState.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				pageCacheState.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				ReaderPageCacheState.class.getModifiers()));
+		for (Field field :
+				ReaderPageCacheState.class.getDeclaredFields()) {
+			assertTrue(Modifier.isPrivate(
+					field.getModifiers()));
+			assertFalse(Modifier.isStatic(
+					field.getModifiers()));
+		}
+		for (Method method :
+				ReaderPageCacheState.class.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize page-cache slots",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
 		Class<?> loadDocumentTask = null;
 		for (Class<?> nested : ReaderView.class.getDeclaredClasses()) {
 			if (nested.getSimpleName().equals("LoadDocumentTask")) {
@@ -2556,6 +2737,169 @@ public class ActivityOwnershipPolicyTest {
 	}
 
 	@Test
+	public void activityServiceGraphOwnsServiceDependencies()
+			throws Exception {
+		Class<?> graphClass = Class.forName(
+				"org.coolreader.ActivityServiceGraph");
+		Field graph = CoolReader.class.getDeclaredField(
+				"serviceGraph");
+		assertTrue(Modifier.isPrivate(graph.getModifiers()));
+		assertTrue(Modifier.isFinal(graph.getModifiers()));
+		assertEquals(graphClass, graph.getType());
+		for (Method method : graphClass.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize service graph ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"mEngine",
+				"mScanner",
+				"mHistory",
+				"mCoverpageManager",
+				"mDocumentCache",
+				"mFileSystemFolders",
+				"mGenresCollection",
+				"mServiceLifecycle"}) {
+			for (Field field : CoolReader.class.getDeclaredFields()) {
+				assertFalse(
+						"CoolReader retains parallel service field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
+	public void browserAndHomeUiOwnersBelongToActivity()
+			throws Exception {
+		Class<?> browserClass = Class.forName(
+				"org.coolreader.BrowserUiOwner");
+		Class<?> homeClass = Class.forName(
+				"org.coolreader.HomeUiOwner");
+		Field browser = CoolReader.class.getDeclaredField(
+				"browserUi");
+		Field home = CoolReader.class.getDeclaredField(
+				"homeUi");
+		assertTrue(Modifier.isPrivate(browser.getModifiers()));
+		assertTrue(Modifier.isFinal(browser.getModifiers()));
+		assertTrue(Modifier.isPrivate(home.getModifiers()));
+		assertTrue(Modifier.isFinal(home.getModifiers()));
+		assertEquals(browserClass, browser.getType());
+		assertEquals(homeClass, home.getType());
+		for (Method method : browserClass.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize browser UI ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		for (Method method : homeClass.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize home UI ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"mBrowser",
+				"mBrowserTitleBar",
+				"mBrowserToolBar",
+				"mBrowserFrame",
+				"mHomeFrame"}) {
+			for (Field field : CoolReader.class.getDeclaredFields()) {
+				assertFalse(
+						"CoolReader retains parallel shell field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	public void readerUiOwnerOwnsReaderSurface()
+			throws Exception {
+		Class<?> ownerClass = Class.forName(
+				"org.coolreader.ReaderUiOwner");
+		Field owner = CoolReader.class.getDeclaredField(
+				"readerUi");
+		assertTrue(Modifier.isPrivate(owner.getModifiers()));
+		assertTrue(Modifier.isFinal(owner.getModifiers()));
+		assertEquals(ownerClass, owner.getType());
+		for (Method method : ownerClass.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize reader UI ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"mReaderView",
+				"mReaderFrame"}) {
+			for (Field field : CoolReader.class.getDeclaredFields()) {
+				assertFalse(
+						"CoolReader retains parallel reader UI field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
+	public void externalDocumentAndToolbarAppearanceBelongToOwners()
+			throws Exception {
+		Class<?> externalClass = Class.forName(
+				"org.coolreader.ExternalDocumentState");
+		Class<?> appearanceClass = Class.forName(
+				"org.coolreader.ToolbarAppearanceState");
+		Field external =
+				CoolReader.class.getDeclaredField(
+						"externalDocumentState");
+		assertTrue(Modifier.isPrivate(
+				external.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				external.getModifiers()));
+		assertEquals(externalClass, external.getType());
+		assertTrue(Modifier.isFinal(
+				externalClass.getModifiers()));
+		for (Method method :
+				externalClass.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize external document ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		Field appearance =
+				CoolReader.class.getDeclaredField(
+						"toolbarAppearance");
+		assertTrue(Modifier.isPrivate(
+				appearance.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				appearance.getModifiers()));
+		assertEquals(appearanceClass, appearance.getType());
+		for (Method method :
+				appearanceClass.getDeclaredMethods()) {
+			assertTrue(
+					method.getName()
+							+ " must serialize toolbar appearance ownership",
+					Modifier.isSynchronized(
+							method.getModifiers()));
+		}
+		for (String legacy : new String[]{
+				"mExternalDocumentSource",
+				"mOptionAppearance"}) {
+			for (Field field :
+					CoolReader.class.getDeclaredFields()) {
+				assertFalse(
+						"CoolReader retains parallel field "
+								+ legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
 	public void libraryDocumentPickerOwnsRestorableRequest()
 			throws Exception {
 		Field requests =
@@ -2817,7 +3161,7 @@ public class ActivityOwnershipPolicyTest {
 		for (String name : new String[]{
 				"mContext",
 				"mLocker",
-				"onConnectCallbacks",
+				"sessionState",
 				"mServiceConnection"}) {
 			Field field =
 					TTSControlServiceAccessor.class
@@ -2825,11 +3169,12 @@ public class ActivityOwnershipPolicyTest {
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
 			assertTrue(Modifier.isFinal(field.getModifiers()));
 		}
-		Field bindingRegistered =
+		Field sessionState =
 				TTSControlServiceAccessor.class.getDeclaredField(
-						"mBindingRegistered");
-		assertTrue(Modifier.isPrivate(
-				bindingRegistered.getModifiers()));
+						"sessionState");
+		assertEquals(
+				"org.coolreader.tts.TtsBindingSessionState",
+				sessionState.getType().getName());
 		Method bind =
 				TTSControlServiceAccessor.class.getDeclaredMethod(
 						"bind",
@@ -2837,7 +3182,10 @@ public class ActivityOwnershipPolicyTest {
 		assertEquals(boolean.class, bind.getReturnType());
 		for (String legacy : new String[]{
 				"mServiceBound",
-				"bindIsCalled"}) {
+				"bindIsCalled",
+				"mBindingRegistered",
+				"mServiceBinder",
+				"onConnectCallbacks"}) {
 			for (Field field :
 					TTSControlServiceAccessor.class
 							.getDeclaredFields()) {
@@ -2904,14 +3252,44 @@ public class ActivityOwnershipPolicyTest {
 
 		Field motionWatchdog =
 				TTSToolbarDlg.class.getDeclaredField(
-						"mMotionWatchdog");
+						"motionWatchdogSlot");
 		assertFalse(Modifier.isStatic(
 				motionWatchdog.getModifiers()));
 		assertTrue(Modifier.isPrivate(
 				motionWatchdog.getModifiers()));
+		assertTrue(Modifier.isFinal(
+				motionWatchdog.getModifiers()));
 		assertEquals(
-				MotionWatchdogHandler.class,
+				MotionWatchdogSlotState.class,
 				motionWatchdog.getType());
+		Field toolbarSessionState =
+				TTSToolbarDlg.class.getDeclaredField(
+						"sessionState");
+		assertTrue(Modifier.isFinal(
+				toolbarSessionState.getModifiers()));
+		assertEquals(
+				TtsToolbarSessionState.class,
+				toolbarSessionState.getType());
+		Field wordTimingHandlerState =
+				TTSToolbarDlg.class.getDeclaredField(
+						"wordTimingHandlerState");
+		assertTrue(Modifier.isFinal(
+				wordTimingHandlerState.getModifiers()));
+		assertEquals(
+				WordTimingCalcHandlerState.class,
+				wordTimingHandlerState.getType());
+		for (Field field :
+				TTSToolbarDlg.class.getDeclaredFields()) {
+			assertFalse(
+					"TTSToolbarDlg retains bare motion watchdog",
+					field.getName().equals("mMotionWatchdog"));
+			assertFalse(
+					"TTSToolbarDlg retains bare closeFinished flag",
+					field.getName().equals("closeFinished"));
+			assertFalse(
+					"TTSToolbarDlg retains bare documentCleanedUp",
+					field.getName().equals("documentCleanedUp"));
+		}
 		for (String name : new String[]{
 				"startMotionWatchdog",
 				"stopMotionWatchdog"}) {
@@ -3268,10 +3646,27 @@ public class ActivityOwnershipPolicyTest {
 	@Test
 	public void readerActionUiConfigurationIsImmutableAndActivityOwned()
 			throws Exception {
-		Field actionIcons =
-				BaseActivity.class.getDeclaredField("actionIcons");
-		assertFalse(Modifier.isStatic(actionIcons.getModifiers()));
-		assertTrue(Modifier.isPrivate(actionIcons.getModifiers()));
+		Field themeState =
+				BaseActivity.class.getDeclaredField("themeState");
+		assertFalse(Modifier.isStatic(themeState.getModifiers()));
+		assertTrue(Modifier.isPrivate(themeState.getModifiers()));
+		assertTrue(Modifier.isFinal(themeState.getModifiers()));
+		assertEquals(InterfaceThemeState.class, themeState.getType());
+		// Parallel theme/icon fields must not remain on BaseActivity.
+		try {
+			BaseActivity.class.getDeclaredField("actionIcons");
+			throw new AssertionError(
+					"BaseActivity retains raw actionIcons field");
+		} catch (NoSuchFieldException expected) {
+			// expected
+		}
+		try {
+			BaseActivity.class.getDeclaredField("currentTheme");
+			throw new AssertionError(
+					"BaseActivity retains raw currentTheme field");
+		} catch (NoSuchFieldException expected) {
+			// expected
+		}
 
 		for (Field field : ReaderAction.class.getDeclaredFields()) {
 			if (!Modifier.isStatic(field.getModifiers())) {
@@ -3727,20 +4122,47 @@ public class ActivityOwnershipPolicyTest {
 					"BaseActivity retains process-wide backlight state "
 							+ field.getName(),
 					field.getName().equals("lastUserActivityTime")
-							|| field.getName().equals("backlightTimerTask"));
+							|| field.getName().equals("backlightTimerTask")
+							|| field.getName().equals("wl")
+							|| field.getName().equals(
+									"lastUpdateTimeStamp"));
 		}
+		Field session = BaseActivity.class.getDeclaredField(
+				"backlightSessionState");
+		assertFalse(Modifier.isStatic(session.getModifiers()));
+		assertTrue(Modifier.isPrivate(session.getModifiers()));
+		assertTrue(Modifier.isFinal(session.getModifiers()));
+		assertEquals(
+				ScreenBacklightSessionState.class,
+				session.getType());
+		for (String name : new String[]{
+				"lastUserActivityTime",
+				"timerTask",
+				"wakeLock",
+				"lastUpdateTimeStamp"}) {
+			Field field =
+					ScreenBacklightSessionState.class.getDeclaredField(
+							name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
+		// Session fields live on ScreenBacklightSessionState, not the
+		// inner ScreenBacklightControl controller.
 		Class<?> controlClass = null;
 		for (Class<?> nested : BaseActivity.class.getDeclaredClasses()) {
 			if (nested.getSimpleName().equals("ScreenBacklightControl"))
 				controlClass = nested;
 		}
 		assertTrue(controlClass != null);
-		for (String name : new String[]{
-				"lastUserActivityTime",
-				"backlightTimerTask"}) {
-			Field field = controlClass.getDeclaredField(name);
-			assertFalse(Modifier.isStatic(field.getModifiers()));
-			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		for (Field field : controlClass.getDeclaredFields()) {
+			assertFalse(
+					"ScreenBacklightControl retains parallel session field "
+							+ field.getName(),
+					field.getName().equals("lastUserActivityTime")
+							|| field.getName().equals("backlightTimerTask")
+							|| field.getName().equals("wl")
+							|| field.getName().equals(
+									"lastUpdateTimeStamp"));
 		}
 	}
 

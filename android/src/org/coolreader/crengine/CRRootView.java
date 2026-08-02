@@ -61,11 +61,11 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	private final ServiceLifecycle mServiceLifecycle;
 	private final RootViewRefreshSession refreshSession =
 			new RootViewRefreshSession();
+	private final CoverListenerRegistrationState coverListenerState =
+			new CoverListenerRegistrationState();
+	private final CoverSizeState coverSizeState = new CoverSizeState();
 	private final FileInfoChangeListener fileSystemFoldersListener;
-	private int coverWidth;
-	private int coverHeight;
 	private BookInfo currentBook;
-	private boolean coverListenerRegistered;
 	public CRRootView(
 			CoolReader activity,
 			Scanner scanner,
@@ -96,8 +96,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 		if (h > w)
 			h = w;
     	w = h * 3 / 4;
-    	coverWidth = w;
-    	coverHeight = h;
+    	coverSizeState.set(w, h);
     	setFocusable(true);
     	setFocusableInTouchMode(true);
 		createViews();
@@ -164,23 +163,23 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 	
 	public void onResume() {
 		if (refreshSession.isClosed()
-				|| coverListenerRegistered)
+				|| !coverListenerState.beginRegister())
 			return;
 		mCoverpageManager.addCoverpageReadyListener(this);
-		coverListenerRegistered = true;
 	}
 
 	public void onPause() {
-		if (!coverListenerRegistered)
+		if (!coverListenerState.beginUnregister())
 			return;
 		mCoverpageManager.removeCoverpageReadyListener(this);
-		coverListenerRegistered = false;
 	}
 
 	public void onClose() {
 		if (!refreshSession.close())
 			return;
 		onPause();
+		coverListenerState.close();
+		coverSizeState.close();
 		mFileSystemFolders.removeListener(
 				fileSystemFoldersListener);
 		super.onDetachedFromWindow();
@@ -204,12 +203,12 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 		ImageView cover = (ImageView)mView.findViewById(R.id.book_cover);
 		if (currentBook != null) {
 			FileInfo item = currentBook.getFileInfo();
-			cover.setImageDrawable(mCoverpageManager.getCoverpageDrawableFor(mActivity.getDB(), item, coverWidth, coverHeight));
-			cover.setMinimumHeight(coverHeight);
-			cover.setMinimumWidth(coverWidth);
-			cover.setMaxHeight(coverHeight);
-			cover.setMaxWidth(coverWidth);
-			cover.setTag(new CoverpageManager.ImageItem(item, coverWidth, coverHeight));
+			cover.setImageDrawable(mCoverpageManager.getCoverpageDrawableFor(mActivity.getDB(), item, coverSizeState.getWidth(), coverSizeState.getHeight()));
+			cover.setMinimumHeight(coverSizeState.getHeight());
+			cover.setMinimumWidth(coverSizeState.getWidth());
+			cover.setMaxHeight(coverSizeState.getHeight());
+			cover.setMaxWidth(coverSizeState.getWidth());
+			cover.setTag(new CoverpageManager.ImageItem(item, coverSizeState.getWidth(), coverSizeState.getHeight()));
 
 			setBookInfoItem(mView, R.id.lbl_book_author, Utils.formatAuthors(item.authors));
 			setBookInfoItem(mView, R.id.lbl_book_title, currentBook.getFileInfo().title);
@@ -246,9 +245,9 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 			final View view = inflater.inflate(R.layout.root_item_recent_book, null);
 			ImageView cover = view.findViewById(R.id.book_cover);
 			TextView label = view.findViewById(R.id.book_name);
-			cover.setMinimumHeight(coverHeight);
-			cover.setMaxHeight(coverHeight);
-			cover.setMaxWidth(coverWidth);
+			cover.setMinimumHeight(coverSizeState.getHeight());
+			cover.setMaxHeight(coverSizeState.getHeight());
+			cover.setMaxWidth(coverSizeState.getWidth());
 			if (item.isRecentDir()) {
 				cover.setImageResource(Utils.resolveResourceIdByAttr(mActivity, R.attr.cr3_button_next_drawable, R.drawable.cr3_button_next));
 				if (label != null) {
@@ -256,9 +255,9 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 				}
 				view.setOnClickListener(v -> mActivity.showRecentBooks());
 			} else {
-				cover.setMinimumWidth(coverWidth);
-				cover.setTag(new CoverpageManager.ImageItem(item, coverWidth, coverHeight));
-				cover.setImageDrawable(mCoverpageManager.getCoverpageDrawableFor(mActivity.getDB(), item, coverWidth, coverHeight));
+				cover.setMinimumWidth(coverSizeState.getWidth());
+				cover.setTag(new CoverpageManager.ImageItem(item, coverSizeState.getWidth(), coverSizeState.getHeight()));
+				cover.setImageDrawable(mCoverpageManager.getCoverpageDrawableFor(mActivity.getDB(), item, coverSizeState.getWidth(), coverSizeState.getHeight()));
 				if (label != null) {
 					String title = item.title;
 					String authors = Utils.formatAuthors(item.authors);
@@ -270,7 +269,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 					else if (!Utils.empty(authors))
 						s = authors;
 					label.setText(s != null ? s : "");
-					label.setMaxWidth(coverWidth);
+					label.setMaxWidth(coverSizeState.getWidth());
 				}
 				view.setOnClickListener(v -> mActivity.loadDocument(item, true));
 				view.setOnLongClickListener(v -> {
@@ -448,7 +447,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 			} else {
 				if (label != null) {
 					label.setText(item.getFileNameToDisplay());
-					label.setMaxWidth(coverWidth * 3 / 2);
+					label.setMaxWidth(coverSizeState.getWidth() * 3 / 2);
 				}
 				view.setOnClickListener(v -> mActivity.showCatalog(item));
 				view.setOnLongClickListener(v -> {
@@ -482,7 +481,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
             	label.setText(item.filename); //  filename
             else
             	label.setText(item.pathname); //  filename
-            label.setMaxWidth(coverWidth * 25 / 10);
+            label.setMaxWidth(coverSizeState.getWidth() * 25 / 10);
             view.setOnClickListener(v -> mActivity.showDirectory(item));
             view.setOnLongClickListener(view1 -> {
 				registerFoldersContextMenu(item);
@@ -503,7 +502,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 							R.string.library_root_access_lost,
 							root.getLabel());
 			label.setText(title);
-			label.setMaxWidth(coverWidth * 25 / 10);
+			label.setMaxWidth(coverSizeState.getWidth() * 25 / 10);
 			view.setContentDescription(title);
 			if (!root.isAccessGranted())
 				view.setAlpha(0.55f);
@@ -522,7 +521,7 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 				mActivity, R.attr.folder_big_bookmark_drawable,
 				R.drawable.folder_bookmark));
 		addRootLabel.setText(R.string.library_root_add);
-		addRootLabel.setMaxWidth(coverWidth * 25 / 10);
+		addRootLabel.setMaxWidth(coverSizeState.getWidth() * 25 / 10);
 		addRootView.setContentDescription(
 				mActivity.getString(R.string.library_root_add));
 		addRootView.setOnClickListener(v -> mActivity.addLibraryRoot());
@@ -579,8 +578,8 @@ public class CRRootView extends ViewGroup implements CoverpageReadyListener {
 				image.setImageResource(Utils.resolveResourceIdByAttr(mActivity, R.attr.cr3_browser_folder_authors_drawable, R.drawable.cr3_browser_folder_authors));
 			if (label != null) {
 				label.setText(item.filename);
-				label.setMinWidth(coverWidth);
-				label.setMaxWidth(coverWidth * 2);
+				label.setMinWidth(coverSizeState.getWidth());
+				label.setMaxWidth(coverSizeState.getWidth() * 2);
 			}
 			view.setOnClickListener(v -> mActivity.showDirectory(item));
 			mLibraryScroll.addView(view);

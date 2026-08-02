@@ -344,21 +344,22 @@ public class LitresConnection {
 		public String title;
 		public String token;
 		private LitresGenre parent;
-		private ArrayList<LitresGenre> children;
+		private final LitresGenreChildrenState children =
+				new LitresGenreChildrenState();
 
 		public LitresGenre getParent() {
 			return parent;
 		}
 
 		public void addChild(LitresGenre child) {
-			if (children == null)
-				children = new ArrayList<LitresGenre>();
+			if (child == null)
+				return;
 			children.add(child);
 			child.parent = this;
 		}
 
 		public int getChildCount() {
-			return (children != null) ? children.size() : 0;
+			return children.size();
 		}
 
 		public LitresGenre get(int index) {

@@ -88,9 +88,7 @@ public class CoverpageManager {
 	public void unqueue(Collection<ImageItem> filesToUnqueue) {
 		synchronized(LOCK) {
 			for (ImageItem file : filesToUnqueue) {
-				mCheckFileCacheQueue.remove(file);
-				mScanFileQueue.remove(file);
-				mReadyQueue.remove(file);
+				workState.removeFromAll(file);
 				mCache.unqueue(file);
 			}
 		}
@@ -100,34 +98,27 @@ public class CoverpageManager {
 	 * Set listener for cover page load completion.
 	 */
 	public void addCoverpageReadyListener(CoverpageReadyListener listener) {
-		this.listeners.add(listener);
+		listenerRegistry.add(listener);
 	}
 	
 	/**
 	 * Set listener for cover page load completion.
 	 */
 	public void removeCoverpageReadyListener(CoverpageReadyListener listener) {
-		this.listeners.remove(listener);
+		listenerRegistry.remove(listener);
 	}
 	
 	public boolean setCoverpageSize(int width, int height) {
 		synchronized(LOCK) {
-			if (maxWidth == width && maxHeight == height)
-				return false;
-			//clear();
-			maxWidth = width;
-			maxHeight = height;
-			return true;
+			return renderOptions.setSize(width, height);
 		}
 	}
 	
 	public boolean setFontFace(String face) {
 		synchronized(LOCK) {
+			// Historical order: clear cache, then update face if changed.
 			clear();
-			if (fontFace.equals(face))
-				return false;
-			fontFace = face;
-			return true;
+			return renderOptions.setFontFace(face);
 		}
 	}
 	
@@ -145,9 +136,7 @@ public class CoverpageManager {
 		log.d("CoverpageManager.clear()");
 		synchronized(LOCK) {
 			mCache.clear();
-			mCheckFileCacheQueue.clear();
-			mScanFileQueue.clear();
-			mReadyQueue.clear();
+			workState.clearQueues();
 		}
 	}
 	
@@ -166,7 +155,10 @@ public class CoverpageManager {
 	 * @return Drawable which can be used to draw coverpage.
 	 */
 	public Drawable getCoverpageDrawableFor(final CRDBService.LocalBinder db, FileInfo book) {
-		return new CoverImage(db, new ImageItem(new FileInfo(book), maxWidth, maxHeight));
+		return new CoverImage(db, new ImageItem(
+				new FileInfo(book),
+				renderOptions.getMaxWidth(),
+				renderOptions.getMaxHeight()));
 	}
 	
 	/**
@@ -181,9 +173,12 @@ public class CoverpageManager {
 		return new CoverImage(db, new ImageItem(new FileInfo(book), maxWidth, maxHeight));
 	}
 	
-	private int maxWidth = 110;
-	private int maxHeight = 140;
-	private String fontFace = "Droid Sans";
+	private final CoverpageRenderOptions renderOptions =
+			new CoverpageRenderOptions();
+	private final CoverpageListenerRegistry listenerRegistry =
+			new CoverpageListenerRegistry();
+	private final CoverpageWorkState workState =
+			new CoverpageWorkState();
 
 	private enum State {
 		UNINITIALIZED,
@@ -319,71 +314,8 @@ public class CoverpageManager {
 	}
 	private final BitmapCache mCache = new BitmapCache(32);
 	
-	private FileInfoQueue mCheckFileCacheQueue = new FileInfoQueue(); 
-	private FileInfoQueue mScanFileQueue = new FileInfoQueue();
-	private FileInfoQueue mReadyQueue = new FileInfoQueue();
-	
-	private static class FileInfoQueue {
-		ArrayList<ImageItem> list = new ArrayList<>();
-		public int indexOf(ImageItem file) {
-			for (int i = list.size() - 1; i >= 0; i--) {
-				if (file.matches(list.get(i))) {
-					return i;
-				}
-			}
-			return -1;
-		}
-		public void remove(ImageItem file) {
-			int index = indexOf(file);
-			if (index >= 0)
-				list.remove(index);
-		}
-		public void moveOnTop(ImageItem file) {
-			int index = indexOf(file);
-			if (index == 0)
-				return;
-			moveOnTop(index);
-		}
-		public void moveOnTop(int index) {
-			ImageItem item = list.get(index);
-			list.remove(index);
-			list.add(0, item);
-		}
-		public boolean empty() {
-			return list.size() == 0;
-		}
-		public void add(ImageItem file) {
-			int index = indexOf(file);
-			if (index >= 0)
-				return;
-			list.add(file);
-		}
-		public void clear() {
-			list.clear();
-		}
-		public boolean addOnTop(ImageItem file) {
-			int index = indexOf(file);
-			if (index >= 0) {
-				if (index > 0)
-					moveOnTop(index);
-				return false;
-			}
-			list.add(0, file);
-			return true;
-		}
-		public ImageItem next() {
-			if (list.size() == 0)
-				return null;
-			ImageItem item = list.get(0);
-			list.remove(0);
-			return item;
-		}
-	}
-	
 	private final Object LOCK = new Object();
 
-	private Runnable lastCheckCacheTask = null;
-	private Runnable lastScanFileTask = null;
 	private BitmapCacheItem setItemState(ImageItem file, State state) {
 		synchronized(LOCK) {
 			BitmapCacheItem item = mCache.getItem(file);
@@ -396,16 +328,10 @@ public class CoverpageManager {
 
 	private final static int COVERPAGE_UPDATE_DELAY = DeviceInfo.EINK_SCREEN ? 1000 : 100;
 	private final static int COVERPAGE_MAX_UPDATE_DELAY = DeviceInfo.EINK_SCREEN ? 3000 : 300;
-	private Runnable lastReadyNotifyTask;
-	private long firstReadyTimestamp;
 	private void notifyBitmapIsReady(final ImageItem file) {
 		if (!mLifecycle.isActive())
 			return;
-		synchronized(LOCK) {
-			if (mReadyQueue.empty())
-				firstReadyTimestamp = Utils.timeStamp();
-			mReadyQueue.add(file);
-		}
+		workState.addReady(file);
 		Runnable task = () -> {
 			if (!mLifecycle.isActive())
 				return;
@@ -413,25 +339,17 @@ public class CoverpageManager {
 //					log.v("skipping update, " + Utils.timeInterval(firstReadyTimestamp));
 //					return;
 //				}
-			ArrayList<ImageItem> list = new ArrayList<>();
-			synchronized(LOCK) {
-				for (;;) {
-					ImageItem f = mReadyQueue.next();
-					if (f == null)
-						break;
-					list.add(f);
-				}
-				mReadyQueue.clear();
-				if (list.size() > 0)
-					log.v("ready coverpages: " + list.size());
-			}
+			ArrayList<ImageItem> list = workState.drainReady();
+			if (list.size() > 0)
+				log.v("ready coverpages: " + list.size());
 			if (list.size() > 0) {
-				for (CoverpageReadyListener listener : listeners)
+				for (CoverpageReadyListener listener :
+						listenerRegistry.snapshot())
 					listener.onCoverpagesReady(list);
-				firstReadyTimestamp = Utils.timeStamp();
+				workState.markReadyNotified();
 			}
 		};
-		lastReadyNotifyTask = task;
+		workState.setLastReadyNotifyTask(task);
 		BackgroundThread.instance().postGUI(task, COVERPAGE_UPDATE_DELAY);
 	}
 
@@ -471,23 +389,18 @@ public class CoverpageManager {
 		if (!mLifecycle.isActive())
 			return;
 		// cache lookup
-		lastCheckCacheTask = new Runnable() {
+		Runnable task = new Runnable() {
 			@Override
 			public void run() {
 				if (!mLifecycle.isActive())
 					return;
-				ImageItem file = null;
-				synchronized(LOCK) {
-					if (lastCheckCacheTask == this) {
-						file = mCheckFileCacheQueue.next();
-					}
-				}
+				ImageItem file = workState.nextCheckCacheIfCurrent(this);
 				if (file != null) {
 					final ImageItem request = file;
 					db.loadBookCoverpage(file.file, (fileInfo, data) -> {
 						if (data == null) {
 							log.v("cover not found in DB for " + fileInfo + ", scheduling scan");
-							mScanFileQueue.addOnTop(request);
+							workState.addScanFileOnTop(request);
 							scheduleScanFile(db);
 						} else {
 							coverpageLoaded(request, data);
@@ -497,23 +410,19 @@ public class CoverpageManager {
 				}
 			}
 		};
-		BackgroundThread.instance().postGUI(lastCheckCacheTask);
+		workState.setLastCheckCacheTask(task);
+		BackgroundThread.instance().postGUI(task);
 	}
 	private void scheduleScanFile(final CRDBService.LocalBinder db) {
 		if (!mLifecycle.isActive())
 			return;
 		// file scan
-		lastScanFileTask = new Runnable() {
+		Runnable task = new Runnable() {
 			@Override
 			public void run() {
 				if (!mLifecycle.isActive())
 					return;
-				ImageItem file = null;
-				synchronized(LOCK) {
-					if (lastScanFileTask == this) {
-						file = mScanFileQueue.next();
-					}
-				}
+				ImageItem file = workState.nextScanFileIfCurrent(this);
 				if (file != null) {
 					final ImageItem fileInfo = file;
 					if (fileInfo.file.format.canParseCoverpages()) {
@@ -534,7 +443,8 @@ public class CoverpageManager {
 				}
 			}
 		};
-		BackgroundThread.instance().postGUI(lastScanFileTask);
+		workState.setLastScanFileTask(task);
+		BackgroundThread.instance().postGUI(task);
 	}
 
 	private void queueForDrawing(final CRDBService.LocalBinder db, ImageItem file) {
@@ -547,12 +457,12 @@ public class CoverpageManager {
 			if (item != null && (item.state == State.READY || item.state == State.DRAWING))
 				return;
 			if (file.file.format.needCoverPageCaching()) {
-				if (mCheckFileCacheQueue.addOnTop(file)) {
+				if (workState.addCheckCacheOnTop(file)) {
 					log.v("Scheduled coverpage DB lookup for " + file);
 					scheduleCheckCache(db);
 				}
 			} else {
-				if (mScanFileQueue.addOnTop(file)) {
+				if (workState.addScanFileOnTop(file)) {
 					log.v("Scheduled coverpage filescan for " + file);
 					scheduleScanFile(db);
 				}
@@ -724,7 +634,7 @@ public class CoverpageManager {
 				if (file.format.needCoverPageCaching())
 					db.saveBookCoverpage(file, imageData);
 			}
-			mEngine.drawBookCover(buffer, imageData, respectAspectRatio, fontFace, file.getTitleOrFileName(), file.authors, file.series, file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
+			mEngine.drawBookCover(buffer, imageData, respectAspectRatio, renderOptions.getFontFace(), file.getTitleOrFileName(), file.authors, file.series, file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
 			BackgroundThread.instance().postGUI(() -> {
 				if (!mLifecycle.isActive())
 					return;
@@ -755,16 +665,13 @@ public class CoverpageManager {
 	{
 		try {
 			Bitmap bmp = Bitmap.createBitmap(file.maxWidth, file.maxHeight, DeviceInfo.BUFFER_COLOR_FORMAT);
-			mEngine.drawBookCover(bmp, data, false, fontFace, file.file.getTitleOrFileName(), file.file.authors, file.file.series, file.file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
+			mEngine.drawBookCover(bmp, data, false, renderOptions.getFontFace(), file.file.getTitleOrFileName(), file.file.authors, file.file.series, file.file.seriesNumber, DeviceInfo.EINK_SCREEN ? 4 : 16);
 			return bmp;
 		} catch ( Exception e ) {
     		Log.e("cr3", "exception while decoding coverpage " + e.getMessage());
     		return null;
 		}
 	}
-
-	private ArrayList<CoverpageReadyListener> listeners = new ArrayList<>();
-
 
 	public static void invalidateChildImages(View view, ArrayList<CoverpageManager.ImageItem> files) {
 		if (view instanceof ViewGroup) {

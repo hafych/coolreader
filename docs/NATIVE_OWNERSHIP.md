@@ -793,6 +793,29 @@ same for a new screen but explicitly borrows an already existing Jinke
 singleton. The native lifecycle regression verifies borrowed teardown, owned
 replacement, owned-to-borrowed transition and final destruction.
 
+Legacy CRGUI front-ends (PocketBook, Jinke, NanoX) own their
+`InitDoc` window manager in a scoped `unique_ptr`. Failure paths
+(skin/engine setup, document open, optional ALLOW_RUN_EXE early exit)
+release the candidate automatically without a manual `delete`. After a
+successful document open the exclusive owner moves into a file-static
+process-long slot; the historical `::instance` pointer remains a
+non-owning compatibility lookup and is cleared from the destructor.
+PocketBook globals use the same process-long `unique_ptr` + non-owning
+`pbGlobals` view pattern.
+
+wxWidgets `cr3view` stages its `CRDocViewWindow` in `unique_ptr` and
+transfers exclusive ownership through `activateWindow(std::move(...))`;
+`_docwin` is a non-owning compatibility view for document access. The
+wx options dialog stages each `OptPanel` page the same way and
+`release()`s only at `wxTreebook::InsertPage`, which adopts the page
+into the notebook graph owned by `_notebook`.
+
+wx main frame stages `cr3view`, `HistList` and `cr3scroll` in exclusive
+`unique_ptr` owners until `Create()` reparents them into the frame; the
+owners `release()` after successful reparent so the wx parent graph
+destroys the children. Toolbar replacement detaches via `SetToolBar(NULL)`
+then `Destroy()` instead of a bare `delete`.
+
 Canvas factories return `LVRef<LVDrawBuf>` on the base and platform contracts,
 so platform-specific clearing/configuration happens under reference ownership.
 Base-screen construction and every resize stage both back and optional front
@@ -803,12 +826,16 @@ replacement.
 
 The GUI window stack and event queue are vectors of exclusive `unique_ptr`
 owners. The legacy raw `activateWindow()` and `postEvent()` arguments are
-adopted before publication; stack reordering moves an existing owner, closing
-keeps the window alive through its lifecycle callback, and duplicate event
-removal releases the replaced owner automatically. Dispatch holds each event
-in a scoped owner, while `getEvent()` remains an explicit transfer boundary for
-legacy callers. Manager teardown releases queued events and every remaining
-window even when the process font manager is already unavailable.
+adopted before publication; producers stage events in `unique_ptr` and
+`release()` only at that adoption boundary (`postCommand`, reconfigure/
+postponed and key/command-driven `CRGUIUpdateEvent` posts, PocketBook key
+forwarding, NanoX/XCB expose/key/resize posts). Stack reordering moves an
+existing owner, closing keeps the window alive through its lifecycle callback,
+and duplicate event removal releases the replaced owner automatically.
+Dispatch holds each event in a scoped owner, while `getEvent()` remains an
+explicit transfer boundary for legacy callers. Manager teardown releases
+queued events and every remaining window even when the process font manager is
+already unavailable.
 `CRDocViewWindow` likewise owns its `LVDocView` directly and exposes only a
 borrowed getter. Native lifecycle coverage verifies reactivation without
 duplication, managed and unmanaged close paths, queued/replaced/transferred
@@ -1025,3 +1052,39 @@ retaining the raw overload for compatibility. The settings command-submenu
 factory holds the menu and each item exclusively through all configuration,
 then releases only the complete menu at its legacy return boundary. A forced
 mid-build exception verifies teardown of every already-published item.
+
+Android JNI owns its long-lived native graph through exclusive
+`std::unique_ptr` owners. `DocViewNative` keeps `LVDocView` in
+`_docviewOwner` and exposes a non-owning `_docview` compatibility view for
+existing call sites; construction and teardown of the wrapper itself stage
+candidates through `unique_ptr` before crossing the Java `mNativeObject`
+boundary. Image-preview rendering keeps the temporary color buffer in a scoped
+owner and releases it only into `LVCreateDrawBufImageSource(..., true)`.
+Bitmap accessors publish a process-wide singleton owner; lock/unlock temporary
+draw buffers and cover-scale intermediates are scoped with `unique_ptr`. EPUB
+and ODT metadata parsers keep `ldomDocument` candidates in `unique_ptr` so
+failure and success paths cannot leak partial trees. Hyphenation dictionary
+registration stages each item until the registry adopts it. Highlighted
+bookmark arrays stage each `CRBookmark` in a scoped owner before
+`LVPtrVector` adoption and the view-side list clones each entry into a
+second exclusive candidate before swap publication.
+
+The wxWidgets desktop view owns its render, clock and cursor timers through
+`std::unique_ptr<wxTimer>`. Construction stages each timer exclusively;
+destruction resets the owners so Stop/Start paths cannot outlive the view.
+Word-selection ranges are staged in a scoped `unique_ptr` and released only
+when the document selection list adopts them.
+
+JNI bitmap lock helpers stage each temporary draw buffer in `unique_ptr` and
+`release()` it only as an explicit ownership transfer into the unlock path,
+which reclaims the buffer with a scoped owner.
+
+wxWidgets history list owns its `LVPtrVector<CRFileHistRecord>` snapshot in
+`std::unique_ptr`. Options dialog owns its `wxTreebook` notebook exclusively.
+Process-wide `ResourceContainer` icons are a `std::unique_ptr` process owner
+reset at exit. EPUB probe paths in the wx front-end parse container/content
+XML into scoped `ldomDocument` owners.
+
+wx TOC dialog stages each `MyItemData` in `std::unique_ptr` and `release()`s
+it only into `wxTreeCtrl::AppendItem`, so a failed tree insert cannot leave an
+owning raw `new` without cleanup.

@@ -22,6 +22,8 @@
 #include "toc.h"
 #include "cr3.h"
 
+#include <memory>
+
 #define TREE_ID 2345
 
 BEGIN_EVENT_TABLE( TocDialog, wxDialog )
@@ -72,7 +74,8 @@ void TocDialog::addTocItems( LVTocItem * tocitem, const wxTreeItemId & treeitem,
     lString32 pos_str = pos.toString();
     for ( int i=0; i<tocitem->getChildCount(); i++ ) {
         LVTocItem * item = tocitem->getChild(i);
-        wxTreeItemId id = _tree->AppendItem( treeitem, cr2wx(item->getName()), -1, -1, new MyItemData(item) );
+        std::unique_ptr<MyItemData> itemData(new MyItemData(item));
+        wxTreeItemId id = _tree->AppendItem( treeitem, cr2wx(item->getName()), -1, -1, itemData.release() );
         MyItemData * data = bestPosMatchNode.IsOk() ? (MyItemData*) _tree->GetItemData(bestPosMatchNode) : NULL;
         lString32 best_str;
         if ( data )

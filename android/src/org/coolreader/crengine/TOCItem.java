@@ -20,8 +20,6 @@
 
 package org.coolreader.crengine;
 
-import java.util.ArrayList;
-
 public class TOCItem {
 	private TOCItem mParent;
 	private int mLevel;
@@ -32,22 +30,23 @@ public class TOCItem {
 	private boolean mExpanded;
 	private String mName;
 	private String mPath;
-	private ArrayList<TOCItem> mChildren;
+	private final TocItemChildrenState mChildren =
+			new TocItemChildrenState();
 	// create root item
 	public TOCItem() {
 	}
 	// create child item
 	public TOCItem addChild() {
-		if ( mChildren==null )
-			mChildren = new ArrayList<TOCItem>();
 		TOCItem item = new TOCItem();
 		item.mParent = this;
-		item.mIndex = mChildren.size();
-		mChildren.add(item);
+		int index = mChildren.add(item);
+		if (index < 0)
+			return null;
+		item.mIndex = index;
 		return item;
 	}
 	public int getChildCount(){
-		return mChildren!=null ? mChildren.size() : 0;
+		return mChildren.size();
 	}
 	public TOCItem getChild( int index)	{
 		return mChildren.get(index);
@@ -108,6 +107,8 @@ public class TOCItem {
 
 		TOCItem parent = this.getParent();
 		int pos = parent.mChildren.indexOf(this);
+		if (pos < 0)
+			return null;
 		if (pos < parent.getChildCount()-1)
 			return parent.getChild(pos+1);
 		

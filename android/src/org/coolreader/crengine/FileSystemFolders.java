@@ -41,8 +41,8 @@ public class FileSystemFolders extends FileInfoChangeSource {
         }
     };
     private final Scanner mScanner;
-
-    private ArrayList<FileInfo> favoriteFolders = null;
+	private final FavoriteFoldersState favoriteFolders =
+			new FavoriteFoldersState();
 
     public FileSystemFolders(Scanner scanner) {
         this.mScanner = scanner;
@@ -86,7 +86,7 @@ public class FileSystemFolders extends FileInfoChangeSource {
     }
 
     public ArrayList<FileInfo> getFileSystemFolders() {
-        return updateEntries(favoriteFolders);
+        return updateEntries(favoriteFolders.orNull());
     }
 
 
@@ -156,7 +156,7 @@ public class FileSystemFolders extends FileInfoChangeSource {
                 if(folderIndex == -1)
                     return;
                 binder.deleteFavoriteFolder(folder);
-                favoriteFolders.remove(folderIndex);
+                favoriteFolders.removeAt(folderIndex);
                 onChange(null, false);
             }
         });
@@ -164,30 +164,22 @@ public class FileSystemFolders extends FileInfoChangeSource {
 
 
     private void loadFavoriteFoldersAndDo(final CRDBService.LocalBinder binder, final FileInfoLoadingCallback callback) {
-        if(favoriteFolders == null) {
+        if(!favoriteFolders.isLoaded()) {
             binder.loadFavoriteFolders(new FileInfoLoadingCallback() {
                 @Override
                 public void onFileInfoListLoaded(ArrayList<FileInfo> list) {
-                    favoriteFolders = new ArrayList<FileInfo>(list);
-                    callback.onFileInfoListLoaded(favoriteFolders);
+                    favoriteFolders.install(new ArrayList<FileInfo>(list));
+                    callback.onFileInfoListLoaded(favoriteFolders.copyAsArrayList());
                     onChange(null,false);
                 }
             });
         } else {
-            callback.onFileInfoListLoaded(favoriteFolders);
+            callback.onFileInfoListLoaded(favoriteFolders.copyAsArrayList());
         }
 
     }
 
     private int findFavoriteFolder(FileInfo folder){
-        if(folder == null || favoriteFolders == null)
-            return -1;
-        int size = favoriteFolders.size();
-        for(int idx = 0; idx < size; ++idx){
-            if(favoriteFolders.get(idx).pathNameEquals(folder)){
-                return idx;
-            }
-        }
-        return -1;
+		return favoriteFolders.find(folder);
     }
 }

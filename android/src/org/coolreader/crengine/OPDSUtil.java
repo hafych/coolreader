@@ -232,7 +232,7 @@ xml:base="http://lib.ololo.cc/opds/">
 		private URL url;
 		private DocInfo docInfo = new DocInfo(); 
 		private EntryInfo entryInfo = new EntryInfo(); 
-		private ArrayList<EntryInfo> entries = new ArrayList<EntryInfo>(); 
+		private final OpdsEntryListState entries = new OpdsEntryListState(); 
 		private Stack<String> elements = new Stack<String>();
 		//private Attributes currentAttributes;
 		private AuthorInfo authorInfo;
@@ -327,7 +327,7 @@ xml:base="http://lib.ololo.cc/opds/">
 			super.endDocument();
 			if (EXTENDED_LOG) L.d("endDocument: " + entries.size() + " entries parsed");
 			if (EXTENDED_LOG) 
-				for ( EntryInfo entry : entries ) {
+				for ( EntryInfo entry : entries.snapshot() ) {
 					L.d("   " + entry.title + " : " + entry.link.toString());
 				}
 		}
@@ -428,9 +428,8 @@ xml:base="http://lib.ololo.cc/opds/">
 				if ( !insideFeed || !insideEntry )
 					throw new SAXException("unexpected element " + localName);
 				if ( entryInfo.link!=null || entryInfo.getBestAcquisitionLink()!=null ) {
-					if (entries.size() >= MAX_OPDS_ITEMS)
+					if (!entries.add(entryInfo, MAX_OPDS_ITEMS))
 						throw new SAXException("OPDS item limit exceeded");
-					entries.add(entryInfo);
 				}
 				insideEntry = false;
 				entryInfo = null;
@@ -938,7 +937,7 @@ xml:base="http://lib.ololo.cc/opds/">
 					// partially loaded
 					if (progressShown && serviceLifecycle.isActive())
 						engine.hideProgress();
-					final ArrayList<EntryInfo> entries = new ArrayList<>(handler.entries);
+					final ArrayList<EntryInfo> entries = handler.entries.copyAsArrayList();
 					BackgroundThread.instance().executeGUI(() -> {
 						if (!serviceLifecycle.isActive())
 							return;
@@ -957,7 +956,7 @@ xml:base="http://lib.ololo.cc/opds/">
 						return;
 					L.d("Parsing is finished successfully. " + handler.entries.size() + " entries found");
 					hideProgress();
-					if (!callback.onFinish(handler.docInfo, handler.entries))
+					if (!callback.onFinish(handler.docInfo, handler.entries.copyAsArrayList()))
 						cancel();
 				});
 			}

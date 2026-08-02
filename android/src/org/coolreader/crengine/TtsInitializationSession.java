@@ -185,36 +185,33 @@ public final class TtsInitializationSession {
 	}
 
 	private static final class CallbackOwner {
-		private Runnable successCallback;
-		private Runnable failureCallback;
+		private final TerminalCallbackPairState callbacks =
+				new TerminalCallbackPairState();
 
 		private CallbackOwner(
 				Runnable successCallback,
 				Runnable failureCallback) {
-			this.successCallback = successCallback;
-			this.failureCallback = failureCallback;
+			callbacks.set(successCallback, failureCallback);
 		}
 
 		private Completion detachCompletion() {
-			Completion completion = new Completion(
-					successCallback,
-					failureCallback);
-			clear();
-			return completion;
+			TerminalCallbackPairState.Snapshot snapshot =
+					callbacks.takeBoth();
+			return new Completion(
+					snapshot.success, snapshot.failure);
 		}
 
 		private Cancellation detachCancellation(
 				ServiceLifecycle lifecycle) {
-			Runnable callback = failureCallback;
-			clear();
+			Runnable callback = callbacks.takeFailure();
 			return callback != null
 					? new Cancellation(lifecycle, callback)
 					: null;
 		}
 
 		private void clear() {
-			successCallback = null;
-			failureCallback = null;
+			callbacks.clear();
+			callbacks.close();
 		}
 	}
 }

@@ -29,40 +29,44 @@ public class Services {
 
 	public static final Logger log = L.create("sv");
 
-	private Engine engine;
-	private Scanner scanner;
-	private History history;
-	private CoverpageManager coverpageManager;
-	private FileSystemFolders fileSystemFolders;
-	private GenresCollection genresCollection;
-	private DocumentFileCache documentCache;
-	private ServiceLifecycle lifecycle;
+	private final ServicesGraphState graph = new ServicesGraphState();
 
 	public ServiceDependencies startServices(BaseActivity activity) {
-		if (engine != null)
+		if (graph.isStarted())
 			throw new IllegalStateException(
 					"Activity services are already started");
 		log.i("First activity is created");
-		lifecycle = new ServiceLifecycle(System.nanoTime());
+		ServiceLifecycle lifecycle = new ServiceLifecycle(System.nanoTime());
 		// testing background thread
 		//mSettings = activity.settings();
 		BackgroundThread.instance().setGUIHandler(new Handler());
-		engine = new Engine(activity);
-		scanner = new Scanner(activity, engine);
+		Engine engine = new Engine(activity);
+		Scanner scanner = new Scanner(activity, engine);
 		scanner.initRoots(
 				Engine.getMountedRootsMap(),
 				engine.getAppPrivateDirs());
-		history = new History(scanner);
+		History history = new History(scanner);
 		scanner.setDirScanEnabled(
 				activity.settings().getBool(
 						ReaderView.PROP_APP_BOOK_PROPERTY_SCAN_ENABLED,
 						true));
-		coverpageManager =
+		CoverpageManager coverpageManager =
 				new CoverpageManager(engine, lifecycle);
-		fileSystemFolders = new FileSystemFolders(scanner);
-		genresCollection =
+		FileSystemFolders fileSystemFolders = new FileSystemFolders(scanner);
+		GenresCollection genresCollection =
 				GenresCollection.getInstance(activity);
-		documentCache = new DocumentFileCache(activity);
+		DocumentFileCache documentCache = new DocumentFileCache(activity);
+		if (!graph.install(
+				engine,
+				scanner,
+				history,
+				coverpageManager,
+				fileSystemFolders,
+				genresCollection,
+				documentCache,
+				lifecycle))
+			throw new IllegalStateException(
+					"Service graph install rejected");
 		return new ServiceDependencies(
 				engine,
 				scanner,
@@ -76,21 +80,22 @@ public class Services {
 
 	public void stopServices(BaseActivity activity) {
 		log.i("Last activity is destroyed");
-		if (engine != null && !engine.isAttachedTo(activity)) {
+		Engine liveEngine = graph.engine();
+		if (liveEngine != null && !liveEngine.isAttachedTo(activity)) {
 			log.i("Ignoring stop from a stale activity generation");
 			return;
 		}
-		if (coverpageManager == null) {
+		if (graph.coverpageManager() == null) {
 			log.i("Will not destroy services: finish only activity creation detected");
 			return;
 		}
-		Engine stoppedEngine = engine;
-		ServiceLifecycle stoppedLifecycle = lifecycle;
-		engine = null;
-		lifecycle = null;
+		ServicesGraphState.Snapshot stopped = graph.close();
+		Engine stoppedEngine = stopped.engine();
+		ServiceLifecycle stoppedLifecycle = stopped.lifecycle();
 		if (stoppedLifecycle != null)
 			stoppedLifecycle.close();
-		coverpageManager.clear();
+		if (stopped.coverpageManager() != null)
+			stopped.coverpageManager().clear();
 		if (stoppedEngine != null)
 			stoppedEngine.detachActivity(activity);
 		BackgroundThread.instance().postBackground(() -> {
@@ -99,11 +104,5 @@ public class Services {
 				return;
 			stoppedEngine.uninit();
 		});
-		history = null;
-		scanner = null;
-		coverpageManager = null;
-		fileSystemFolders = null;
-		genresCollection = null;
-		documentCache = null;
 	}
 }

@@ -292,7 +292,8 @@ public class Engine {
 
 	private final ProgressUiState progressUiState =
 			new ProgressUiState();
-	private ProgressDialog mProgress;
+	private final EngineProgressDialogState progressDialogState =
+			new EngineProgressDialogState();
 	private static final int PROGRESS_STYLE =
 			ProgressDialog.STYLE_HORIZONTAL;
 
@@ -415,26 +416,28 @@ public class Engine {
 		if (!progressUiState.isCurrent(request))
 			return;
 		try {
-			if (mProgress == null) {
+			ProgressDialog dialog = progressDialogState.get();
+			if (dialog == null) {
 				BaseActivity activity = getActivity();
 				if (activity == null || !activity.isStarted()) {
 					progressUiState.markShowFailed(request);
 					return;
 				}
-				mProgress = new ProgressDialog(activity);
-				mProgress.setProgressStyle(PROGRESS_STYLE);
-				mProgress.setIcon(R.mipmap.cr3_logo);
-				mProgress.setMax(10000);
-				mProgress.setTitle(
+				dialog = new ProgressDialog(activity);
+				dialog.setProgressStyle(PROGRESS_STYLE);
+				dialog.setIcon(R.mipmap.cr3_logo);
+				dialog.setMax(10000);
+				dialog.setTitle(
 						activity.getResources().getString(
 								R.string.progress_please_wait));
+				progressDialogState.set(dialog);
 			}
-			mProgress.setProgress(mainProgress);
-			mProgress.setMessage(msg);
-			mProgress.setCancelable(scanControl != null);
-			mProgress.setOnCancelListener(dialog -> {
+			dialog.setProgress(mainProgress);
+			dialog.setMessage(msg);
+			dialog.setCancelable(scanControl != null);
+			dialog.setOnCancelListener(d -> {
 				if (progressUiState.markDismissed(request))
-					mProgress = null;
+					progressDialogState.take();
 				if (scanControl != null) {
 					log.e("scanControl.stop()");
 					scanControl.stop();
@@ -442,11 +445,12 @@ public class Engine {
 			});
 			if (!progressUiState.isCurrent(request))
 				return;
-			if (!mProgress.isShowing())
-				mProgress.show();
+			if (!dialog.isShowing())
+				dialog.show();
+			ProgressDialog published = progressDialogState.get();
 			if (!progressUiState.markVisible(request)
-					&& mProgress != null
-					&& mProgress.isShowing()
+					&& published != null
+					&& published.isShowing()
 					&& !progressUiState.isVisible()) {
 				dismissProgressDialog();
 			}
@@ -490,11 +494,11 @@ public class Engine {
 	}
 
 	private void dismissProgressDialog() {
-		if (mProgress == null)
+		ProgressDialog dialog = progressDialogState.take();
+		if (dialog == null)
 			return;
-		if (mProgress.isShowing())
-			mProgress.dismiss();
-		mProgress = null;
+		if (dialog.isShowing())
+			dialog.dismiss();
 	}
 
 	public boolean isProgressShown() {
@@ -588,8 +592,12 @@ public class Engine {
 		if (attached != activity)
 			return;
 		progressUiState.close();
-		BackgroundThread.instance().executeGUI(
-				this::dismissProgressDialog);
+		keyBacklightState.close();
+		ProgressDialog closing = progressDialogState.close();
+		BackgroundThread.instance().executeGUI(() -> {
+			if (closing != null && closing.isShowing())
+				closing.dismiss();
+		});
 		mActivityRef.clear();
 	}
 
@@ -1006,14 +1014,15 @@ public class Engine {
 		}
 	}
 
-	private int currentKeyBacklightLevel = 1;
+	private final EngineKeyBacklightState keyBacklightState =
+			new EngineKeyBacklightState();
 
 	public int getKeyBacklight() {
-		return currentKeyBacklightLevel;
+		return keyBacklightState.getLevel();
 	}
 
 	public boolean setKeyBacklight(int value) {
-		currentKeyBacklightLevel = value;
+		keyBacklightState.setLevel(value);
 		// thread safe
 		return setKeyBacklightInternal(value);
 	}

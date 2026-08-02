@@ -175,14 +175,15 @@ public class BookmarksDlg  extends BaseDialog {
 			return mBookInfo.getBookmarkCount()==0;
 		}
 
-		private ArrayList<DataSetObserver> observers = new ArrayList<DataSetObserver>();
+		private final DataSetObserverRegistry observers =
+				new DataSetObserverRegistry();
 		
 		public void registerDataSetObserver(DataSetObserver observer) {
-			observers.add(observer);
+			observers.register(observer);
 		}
 
 		public void unregisterDataSetObserver(DataSetObserver observer) {
-			observers.remove(observer);
+			observers.unregister(observer);
 		}
 	}
 	
@@ -202,16 +203,18 @@ public class BookmarksDlg  extends BaseDialog {
 	
 	class BookmarkList extends BaseListView {
 		private ListAdapter mAdapter;
-		private boolean mShortcutMode = false;
+		private final ShortcutModeState shortcutModeState =
+				new ShortcutModeState();
 		
 		public boolean isShortcutMode() {
-			return mShortcutMode;
+			return shortcutModeState.isShortcutMode();
 		}
 		public void setShortcutMode( boolean shortcutMode ) {
 			if (mBookInfo == null) {
 				L.e("BookmarkList - mBookInfo is null");
 				return;
 			}
+			shortcutModeState.set(shortcutMode);
 			if ( !shortcutMode )
 				mBookInfo.sortBookmarks();
 			updateAdapter( shortcutMode ? new ShortcutBookmarkListAdapter() : new BookmarkListAdapter() );
@@ -242,7 +245,7 @@ public class BookmarksDlg  extends BaseDialog {
 				dismiss();
 				return true;
 			}
-			if ( mShortcutMode ) {
+			if ( shortcutModeState.isShortcutMode() ) {
 				Bookmark b = mBookInfo.findShortcutBookmark(position+1);
 				if ( b==null ) {
 					interactionHandler.addBookmark(position+1);

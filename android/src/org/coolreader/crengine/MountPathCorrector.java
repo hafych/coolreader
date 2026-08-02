@@ -20,7 +20,6 @@
 package org.coolreader.crengine;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -113,14 +112,10 @@ public class MountPathCorrector {
 	}
 	
 	private static class LinkCollection {
-		private ArrayList<LinkInfo> links;
+		private final MountPathLinkListState<LinkInfo> links =
+				new MountPathLinkListState<>();
 		public LinkCollection() {
-			links = new ArrayList<LinkInfo>(4);
 		}
-//		public LinkCollection(LinkCollection v) {
-//			links = new ArrayList<LinkInfo>(v.links.size() + 2);
-//			links.addAll(v.links);
-//		}
 		public void add(LinkInfo item) {
 			links.add(item);
 		}
@@ -138,7 +133,7 @@ public class MountPathCorrector {
 		}
 		@Override
 		public String toString() {
-			return "[" + links + "]";
+			return "[" + links.snapshot() + "]";
 		}
 		/**
 		 * Try to correct path base by substitution of links, to start with good path.
@@ -149,7 +144,7 @@ public class MountPathCorrector {
 		public String correct(String goodBase, String pathName) {
 			if (pathStartsWith(pathName, goodBase))
 				return pathName; // no correction needed
-			for (LinkInfo link : links) {
+			for (LinkInfo link : links.snapshot()) {
 				String res = link.correct(goodBase, pathName);
 				if (res != null)
 					return res;

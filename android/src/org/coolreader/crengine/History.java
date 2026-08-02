@@ -22,13 +22,13 @@
 package org.coolreader.crengine;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.coolreader.db.CRDBService;
 
 
 public class History extends FileInfoChangeSource {
-	private ArrayList<BookInfo> mBooks = new ArrayList<>();
-	private FileInfo mRecentBooksFolder;
+	private final HistoryBooksState booksState = new HistoryBooksState();
 
 	public History(Scanner scanner)
 	{
@@ -37,16 +37,12 @@ public class History extends FileInfoChangeSource {
 	
 	public BookInfo getLastBook()
 	{
-		if ( mBooks.size()==0 )
-			return null;
-		return mBooks.get(0);
+		return booksState.get(0);
 	}
 
 	public BookInfo getPreviousBook()
 	{
-		if ( mBooks.size()<2 )
-			return null;
-		return mBooks.get(1);
+		return booksState.get(1);
 	}
 
 	public interface BookInfoLoadedCallback {
@@ -66,7 +62,7 @@ public class History extends FileInfoChangeSource {
 					|| bookInfo.getFileInfo().size < 0
 					|| bookInfo.getFileInfo().crc32 < 0) {
 				bookInfo = new BookInfo(file);
-				mBooks.add(0, bookInfo);
+				booksState.addFirst(bookInfo);
 			}
 			callback.onBookInfoLoaded(bookInfo);
 		});
@@ -76,7 +72,7 @@ public class History extends FileInfoChangeSource {
 	{
 		int index = findBookInfo( file );
 		if ( index>=0 )
-			return mBooks.get(index);
+			return booksState.get(index);
 		return null;
 	}
 
@@ -84,7 +80,7 @@ public class History extends FileInfoChangeSource {
 	{
 		int index = findBookInfo( pathname );
 		if ( index>=0 )
-			return mBooks.get(index);
+			return booksState.get(index);
 		return null;
 	}
 	
@@ -92,7 +88,7 @@ public class History extends FileInfoChangeSource {
 	{
 		int index = findBookInfo(fileInfo);
 		if (index >= 0)
-			mBooks.remove(index);
+			booksState.removeAt(index);
 		if ( removeBookFromDB )
 			db.deleteBook(fileInfo);
 		else if ( removeRecentAccessFromDB )
@@ -106,14 +102,11 @@ public class History extends FileInfoChangeSource {
 		bookInfo.updateAccess();
 		int index = findBookInfo(bookInfo.getFileInfo());
 		if ( index>=0 ) {
-			BookInfo info = mBooks.get(index);
-			if ( index>0 ) {
-				mBooks.remove(index);
-				mBooks.add(0, info);
-			}
-			info.setBookmarks(bookInfo.getAllBookmarks());
+			BookInfo info = booksState.moveToFront(index);
+			if (info != null)
+				info.setBookmarks(bookInfo.getAllBookmarks());
 		} else {
-			mBooks.add(0, bookInfo);
+			booksState.addFirst(bookInfo);
 		}
 	}
 
@@ -124,32 +117,23 @@ public class History extends FileInfoChangeSource {
 		bookInfo.updateTimeElapsed(timeElapsed);
 		int index = findBookInfo(bookInfo.getFileInfo());
 		if ( index>=0 ) {
-			BookInfo info = mBooks.get(index);
-			if ( index>0 ) {
-				mBooks.remove(index);
-				mBooks.add(0, info);
-			}
-			info.setBookmarks(bookInfo.getAllBookmarks());
+			BookInfo info = booksState.moveToFront(index);
+			if (info != null)
+				info.setBookmarks(bookInfo.getAllBookmarks());
 		} else {
-			mBooks.add(0, bookInfo);
+			booksState.addFirst(bookInfo);
 		}
 		updateRecentDir();
 	}
 
 	public int findBookInfo( String pathname )
 	{
-		for ( int i=0; i<mBooks.size(); i++ )
-			if ( pathname.equals(mBooks.get(i).getFileInfo().getPathName()) )
-				return i;
-		return -1;
+		return booksState.findByPathname(pathname);
 	}
 	
 	public int findBookInfo( FileInfo file )
 	{
-		for ( int i=0; i<mBooks.size(); i++ )
-			if (file.sameBook(mBooks.get(i).getFileInfo()))
-				return i;
-		return -1;
+		return booksState.findByFile(file);
 	}
 	
 	public Bookmark getLastPos( FileInfo file )
@@ -157,16 +141,19 @@ public class History extends FileInfoChangeSource {
 		int index = findBookInfo(file);
 		if ( index<0 )
 			return null;
-		return mBooks.get(index).getLastPosition();
+		BookInfo info = booksState.get(index);
+		return info != null ? info.getLastPosition() : null;
 	}
 	protected void updateRecentDir()
 	{
 		Log.v("cr3", "History.updateRecentDir()");
-		if ( mRecentBooksFolder!=null ) { 
-			mRecentBooksFolder.clear();
-			for ( BookInfo book : mBooks )
-				mRecentBooksFolder.addFile(book.getFileInfo());
-			onChange(mRecentBooksFolder, false);
+		FileInfo recent = booksState.getRecentFolder();
+		if ( recent!=null ) { 
+			recent.clear();
+			List<BookInfo> books = booksState.snapshot();
+			for ( BookInfo book : books )
+				recent.addFile(book.getFileInfo());
+			onChange(recent, false);
 		} else {
 			Log.v("cr3", "History.updateRecentDir() : mRecentBooksFolder is null");
 		}
@@ -175,25 +162,26 @@ public class History extends FileInfoChangeSource {
 
 	
 	public void getOrLoadRecentBooks(final CRDBService.LocalBinder db, final CRDBService.RecentBooksLoadingCallback callback) {
-		if (mBooks != null && mBooks.size() > 0) {
-			callback.onRecentBooksListLoaded(mBooks);
+		if (!booksState.isEmpty()) {
+			callback.onRecentBooksListLoaded(booksState.copyAsArrayList());
 		} else {
 			// not yet loaded. Wait until ready: sync with DB thread.
-			db.sync(() -> callback.onRecentBooksListLoaded(mBooks));
+			db.sync(() -> callback.onRecentBooksListLoaded(
+					booksState.copyAsArrayList()));
 		}
 	}
 	
 	public boolean loadFromDB(final CRDBService.LocalBinder db, int maxItems )
 	{
 		Log.v("cr3", "History.loadFromDB()");
-		mRecentBooksFolder = mScanner.getRecentDir();
+		booksState.setRecentFolder(mScanner.getRecentDir());
 		db.loadRecentBooks(100, bookList -> {
 			if (bookList != null) {
-				mBooks = bookList;
+				booksState.replaceAll(bookList);
 				updateRecentDir();
 			}
 		});
-		if ( mRecentBooksFolder==null )
+		if ( booksState.getRecentFolder()==null )
 			Log.v("cr3", "History.loadFromDB() : mRecentBooksFolder is null");
 		return true;
 	}

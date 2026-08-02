@@ -22,6 +22,7 @@
 #ifndef OPTIONS_DLG_H_INCLUDED
 #define OPTIONS_DLG_H_INCLUDED
 
+#include <memory>
 
 #include <wx/treebook.h>
 
@@ -109,7 +110,8 @@ protected:
 class CR3OptionsDialog : public wxDialog
 {
 private:
-    wxTreebook * _notebook;
+    std::unique_ptr<wxTreebook> _notebook;
+    /// Non-owning views; pages are adopted by `_notebook` at InsertPage.
     OptPanel * _opt_window;
     OptPanel * _opt_page;
     OptPanel * _opt_view;

@@ -1110,11 +1110,24 @@ def main() -> None:
         violations.append("Dictan result launcher is missing")
     for marker in (
         "private final ScreenBacklightControl backlightControl",
-        "private Runnable backlightTimerTask",
-        "private long lastUserActivityTime",
+        "private final ScreenBacklightSessionState backlightSessionState",
+        "backlightSessionState.setLastUserActivityTime(",
+        "backlightSessionState.getLastUserActivityTime()",
+        "backlightSessionState.setTimerTask(",
+        "backlightSessionState.getTimerTask()",
+        "backlightSessionState.clearForRelease()",
+        "backlightSessionState.close()",
+        "private final ActivityVersionState versionState",
+        "versionState.set(",
+        "versionState.get()",
+        "versionState.close()",
         "BacklightTimeoutPolicy.nextCheckDelay(",
         "BacklightTimeoutPolicy.shouldDim(",
         "BacklightTimeoutPolicy.isExpired(",
+        "private final SettingsPropertiesState settingsProperties",
+        "settingsProperties.replace(",
+        "settingsProperties.copy()",
+        "settingsProperties.close()",
     ):
         if marker not in base_text:
             violations.append(
@@ -1123,13 +1136,127 @@ def main() -> None:
     if "private static long lastUserActivityTime" in base_text:
         violations.append(
             f"{relative(BASE_ACTIVITY)} retains process-wide user activity")
+    for legacy in (
+        "private String mVersion",
+        "mVersion = pi.versionName",
+        "return mVersion;",
+        "private PowerManager.WakeLock wl;",
+        "private Runnable backlightTimerTask;",
+        "private long lastUserActivityTime;",
+        "private long lastUpdateTimeStamp;",
+        "private Properties mSettings;",
+        "mSettings = loadSettings()",
+        "mSettings = new Properties",
+        "return mSettings.getProperty",
+        "return new Properties(mSettings)",
+        "settingsManagerOwner.require().mSettings",
+    ):
+        if legacy in base_text:
+            violations.append(
+                f"{relative(BASE_ACTIVITY)} retains parallel backlight/"
+                f"version/settings field: {legacy}")
     for marker in (
-        "private ActionIconSet actionIcons = ActionIconSet.empty()",
+        "private final InterfaceThemeState themeState",
         "int getActionIconId(ReaderAction action)",
-        "actionIcons = ActionIconSet.builder()",
+        "themeState.setActionIcons(ActionIconSet.builder()",
+        "themeState.setTheme(theme)",
+        "themeState.getTheme()",
+        "themeState.iconFor(action)",
+        "themeState.close()",
         "private final DefaultInputActions defaultInputActions",
         "DefaultInputActions.create(",
         "defaultInputActions.applyTo(",
+        "private final CrdbServiceConnectionState crdbService",
+        "crdbService.ensure(",
+        "crdbService.get()",
+        "crdbService.close()",
+        "private final BaseServiceDependenciesState serviceDependencies",
+        "serviceDependencies.install(mServices.startServices(this))",
+        "serviceDependencies.get()",
+        "serviceDependencies.close()",
+        "private final ActivityRunState runState",
+        "runState.onStart()",
+        "runState.onStop()",
+        "runState.onPause()",
+        "runState.onResume()",
+        "runState.isStarted()",
+        "runState.close()",
+        "private final ActivityProfileState profileState",
+        "profileState.getOrLoad(",
+        "profileState.set(profile, MAX_PROFILES)",
+        "profileState.close()",
+        "private final EinkScreenOwner einkScreenOwner",
+        "einkScreenOwner.install(screen)",
+        "einkScreenOwner.get()",
+        "einkScreenOwner.close()",
+        "private final NoticeDialogState noticeDialogState",
+        "noticeDialogState.beginShow()",
+        "noticeDialogState::endShow",
+        "noticeDialogState.close()",
+        "private final NightModeState nightModeState",
+        "nightModeState.set(nightMode)",
+        "nightModeState.isNightMode()",
+        "nightModeState.close()",
+        "private final DictionariesOwner dictionariesOwner",
+        "dictionariesOwner.install(",
+        "dictionariesOwner.get()",
+        "dictionariesOwner.close()",
+        "public Dictionaries getDictionaries()",
+        "private final FullscreenState fullscreenState",
+        "fullscreenState.set(fullscreen)",
+        "fullscreenState.isFullscreen()",
+        "fullscreenState.close()",
+        "private final ScreenOrientationState screenOrientationState",
+        "screenOrientationState.set(newOrientation)",
+        "screenOrientationState.get()",
+        "screenOrientationState.close()",
+        "private final SettingsManagerOwner settingsManagerOwner",
+        "settingsManagerOwner.install(new SettingsManager(this))",
+        "settingsManagerOwner.require()",
+        "settingsManagerOwner.close()",
+        "private final DisplayMetricsState displayMetrics",
+        "displayMetrics.setDensityDpi(",
+        "displayMetrics.getDensityDpi()",
+        "displayMetrics.close()",
+        "private final ScreenBrightnessState screenBrightness",
+        "screenBrightness.setColdLevel(",
+        "screenBrightness.getColdLevel()",
+        "screenBrightness.close()",
+        "private final KeyBacklightState keyBacklightState",
+        "keyBacklightState.setLevel(",
+        "keyBacklightState.getLevel()",
+        "keyBacklightState.close()",
+        "private final EinkUpdateState einkUpdateState",
+        "einkUpdateState.setMode(",
+        "einkUpdateState.getMode()",
+        "einkUpdateState.close()",
+        "private final SystemUiVisibilityState systemUiVisibilityState",
+        "systemUiVisibilityState.invalidateCache()",
+        "systemUiVisibilityState.getLastVisibility()",
+        "systemUiVisibilityState.close()",
+        "private final ActivityLanguageState languageState",
+        "languageState.set(",
+        "languageState.get()",
+        "languageState.close()",
+        "private final SensorOrientationState sensorOrientationState",
+        "sensorOrientationState.set(",
+        "sensorOrientationState.get()",
+        "sensorOrientationState.close()",
+        "private final HardwareMenuKeyState hardwareMenuKeyState",
+        "hardwareMenuKeyState.set(",
+        "hardwareMenuKeyState.get()",
+        "hardwareMenuKeyState.close()",
+        "private final ContentViewState contentViewState",
+        "contentViewState.setContentView(view)",
+        "contentViewState.getContentView()",
+        "contentViewState.setDecorView(",
+        "contentViewState.getDecorView()",
+        "contentViewState.close()",
+        "private final ScreenBacklightDurationState backlightDurationState",
+        "backlightDurationState.setDurationMs(",
+        "backlightDurationState.getDurationMs()",
+        "backlightDurationState.isEnabled()",
+        "backlightDurationState.close()",
     ):
         if marker not in base_text:
             violations.append(
@@ -1140,6 +1267,99 @@ def main() -> None:
         "DEF_NOOK_KEY_ACTIONS",
         "DEF_TAP_ACTIONS",
         ".setIconId(",
+        "private ActionIconSet actionIcons",
+        "private InterfaceTheme currentTheme",
+        "private CRDBServiceAccessor mCRDBService",
+        "private ServiceDependencies mServiceDependencies",
+        "private boolean mIsStarted",
+        "private boolean mPaused",
+        "private int currentProfile",
+        "private EinkScreen mEinkScreen",
+        "private boolean noticeDialogVisible",
+        "private boolean mNightMode",
+        "protected Dictionaries mDictionaries",
+        "private boolean mFullscreen",
+        "int screenOrientation = ActivityInfo.SCREEN_ORIENTATION_USER",
+        "private int densityDpi",
+        "private float diagonalInches",
+        "private int preferredItemHeight",
+        "private int minFontSize",
+        "private int maxFontSize",
+        "private int orientationFromSensor",
+        "private int lastSystemUiVisibility",
+        "private boolean systemUiVisibilityListenerIsSet",
+        "private int currentKeyBacklightLevel",
+        "private boolean keyBacklightOff",
+        "private int screenBacklightBrightness",
+        "private int screenWarmBacklightBrightness",
+        "private boolean brightnessHackError",
+        "private EinkScreen.EinkUpdateMode mScreenUpdateMode",
+        "private int mScreenUpdateInterval",
+        "private String currentLanguage",
+        "private Boolean hasHardwareMenuKey",
+        "mServiceDependencies = mServices.startServices(this)",
+        "mServiceDependencies = null",
+        "mCRDBService = new CRDBServiceAccessor",
+        "mCRDBService = null",
+        "mIsStarted = true",
+        "mIsStarted = false",
+        "mPaused = true",
+        "mPaused = false",
+        "currentProfile = profile",
+        "currentTheme = theme",
+        "actionIcons = ActionIconSet.builder()",
+        "mEinkScreen = new EinkScreen",
+        "noticeDialogVisible = true",
+        "noticeDialogVisible = false",
+        "mNightMode = nightMode",
+        "return mNightMode",
+        "mDictionaries = new Dictionaries",
+        "mDictionaries = null",
+        "mFullscreen = fullscreen",
+        "return mFullscreen",
+        "screenOrientation = newOrientation",
+        "private SettingsManager mSettingsManager",
+        "mSettingsManager = new SettingsManager",
+        "mSettingsManager = null",
+        "private int densityDpi = 160",
+        "private float diagonalInches = 5",
+        "private int preferredItemHeight = 36",
+        "private int minFontSize = 9",
+        "private int maxFontSize = 90",
+        "private int orientationFromSensor = 0",
+        "private int lastSystemUiVisibility = -1",
+        "private boolean systemUiVisibilityListenerIsSet = false",
+        "private int currentKeyBacklightLevel = 1",
+        "private boolean keyBacklightOff = true",
+        "private int screenBacklightBrightness = -1",
+        "private int screenWarmBacklightBrightness = -1",
+        "private boolean brightnessHackError = DeviceInfo.SAMSUNG_BUTTONS_HIGHLIGHT_PATCH",
+        "private EinkScreen.EinkUpdateMode mScreenUpdateMode",
+        "private int mScreenUpdateInterval = 0",
+        "private String currentLanguage;",
+        "private Boolean hasHardwareMenuKey = null",
+        "return densityDpi;",
+        "return diagonalInches;",
+        "return preferredItemHeight;",
+        "return minFontSize;",
+        "return maxFontSize;",
+        "return orientationFromSensor;",
+        "return currentKeyBacklightLevel;",
+        "return keyBacklightOff;",
+        "return screenBacklightBrightness;",
+        "return screenWarmBacklightBrightness;",
+        "return mScreenUpdateMode;",
+        "return mScreenUpdateInterval;",
+        "return currentLanguage;",
+        "return hasHardwareMenuKey;",
+        "private View mDecorView",
+        "protected View contentView",
+        "private int screenBacklightDuration = DEF_SCREEN_BACKLIGHT_TIMER_INTERVAL",
+        "mDecorView = getWindow().getDecorView()",
+        "this.contentView = view",
+        "return contentView;",
+        "return screenBacklightDuration > 0",
+        "screenBacklightDuration = backlightDurationMinutes",
     ):
         if legacy in base_text:
             violations.append(
@@ -1460,6 +1680,24 @@ def main() -> None:
     if re.search(r"\b(?:item|action)\.iconId\b", toolbar_text):
         violations.append(
             f"{relative(CR_TOOLBAR)} bypasses the Activity icon snapshot")
+    for marker in (
+        "private final ReaderActionListState actions",
+        "private final ReaderActionListState iconActions",
+        "private final ReaderActionListState itemsOverflow",
+    ):
+        if marker not in toolbar_text:
+            violations.append(
+                f"{relative(CR_TOOLBAR)} omits action-list ownership "
+                f"marker: {marker}")
+    for legacy in (
+        "private ArrayList<ReaderAction> actions",
+        "private ArrayList<ReaderAction> iconActions",
+        "private ArrayList<ReaderAction> itemsOverflow",
+    ):
+        if legacy in toolbar_text:
+            violations.append(
+                f"{relative(CR_TOOLBAR)} retains bare action list "
+                f"field: {legacy}")
 
     action_icon_test_text = ACTION_ICON_SET_TEST.read_text(encoding="utf-8")
     for marker in (
@@ -1821,15 +2059,39 @@ def main() -> None:
         violations.append(
             f"{relative(SERVICES)} retains a static service graph")
     for marker in (
-        "private Engine engine",
+        "private final ServicesGraphState graph",
         "public ServiceDependencies startServices(BaseActivity activity)",
-        "lifecycle = new ServiceLifecycle(",
+        "ServiceLifecycle lifecycle = new ServiceLifecycle(",
+        "graph.install(",
         "public void stopServices(BaseActivity activity)",
+        "graph.close()",
         "stoppedLifecycle.close()",
     ):
         if marker not in services_text:
             violations.append(
                 f"{relative(SERVICES)} omits lifecycle marker: {marker}")
+    for legacy in (
+        "private Engine engine;",
+        "private Scanner scanner;",
+        "private History history;",
+        "private CoverpageManager coverpageManager;",
+        "private FileSystemFolders fileSystemFolders;",
+        "private GenresCollection genresCollection;",
+        "private DocumentFileCache documentCache;",
+        "private ServiceLifecycle lifecycle;",
+        "engine = null;",
+        "history = null;",
+        "scanner = null;",
+        "coverpageManager = null;",
+        "fileSystemFolders = null;",
+        "genresCollection = null;",
+        "documentCache = null;",
+        "lifecycle = null;",
+    ):
+        if legacy in services_text:
+            violations.append(
+                f"{relative(SERVICES)} retains parallel service field: "
+                f"{legacy}")
     if "BackgroundThread.instance().quit()" in services_text:
         violations.append(
             f"{relative(SERVICES)} lets Activity teardown stop the "
@@ -1838,8 +2100,13 @@ def main() -> None:
     background_thread_text = BACKGROUND_THREAD.read_text(encoding="utf-8")
     for marker in (
         "private static volatile BackgroundThread instance",
-        "private volatile Handler handler",
-        "private volatile Handler guiHandler",
+        "private final BackgroundThreadHandlerState handlerState",
+        "private final BackgroundThreadHandlerState guiHandlerState",
+        "handlerState.get()",
+        "guiHandlerState.get()",
+        "handlerState.set(",
+        "guiHandlerState.set(",
+        "handlerState.take()",
         "backgroundTasks.attach(",
         "backgroundTasks.attach(null)",
         "guiTasks.attach(",
@@ -1858,6 +2125,8 @@ def main() -> None:
         "mStopped",
         "ReaderView.Sync",
         "new Sync<",
+        "private volatile Handler handler",
+        "private volatile Handler guiHandler",
     ):
         if marker in background_thread_text:
             violations.append(
@@ -1893,6 +2162,7 @@ def main() -> None:
     for marker in (
         "public final class DelayedExecutor",
         "private final ReplaceableTaskSlot tasks",
+        "private final DelayedExecutorHandlerState handlerState",
         "public synchronized void postDelayed(",
         "public synchronized void cancel()",
         "tasks.replace(loggedTask)",
@@ -1907,6 +2177,7 @@ def main() -> None:
     for legacy in (
         "private Runnable currentTask",
         "if (currentTask != null)",
+        "private Handler handler;",
     ):
         if legacy in delayed_executor_text:
             violations.append(
@@ -2027,14 +2298,23 @@ def main() -> None:
     for marker in (
         "private final CloseableTaskGate workLifecycle",
         "private final Handler audioBookPosHandler",
+        "private final MotionWatchdogSlotState motionWatchdogSlot",
+        "private final TtsToolbarSessionState sessionState",
+        "private final WordTimingCalcHandlerState wordTimingHandlerState",
+        "private final TtsAudiobookFilesState audiobookFiles",
         "if (!workLifecycle.close())",
         "private void stopAudiobookWork()",
         "audioBookPosHandler.removeCallbacksAndMessages(null)",
-        "wordTimingCalcHandlerThread.quit()",
+        "wordTimingHandlerState.takeRunning()",
+        "running.thread.quit()",
         "CloseableTaskGate.Token token = workLifecycle.replace()",
         "finishAudiobookInitialization(",
         "scheduleAudiobookPositionPoll(token)",
         "workLifecycle.isActive(token)",
+        "sessionState.beginFinishClose()",
+        "sessionState.beginDocumentCleanup()",
+        "audiobookFiles.snapshot()",
+        "audiobookFiles.close()",
     ):
         if marker not in tts_toolbar_text:
             violations.append(
@@ -2044,6 +2324,15 @@ def main() -> None:
         "audioBookPosRunnable",
         "postDelayed(this, 500)",
         "private boolean mClosed",
+        "private boolean documentCleanedUp",
+        "private boolean closeFinished",
+        "private Runnable mOnCloseListener",
+        "private HandlerThread wordTimingCalcHandlerThread",
+        "private Handler wordTimingCalcHandler",
+        "private MotionWatchdogHandler mMotionWatchdog",
+        "private File wordTimingFile",
+        "private File sentenceInfoFile",
+        "private File sentenceTimingCacheFile",
     ):
         if legacy in tts_toolbar_text:
             violations.append(
@@ -2125,11 +2414,12 @@ def main() -> None:
                 f"{relative(TTS_DOCUMENT_SNAPSHOT_TEST)} omits TTS "
                 f"snapshot regression: {marker}")
     for marker in (
-        "private MotionWatchdogHandler mMotionWatchdog",
+        "private final MotionWatchdogSlotState motionWatchdogSlot",
         "private synchronized void startMotionWatchdog()",
         "private synchronized void stopMotionWatchdog()",
         "stopMotionWatchdog();",
-        "mMotionWatchdog = new MotionWatchdogHandler(",
+        "motionWatchdogSlot.install(",
+        "new MotionWatchdogHandler(",
         "watchdog.close()",
     ):
         if marker not in tts_toolbar_text:
@@ -2139,7 +2429,8 @@ def main() -> None:
     for legacy in (
         "private HandlerThread mMotionWatchdog",
         "mMotionWatchdog.interrupt()",
-        "new MotionWatchdogHandler(this, mCoolReader",
+        "private MotionWatchdogHandler mMotionWatchdog",
+        "mMotionWatchdog = new MotionWatchdogHandler",
     ):
         if legacy in tts_toolbar_text:
             violations.append(
@@ -2404,23 +2695,34 @@ def main() -> None:
                 f"{relative(READER_VIEW)} retains inline E-Ink refresh "
                 f"state: {legacy}")
     for marker in (
-        "private volatile BatteryStatus batteryStatus",
+        "private final ReaderBatteryState batteryState",
+        "batteryState.update(status)",
+        "batteryState.snapshot()",
+        "batteryState.close()",
         "public void setBatteryStatus(BatteryStatus status)",
         "private void applyBatteryStatusToDocument()",
+        "private final TouchScreenLockState touchScreenLockState",
+        "touchScreenLockState.toggle()",
+        "touchScreenLockState.isEnabled()",
+        "touchScreenLockState.close()",
     ):
         if marker not in reader_view_text:
             violations.append(
-                f"{relative(READER_VIEW)} omits atomic battery snapshot: "
+                f"{relative(READER_VIEW)} omits atomic battery/touch owner: "
                 f"{marker}")
     for legacy in (
         "mBatteryState",
         "mBatteryChargingConn",
         "mBatteryChargeLevel",
+        "private volatile BatteryStatus batteryStatus",
+        "batteryStatus = status",
+        "private boolean isTouchScreenEnabled",
+        "isTouchScreenEnabled = !isTouchScreenEnabled",
     ):
         if legacy in reader_view_text:
             violations.append(
-                f"{relative(READER_VIEW)} retains parallel battery field: "
-                f"{legacy}")
+                f"{relative(READER_VIEW)} retains parallel battery/touch "
+                f"field: {legacy}")
     time_tick_start = reader_view_text.find(
         "\n\tpublic void onTimeTickReceived() {")
     time_tick_end = reader_view_text.find(
@@ -2442,7 +2744,7 @@ def main() -> None:
             "isRenderRequestCurrent(",
             work_index)
         native_index = time_tick_text.find(
-            "changed = doc.isTimeChanged()",
+            "changed = doc().isTimeChanged()",
             work_index)
         done_index = time_tick_text.find(
             "public void done()")
@@ -2603,7 +2905,7 @@ def main() -> None:
         "private Bookmark publishPositionSnapshot(",
         "ReaderPositionSnapshot.capture(",
         "snapshot.copyBookmark()",
-        "delayMillis, mBookInfo,",
+        "delayMillis, openedBookState.book(),",
         "final BookInfo expectedBook,",
         "Bookmark bookmark,\n"
         "\t\t\tDocumentLoadLifecycle.Interaction interaction)",
@@ -2665,6 +2967,8 @@ def main() -> None:
         "stopTts();\n\t\tttsToolbarState.close();\n"
         "\t\tstopImageViewer();\n"
         "\t\timageViewerState.close();\n"
+        "\t\topenedBookState.close();\n"
+        "\t\tbatteryState.close();\n"
         "\t\tresetTemporaryViewMode();\n"
         "\t\treaderViewModeState.close();\n"
         "\t\tcancelDelayedReaderWork();",
@@ -2674,7 +2978,9 @@ def main() -> None:
         "imageViewerState.snapshot(this)",
         "imageViewerState.finish(this)",
         "imageViewerState.snapshotForBuffer(",
-        "ReaderPageCacheClose.begin(",
+        "pageCacheState.beginClose()",
+        "pageCacheState.publishSerializedClose(",
+        "private final ReaderPageCacheState<BitmapInfo>",
         "private ReaderPageCacheClose<BitmapInfo>",
         "beginPageCacheClose()",
         "private void publishSerializedPageCacheClose(",
@@ -2723,6 +3029,7 @@ def main() -> None:
         "\t\t\t\tbackgroundState.close());\n"
         "\t\tstopTts();",
         "private void initializeNativeDocument()",
+        "readerNativeLifecycle.attach(nativeDoc)",
         "readerNativeLifecycle.claimCreate()",
         "readerNativeLifecycle.markCreated()",
         "readerNativeLifecycle.isActive()",
@@ -2731,6 +3038,8 @@ def main() -> None:
         "private void closeNativeDocument()",
         "readerNativeLifecycle.close()",
         "readerNativeLifecycle.claimDestroy()",
+        "readerNativeLifecycle.takeDoc()",
+        "private DocView doc()",
         "closeNativeDocument();",
         "ReaderBookInfoSnapshot.capture(",
         "bookInfoDialogLifecycle.replace()",
@@ -2793,7 +3102,7 @@ def main() -> None:
                 violations.append(
                     f"{relative(READER_VIEW)} omits position capture "
                     f"ownership marker: {marker}")
-        if "doc.getCurrentPageBookmark" in position_schedule_text:
+        if "doc().getCurrentPageBookmark" in position_schedule_text:
             violations.append(
                 f"{relative(READER_VIEW)} reads native position from the "
                 "GUI scheduling phase")
@@ -2817,7 +3126,7 @@ def main() -> None:
             "BackgroundThread.ensureBackground()",
             "readerNativeLifecycle.isInitialized()",
             "isDocumentInteractionCurrent(",
-            "doc.getCurrentPageBookmarkNoRender()",
+            "doc().getCurrentPageBookmarkNoRender()",
             "ReaderPositionSnapshot.capture(",
         ):
             if marker not in position_background_text:
@@ -2849,7 +3158,7 @@ def main() -> None:
                 violations.append(
                     f"{relative(READER_VIEW)} omits synchronous position "
                     f"boundary marker: {marker}")
-        if "doc.getCurrentPageBookmark" in position_sync_text:
+        if "doc().getCurrentPageBookmark" in position_sync_text:
             violations.append(
                 f"{relative(READER_VIEW)} bypasses serialized position "
                 "capture during synchronous save")
@@ -2878,7 +3187,7 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} {method_name} does not capture "
                 "an exact final position")
-        if "doc.getCurrentPageBookmark" in method_text:
+        if "doc().getCurrentPageBookmark" in method_text:
             violations.append(
                 f"{relative(READER_VIEW)} {method_name} reads native "
                 "position on the GUI thread")
@@ -2943,7 +3252,7 @@ def main() -> None:
                 + ", ".join(single_argument_page_prepare)
             )
         render_index = page_prepare_text.find(
-            "doc.getPageImage(bi.bitmap)")
+            "doc().getPageImage(bi.bitmap)")
         publication_call_index = page_prepare_text.find(
             "publishCurrentPageCandidate(",
             render_index)
@@ -2961,9 +3270,9 @@ def main() -> None:
                 ) > page_prepare_text.find(
                     "synchronized (documentLoadLifecycle)"
                 )
-                and "mCurrentPageInfo = candidate"
+                and "pageCacheState.publishCurrent(candidate)"
                     in page_prepare_text
-                and "mNextPageInfo = candidate"
+                and "pageCacheState.publishNext(candidate)"
                     in page_prepare_text
                 and "candidate.recycle()" in page_prepare_text):
             violations.append(
@@ -2985,7 +3294,7 @@ def main() -> None:
             image_prepare_start:image_prepare_end
         ]
         image_render_index = image_prepare_text.find(
-            "doc.drawImage(bi.bitmap, bi.imageInfo)")
+            "doc().drawImage(bi.bitmap, bi.imageInfo)")
         image_validation_index = image_prepare_text.find(
             "!isRenderRequestCurrent(renderRequest)",
             image_render_index)
@@ -3076,9 +3385,9 @@ def main() -> None:
         for marker in (
             "applyRequest.bookLanguage(\n"
             "\t\t\t\t\t\t\t\tdocumentLoadLifecycle)",
-            "doc.applySettings(props)",
+            "doc().applySettings(props)",
             "applyRequest.renderRequest(\n"
-            "\t\t\t\t\t\t\t\tmBookInfo,\n"
+            "\t\t\t\t\t\t\t\topenedBookState.book(),\n"
             "\t\t\t\t\t\t\t\tdocumentLoadLifecycle)",
             "&& !applyRequest.isCurrent(\n"
             "\t\t\t\t\t\tdocumentLoadLifecycle)",
@@ -3090,15 +3399,22 @@ def main() -> None:
                     f"{relative(READER_VIEW)} settings apply omits exact "
                     f"ownership marker: {marker}")
         if (
-                "mBookInfo.getFileInfo()" in settings_apply_text
+                "openedBookState.book().getFileInfo()"
+                in settings_apply_text
+                or "mBookInfo.getFileInfo()" in settings_apply_text
                 or "\n\t\tdrawPage();" in settings_apply_text):
             violations.append(
                 f"{relative(READER_VIEW)} settings apply recaptures "
                 "mutable document metadata or render ownership")
     for marker in (
-        "private volatile BookInfo mBookInfo",
+        "private final ReaderOpenedBookState openedBookState",
+        "openedBookState.bind(bookInfo)",
+        "openedBookState.publishOpened(bookInfo)",
+        "openedBookState.markClosed()",
+        "openedBookState.clearIf(bookInfo)",
+        "openedBookState.close()",
         "ReaderSettingsApplyRequest.capture(\n"
-        "\t\t\t\t\t\t\tmBookInfo,\n"
+        "\t\t\t\t\t\t\topenedBookState.book(),\n"
         "\t\t\t\t\t\t\tdocumentLoadLifecycle)",
         "private final ReaderSettingsApplyRequest\n"
         "\t\t\t\tsettingsApplyRequest",
@@ -3109,6 +3425,18 @@ def main() -> None:
             violations.append(
                 f"{relative(READER_VIEW)} omits captured settings owner: "
                 f"{marker}")
+    for legacy in (
+        "private volatile BookInfo mBookInfo",
+        "volatile private boolean mOpened",
+        "mOpened = true",
+        "mOpened = false",
+        "mBookInfo = bookInfo",
+        "mBookInfo = null",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains parallel opened-book "
+                f"field: {legacy}")
 
     for marker in (
         "private final ReaderBackgroundState<\n"
@@ -3238,6 +3566,9 @@ def main() -> None:
         for legacy in (
             "mCurrentPageInfo",
             "mNextPageInfo",
+            "pageCacheState.publishCurrent(",
+            "pageCacheState.publishNext(",
+            "pageCacheState.clear()",
             "factory.compact()",
         ):
             if legacy in done_text:
@@ -3265,11 +3596,9 @@ def main() -> None:
             page_cache_helpers_start:page_cache_helpers_end
         ]
         for marker in (
-            "ReaderPageCacheClose.begin(",
-            "close.publishSerialized(current, next)",
+            "pageCacheState.beginClose()",
+            "pageCacheState.publishSerializedClose(close)",
             "close.finish()",
-            "mCurrentPageInfo = null",
-            "mNextPageInfo = null",
             "pageInvalidationState.invalidate()",
             "resources.initialCurrent()",
             "resources.initialNext()",
@@ -3283,6 +3612,30 @@ def main() -> None:
                 violations.append(
                     f"{relative(READER_VIEW)} page-cache close omits "
                     f"resource marker: {marker}")
+    for marker in (
+        "private final ReaderPageCacheState<BitmapInfo>",
+        "pageCacheState.publishCurrent(candidate)",
+        "pageCacheState.publishNext(candidate)",
+        "pageCacheState.makeCurrent(",
+        "pageCacheState.clear()",
+        "pageCacheState.close()",
+    ):
+        if marker not in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} omits page-cache slot owner: "
+                f"{marker}")
+    for legacy in (
+        "private BitmapInfo mCurrentPageInfo",
+        "private BitmapInfo mNextPageInfo",
+        "mCurrentPageInfo = candidate",
+        "mNextPageInfo = candidate",
+        "mCurrentPageInfo = null",
+        "mNextPageInfo = null",
+    ):
+        if legacy in reader_view_text:
+            violations.append(
+                f"{relative(READER_VIEW)} retains parallel page-cache "
+                f"slot field: {legacy}")
 
     load_task_work_start = reader_view_text.find(
         "\n\t\tpublic void work() throws IOException {",
@@ -3344,7 +3697,7 @@ def main() -> None:
             "ReaderEngineCommandPolicy.Scope.DOCUMENT",
             "ReaderRenderRequest.fromInteraction(",
             "postEngineCommand(",
-            "() -> doc.doCommand(cmd.nativeId, param)",
+            "() -> doc().doCommand(cmd.nativeId, param)",
         ):
             if marker not in engine_command_text:
                 violations.append(
@@ -3367,7 +3720,7 @@ def main() -> None:
             "ReaderRenderRequest.fromInteraction(",
             "isRenderRequestCurrent(renderRequest)",
             "postEngineCommand(",
-            "doc.getPositionProps(",
+            "doc().getPositionProps(",
             "ReaderScrollPageCommand",
             ".destination(",
             "isEngineCommandRequestCurrent(",
@@ -3401,7 +3754,7 @@ def main() -> None:
                 violations.append(
                     f"{relative(READER_VIEW)} page command omits queued "
                     f"scroll marker: {marker}")
-        if "doc.getPositionProps(" in page_command_text:
+        if "doc().getPositionProps(" in page_command_text:
             violations.append(
                 f"{relative(READER_VIEW)} reads native scroll position "
                 "from GUI page-command dispatch")
@@ -3864,11 +4217,14 @@ def main() -> None:
         encoding="utf-8")
     for marker in (
         "final class ReaderNativeLifecycle",
+        "private DocView doc",
         "private boolean createClaimed",
         "private boolean created",
         "private boolean initialized",
         "private boolean closed",
         "private boolean destroyed",
+        "synchronized boolean attach(DocView candidate)",
+        "synchronized DocView doc()",
         "synchronized boolean claimCreate()",
         "synchronized boolean markCreated()",
         "synchronized boolean isActive()",
@@ -3877,11 +4233,17 @@ def main() -> None:
         "synchronized boolean isClosed()",
         "synchronized boolean close()",
         "synchronized boolean claimDestroy()",
+        "synchronized DocView takeDoc()",
     ):
         if marker not in reader_native_lifecycle_text:
             violations.append(
                 f"{relative(READER_NATIVE_LIFECYCLE)} omits exact native "
                 f"lifecycle marker: {marker}")
+    if "private DocView doc;" in (
+            READER_VIEW.read_text(encoding="utf-8")):
+        violations.append(
+            f"{relative(READER_VIEW)} retains raw DocView field outside "
+            "ReaderNativeLifecycle")
 
     reader_native_lifecycle_test_text = (
         READER_NATIVE_LIFECYCLE_TEST.read_text(encoding="utf-8")
@@ -3892,6 +4254,7 @@ def main() -> None:
         "closeDuringCreateStillRequiresDestroy",
         "closeAfterCreateRejectsLateInitialization",
         "initializationRequiresCompletedCreate",
+        "takeDocRequiresDestroyClaim",
     ):
         if marker not in reader_native_lifecycle_test_text:
             violations.append(
@@ -4962,10 +5325,13 @@ def main() -> None:
 
     cool_reader_battery_text = COOL_READER.read_text(encoding="utf-8")
     for marker in (
-        "private BatteryStatus initialBatteryStatus",
+        "private final InitialBatteryStatusState initialBatteryStatus",
+        "initialBatteryStatus.set(batteryStatus)",
+        "initialBatteryStatus.get()",
+        "initialBatteryStatus.close()",
         "BatteryManager.EXTRA_SCALE",
         "BatteryStatus.fromRawLevel(",
-        "mReaderView.setBatteryStatus(",
+        "readerUi.view().setBatteryStatus(",
     ):
         if marker not in cool_reader_battery_text:
             violations.append(
@@ -4975,6 +5341,8 @@ def main() -> None:
         "initialBatteryState",
         "initialBatteryChargeConn",
         "initialBatteryLevel",
+        "private BatteryStatus initialBatteryStatus",
+        "initialBatteryStatus = batteryStatus",
     ):
         if legacy in cool_reader_battery_text:
             violations.append(
@@ -5128,7 +5496,15 @@ def main() -> None:
         "public synchronized void cancel()",
         "hideImmediately = cancelled",
         "progressUiState.close()",
-        "this::dismissProgressDialog",
+        "private final EngineProgressDialogState progressDialogState",
+        "progressDialogState.get()",
+        "progressDialogState.set(",
+        "progressDialogState.take()",
+        "progressDialogState.close()",
+        "private final EngineKeyBacklightState keyBacklightState",
+        "keyBacklightState.setLevel(",
+        "keyBacklightState.getLevel()",
+        "keyBacklightState.close()",
     ):
         if marker not in engine_text:
             violations.append(
@@ -5141,6 +5517,12 @@ def main() -> None:
         "mProgressMessage",
         "mProgressPos",
         "private volatile boolean cancelled",
+        "private ProgressDialog mProgress",
+        "private int currentKeyBacklightLevel",
+        "currentKeyBacklightLevel = value",
+        "return currentKeyBacklightLevel",
+        "mProgress = new ProgressDialog",
+        "mProgress = null",
         "private volatile boolean shown",
     ):
         if legacy in engine_text:
@@ -5207,6 +5589,27 @@ def main() -> None:
         if re.search(r"\bServices\.", text):
             violations.append(
                 f"{relative(path)} still uses the static service locator")
+
+    root_view_text = ROOT_VIEW.read_text(encoding="utf-8")
+    for marker in (
+        "private final CoverListenerRegistrationState coverListenerState",
+        "private final CoverSizeState coverSizeState",
+        "coverListenerState.beginRegister()",
+        "coverListenerState.beginUnregister()",
+        "coverSizeState.set(",
+    ):
+        if marker not in root_view_text:
+            violations.append(
+                f"{relative(ROOT_VIEW)} omits cover ownership marker: "
+                f"{marker}")
+    for legacy in (
+        "private int coverWidth",
+        "private int coverHeight",
+        "private boolean coverListenerRegistered",
+    ):
+        if legacy in root_view_text:
+            violations.append(
+                f"{relative(ROOT_VIEW)} retains bare cover field: {legacy}")
 
     coverpage_manager_text = COVERPAGE_MANAGER.read_text(encoding="utf-8")
     if re.search(r"\bServices\.", coverpage_manager_text):
@@ -5812,12 +6215,13 @@ def main() -> None:
     tts_accessor_text = tts_accessor.read_text(encoding="utf-8")
     for marker in (
         "private final Object mLocker",
-        "private boolean mBindingRegistered",
+        "private final TtsBindingSessionState sessionState",
         "public boolean bind(",
         "synchronized (mLocker)",
-        "callbacks = new ArrayList<>(onConnectCallbacks)",
-        "onConnectCallbacks.clear()",
-        "if (!mBindingRegistered)",
+        "sessionState.takePending()",
+        "sessionState.isBindingRegistered()",
+        "sessionState.beginBinding()",
+        "sessionState.unbind()",
         "return bound",
     ):
         if marker not in tts_accessor_text:
@@ -5829,6 +6233,11 @@ def main() -> None:
         "bindIsCalled",
         "synchronized (this)",
         "synchronized (TTSControlServiceAccessor.this)",
+        "private boolean mBindingRegistered",
+        "private TTSControlBinder mServiceBinder",
+        "mBindingRegistered = true",
+        "mServiceBinder = binder",
+        "mServiceBinder = null",
     ):
         if legacy in tts_accessor_text:
             violations.append(
@@ -5839,9 +6248,10 @@ def main() -> None:
         "private final ToastView mToastView = new ToastView()",
         "mToastView.close()",
         "private final Services mServices = new Services()",
-        "mServiceDependencies = mServices.startServices(this)",
+        "serviceDependencies.install(mServices.startServices(this))",
         "public final ServiceDependencies getServiceDependencies()",
         "mServices.stopServices(this)",
+        "serviceDependencies.close()",
     ):
         if marker not in base_text:
             violations.append(
@@ -5866,12 +6276,118 @@ def main() -> None:
         violations.append(
             f"{relative(COOL_READER)} does not delegate external source "
             "validation")
+    for marker in (
+        "private final ExternalDocumentState externalDocumentState",
+        "externalDocumentState.clear()",
+        "externalDocumentState.set(sourceToOpen)",
+        "externalDocumentState.get()",
+        "externalDocumentState.close()",
+        "private final ToolbarAppearanceState toolbarAppearance",
+        "toolbarAppearance.set(id)",
+        "toolbarAppearance.get()",
+        "toolbarAppearance.close()",
+        "private final LibraryRootStoreState libraryRootStore",
+        "libraryRootStore.install(",
+        "libraryRootStore.get()",
+        "libraryRootStore.close()",
+        "private final ActivityServiceGraph serviceGraph",
+        "serviceGraph.install(dependencies)",
+        "serviceGraph.engine()",
+        "serviceGraph.lifecycle()",
+        "serviceGraph.close()",
+        "private final ReaderUiOwner readerUi",
+        "readerUi.install(createdReader, createdFrame)",
+        "readerUi.view()",
+        "readerUi.frame()",
+        # closeForDestroy permanently closes ReaderUiOwner and retains the
+        # prior view for native destroy (must not use post-close view()).
+        "ReaderUiTeardown.closeForDestroy",
+        "ReaderUiTeardown.destroyClosedOut",
+        # Late CRDB callbacks must not orphan ReaderView/FileBrowser after
+        # Activity/service destroy (install rejection destroys unowned UI).
+        "createdReader.destroy()",
+        "createdBrowser.onClose()",
+        "serviceGraph.isActive()",
+        # Async service-generation pin (null-safe after graph close).
+        "pinServiceLifecycle()",
+        # Graph close can null history before lifecycle.close(); folder
+        # deletion must not chain serviceGraph.history().removeBookInfo.
+        "history.removeBookInfo(",
+        # Post-close frame() is null; status bar updates must not NPE.
+        "ReaderViewLayout frame = readerUi.frame()",
+        # Home install rejection must onClose ctor-registered listeners.
+        "createdHome.onClose()",
+        # directoryUpdated must not chain null home frame (async install).
+        "CRRootView home = homeUi.frame()",
+        # Cold-start reader command intents must not chain null view.
+        "Ignoring reader command intent",
+        # runInReader captures generation deps before ReaderView construct.
+        "Engine engine = serviceGraph.engine()",
+
+
+        "private final BrowserUiOwner browserUi",
+        "browserUi.install(",
+        "browserUi.browser()",
+        "browserUi.frame()",
+        "browserUi.close()",
+        "private final HomeUiOwner homeUi",
+        "homeUi.install(createdHome)",
+        "homeUi.frame()",
+        "homeUi.close()",
+    ):
+        if marker not in cool_reader_text:
+            violations.append(
+                f"{relative(COOL_READER)} omits external/toolbar/library "
+                f"owner: {marker}")
+    for legacy in (
+        "private DocumentSource mExternalDocumentSource",
+        "mExternalDocumentSource = null",
+        "mExternalDocumentSource = sourceToOpen",
+        "private String mOptionAppearance",
+        "mOptionAppearance = id",
+        "return mOptionAppearance",
+        "private LibraryRootStore mLibraryRootStore",
+        "mLibraryRootStore = new LibraryRootStore",
+        "private Engine mEngine",
+        "private Scanner mScanner",
+        "private History mHistory",
+        "private CoverpageManager mCoverpageManager",
+        "private DocumentFileCache mDocumentCache",
+        "private FileSystemFolders mFileSystemFolders",
+        "private GenresCollection mGenresCollection",
+        "private ServiceLifecycle mServiceLifecycle",
+        "mEngine = dependencies.getEngine()",
+        "mServiceLifecycle = dependencies.getLifecycle()",
+        "private ReaderView mReaderView",
+        "private ReaderViewLayout mReaderFrame",
+        "mReaderView = new ReaderView",
+        "mReaderFrame = new ReaderViewLayout",
+        "mReaderView = null",
+        "private FileBrowser mBrowser",
+        "private View mBrowserTitleBar",
+        "private CRToolBar mBrowserToolBar",
+        "private BrowserViewLayout mBrowserFrame",
+        "private CRRootView mHomeFrame",
+        "mBrowser = new FileBrowser",
+        "mBrowserFrame = new BrowserViewLayout",
+        "mHomeFrame = new CRRootView",
+        "mBrowser = null",
+    ):
+        if legacy in cool_reader_text:
+            violations.append(
+                f"{relative(COOL_READER)} retains parallel external/toolbar "
+                f"field: {legacy}")
     if "stopServices();" not in cool_reader_text:
         violations.append(
             f"{relative(COOL_READER)} does not stop its owned service graph")
     for marker in (
         "final TTSControlServiceAccessor accessor",
         "final String requestedEngine",
+        "private final TtsServiceConnectionState ttsServiceConnection",
+        "ttsServiceConnection.ensureAccessor(",
+        "ttsServiceConnection.getEnginePackage()",
+        "ttsServiceConnection.setEnginePackage(",
+        "ttsServiceConnection.close()",
         "private final TtsInitializationSession "
         "ttsInitializationRequests",
         "ttsInitializationRequests.replace(",
@@ -5888,6 +6404,18 @@ def main() -> None:
             violations.append(
                 f"{relative(COOL_READER)} omits generation-owned TTS "
                 f"initialization marker: {marker}")
+    for legacy in (
+        "private String ttsEnginePackage",
+        "private TTSControlServiceAccessor ttsControlServiceAccessor",
+        "ttsEnginePackage = value",
+        "ttsEnginePackage = \"\"",
+        "ttsControlServiceAccessor = new TTSControlServiceAccessor",
+        "ttsControlServiceAccessor = null",
+    ):
+        if legacy in cool_reader_text:
+            violations.append(
+                f"{relative(COOL_READER)} retains parallel TTS connection "
+                f"field: {legacy}")
     if "callback.run(ttsControlServiceAccessor)" in cool_reader_text:
         violations.append(
             f"{relative(COOL_READER)} publishes TTS through a mutable "
@@ -5898,12 +6426,12 @@ def main() -> None:
             "dispatch")
     for marker in (
         "private void stopTtsForDocumentChange()",
-        "mReaderView.stopTtsForDocumentChange()",
+        "closingReader.stopTtsForDocumentChange()",
         "private DocumentLoadLifecycle.Request replaceDocumentLoad()",
         "private void cancelPendingDocumentLoad()",
-        "mReaderView.cancelPendingDocumentLoad()",
+        "readerUi.view().cancelPendingDocumentLoad()",
         "stopTtsForDocumentChange();",
-        "mReaderView.stopTtsForDocumentChange();\n"
+        "closingReader.stopTtsForDocumentChange();\n"
         "\t\t\tif (!CLOSE_BOOK_ON_STOP)",
     ):
         if marker not in cool_reader_text:
@@ -5932,7 +6460,7 @@ def main() -> None:
             cancel_pending_start:cancel_pending_end
         ]
         reader_cancel_index = cancel_pending_text.find(
-            "mReaderView.cancelPendingDocumentLoad()")
+            "readerUi.view().cancelPendingDocumentLoad()")
         fallback_stop_index = cancel_pending_text.find(
             "stopTtsForDocumentChange()")
         fallback_cancel_index = cancel_pending_text.find(

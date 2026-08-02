@@ -139,21 +139,14 @@ import java.util.Objects;
 public class CoolReader extends BaseActivity {
 	public static final Logger log = L.create("cr");
 
-	private ReaderView mReaderView;
-	private ReaderViewLayout mReaderFrame;
-	private FileBrowser mBrowser;
-	private View mBrowserTitleBar;
-	private CRToolBar mBrowserToolBar;
-	private BrowserViewLayout mBrowserFrame;
-	private CRRootView mHomeFrame;
-	private Engine mEngine;
-	private Scanner mScanner;
-	private History mHistory;
-	private CoverpageManager mCoverpageManager;
-	private DocumentFileCache mDocumentCache;
-	private FileSystemFolders mFileSystemFolders;
-	private GenresCollection mGenresCollection;
-	private ServiceLifecycle mServiceLifecycle;
+	private final ReaderUiOwner readerUi =
+			new ReaderUiOwner();
+	private final BrowserUiOwner browserUi =
+			new BrowserUiOwner();
+	private final HomeUiOwner homeUi =
+			new HomeUiOwner();
+	private final ActivityServiceGraph serviceGraph =
+			new ActivityServiceGraph();
 	private final ActivityLifecycleState activityLifecycle =
 			new ActivityLifecycleState();
 	private final ActivityStartupState startupState =
@@ -192,10 +185,12 @@ public class CoolReader extends BaseActivity {
 	private boolean mSuppressSettingsCopyToCloud;
 	 */
 
-	private String mOptionAppearance = "0";
-
-	private DocumentSource mExternalDocumentSource = null;
-	private LibraryRootStore mLibraryRootStore;
+	private final ToolbarAppearanceState toolbarAppearance =
+			new ToolbarAppearanceState();
+	private final ExternalDocumentState externalDocumentState =
+			new ExternalDocumentState();
+	private final LibraryRootStoreState libraryRootStore =
+			new LibraryRootStoreState();
 	private final LibraryRootRequestState<String> libraryRootRequests =
 			new LibraryRootRequestState<>();
 	private final LibraryDocumentRequestState<String>
@@ -220,11 +215,16 @@ public class CoolReader extends BaseActivity {
 					result -> handleOpenDocumentTreeResult(
 							result.getResultCode(), result.getData()));
 
-	private BatteryStatus initialBatteryStatus =
-			BatteryStatus.unavailable();
-
-	private String ttsEnginePackage = "";
-	private TTSControlServiceAccessor ttsControlServiceAccessor = null;
+	private final InitialBatteryStatusState initialBatteryStatus =
+			new InitialBatteryStatusState();
+	private final ActivityPreferencesState preferencesState =
+			new ActivityPreferencesState();
+	private final TtsServiceConnectionState ttsServiceConnection =
+			new TtsServiceConnectionState();
+	private final BroadcastRegistrationState batteryReceiverRegistration =
+			new BroadcastRegistrationState();
+	private final BroadcastRegistrationState timeTickReceiverRegistration =
+			new BroadcastRegistrationState();
 
 	private static final String STATE_LIBRARY_ROOT_REQUEST_PENDING =
 			"libraryRootRequestPending";
@@ -278,18 +278,18 @@ public class CoolReader extends BaseActivity {
 			BatteryStatus batteryStatus =
 					BatteryStatus.fromRawLevel(
 							status, plugged, level, scale);
-			if (mReaderView != null)
-				mReaderView.setBatteryStatus(batteryStatus);
+			if (readerUi.view() != null)
+				readerUi.view().setBatteryStatus(batteryStatus);
 			else
-				initialBatteryStatus = batteryStatus;
+				initialBatteryStatus.set(batteryStatus);
 		}
 	};
 	private BroadcastReceiver timeTickReceiver = new BroadcastReceiver() {
 		@Override
 		public void onReceive(Context context, Intent intent) {
 			if (activityLifecycle.isResumed()
-					&& null != mReaderView) {
-				mReaderView.onTimeTickReceived();
+					&& null != readerUi.view()) {
+				readerUi.view().onTimeTickReceived();
 			}
 		}
 	};
@@ -303,7 +303,9 @@ public class CoolReader extends BaseActivity {
 
 		log.i("CoolReader.onCreate() entered");
 		super.onCreate(savedInstanceState);
-		mLibraryRootStore = new LibraryRootStore(this);
+		if (!libraryRootStore.install(new LibraryRootStore(this)))
+			throw new IllegalStateException(
+					"library root store already installed");
 		if (savedInstanceState != null) {
 			if (savedInstanceState.getBoolean(
 					STATE_LIBRARY_ROOT_REQUEST_PENDING,
@@ -336,14 +338,9 @@ public class CoolReader extends BaseActivity {
 		}
 
 		ServiceDependencies dependencies = getServiceDependencies();
-		mEngine = dependencies.getEngine();
-		mScanner = dependencies.getScanner();
-		mHistory = dependencies.getHistory();
-		mCoverpageManager = dependencies.getCoverpageManager();
-		mDocumentCache = dependencies.getDocumentCache();
-		mFileSystemFolders = dependencies.getFileSystemFolders();
-		mGenresCollection = dependencies.getGenresCollection();
-		mServiceLifecycle = dependencies.getLifecycle();
+		if (!serviceGraph.install(dependencies))
+			throw new IllegalStateException(
+					"service graph already installed");
 
 		// Service-backed settings require the captured generation.
 		onSettingsChanged(settings(), null);
@@ -379,10 +376,15 @@ public class CoolReader extends BaseActivity {
 		activityLifecycle.close();
 		startupState.close();
 		frameState.close();
-		if (mReaderView != null) {
-			mReaderView.stopTtsForDocumentChange();
+		// Permanently close reader UI ownership first; retain the prior view
+		// for stop/close/destroy. After closeForDestroy, readerUi.view() is
+		// always null — never look up destroy through the owner again.
+		ReaderView closingReader =
+				ReaderUiTeardown.closeForDestroy(readerUi);
+		if (closingReader != null) {
+			closingReader.stopTtsForDocumentChange();
 			if (!CLOSE_BOOK_ON_STOP)
-				mReaderView.close();
+				closingReader.close();
 		}
 		documentLoadLifecycle.close();
 		bookInfoDialogRequests.close();
@@ -394,11 +396,34 @@ public class CoolReader extends BaseActivity {
 		openDocumentTreeRequests.close();
 		optionsDialogRequests.close();
 		ttsInitializationRequests.close();
+		externalDocumentState.close();
+		toolbarAppearance.close();
+		libraryRootStore.close();
+		serviceGraph.close();
 
 		// Shutdown TTS service if running
-		if (null != ttsControlServiceAccessor) {
-			ttsControlServiceAccessor.unbind();
-			ttsControlServiceAccessor = null;
+		TTSControlServiceAccessor ttsAccessor =
+				ttsServiceConnection.close();
+		if (null != ttsAccessor)
+			ttsAccessor.unbind();
+		initialBatteryStatus.close();
+		preferencesState.close();
+		// Final unregister if pause was skipped (e.g. process death path).
+		if (batteryReceiverRegistration.close()) {
+			try {
+				unregisterReceiver(batteryChangeReceiver);
+			} catch (IllegalArgumentException e) {
+				log.e("Failed to unregister battery receiver: "
+						+ e.toString());
+			}
+		}
+		if (timeTickReceiverRegistration.close()) {
+			try {
+				unregisterReceiver(timeTickReceiver);
+			} catch (IllegalArgumentException e) {
+				log.e("Failed to unregister time-tick receiver: "
+						+ e.toString());
+			}
 		}
 
 		/*
@@ -410,16 +435,16 @@ public class CoolReader extends BaseActivity {
 		}
 		 */
 
-		if (mHomeFrame != null)
-			mHomeFrame.onClose();
-		if (mBrowser != null) {
-			mBrowser.onClose();
-			mBrowser = null;
-		}
-		//if ( mReaderView!=null )
-		//	mReaderView.close();
+		CRRootView homeFrame = homeUi.close();
+		if (homeFrame != null)
+			homeFrame.onClose();
+		FileBrowser closingBrowser = browserUi.close();
+		if (closingBrowser != null)
+			closingBrowser.onClose();
+		//if ( readerUi.view()!=null )
+		//	readerUi.view().close();
 
-		//if ( mHistory!=null && mDB!=null ) {
+		//if ( serviceGraph.history()!=null && mDB!=null ) {
 		//history.saveToDB();
 		//}
 
@@ -428,13 +453,12 @@ public class CoolReader extends BaseActivity {
 //			BackgroundThread.instance().quit();
 //		}
 
-		//mEngine = null;
+		//serviceGraph.engine() = null;
 
-		if (mReaderView != null) {
-			mReaderView.destroy();
-		}
-		mReaderView = null;
-
+		// Native DocView teardown on the closed-out identity only.
+		ReaderUiTeardown.destroyClosedOut(
+				closingReader, ReaderView::destroy);
+	
 		log.i("CoolReader.onDestroy() exiting");
 		super.onDestroy();
 
@@ -442,7 +466,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public ReaderView getReaderView() {
-		return mReaderView;
+		return readerUi.view();
 	}
 
 	// Absolute screen rotation
@@ -451,8 +475,8 @@ public class CoolReader extends BaseActivity {
 	@Override
 	protected void onScreenRotationChanged(int rotation) {
 		screenRotation = rotation;
-		if (null != mReaderView) {
-			mReaderView.doEngineCommand(ReaderCommand.DCMD_SET_ROTATION_INFO_FOR_AA, rotation);
+		if (null != readerUi.view()) {
+			readerUi.view().doEngineCommand(ReaderCommand.DCMD_SET_ROTATION_INFO_FOR_AA, rotation);
 		}
 	}
 
@@ -467,22 +491,24 @@ public class CoolReader extends BaseActivity {
 		} else if (key.equals(PROP_TOOLBAR_APPEARANCE)) {
 			setToolbarAppearance(value);
 		} else if (key.equals(PROP_APP_BOOK_SORT_ORDER)) {
-			if (mBrowser != null)
-				mBrowser.setSortOrder(value);
+			if (browserUi.browser() != null)
+				browserUi.browser().setSortOrder(value);
 		} else if (key.equals(PROP_APP_SHOW_COVERPAGES)) {
-			if (mBrowser != null)
-				mBrowser.setCoverPagesEnabled(flg);
+			if (browserUi.browser() != null)
+				browserUi.browser().setCoverPagesEnabled(flg);
 		} else if (key.equals(PROP_APP_BOOK_PROPERTY_SCAN_ENABLED)) {
-			mScanner.setDirScanEnabled(flg);
+			Scanner scanner = serviceGraph.scanner();
+			if (scanner != null)
+				scanner.setDirScanEnabled(flg);
 		} else if (key.equals(PROP_FONT_FACE)) {
-			if (mBrowser != null)
-				mBrowser.setCoverPageFontFace(value);
+			if (browserUi.browser() != null)
+				browserUi.browser().setCoverPageFontFace(value);
 		} else if (key.equals(PROP_APP_COVERPAGE_SIZE)) {
-			if (mBrowser != null)
-				mBrowser.setCoverPageSizeOption(Utils.parseInt(value, 0, 0, 2));
+			if (browserUi.browser() != null)
+				browserUi.browser().setCoverPageSizeOption(Utils.parseInt(value, 0, 0, 2));
 		} else if (key.equals(PROP_APP_FILE_BROWSER_SIMPLE_MODE)) {
-			if (mBrowser != null)
-				mBrowser.setSimpleViewMode(flg);
+			if (browserUi.browser() != null)
+				browserUi.browser().setSimpleViewMode(flg);
 		}
 		/* See notes for buildGoogleDriveSynchronizer() function
 		else if (key.equals(PROP_APP_CLOUDSYNC_GOOGLEDRIVE_ENABLED)) {
@@ -524,18 +550,18 @@ public class CoolReader extends BaseActivity {
 		} */
 		else if (key.equals(PROP_APP_FILE_BROWSER_HIDE_EMPTY_FOLDERS)) {
 			// already in super method:
-			// mScanner.setHideEmptyDirs(flg);
+			// serviceGraph.scanner().setHideEmptyDirs(flg);
 			// Here only refresh the file browser
-			if (null != mBrowser) {
-				mBrowser.showLastDirectory();
+			if (null != browserUi.browser()) {
+				browserUi.browser().showLastDirectory();
 			}
 		} else if (key.equals(PROP_APP_FILE_BROWSER_HIDE_EMPTY_GENRES)) {
-			if (null != mBrowser) {
-				mBrowser.setHideEmptyGenres(flg);
+			if (null != browserUi.browser()) {
+				browserUi.browser().setHideEmptyGenres(flg);
 			}
 		} else if (key.equals(PROP_APP_TTS_ENGINE)) {
-			ttsEnginePackage = value;
-			if (null != mReaderView && mReaderView.isTTSActive()) {
+			ttsServiceConnection.setEnginePackage(value);
+			if (null != readerUi.view() && readerUi.view().isTTSActive()) {
 				// Set new TTS engine if running
 				initTTS(null);
 			} else
@@ -562,7 +588,7 @@ public class CoolReader extends BaseActivity {
 		// DeviceInfo.getSDKLevel() not applicable here -> compile error about Android API compatibility
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
 			GoogleDriveRemoteAccess googleDriveRemoteAccess = new GoogleDriveRemoteAccess(this, 30);
-			mGoogleDriveSync = new Synchronizer(this, mScanner, googleDriveRemoteAccess, getString(R.string.app_name), REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN);
+			mGoogleDriveSync = new Synchronizer(this, serviceGraph.scanner(), googleDriveRemoteAccess, getString(R.string.app_name), REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN);
 			mGoogleDriveSyncStatusListener = new OnSyncStatusListener() {
 				@Override
 				public void onSyncStarted(Synchronizer.SyncDirection direction, boolean showProgress, boolean interactively) {
@@ -571,9 +597,9 @@ public class CoolReader extends BaseActivity {
 					} else if (Synchronizer.SyncDirection.SyncTo == direction) {
 						log.d("Starting synchronization to Google Drive");
 					}
-					if (null != mReaderView) {
+					if (null != readerUi.view()) {
 						if (showProgress) {
-							mReaderView.showCloudSyncProgress(100);
+							readerUi.view().showCloudSyncProgress(100);
 						}
 					}
 				}
@@ -581,12 +607,12 @@ public class CoolReader extends BaseActivity {
 				@Override
 				public void OnSyncProgress(Synchronizer.SyncDirection direction, boolean showProgress, int current, int total, boolean interactively) {
 					log.v("sync progress: current=" + current + "; total=" + total);
-					if (null != mReaderView) {
+					if (null != readerUi.view()) {
 						if (showProgress) {
 							int total_ = total;
 							if (current > total_)
 								total_ = current;
-							mReaderView.showCloudSyncProgress(10000 * current / total_);
+							readerUi.view().showCloudSyncProgress(10000 * current / total_);
 						}
 					}
 				}
@@ -601,9 +627,9 @@ public class CoolReader extends BaseActivity {
 					if (interactively)
 						showToast(R.string.googledrive_sync_completed);
 					if (showProgress) {
-						if (null != mReaderView) {
+						if (null != readerUi.view()) {
 							// Hide sync indicator
-							mReaderView.hideCloudSyncProgress();
+							readerUi.view().hideCloudSyncProgress();
 						}
 					}
 					if (mGoogleDriveSyncOpts.Enabled)
@@ -613,8 +639,8 @@ public class CoolReader extends BaseActivity {
 				@Override
 				public void onSyncError(Synchronizer.SyncDirection direction, String errorString) {
 					// Hide sync indicator
-					if (null != mReaderView) {
-						mReaderView.hideCloudSyncProgress();
+					if (null != readerUi.view()) {
+						readerUi.view().hideCloudSyncProgress();
 					}
 					if (null != errorString)
 						showToast(R.string.googledrive_sync_failed_with, errorString);
@@ -633,8 +659,8 @@ public class CoolReader extends BaseActivity {
 				@Override
 				public void onAborted(Synchronizer.SyncDirection direction) {
 					// Hide sync indicator
-					if (null != mReaderView) {
-						mReaderView.hideCloudSyncProgress();
+					if (null != readerUi.view()) {
+						readerUi.view().hideCloudSyncProgress();
 					}
 					showToast(R.string.googledrive_sync_aborted);
 				}
@@ -652,15 +678,15 @@ public class CoolReader extends BaseActivity {
 						// TODO: ask the user whether to import new bookmarks.
 						BookInfo currentBook = null;
 						int currentPos = -1;
-						if (null != mReaderView) {
-							currentBook = mReaderView.getBookInfo();
+						if (null != readerUi.view()) {
+							currentBook = readerUi.view().getBookInfo();
 							if (null != currentBook) {
 								Bookmark lastPos = currentBook.getLastPosition();
 								if (null != lastPos)
 									currentPos = lastPos.getPercent();
 							}
 						}
-						mHistory.updateBookInfo(bookInfo);
+						serviceGraph.history().updateBookInfo(bookInfo);
 						getDB().saveBookInfo(bookInfo);
 						if (null != currentBook) {
 							FileInfo currentFileInfo = currentBook.getFileInfo();
@@ -670,11 +696,11 @@ public class CoolReader extends BaseActivity {
 									Bookmark lastPos = bookInfo.getLastPosition();
 									if (null != lastPos) {
 										if (!interactively) {
-											mReaderView.goToBookmark(lastPos);
+											readerUi.view().goToBookmark(lastPos);
 										} else {
 											if (Math.abs(currentPos - lastPos.getPercent()) > 10) {		// 0.1%
 												askQuestion(R.string.cloud_synchronization_from_, R.string.sync_confirmation_new_reading_position,
-														() -> mReaderView.goToBookmark(lastPos), null);
+														() -> readerUi.view().goToBookmark(lastPos), null);
 											}
 										}
 									}
@@ -687,8 +713,8 @@ public class CoolReader extends BaseActivity {
 				@Override
 				public void onCurrentBookInfoLoaded(FileInfo fileInfo, boolean interactively) {
 					FileInfo current = null;
-					if (null != mReaderView) {
-						BookInfo bookInfo = mReaderView.getBookInfo();
+					if (null != readerUi.view()) {
+						BookInfo bookInfo = readerUi.view().getBookInfo();
 						if (null != bookInfo)
 							current = bookInfo.getFileInfo();
 					}
@@ -829,8 +855,8 @@ public class CoolReader extends BaseActivity {
 
 	private BookInfo getCurrentBookInfo() {
 		BookInfo bookInfo = null;
-		if (mReaderView != null) {
-			bookInfo = mReaderView.getBookInfo();
+		if (readerUi.view() != null) {
+			bookInfo = readerUi.view().getBookInfo();
 			if (null != bookInfo && null == bookInfo.getFileInfo()) {
 				// nullify if fileInfo is null
 				bookInfo = null;
@@ -842,8 +868,8 @@ public class CoolReader extends BaseActivity {
 	@Override
 	public void setFullscreen(boolean fullscreen) {
 		super.setFullscreen(fullscreen);
-		if (mReaderFrame != null)
-			mReaderFrame.updateFullscreen(fullscreen);
+		if (readerUi.frame() != null)
+			readerUi.frame().updateFullscreen(fullscreen);
 	}
 
 	@Override
@@ -862,7 +888,7 @@ public class CoolReader extends BaseActivity {
 		if (intent == null)
 			return false;
 		DocumentSource sourceToOpen = null;
-		mExternalDocumentSource = null;
+		externalDocumentState.clear();
 		Uri uri = null;
 		if (Intent.ACTION_VIEW.equals(intent.getAction())) {
 			uri = intent.getData();
@@ -882,7 +908,14 @@ public class CoolReader extends BaseActivity {
 			for (ReaderAction ra: ReaderAction.availableActions()) {
 				String raIntentName = "org.coolreader.cmd." + ra.id;
 				if (raIntentName.equals(intent.getAction())) {
-					mReaderView.onCommand(ra.cmd, ra.param, null);
+					// Reader UI may not exist yet (cold start) or may be
+					// torn down after destroy — never chain null view.
+					ReaderView view = readerUi.view();
+					if (view == null) {
+						log.w("Ignoring reader command intent: reader UI not ready");
+						return false;
+					}
+					view.onCommand(ra.cmd, ra.param, null);
 					return true;
 				}
 			}
@@ -902,7 +935,7 @@ public class CoolReader extends BaseActivity {
 				showRootWindow();
 				return true;
 			}
-			mExternalDocumentSource = sourceToOpen;
+			externalDocumentState.set(sourceToOpen);
 			log.d("DOCUMENT_TO_OPEN = "
 					+ safePathForLog(sourceToOpen.getIdentity()));
 			final String errorLabel = sourceToOpen.getDisplayName() != null
@@ -991,24 +1024,28 @@ public class CoolReader extends BaseActivity {
 	@Override
 	protected void onPause() {
 		activityLifecycle.pause();
-		if (mReaderView != null) {
-			mReaderView.onAppPause();
+		if (readerUi.view() != null) {
+			readerUi.view().onAppPause();
 		}
-		if (mBrowser != null) {
-			mBrowser.stopCurrentScan();
+		if (browserUi.browser() != null) {
+			browserUi.browser().stopCurrentScan();
 		}
-		try {
-			unregisterReceiver(batteryChangeReceiver);
-		} catch (IllegalArgumentException e) {
-			log.e("Failed to unregister receiver: " + e.toString());
+		if (batteryReceiverRegistration.beginUnregister()) {
+			try {
+				unregisterReceiver(batteryChangeReceiver);
+			} catch (IllegalArgumentException e) {
+				log.e("Failed to unregister receiver: " + e.toString());
+			}
 		}
-		try {
-			unregisterReceiver(timeTickReceiver);
-		} catch (IllegalArgumentException e) {
-			log.e("Failed to unregister receiver: " + e.toString());
+		if (timeTickReceiverRegistration.beginUnregister()) {
+			try {
+				unregisterReceiver(timeTickReceiver);
+			} catch (IllegalArgumentException e) {
+				log.e("Failed to unregister receiver: " + e.toString());
+			}
 		}
-		if (mHomeFrame != null)
-			mHomeFrame.onPause();
+		if (homeUi.frame() != null)
+			homeUi.frame().onPause();
 		/*
 		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
@@ -1058,31 +1095,40 @@ public class CoolReader extends BaseActivity {
 
 	@Override
 	protected void onResume() {
-		if (null == mExternalDocumentSource)
+		DocumentSource externalDocument =
+				externalDocumentState.get();
+		if (null == externalDocument)
 			log.i("CoolReader.onResume()");
 		else
 			log.i("CoolReader.onResume(), externalDocumentSource="
-					+ safePathForLog(mExternalDocumentSource.getIdentity()));
+					+ safePathForLog(externalDocument.getIdentity()));
 		super.onResume();
 		//Properties props = SettingsManager.instance(this).get();
 
-		if (mReaderView != null)
-			mReaderView.onAppResume();
-		if (mHomeFrame != null)
-			mHomeFrame.onResume();
+		if (readerUi.view() != null)
+			readerUi.view().onAppResume();
+		if (homeUi.frame() != null)
+			homeUi.frame().onResume();
 		// ACTION_BATTERY_CHANGED: This is a sticky broadcast containing the charging state, level, and other information about the battery.
-		Intent intent = ContextCompat.registerReceiver(
-				this, batteryChangeReceiver,
-				new IntentFilter(Intent.ACTION_BATTERY_CHANGED),
-				ContextCompat.RECEIVER_NOT_EXPORTED);
-		if (null != intent) {
-			// process this Intent
-			batteryChangeReceiver.onReceive(null, intent);
+		if (!batteryReceiverRegistration.isClosed()) {
+			Intent intent = ContextCompat.registerReceiver(
+					this, batteryChangeReceiver,
+					new IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+					ContextCompat.RECEIVER_NOT_EXPORTED);
+			batteryReceiverRegistration.onRegistered();
+			if (null != intent) {
+				// process this Intent
+				batteryChangeReceiver.onReceive(null, intent);
+			}
 		}
 		// ACTION_TIME_TICK: The current time has changed. Sent every minute.
-		ContextCompat.registerReceiver(
-				this, timeTickReceiver, new IntentFilter(Intent.ACTION_TIME_TICK),
-				ContextCompat.RECEIVER_NOT_EXPORTED);
+		if (!timeTickReceiverRegistration.isClosed()) {
+			ContextCompat.registerReceiver(
+					this, timeTickReceiver,
+					new IntentFilter(Intent.ACTION_TIME_TICK),
+					ContextCompat.RECEIVER_NOT_EXPORTED);
+			timeTickReceiverRegistration.onRegistered();
+		}
 
 		if (DeviceInfo.EINK_SCREEN) {
 			if (DeviceInfo.EINK_SONY) {
@@ -1105,7 +1151,7 @@ public class CoolReader extends BaseActivity {
 				// when the program starts, the local settings file is already updated, so the local file is always newer than the remote one
 				// Therefore, the synchronization mode is quiet, i.e. without comparing modification times and without prompting the user for action.
 				// If the file is opened from an external file manager, we must disable the "currently reading book" sync operation with google drive.
-				if (null == mExternalDocumentSource) {
+				if (null == externalDocumentState.get()) {
 					//mGoogleDriveSync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0));
 					syncServiceAccessor.bind(sync -> {
 						sync.setSynchronizer(mGoogleDriveSync);
@@ -1177,31 +1223,51 @@ public class CoolReader extends BaseActivity {
 		//		BackgroundThread.instance().postGUI(new Runnable() {
 //			public void run() {
 //				// fixing font settings
-//				Properties settings = mReaderView.getSettings();
+//				Properties settings = readerUi.view().getSettings();
 //				if (SettingsManager.instance(CoolReader.this).fixFontSettings(settings)) {
 //					log.i("Missing font settings were fixed");
-//					mBrowser.setCoverPageFontFace(settings.getProperty(ReaderView.PROP_FONT_FACE, DeviceInfo.DEF_FONT_FACE));
-//					mReaderView.setSettings(settings, null);
+//					browserUi.browser().setCoverPageFontFace(settings.getProperty(ReaderView.PROP_FONT_FACE, DeviceInfo.DEF_FONT_FACE));
+//					readerUi.view().setSettings(settings, null);
 //				}
 //			}
 //		});
 
-		if (mHomeFrame == null) {
+		if (!homeUi.isPresent()) {
 			waitForCRDBService(() -> {
-				if (!mServiceLifecycle.isActive()
-						|| activityLifecycle.isClosed())
+				// serviceGraph.lifecycle() is null after close(); use isActive().
+				if (activityLifecycle.isClosed()
+						|| !serviceGraph.isActive())
 					return;
-				mHistory.loadFromDB(getDB(), 200);
+				History history = serviceGraph.history();
+				Scanner scanner = serviceGraph.scanner();
+				CoverpageManager covers =
+						serviceGraph.coverpageManager();
+				FileSystemFolders folders =
+						serviceGraph.fileSystemFolders();
+				CRDBService.LocalBinder db = getDB();
+				if (history == null
+						|| scanner == null
+						|| covers == null
+						|| folders == null
+						|| db == null)
+					return;
+				history.loadFromDB(db, 200);
 
-				mHomeFrame = new CRRootView(
+				CRRootView createdHome = new CRRootView(
 						CoolReader.this,
-						mScanner,
-						mHistory,
-						mCoverpageManager,
-						mFileSystemFolders);
+						scanner,
+						history,
+						covers,
+						folders);
+				if (!homeUi.install(createdHome)) {
+					// Owner closed or already published: drop listeners
+					// registered in the CRRootView ctor.
+					createdHome.onClose();
+					return;
+				}
 				if (activityLifecycle.isResumed())
-					mHomeFrame.onResume();
-				mHomeFrame.requestFocus();
+					createdHome.onResume();
+				createdHome.requestFocus();
 
 				showRootWindow();
 				setSystemUiVisibility();
@@ -1233,8 +1299,11 @@ public class CoolReader extends BaseActivity {
 		// Donations support code
 		super.onStop();
 		// will close book at onDestroy()
-		if (CLOSE_BOOK_ON_STOP)
-			mReaderView.close();
+		if (CLOSE_BOOK_ON_STOP) {
+			ReaderView view = readerUi.view();
+			if (view != null)
+				view.close();
+		}
 
 		log.i("CoolReader.onStop() exiting");
 	}
@@ -1270,22 +1339,29 @@ public class CoolReader extends BaseActivity {
 	@Override
 	public void setCurrentTheme(InterfaceTheme theme) {
 		super.setCurrentTheme(theme);
-		if (mHomeFrame != null)
-			mHomeFrame.onThemeChange(theme);
-		if (mBrowser != null)
-			mBrowser.onThemeChanged();
-		if (mBrowserFrame != null)
-			mBrowserFrame.onThemeChanged(theme);
+		if (homeUi.frame() != null)
+			homeUi.frame().onThemeChange(theme);
+		if (browserUi.browser() != null)
+			browserUi.browser().onThemeChanged();
+		if (browserUi.frame() != null)
+			browserUi.frame().onThemeChanged(theme);
 		//getWindow().setBackgroundDrawable(theme.getActionBarBackgroundDrawableBrowser());
 	}
 
 	public void directoryUpdated(FileInfo dir, FileInfo selected) {
-		if (dir.isOPDSRoot())
-			mHomeFrame.refreshOnlineCatalogs();
-		else if (dir.isRecentDir())
-			mHomeFrame.refreshRecentBooks();
-		if (mBrowser != null)
-			mBrowser.refreshDirectory(dir, selected);
+		if (dir == null)
+			return;
+		// Home may not be installed yet (async onStart) or already closed.
+		CRRootView home = homeUi.frame();
+		if (home != null) {
+			if (dir.isOPDSRoot())
+				home.refreshOnlineCatalogs();
+			else if (dir.isRecentDir())
+				home.refreshRecentBooks();
+		}
+		FileBrowser browser = browserUi.browser();
+		if (browser != null)
+			browser.refreshDirectory(dir, selected);
 	}
 
 	public void directoryUpdated(FileInfo dir) {
@@ -1295,13 +1371,13 @@ public class CoolReader extends BaseActivity {
 	@Override
 	public void onSettingsChanged(Properties props, Properties oldProps) {
 		Properties changedProps = oldProps != null ? props.diff(oldProps) : props;
-		if (mHomeFrame != null) {
-			mHomeFrame.refreshOnlineCatalogs();
+		if (homeUi.frame() != null) {
+			homeUi.frame().refreshOnlineCatalogs();
 		}
-		if (mReaderFrame != null) {
-			mReaderFrame.updateSettings(props);
-			if (mReaderView != null)
-				mReaderView.updateSettings(props);
+		if (readerUi.frame() != null) {
+			readerUi.frame().updateSettings(props);
+			if (readerUi.view() != null)
+				readerUi.view().updateSettings(props);
 		}
 		for (Map.Entry<Object, Object> entry : changedProps.entrySet()) {
 			String key = (String) entry.getKey();
@@ -1355,7 +1431,7 @@ public class CoolReader extends BaseActivity {
 
 	protected boolean allowLowBrightness() {
 		// override to force higher brightness in non-reading mode (to avoid black screen on some devices when brightness level set to small value)
-		return frameState.isCurrent(mReaderFrame);
+		return frameState.isCurrent(readerUi.frame());
 	}
 
 
@@ -1364,7 +1440,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public boolean isPreviousFrameHome() {
-		return frameState.isPrevious(mHomeFrame);
+		return frameState.isPrevious(homeUi.frame());
 	}
 
 	private void setCurrentFrame(ViewGroup newFrame) {
@@ -1374,21 +1450,25 @@ public class CoolReader extends BaseActivity {
 				+ newFrame.getClass().toString());
 		setContentView(newFrame);
 		newFrame.requestFocus();
-		if (newFrame != mReaderFrame)
+		if (newFrame != readerUi.frame())
 			releaseBacklightControl();
-		if (newFrame == mHomeFrame) {
+		if (newFrame == homeUi.frame()) {
 			// update recent books
-			mHomeFrame.refreshRecentBooks();
+			homeUi.frame().refreshRecentBooks();
 			setLastLocationRoot();
 			newFrame.invalidate();
 		}
-		if (newFrame == mBrowserFrame) {
+		if (newFrame == browserUi.frame()) {
 			// update recent books directory
-			mBrowser.refreshDirectory(
-					mScanner.getRecentDir(), null);
+			FileBrowser browser = browserUi.browser();
+			Scanner scanner = serviceGraph.scanner();
+			if (browser != null && scanner != null)
+				browser.refreshDirectory(
+						scanner.getRecentDir(), null);
 		} else {
-			if (null != mBrowser)
-				mBrowser.stopCurrentScan();
+			FileBrowser browser = browserUi.browser();
+			if (browser != null)
+				browser.stopCurrentScan();
 		}
 		onUserActivity();
 	}
@@ -1400,8 +1480,8 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void stopTtsForDocumentChange() {
-		if (mReaderView != null)
-			mReaderView.stopTtsForDocumentChange();
+		if (readerUi.view() != null)
+			readerUi.view().stopTtsForDocumentChange();
 	}
 
 	private DocumentLoadLifecycle.Request replaceDocumentLoad() {
@@ -1410,8 +1490,8 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void cancelPendingDocumentLoad() {
-		if (mReaderView != null) {
-			mReaderView.cancelPendingDocumentLoad();
+		if (readerUi.view() != null) {
+			readerUi.view().cancelPendingDocumentLoad();
 			return;
 		}
 		stopTtsForDocumentChange();
@@ -1420,9 +1500,9 @@ public class CoolReader extends BaseActivity {
 
 	public void showRootWindow() {
 		cancelPendingDocumentLoad();
-		if (null != mBrowser)
-			mBrowser.stopCurrentScan();
-		setCurrentFrame(mHomeFrame);
+		if (null != browserUi.browser())
+			browserUi.browser().stopCurrentScan();
+		setCurrentFrame(homeUi.frame());
 		if (startupState.isInterfaceReady()) {
 			/*
 			  Commented until the appearance of free implementation of the binding to the Google Drive (R)
@@ -1441,6 +1521,17 @@ public class CoolReader extends BaseActivity {
 		}
 	}
 
+	/**
+	 * Pins the active service generation for async callbacks.
+	 * Null when the Activity is closed, the service graph is torn down, or a
+	 * race with destroy clears the lifecycle between checks.
+	 */
+	private ServiceLifecycle pinServiceLifecycle() {
+		if (activityLifecycle.isClosed() || !serviceGraph.isActive())
+			return null;
+		return serviceGraph.lifecycle();
+	}
+
 	private void runInReader(final Runnable task) {
 		runInReader(null, task);
 	}
@@ -1448,93 +1539,166 @@ public class CoolReader extends BaseActivity {
 	private void runInReader(
 			final DocumentLoadLifecycle.Request loadOwner,
 			final Runnable task) {
-		if (null != mBrowser)
-			mBrowser.stopCurrentScan();
+		if (null != browserUi.browser())
+			browserUi.browser().stopCurrentScan();
 		waitForCRDBService(() -> {
+			// Destroy generation: never construct ReaderView after the
+			// Activity/service graph is closed, and never leave an orphan
+			// when install rejects a closed owner.
+			if (activityLifecycle.isClosed()
+					|| !serviceGraph.isActive())
+				return;
 			if (loadOwner != null
 					&& !documentLoadLifecycle.isActive(loadOwner))
 				return;
-			if (mReaderFrame != null) {
+			if (readerUi.frame() != null) {
+				// Existing shell: task must still tolerate a null view
+				// if ownership closed between frame check and run.
+				if (readerUi.view() == null) {
+					log.w("runInReader: frame present but view null");
+					return;
+				}
 				task.run();
+				if (activityLifecycle.isClosed()
+						|| !serviceGraph.isActive())
+					return;
 				if (loadOwner != null
 						&& !documentLoadLifecycle.isActive(loadOwner))
 					return;
-				setCurrentFrame(mReaderFrame);
-				if (mReaderView != null && mReaderView.getSurface() != null) {
-					mReaderView.getSurface().setFocusable(true);
-					mReaderView.getSurface().setFocusableInTouchMode(true);
-					mReaderView.getSurface().requestFocus();
+				setCurrentFrame(readerUi.frame());
+				ReaderView liveView = readerUi.view();
+				if (liveView != null && liveView.getSurface() != null) {
+					liveView.getSurface().setFocusable(true);
+					liveView.getSurface().setFocusableInTouchMode(true);
+					liveView.getSurface().requestFocus();
 				} else {
-					log.w("runInReader: mReaderView or mReaderView.getSurface() is null");
+					log.w("runInReader: readerUi.view() or surface is null");
 				}
 			} else {
-				mReaderView = new ReaderView(
+				// Capture generation deps once; isActive() does not freeze
+				// accessors against concurrent serviceGraph.close().
+				Engine engine = serviceGraph.engine();
+				Scanner scanner = serviceGraph.scanner();
+				History history = serviceGraph.history();
+				CoverpageManager covers =
+						serviceGraph.coverpageManager();
+				GenresCollection genres =
+						serviceGraph.genresCollection();
+				DocumentFileCache cache =
+						serviceGraph.documentCache();
+				ServiceLifecycle lifecycle =
+						serviceGraph.lifecycle();
+				if (engine == null
+						|| scanner == null
+						|| history == null
+						|| covers == null
+						|| genres == null
+						|| cache == null
+						|| lifecycle == null)
+					return;
+				ReaderView createdReader = new ReaderView(
 						CoolReader.this,
-						mEngine,
-						mScanner,
-						mHistory,
-						mCoverpageManager,
-						mGenresCollection,
-						mDocumentCache,
+						engine,
+						scanner,
+						history,
+						covers,
+						genres,
+						cache,
 						documentLoadLifecycle,
-						mServiceLifecycle,
+						lifecycle,
 						settings());
-				mReaderFrame = new ReaderViewLayout(CoolReader.this, mReaderView);
-				mReaderFrame.getToolBar().setOnActionHandler(item -> {
-					if (mReaderView != null)
-						mReaderView.onAction(item);
-					return true;
-				});
+				ReaderViewLayout createdFrame =
+						new ReaderViewLayout(
+								CoolReader.this, createdReader);
+				if (!readerUi.install(createdReader, createdFrame)) {
+					// Owner closed or already published: tear down the
+					// unowned ReaderView (ctor already scheduled native
+					// create) instead of throwing.
+					createdReader.destroy();
+					return;
+				}
+				ReaderViewLayout installedFrame = readerUi.frame();
+				if (installedFrame != null) {
+					installedFrame.getToolBar().setOnActionHandler(item -> {
+						ReaderView v = readerUi.view();
+						if (v != null)
+							v.onAction(item);
+						return true;
+					});
+				}
 				task.run();
-				mReaderView.setBatteryStatus(initialBatteryStatus);
-				mReaderView.doEngineCommand(
+				ReaderView liveView = readerUi.view();
+				if (activityLifecycle.isClosed()
+						|| !serviceGraph.isActive()
+						|| liveView == null)
+					return;
+				liveView.setBatteryStatus(
+						initialBatteryStatus.get());
+				liveView.doEngineCommand(
 						ReaderCommand.DCMD_SET_ROTATION_INFO_FOR_AA,
 						screenRotation);
 				if (loadOwner != null
 						&& !documentLoadLifecycle.isActive(loadOwner))
 					return;
-				setCurrentFrame(mReaderFrame);
-				if (mReaderView.getSurface() != null) {
-					mReaderView.getSurface().setFocusable(true);
-					mReaderView.getSurface().setFocusableInTouchMode(true);
-					mReaderView.getSurface().requestFocus();
+				setCurrentFrame(readerUi.frame());
+				if (liveView.getSurface() != null) {
+					liveView.getSurface().setFocusable(true);
+					liveView.getSurface().setFocusableInTouchMode(true);
+					liveView.getSurface().requestFocus();
 				}
 			}
 		});
 	}
 
 	public boolean isBrowserCreated() {
-		return mBrowserFrame != null;
+		return browserUi.isPresent();
 	}
 
 	private void runInBrowser(final Runnable task) {
 		cancelPendingDocumentLoad();
 		waitForCRDBService(() -> {
-			if (mBrowserFrame == null) {
-				mBrowser = new FileBrowser(
+			if (activityLifecycle.isClosed()
+					|| !serviceGraph.isActive())
+				return;
+			if (!browserUi.isPresent()) {
+				Engine engine = serviceGraph.engine();
+				Scanner scanner = serviceGraph.scanner();
+				History history = serviceGraph.history();
+				CoverpageManager covers =
+						serviceGraph.coverpageManager();
+				ServiceLifecycle lifecycle =
+						serviceGraph.lifecycle();
+				FileSystemFolders folders =
+						serviceGraph.fileSystemFolders();
+				if (engine == null
+						|| scanner == null
+						|| history == null
+						|| covers == null
+						|| lifecycle == null
+						|| folders == null)
+					return;
+				FileBrowser createdBrowser = new FileBrowser(
 						CoolReader.this,
-						mEngine,
-						mScanner,
-						mHistory,
-						mCoverpageManager,
-						mServiceLifecycle,
-						mFileSystemFolders,
+						engine,
+						scanner,
+						history,
+						covers,
+						lifecycle,
+						folders,
 						settings().getBool(
 								PROP_APP_FILE_BROWSER_HIDE_EMPTY_GENRES,
 								false));
-				mBrowser.setCoverPagesEnabled(settings().getBool(ReaderView.PROP_APP_SHOW_COVERPAGES, true));
-				mBrowser.setCoverPageFontFace(settings().getProperty(ReaderView.PROP_FONT_FACE, DeviceInfo.DEF_FONT_FACE));
-				mBrowser.setCoverPageSizeOption(settings().getInt(ReaderView.PROP_APP_COVERPAGE_SIZE, 1));
-				mBrowser.setSortOrder(settings().getProperty(ReaderView.PROP_APP_BOOK_SORT_ORDER));
-				mBrowser.setSimpleViewMode(settings().getBool(ReaderView.PROP_APP_FILE_BROWSER_SIMPLE_MODE, false));
-				mBrowser.init();
+				createdBrowser.setCoverPagesEnabled(settings().getBool(ReaderView.PROP_APP_SHOW_COVERPAGES, true));
+				createdBrowser.setCoverPageFontFace(settings().getProperty(ReaderView.PROP_FONT_FACE, DeviceInfo.DEF_FONT_FACE));
+				createdBrowser.setCoverPageSizeOption(settings().getInt(ReaderView.PROP_APP_COVERPAGE_SIZE, 1));
+				createdBrowser.setSortOrder(settings().getProperty(ReaderView.PROP_APP_BOOK_SORT_ORDER));
+				createdBrowser.setSimpleViewMode(settings().getBool(ReaderView.PROP_APP_FILE_BROWSER_SIMPLE_MODE, false));
+				createdBrowser.init();
 
 				LayoutInflater inflater = LayoutInflater.from(CoolReader.this);// activity.getLayoutInflater();
 
-				mBrowserTitleBar = inflater.inflate(R.layout.browser_status_bar, null);
-				setBrowserTitle("Cool Reader browser window");
-
-				mBrowserToolBar = new CRToolBar(CoolReader.this, ReaderAction.createList(
+				View createdTitleBar = inflater.inflate(R.layout.browser_status_bar, null);
+				CRToolBar createdToolBar = new CRToolBar(CoolReader.this, ReaderAction.createList(
 						ReaderAction.FILE_BROWSER_UP,
 						ReaderAction.CURRENT_BOOK,
 						ReaderAction.OPTIONS,
@@ -1548,8 +1712,11 @@ public class CoolReader extends BaseActivity {
 						ReaderAction.SAVE_LOGCAT,
 						ReaderAction.EXIT
 				), false);
-				mBrowserToolBar.setBackgroundResource(R.drawable.ui_status_background_browser_dark);
-				mBrowserToolBar.setOnActionHandler(item -> {
+				createdToolBar.setBackgroundResource(R.drawable.ui_status_background_browser_dark);
+				createdToolBar.setOnActionHandler(item -> {
+					FileBrowser browser = browserUi.browser();
+					if (browser == null && !browserUi.isPresent())
+						browser = createdBrowser;
 					switch (item.cmd) {
 						case DCMD_EXIT:
 							//
@@ -1559,16 +1726,20 @@ public class CoolReader extends BaseActivity {
 							showRootWindow();
 							break;
 						case DCMD_FILE_BROWSER_UP:
-							mBrowser.showParentDirectory();
+							if (browser != null)
+								browser.showParentDirectory();
 							break;
 						case DCMD_OPDS_CATALOGS:
-							mBrowser.showOPDSRootDirectory();
+							if (browser != null)
+								browser.showOPDSRootDirectory();
 							break;
 						case DCMD_RECENT_BOOKS_LIST:
-							mBrowser.showRecentBooks();
+							if (browser != null)
+								browser.showRecentBooks();
 							break;
 						case DCMD_SEARCH:
-							mBrowser.showFindBookDialog();
+							if (browser != null)
+								browser.showFindBookDialog();
 							break;
 						case DCMD_CURRENT_BOOK:
 							showCurrentBook();
@@ -1577,10 +1748,12 @@ public class CoolReader extends BaseActivity {
 							showBrowserOptionsDialog();
 							break;
 						case DCMD_SCAN_DIRECTORY_RECURSIVE:
-							mBrowser.scanCurrentDirectoryRecursive();
+							if (browser != null)
+								browser.scanCurrentDirectoryRecursive();
 							break;
 						case DCMD_FILE_BROWSER_SORT_ORDER:
-							mBrowser.showSortOrderMenu();
+							if (browser != null)
+								browser.showSortOrderMenu();
 							break;
 						case DCMD_SAVE_LOGCAT:
 							createLogcatFile();
@@ -1591,13 +1764,32 @@ public class CoolReader extends BaseActivity {
 					}
 					return false;
 				});
-				mBrowserFrame = new BrowserViewLayout(CoolReader.this, mBrowser, mBrowserToolBar, mBrowserTitleBar);
+				BrowserViewLayout createdFrame = new BrowserViewLayout(
+						CoolReader.this,
+						createdBrowser,
+						createdToolBar,
+						createdTitleBar);
+				if (!browserUi.install(
+						createdBrowser,
+						createdTitleBar,
+						createdToolBar,
+						createdFrame)) {
+					// Owner closed or already published: close the unowned
+					// browser instead of leaking scan/UI state.
+					createdBrowser.onClose();
+					return;
+				}
+				setBrowserTitle("Cool Reader browser window");
 
 				//					if (getIntent() == null)
-//						mBrowser.showDirectory(mScanner.getDownloadDirectory(), null);
+//						browserUi.browser().showDirectory(serviceGraph.scanner().getDownloadDirectory(), null);
 			}
+			if (activityLifecycle.isClosed()
+					|| !serviceGraph.isActive()
+					|| !browserUi.isPresent())
+				return;
 			task.run();
-			setCurrentFrame(mBrowserFrame);
+			setCurrentFrame(browserUi.frame());
 		});
 
 	}
@@ -1615,7 +1807,12 @@ public class CoolReader extends BaseActivity {
 			return;
 		runInReader(
 				loadOwner,
-				() -> mReaderView.showManual(loadOwner));
+				() -> {
+					ReaderView view = readerUi.view();
+					if (view == null)
+						return;
+					view.showManual(loadOwner);
+				});
 	}
 
 	public static final String OPEN_FILE_PARAM = "FILE_TO_OPEN";
@@ -1640,7 +1837,13 @@ public class CoolReader extends BaseActivity {
 					loadOwner, source, doneCallback, errorCallback);
 			return;
 		}
-		runInReader(loadOwner, () -> mReaderView.loadDocument(
+		runInReader(loadOwner, () -> {
+			ReaderView view = readerUi.view();
+			if (view == null) {
+				runOpenError(errorCallback);
+				return;
+			}
+			view.loadDocument(
 				loadOwner, source, forceSync ? () -> {
 			if (null != doneCallback)
 				doneCallback.run();
@@ -1665,7 +1868,8 @@ public class CoolReader extends BaseActivity {
 				}
 			}
 			 */
-		} : doneCallback, errorCallback));
+		} : doneCallback, errorCallback);
+		});
 	}
 
 	public void loadDocumentFromUri(Uri uri, Runnable doneCallback, Runnable errorCallback) {
@@ -1687,6 +1891,11 @@ public class CoolReader extends BaseActivity {
 		runInReader(loadOwner, () -> {
 			if (!documentLoadLifecycle.isActive(loadOwner))
 				return;
+			ReaderView view = readerUi.view();
+			if (view == null) {
+				runOpenError(loadOwner, errorCallback);
+				return;
+			}
 			ContentResolver contentResolver = getContentResolver();
 			ParcelFileDescriptor pfd = null;
 			try {
@@ -1713,7 +1922,13 @@ public class CoolReader extends BaseActivity {
 					DocumentSource resolvedSource = source.withMetadata(
 							metadata.displayName, metadata.mimeType, statSize,
 							detectedFormat);
-					mReaderView.loadDocumentFromFileDescriptor(
+					// Re-check: view may have been closed while opening FD.
+					view = readerUi.view();
+					if (view == null) {
+						runOpenError(loadOwner, errorCallback);
+						return;
+					}
+					view.loadDocumentFromFileDescriptor(
 							loadOwner, pfd, resolvedSource,
 							doneCallback, errorCallback);
 					pfd = null; // ownership transferred to ReaderView
@@ -1794,7 +2009,10 @@ public class CoolReader extends BaseActivity {
 		try (InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
 			if (!documentLoadLifecycle.isActive(loadOwner))
 				return;
-			cachedBook = mDocumentCache.saveStream(
+			DocumentFileCache cache = serviceGraph.documentCache();
+			if (cache == null)
+				return;
+			cachedBook = cache.saveStream(
 					sourceInfo, inputStream, ParseBudget.MAX_DOCUMENT_INPUT_BYTES);
 			if (cachedBook != null
 					&& documentLoadLifecycle.isActive(loadOwner)) {
@@ -1843,13 +2061,14 @@ public class CoolReader extends BaseActivity {
 				runOpenError(loadOwner, errorCallback);
 				return;
 			}
-			if (mReaderView == null) {
+			ReaderView view = readerUi.view();
+			if (view == null) {
 				closeDescriptorQuietly(resultPfd);
 				runOpenError(loadOwner, errorCallback);
 				return;
 			}
 			try {
-				mReaderView.loadDocumentFromFileDescriptor(
+				view.loadDocumentFromFileDescriptor(
 						loadOwner, resultPfd, resultSource,
 						doneCallback, errorCallback);
 			} catch (RuntimeException e) {
@@ -1994,13 +2213,16 @@ public class CoolReader extends BaseActivity {
 	 * @param errorCallback
 	 */
 	public void loadPreviousDocument(Runnable errorCallback) {
-		BookInfo bi = mHistory.getPreviousBook();
+		History history = serviceGraph.history();
+		BookInfo bi =
+				history != null ? history.getPreviousBook() : null;
 		if (bi != null && bi.getFileInfo() != null) {
 			log.i("loadPreviousDocument() is called, prevBookName = " + bi.getFileInfo().getPathName());
 			loadDocument(bi.getFileInfo(), null, errorCallback, true);
 			return;
 		}
-		errorCallback.run();
+		if (errorCallback != null)
+			errorCallback.run();
 	}
 
 	public void showOpenedBook() {
@@ -2010,22 +2232,40 @@ public class CoolReader extends BaseActivity {
 	public static final String OPEN_DIR_PARAM = "DIR_TO_OPEN";
 
 	public void showBrowser(final FileInfo dir) {
-		runInBrowser(() -> mBrowser.showDirectory(dir, null));
+		runInBrowser(() -> {
+			FileBrowser browser = browserUi.browser();
+			if (browser != null)
+				browser.showDirectory(dir, null);
+		});
 	}
 
 	public void showBrowser(final String dir) {
-		runInBrowser(() -> mBrowser.showDirectory(
-				mScanner.pathToFileInfo(dir), null));
+		runInBrowser(() -> {
+			FileBrowser browser = browserUi.browser();
+			Scanner scanner = serviceGraph.scanner();
+			if (browser == null || scanner == null)
+				return;
+			browser.showDirectory(
+					scanner.pathToFileInfo(dir), null);
+		});
 	}
 
 	public void showRecentBooks() {
 		log.d("Activities.showRecentBooks() is called");
-		runInBrowser(() -> mBrowser.showRecentBooks());
+		runInBrowser(() -> {
+			FileBrowser browser = browserUi.browser();
+			if (browser != null)
+				browser.showRecentBooks();
+		});
 	}
 
 	public void showOnlineCatalogs() {
 		log.d("Activities.showOnlineCatalogs() is called");
-		runInBrowser(() -> mBrowser.showOPDSRootDirectory());
+		runInBrowser(() -> {
+			FileBrowser browser = browserUi.browser();
+			if (browser != null)
+				browser.showOPDSRootDirectory();
+		});
 	}
 
 	public void showDirectory(FileInfo path) {
@@ -2034,7 +2274,10 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public List<LibraryRootStore.Entry> getLibraryRoots() {
-		return mLibraryRootStore.getRoots();
+		LibraryRootStore store = libraryRootStore.get();
+		if (store == null)
+			return java.util.Collections.emptyList();
+		return store.getRoots();
 	}
 
 	public void addLibraryRoot() {
@@ -2046,7 +2289,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void selectLibraryRoot(Uri previousUri) {
-		if (!mServiceLifecycle.isActive())
+		if (!serviceGraph.isActive())
 			return;
 		String previousRoot =
 				previousUri != null
@@ -2077,7 +2320,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void openLibraryRoot(LibraryRootStore.Entry root) {
-		if (root == null || !mServiceLifecycle.isActive())
+		if (root == null || !serviceGraph.isActive())
 			return;
 		if (!root.isAccessGranted()) {
 			reselectLibraryRoot(root);
@@ -2128,7 +2371,12 @@ public class CoolReader extends BaseActivity {
 						askConfirmation(
 								getString(R.string.library_root_remove_confirm),
 								() -> {
-									mLibraryRootStore.remove(root.getUri());
+									// Store is permanently null after destroy close.
+									LibraryRootStore store =
+											libraryRootStore.get();
+									if (store == null)
+										return;
+									store.remove(root.getUri());
 									refreshLibraryRoots();
 								});
 					}
@@ -2137,24 +2385,28 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void refreshLibraryRoots() {
-		if (mHomeFrame != null)
-			mHomeFrame.refreshFileSystemFolders();
+		if (homeUi.frame() != null)
+			homeUi.frame().refreshFileSystemFolders();
 	}
 
 	public void showCatalog(final FileInfo path) {
 		log.d("Activities.showCatalog(" + path + ") is called");
-		runInBrowser(() -> mBrowser.showDirectory(path, null));
+		runInBrowser(() -> {
+			FileBrowser browser = browserUi.browser();
+			if (browser != null)
+				browser.showDirectory(path, null);
+		});
 	}
 
 
 	public void setBrowserTitle(String title) {
-		if (mBrowserFrame != null)
-			mBrowserFrame.setBrowserTitle(title);
+		if (browserUi.frame() != null)
+			browserUi.frame().setBrowserTitle(title);
 	}
 
 	public void setBrowserProgressStatus(boolean enable) {
-		if (mBrowserFrame != null)
-			mBrowserFrame.setBrowserProgressStatus(enable);
+		if (browserUi.frame() != null)
+			browserUi.frame().setBrowserProgressStatus(enable);
 	}
 
 
@@ -2175,7 +2427,9 @@ public class CoolReader extends BaseActivity {
 	private void findInDictionaryInternal(String s) {
 		log.d("lookup in dictionary: " + s);
 		try {
-			mDictionaries.findInDictionary(s);
+			Dictionaries dictionaries = getDictionaries();
+			if (dictionaries != null)
+				dictionaries.findInDictionary(s);
 		} catch (DictionaryException e) {
 			showToast(e.getMessage());
 		}
@@ -2188,7 +2442,7 @@ public class CoolReader extends BaseActivity {
 	private void scheduleDictionaryLookup(
 			String query,
 			long delayMillis) {
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = serviceGraph.lifecycle();
 		if (activityLifecycle.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive()) {
@@ -2224,7 +2478,7 @@ public class CoolReader extends BaseActivity {
 			log.w("Ignoring library root result without an owner");
 			return;
 		}
-		if (!mServiceLifecycle.isActive())
+		if (!serviceGraph.isActive())
 			return;
 		if (resultCode == Activity.RESULT_OK && intent != null) {
 			Uri selectedUri = intent.getData();
@@ -2236,8 +2490,11 @@ public class CoolReader extends BaseActivity {
 							: null;
 			boolean persisted = persistReadPermission(
 					selectedUri, intent.getFlags());
-			if (persisted && mLibraryRootStore.addOrReplace(
-					previousUri, selectedUri)) {
+			LibraryRootStore store = libraryRootStore.get();
+			if (persisted
+					&& store != null
+					&& store.addOrReplace(
+							previousUri, selectedUri)) {
 				showToast(R.string.library_root_selected);
 			} else {
 				showToast(R.string.library_root_grant_failed);
@@ -2254,7 +2511,7 @@ public class CoolReader extends BaseActivity {
 			log.w("Ignoring library document result without an owner");
 			return;
 		}
-		if (!mServiceLifecycle.isActive())
+		if (!serviceGraph.isActive())
 			return;
 		if (resultCode == Activity.RESULT_OK
 				&& intent != null && intent.getData() != null) {
@@ -2272,7 +2529,7 @@ public class CoolReader extends BaseActivity {
 			log.w("Ignoring document tree result without an owner");
 			return;
 		}
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = serviceGraph.lifecycle();
 		if (activityLifecycle.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive())
@@ -2306,7 +2563,7 @@ public class CoolReader extends BaseActivity {
 	}
 
 	private void refreshFolderDeletionParent(FileInfo target) {
-		if (!mServiceLifecycle.isActive())
+		if (!serviceGraph.isActive())
 			return;
 		DeletionSnapshot<FileInfo> deletion =
 				captureDeletion(target);
@@ -2314,7 +2571,7 @@ public class CoolReader extends BaseActivity {
 				deletion != null
 						? deletion.getParent()
 						: null;
-		if (parent != null && mServiceLifecycle.isActive())
+		if (parent != null && serviceGraph.isActive())
 			directoryUpdated(parent, null);
 	}
 
@@ -2331,7 +2588,7 @@ public class CoolReader extends BaseActivity {
 			DocumentTreeRequestState.Command command,
 			FileInfo argument,
 			int attempt) {
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = serviceGraph.lifecycle();
 		if (activityLifecycle.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive())
@@ -2392,7 +2649,7 @@ public class CoolReader extends BaseActivity {
 				: null;
 		if (documentUri == null) {
 			postFolderDeletionFailure(
-					mServiceLifecycle,
+					serviceGraph.lifecycle(),
 					deletion,
 					new ArrayList<>(),
 					pickerAttempt);
@@ -2405,7 +2662,7 @@ public class CoolReader extends BaseActivity {
 					pickerAttempt);
 		} else {
 			postFolderDeletionFailure(
-					mServiceLifecycle,
+					serviceGraph.lifecycle(),
 					deletion,
 					new ArrayList<>(),
 					pickerAttempt);
@@ -2446,23 +2703,30 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void setDict(String id) {
-		mDictionaries.setDict(id);
+		Dictionaries dictionaries = getDictionaries();
+		if (dictionaries != null)
+			dictionaries.setDict(id);
 	}
 
 	public void setDict2(String id) {
-		mDictionaries.setDict2(id);
+		Dictionaries dictionaries = getDictionaries();
+		if (dictionaries != null)
+			dictionaries.setDict2(id);
 	}
 
 	public void setToolbarAppearance(String id) {
-		mOptionAppearance = id;
+		toolbarAppearance.set(id);
 	}
 
 	public String getToolbarAppearance() {
-		return mOptionAppearance;
+		return toolbarAppearance.get();
 	}
 
 	public void showAboutDialog() {
-		AboutDialog dlg = new AboutDialog(this, mEngine);
+		Engine engine = serviceGraph.engine();
+		if (engine == null)
+			return;
+		AboutDialog dlg = new AboutDialog(this, engine);
 		dlg.show();
 	}
 
@@ -2474,7 +2738,7 @@ public class CoolReader extends BaseActivity {
 	public void initTTS(
 			TTSControlServiceAccessor.Callback callback,
 			Runnable failureCallback) {
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = serviceGraph.lifecycle();
 		if (activityLifecycle.isClosed()
 				|| lifecycle == null
 				|| !lifecycle.isActive()) {
@@ -2482,11 +2746,15 @@ public class CoolReader extends BaseActivity {
 			return;
 		}
 		showToast("Initializing TTS");
-		if (null == ttsControlServiceAccessor)
-			ttsControlServiceAccessor = new TTSControlServiceAccessor(this);
 		final TTSControlServiceAccessor accessor =
-				ttsControlServiceAccessor;
-		final String requestedEngine = ttsEnginePackage;
+				ttsServiceConnection.ensureAccessor(
+						() -> new TTSControlServiceAccessor(this));
+		if (accessor == null) {
+			postRejectedTtsInitialization(failureCallback);
+			return;
+		}
+		final String requestedEngine =
+				ttsServiceConnection.getEnginePackage();
 		Runnable successCallback =
 				callback != null
 						? () -> callback.run(accessor)
@@ -2589,7 +2857,7 @@ public class CoolReader extends BaseActivity {
 						+ "\" init failure");
 				if (Objects.equals(
 						requestedEngine,
-						ttsEnginePackage)) {
+						ttsServiceConnection.getEnginePackage())) {
 					showToast(
 							R.string.tts_init_failure,
 							requestedEngine);
@@ -2597,10 +2865,10 @@ public class CoolReader extends BaseActivity {
 							PROP_APP_TTS_ENGINE,
 							"",
 							false);
-					ttsEnginePackage = "";
+					ttsServiceConnection.setEnginePackage("");
 					TTSToolbarDlg toolbar =
-							mReaderView != null
-									? mReaderView
+							readerUi.view() != null
+									? readerUi.view()
 											.getTTSToolbar()
 									: null;
 					if (toolbar != null)
@@ -2671,14 +2939,16 @@ public class CoolReader extends BaseActivity {
 	public void showOptionsDialog(final OptionsDialog.Mode mode) {
 		if (mode == OptionsDialog.Mode.READER) {
 			optionsDialogRequests.cancel();
-			if (mReaderView != null)
-				mReaderView.showOptionsDialog();
+			if (readerUi.view() != null)
+				readerUi.view().showOptionsDialog();
 			return;
 		}
-		if (mode == null || !mServiceLifecycle.isActive())
+		if (mode == null)
 			return;
-		ServiceLifecycle lifecycle = mServiceLifecycle;
-		Engine engine = mEngine;
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		Engine engine = serviceGraph.engine();
+		if (lifecycle == null || engine == null)
+			return;
 		OptionsDialogRequestSession.Request<OptionsDialog.Mode>
 				request = optionsDialogRequests.replace(mode);
 		if (request == null)
@@ -2708,20 +2978,25 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void updateCurrentPositionStatus(FileInfo book, Bookmark position, PositionProperties props) {
-		mReaderFrame.getStatusBar().updateCurrentPositionStatus(book, position, props);
+		// After closeForDestroy, frame() is always null — never NPE on teardown.
+		ReaderViewLayout frame = readerUi.frame();
+		if (frame == null)
+			return;
+		frame.getStatusBar().updateCurrentPositionStatus(
+				book, position, props);
 	}
 
 
 	@Override
 	protected void setDimmingAlpha(int dimmingAlpha) {
-		if (mReaderView != null)
-			mReaderView.setDimmingAlpha(dimmingAlpha);
+		if (readerUi.view() != null)
+			readerUi.view().setDimmingAlpha(dimmingAlpha);
 	}
 
 	public void showReaderMenu() {
 		//
-		if (mReaderFrame != null) {
-			mReaderFrame.showMenu();
+		if (readerUi.frame() != null) {
+			readerUi.frame().showMenu();
 		}
 	}
 
@@ -2735,8 +3010,8 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showBookmarksDialog() {
-		if (mReaderView != null)
-			mReaderView.showBookmarksDialog();
+		if (readerUi.view() != null)
+			readerUi.view().showBookmarksDialog();
 	}
 
 	public void openURL(String url) {
@@ -2753,15 +3028,15 @@ public class CoolReader extends BaseActivity {
 
 
 	public boolean isBookOpened() {
-		if (mReaderView == null)
+		if (readerUi.view() == null)
 			return false;
-		return mReaderView.isBookLoaded();
+		return readerUi.view().isBookLoaded();
 	}
 
 	public void closeBookIfOpened(FileInfo book) {
-		if (mReaderView == null)
+		if (readerUi.view() == null)
 			return;
-		mReaderView.closeIfOpened(book);
+		readerUi.view().closeIfOpened(book);
 	}
 
 	public void askDeleteBook(final FileInfo item) {
@@ -2770,12 +3045,15 @@ public class CoolReader extends BaseActivity {
 		if (requested == null)
 			return;
 		askConfirmation(R.string.win_title_confirm_book_delete, () -> {
-			if (!mServiceLifecycle.isActive())
+			if (!serviceGraph.isActive())
 				return;
 			FileInfo requestedTarget = requested.getTarget();
 			closeBookIfOpened(requestedTarget);
+			Scanner scanner = serviceGraph.scanner();
 			FileInfo file =
-					mScanner.findFileInTree(requestedTarget);
+					scanner != null
+							? scanner.findFileInTree(requestedTarget)
+							: null;
 			if (file == null)
 				file = requestedTarget;
 			DeletionSnapshot<FileInfo> deletion =
@@ -2820,18 +3098,21 @@ public class CoolReader extends BaseActivity {
 
 	private void finishDeletedBook(
 			DeletionSnapshot<FileInfo> deletion) {
-		if (deletion == null || !mServiceLifecycle.isActive())
+		if (deletion == null)
 			return;
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		if (lifecycle == null)
+			return;
 		FileInfo target = deletion.getTarget();
 		FileInfo parent = deletion.getParent();
 		waitForCRDBService(() -> {
 			if (!lifecycle.isActive())
 				return;
 			CRDBService.LocalBinder db = getDB();
-			if (db == null)
+			History history = serviceGraph.history();
+			if (db == null || history == null)
 				return;
-			mHistory.removeBookInfo(
+			history.removeBookInfo(
 					db,
 					target,
 					true,
@@ -2847,24 +3128,27 @@ public class CoolReader extends BaseActivity {
 
 	private void removeRecentBook(
 			DeletionSnapshot<FileInfo> deletion) {
-		if (deletion == null || !mServiceLifecycle.isActive())
+		if (deletion == null)
 			return;
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		if (lifecycle == null)
+			return;
 		FileInfo target = deletion.getTarget();
 		waitForCRDBService(() -> {
 			if (!lifecycle.isActive())
 				return;
 			CRDBService.LocalBinder db = getDB();
-			if (db == null)
+			History history = serviceGraph.history();
+			Scanner scanner = serviceGraph.scanner();
+			if (db == null || history == null || scanner == null)
 				return;
-			mHistory.removeBookInfo(
+			history.removeBookInfo(
 					db,
 					target,
 					true,
 					false);
 			if (lifecycle.isActive())
-				directoryUpdated(
-						mScanner.createRecentRoot());
+				directoryUpdated(scanner.createRecentRoot());
 		});
 	}
 
@@ -2890,7 +3174,9 @@ public class CoolReader extends BaseActivity {
 				|| item.id == null)
 			return;
 		Long catalogId = item.id;
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		if (lifecycle == null)
+			return;
 		askConfirmation(R.string.win_title_confirm_catalog_delete, () -> {
 			if (!lifecycle.isActive())
 				return;
@@ -2898,12 +3184,12 @@ public class CoolReader extends BaseActivity {
 				if (!lifecycle.isActive())
 					return;
 				CRDBService.LocalBinder db = getDB();
-				if (db == null)
+				Scanner scanner = serviceGraph.scanner();
+				if (db == null || scanner == null)
 					return;
 				db.removeOPDSCatalog(catalogId);
 				if (lifecycle.isActive())
-					directoryUpdated(
-							mScanner.createOPDSRoot());
+					directoryUpdated(scanner.createOPDSRoot());
 			});
 		});
 	}
@@ -2917,7 +3203,9 @@ public class CoolReader extends BaseActivity {
 						: null;
 		if (!isDeletableFolder(requestedTarget))
 			return;
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		if (lifecycle == null)
+			return;
 		askConfirmation(R.string.win_title_confirm_folder_delete, () -> {
 			if (lifecycle.isActive())
 				deleteFolder(requested, 0);
@@ -2927,11 +3215,11 @@ public class CoolReader extends BaseActivity {
 	private void deleteFolder(
 			DeletionSnapshot<FileInfo> deletion,
 			int pickerAttempt) {
-		if (deletion == null
-				|| pickerAttempt < 0
-				|| !mServiceLifecycle.isActive())
+		if (deletion == null || pickerAttempt < 0)
 			return;
-		ServiceLifecycle lifecycle = mServiceLifecycle;
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		if (lifecycle == null)
+			return;
 		if (pickerAttempt > MAX_FOLDER_DELETE_PICKER_ATTEMPTS) {
 			postFolderDeletionFailure(
 					lifecycle,
@@ -2943,7 +3231,9 @@ public class CoolReader extends BaseActivity {
 		FileInfo target = deletion.getTarget();
 		if (!isDeletableFolder(target))
 			return;
-		Scanner scanner = mScanner;
+		Scanner scanner = serviceGraph.scanner();
+		if (scanner == null)
+			return;
 		Context appContext = getApplicationContext();
 		Uri knownSdCardUri =
 				Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
@@ -3062,17 +3352,20 @@ public class CoolReader extends BaseActivity {
 			ServiceLifecycle lifecycle,
 			List<FileInfo> deletedBooks,
 			FileInfo parent) {
-		if (!lifecycle.isActive())
+		if (lifecycle == null || !lifecycle.isActive())
 			return;
 		if (!deletedBooks.isEmpty()) {
 			waitForCRDBService(() -> {
+				// Lifecycle can still be active after serviceGraph.close()
+				// until stopServices(); graph accessors may already be null.
 				if (!lifecycle.isActive())
 					return;
 				CRDBService.LocalBinder db = getDB();
-				if (db == null)
+				History history = serviceGraph.history();
+				if (db == null || history == null)
 					return;
 				for (FileInfo book : deletedBooks) {
-					mHistory.removeBookInfo(
+					history.removeBookInfo(
 							db,
 							book,
 							true,
@@ -3112,11 +3405,14 @@ public class CoolReader extends BaseActivity {
 						"'cr3-'yyyy-MM-dd_HH_mm_ss'.log'",
 						Locale.US)
 						.format(new Date());
-		FileInfo dir = mScanner.getSharedDownloadDirectory();
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		Scanner scanner = serviceGraph.scanner();
+		if (lifecycle == null || scanner == null)
+			return;
+		FileInfo dir = scanner.getSharedDownloadDirectory();
 		if (dir == null) {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 				log.d("logcat: no access to download directory, opening document tree...");
-				ServiceLifecycle lifecycle = mServiceLifecycle;
 				askConfirmation(R.string.confirmation_select_folder_for_log, () -> {
 					if (lifecycle.isActive()) {
 						FileInfo target = new FileInfo();
@@ -3146,8 +3442,8 @@ public class CoolReader extends BaseActivity {
 	private void startLogcatExport(
 			String displayName,
 			LogcatOutputFactory outputFactory) {
-		ServiceLifecycle lifecycle = mServiceLifecycle;
-		if (!lifecycle.isActive())
+		ServiceLifecycle lifecycle = pinServiceLifecycle();
+		if (lifecycle == null)
 			return;
 		if (displayName == null
 				|| displayName.isEmpty()
@@ -3228,8 +3524,8 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void saveSetting(String name, String value) {
-		if (mReaderView != null)
-			mReaderView.saveSetting(name, value);
+		if (readerUi.view() != null)
+			readerUi.view().saveSetting(name, value);
 	}
 
 	public void editBookInfo(final FileInfo currDirectory, final FileInfo item) {
@@ -3238,19 +3534,29 @@ public class CoolReader extends BaseActivity {
 		if (owner == null)
 			return;
 		waitForCRDBService(() -> {
-			if (!mServiceLifecycle.isActive()
+			if (!serviceGraph.isActive()
 					|| activityLifecycle.isClosed()
 					|| !bookInfoDialogRequests.isActive(owner))
 				return;
 			CRDBService.LocalBinder db = getDB();
-			if (db == null) {
+			History history = serviceGraph.history();
+			if (db == null || history == null) {
 				bookInfoDialogRequests.complete(owner);
 				return;
 			}
-			mHistory.getOrCreateBookInfo(db, item, bookInfo -> {
-				if (!mServiceLifecycle.isActive()
+			history.getOrCreateBookInfo(db, item, bookInfo -> {
+				if (!serviceGraph.isActive()
 						|| activityLifecycle.isClosed()
 						|| !bookInfoDialogRequests.complete(owner))
+					return;
+				CoverpageManager covers =
+						serviceGraph.coverpageManager();
+				GenresCollection genres =
+						serviceGraph.genresCollection();
+				History liveHistory = serviceGraph.history();
+				if (covers == null
+						|| genres == null
+						|| liveHistory == null)
 					return;
 				BookInfo dialogBook =
 						bookInfo != null
@@ -3259,9 +3565,9 @@ public class CoolReader extends BaseActivity {
 				BookInfoEditDialog dlg =
 						new BookInfoEditDialog(
 								CoolReader.this,
-								mCoverpageManager,
-								mGenresCollection,
-								mHistory,
+								covers,
+								genres,
+								liveHistory,
 								currDirectory,
 								dialogBook,
 								currDirectory.isRecentDir());
@@ -3278,7 +3584,10 @@ public class CoolReader extends BaseActivity {
 			opds.filename = "New Catalog";
 			opds.isListed = true;
 			opds.isScanned = true;
-			opds.parent = mScanner.getOPDSRoot();
+			Scanner scanner = serviceGraph.scanner();
+			if (scanner == null)
+				return;
+			opds.parent = scanner.getOPDSRoot();
 		}
 		OPDSCatalogEditDialog dlg = new OPDSCatalogEditDialog(CoolReader.this, opds,
 				() -> refreshOPDSRootDirectory(true));
@@ -3286,21 +3595,23 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void refreshOPDSRootDirectory(boolean showInBrowser) {
-		if (mBrowser != null)
-			mBrowser.refreshOPDSRootDirectory(showInBrowser);
-		if (mHomeFrame != null)
-			mHomeFrame.refreshOnlineCatalogs();
+		if (browserUi.browser() != null)
+			browserUi.browser().refreshOPDSRootDirectory(showInBrowser);
+		if (homeUi.frame() != null)
+			homeUi.frame().refreshOnlineCatalogs();
 	}
 
 
-	private SharedPreferences mPreferences;
 	private final static String BOOK_LOCATION_PREFIX = "@book:";
 	private final static String DIRECTORY_LOCATION_PREFIX = "@dir:";
 
 	private SharedPreferences getPrefs() {
-		if (mPreferences == null)
-			mPreferences = getSharedPreferences(PREF_FILE, 0);
-		return mPreferences;
+		SharedPreferences prefs = preferencesState.ensure(
+				() -> getSharedPreferences(PREF_FILE, 0));
+		if (prefs == null)
+			throw new IllegalStateException(
+					"Activity preferences closed");
+		return prefs;
 	}
 
 	public void setLastBook(String path) {
@@ -3518,7 +3829,10 @@ public class CoolReader extends BaseActivity {
 	}
 
 	public void showCurrentBook() {
-		BookInfo bi = mHistory.getLastBook();
+		History history = serviceGraph.history();
+		if (history == null)
+			return;
+		BookInfo bi = history.getLastBook();
 		if (bi != null)
 			loadDocument(bi.getFileInfo(), false);
 	}

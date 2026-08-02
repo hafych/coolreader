@@ -331,17 +331,15 @@ public:
 };
 
 CR3OptionsDialog::CR3OptionsDialog(CRPropRef props)
-: _notebook(NULL), _opt_window(NULL), _oldprops(props)
+: _opt_window(NULL), _oldprops(props)
 {
     _props = _oldprops->clone();
 }
 
 CR3OptionsDialog::~CR3OptionsDialog()
 {
-    if ( _notebook ) {
-        delete _notebook;
-        _notebook = NULL;
-    }
+    // Exclusive owner of the notebook window graph for this dialog.
+    _notebook.reset();
 }
 
 void CR3OptionsDialog::PropsToControls()
@@ -367,12 +365,12 @@ bool CR3OptionsDialog::Create( wxWindow* parent, wxWindowID id )
         wxRESIZE_BORDER|wxCLOSE_BOX|wxCAPTION, wxString(wxT("dialogBox")));
     if ( res ) {
 
-        _notebook = new wxTreebook( this, ID_OPTIONS_TREEBOOK );
+        _notebook.reset(new wxTreebook( this, ID_OPTIONS_TREEBOOK ));
         _notebook->Hide();
         wxSizer * btnSizer = CreateButtonSizer( wxOK | wxCANCEL );
         wxBoxSizer * sizer = new wxBoxSizer( wxVERTICAL );
         sizer->Add(
-            _notebook,
+            _notebook.get(),
             1,            // make vertically stretchable
             wxEXPAND |    // make horizontally stretchable
             wxALL,        //   and make border all around
@@ -384,17 +382,26 @@ bool CR3OptionsDialog::Create( wxWindow* parent, wxWindowID id )
             wxALIGN_CENTER | wxALL,
             4); // no border and centre horizontally
 
-        _opt_window = new OptPanelWindow( _notebook );
-        _notebook->InsertPage(0, _opt_window, wxT("Window") );
+        // Stage each page exclusively until the treebook adopts it.
+        std::unique_ptr<OptPanelWindow> windowPage =
+                std::make_unique<OptPanelWindow>(_notebook.get());
+        _opt_window = windowPage.get();
+        _notebook->InsertPage(0, windowPage.release(), wxT("Window"));
 
-        _opt_view = new OptPanelView( _notebook );
-        _notebook->InsertPage(1, _opt_view, wxT("View") );
+        std::unique_ptr<OptPanelView> viewPage =
+                std::make_unique<OptPanelView>(_notebook.get());
+        _opt_view = viewPage.get();
+        _notebook->InsertPage(1, viewPage.release(), wxT("View"));
 
-        _opt_page = new OptPanelPageHeader( _notebook );
-        _notebook->InsertPage(2, _opt_page, wxT("Page header") );
+        std::unique_ptr<OptPanelPageHeader> pageHeader =
+                std::make_unique<OptPanelPageHeader>(_notebook.get());
+        _opt_page = pageHeader.get();
+        _notebook->InsertPage(2, pageHeader.release(), wxT("Page header"));
 
-        _opt_app = new OptPanelApp( _notebook );
-        _notebook->InsertPage(3, _opt_app, wxT("Application") );
+        std::unique_ptr<OptPanelApp> appPage =
+                std::make_unique<OptPanelApp>(_notebook.get());
+        _opt_app = appPage.get();
+        _notebook->InsertPage(3, appPage.release(), wxT("Application"));
 
         SetSizer( sizer );
         PropsToControls();

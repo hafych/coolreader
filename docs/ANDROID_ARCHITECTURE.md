@@ -6,10 +6,36 @@ in progress.
 
 ## Activity service graph
 
-`BaseActivity` owns one `Services` instance. Starting that instance creates an
-immutable `ServiceDependencies` snapshot containing the Engine, Scanner,
-History, cover manager, filesystem folders, genre collection, document cache
-and one `ServiceLifecycle`.
+`BaseActivity` owns one `Services` instance. Starting that instance builds the
+Engine, Scanner, History, cover manager, filesystem folders, genre collection,
+document cache and one `ServiceLifecycle` under `ServicesGraphState` (atomic
+install; stop permanently closes and returns a teardown snapshot). The
+immutable `ServiceDependencies` view of that graph is held by
+`BaseServiceDependenciesState`: one-shot install, get while open, and permanent
+close on `stopServices` so late work cannot observe a torn-down generation
+through a parallel raw field. History owns its recent-books list in
+`HistoryBooksState`; Engine owns progress-dialog identity in
+`EngineProgressDialogState` and key-backlight level in
+`EngineKeyBacklightState`. FileSystemFolders favorites belong to
+`FavoriteFoldersState`; Scanner dir-scan/hide-empty policy to
+`ScannerScanOptionsState`; CoverpageManager render size/font to
+`CoverpageRenderOptions` and ready-listener registration to
+`CoverpageListenerRegistry`; check/scan/ready work queues and exact GUI
+task tokens to `CoverpageWorkState` / `CoverpageImageQueue`. Scanner owns its
+virtual root in `ScannerRootState` and scan-session finish flags in
+`MetadataScanSessionState`. FileInfo child files/dirs live in
+`FileInfoChildren`; BookInfo non-last-position bookmarks in
+`BookInfoBookmarksState`. List adapters use `DataSetObserverRegistry`;
+OptionsDialog list rows use `OptionsListState`; DB service thread
+queue/handler use `ServiceThreadState`; FileInfo MRU cache uses
+`FileInfoCacheState`. TTS bind registration lives in
+`TtsBindingSessionState`; SyncService bind flags in
+`SyncServiceBindingState`; OnlineStore book/author lists in
+`OnlineStoreItemListState`; OPDS feed entries in `OpdsEntryListState`.
+
+The CRDB service accessor is owned by `CrdbServiceConnectionState` with the same
+lazy-ensure and permanent-close pattern as the TTS accessor. Destroy unbinds
+only the closed-out accessor; ensure after close returns null.
 
 Components receive either the snapshot or the specific dependency they need.
 They must not resolve Activity-owned services through static fields or a global
@@ -22,11 +48,28 @@ cannot clear or stop a graph owned by a newer Activity.
 
 Activity UI helpers follow the same rule. For example, each `BaseActivity` owns
 its custom E-Ink toast queue, main-thread handler and popup window, then cancels
-and dismisses them during `onDestroy`. Diagnostic heap snapshots are created
-per invocation rather than being shared by every Activity generation, and
-unused formatter objects are not retained at process scope. Preference names
-and debug switches are immutable constants; the system-locale snapshot belongs
-to one Activity generation and is resolved through the pure
+and dismisses them during `onDestroy`. Interface theme and themed action icons
+belong to synchronized `InterfaceThemeState`; start/pause visibility to
+`ActivityRunState`; settings profile number to `ActivityProfileState`;
+E-Ink controller to `EinkScreenOwner`; notice-dialog exclusivity to
+`NoticeDialogState`; night mode to `NightModeState`; dictionary helper to
+`DictionariesOwner` (exposed only via `getDictionaries()`); fullscreen to
+`FullscreenState`; requested orientation to `ScreenOrientationState`; density/
+diagonal/font bounds to `DisplayMetricsState`; cold/warm brightness to
+`ScreenBrightnessState`; key backlight to `KeyBacklightState`; E-Ink update
+mode/interval to `EinkUpdateState`; system-UI visibility cache to
+`SystemUiVisibilityState`; UI language to `ActivityLanguageState`; sensor
+orientation to `SensorOrientationState`; hardware-menu-key detection cache to
+`HardwareMenuKeyState`; content/decor views to `ContentViewState`; screen
+backlight wake duration to `ScreenBacklightDurationState`; package version to
+`ActivityVersionState`; wake-lock session fields to
+`ScreenBacklightSessionState`; settings Properties to
+`SettingsPropertiesState` (clone-on-publish; `settings()` returns a defensive
+copy). Destroy closes those owners permanently. Diagnostic heap snapshots are
+created per invocation rather than being shared by every Activity generation,
+and unused formatter objects are not retained at process scope. Preference
+names and debug switches are immutable constants; the system-locale snapshot
+belongs to one Activity generation and is resolved through the pure
 `AppLocaleSelection` value instead of being captured at process scope.
 
 ## Process-scoped infrastructure
@@ -236,6 +279,65 @@ the new metadata is published, and the serialized native boundary closes any
 document left by a parse that became stale mid-flight. Only the current token
 may publish reader UI, run failure recovery, or replace the stream book with a
 late database/cache result.
+The published reader book identity and opened flag belong to one synchronized
+`ReaderOpenedBookState`. Load may bind a pending book before native open
+succeeds; successful publication sets both identity and opened together. Stream
+reconciliation rebinds only the book while leaving the session opened. Close
+clears the opened flag and keeps the last identity; load failure clears only
+the exact pending/published book. Reader destruction permanently closes the
+owner so a late bind or publish cannot resurrect a destroyed reader.
+The two page-cache slots also belong to one synchronized
+`ReaderPageCacheState`. Current and next candidates publish through that owner,
+promotion of a ready next page into the current slot is identity-exact, and
+invalidation or serialized document close detaches both slots together.
+`ReaderPageBitmapLifetime` still defers recycle while a Canvas read is active;
+the cache owner only decides which identities occupy the slots. Reader
+destruction closes the cache permanently so a late publish cannot install a
+page into a destroyed reader.
+Battery status publication belongs to `ReaderBatteryState`. Broadcasts install
+one complete immutable `BatteryStatus` snapshot; equal updates are no-ops, and
+only a real change may trigger redraw or native apply. Reader destruction
+closes the owner so a late battery broadcast cannot publish into a torn-down
+reader. The temporary touch-screen lock is a synchronized
+`TouchScreenLockState`: command toggle and touch delivery share one enabled
+flag, and destruction permanently disables touch so late motion events are
+swallowed.
+External document opens from VIEW intents own their pending
+`DocumentSource` in Activity-scoped `ExternalDocumentState`. Intent
+processing clears or binds that identity before load, resume reads a stable
+snapshot for logging and future sync gating, and Activity destruction closes
+the owner permanently. Toolbar appearance id likewise belongs to
+`ToolbarAppearanceState` so settings apply and UI queries share one
+synchronized value through Activity teardown.
+The TTS service accessor and selected engine package belong to one
+`TtsServiceConnectionState`. Initialization lazily creates the accessor while
+the Activity is open, settings and timeout paths update the engine package
+through the same owner, and destruction closes it and unbinds the returned
+accessor. Battery broadcasts publish into `InitialBatteryStatusState` when
+the reader is not yet created; reader setup applies one stable snapshot, and
+Activity destruction closes that owner too.
+Native `DocView` identity belongs to `ReaderNativeLifecycle`. Construction
+attaches the exclusive instance before background create; readers access it
+only through the lifecycle while destroy has not taken it; close rejects new
+work, and claimDestroy plus takeDoc transfer the instance for native
+teardown so a late path cannot destroy a replacement or resurrect a
+torn-down document.
+SAF library roots belong to Activity-owned `LibraryRootStoreState`. onCreate
+installs the store once; queries and mutations go through the owner with
+null-safe access after teardown; destroy closes the owner permanently.
+CoolReader no longer keeps parallel service dependency fields. One
+`ActivityServiceGraph` installs the immutable `ServiceDependencies` snapshot
+once and exposes engine, scanner, history, cover manager, document cache,
+filesystem folders, genres and lifecycle. Destroy closes the graph after
+reader teardown so late callbacks cannot observe a half-cleared generation.
+The reader surface pair belongs to `ReaderUiOwner`. Creation installs a fully
+built `ReaderView` and `ReaderViewLayout` together; UI and document paths
+access them through the owner; destroy closes the owner after requesting
+reader teardown so late work cannot resurrect a destroyed reader.
+Home and file-browser shells follow the same rule. `HomeUiOwner` installs the
+`CRRootView` once; `BrowserUiOwner` installs the browser, chrome and frame as
+one quartet. Destroy closes both owners and runs `onClose` on the returned
+views so late theme/frame work cannot revive torn-down UI.
 
 Operations against the selected document carry a second exact
 `DocumentLoadLifecycle.Interaction` identity together with their captured
@@ -735,9 +837,10 @@ diagnostic accounting state.
 `ReaderAction` definitions are immutable command metadata. The assignable
 catalog is exposed only as copies, and its device-specific addition is selected
 by an explicit accessor rather than during class initialization. Theme
-drawable overrides live in an immutable `ActionIconSet` snapshot owned by each
-`BaseActivity`; toolbars resolve icons through their current Activity instead
-of reading a process-wide mutable action field.
+drawable overrides live in an immutable `ActionIconSet` snapshot published
+through each `BaseActivity`'s `InterfaceThemeState`; toolbars resolve icons
+through their current Activity instead of reading a process-wide mutable
+action field.
 
 Key and tap defaults are built as one immutable `DefaultInputActions` snapshot
 per `SettingsManager`. Device flags are captured at construction. Nook

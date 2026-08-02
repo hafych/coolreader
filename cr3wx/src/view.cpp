@@ -104,8 +104,13 @@ cr3view::cr3view(CRPropRef props, lString32 exeDirPath )
 , _props(props)
 , _screen(300,400)
 , _wm(&_screen)
+, _docwin(NULL)
 {
-    _wm.activateWindow( (_docwin = new CRDocViewWindow(&_wm)) );
+    // Stage exclusive ownership until the window manager adopts it.
+    std::unique_ptr<CRDocViewWindow> docWin =
+            std::make_unique<CRDocViewWindow>(&_wm);
+    _docwin = docWin.get();
+    _wm.activateWindow(std::move(docWin));
     getDocView()->setCallback( this );
     IMAGE_SOURCE_FROM_BYTES(defCover, cr3_def_cover_gif);
     LVImageSourceRef cover = LVCreateFileCopyImageSource( exeDirPath + "cr3_def_cover.png" );
@@ -134,9 +139,9 @@ cr3view::cr3view(CRPropRef props, lString32 exeDirPath )
 
 
 
-    _renderTimer = new wxTimer( this, RENDER_TIMER_ID );
-    _clockTimer = new wxTimer( this, CLOCK_TIMER_ID );
-    _cursorTimer = new wxTimer( this, CURSOR_TIMER_ID );
+    _renderTimer.reset(new wxTimer( this, RENDER_TIMER_ID ));
+    _clockTimer.reset(new wxTimer( this, CLOCK_TIMER_ID ));
+    _cursorTimer.reset(new wxTimer( this, CURSOR_TIMER_ID ));
 
     //SetBackgroundColour( getBackgroundColour() );
     InitDialog();
@@ -290,9 +295,9 @@ cr3view::cr3view(CRPropRef props, lString32 exeDirPath )
 
 cr3view::~cr3view()
 {
-    delete _renderTimer;
-    delete _clockTimer;
-    delete _cursorTimer;
+    _renderTimer.reset();
+    _clockTimer.reset();
+    _cursorTimer.reset();
 }
 
 void cr3view::OnTimer(wxTimerEvent& event)
@@ -493,14 +498,14 @@ void cr3view::OnMouseLDown( wxMouseEvent & event )
     if ( ptr.getNode()->isText() ) {
         lString8 s = UnicodeToUtf8( ptr.toString() );
         CRLog::debug("Text node clicked (%d, %d): %s", x, y, s.c_str() );
-        ldomXRange * wordRange = new ldomXRange();
+        std::unique_ptr<ldomXRange> wordRange(new ldomXRange());
         if ( ldomXRange::getWordRange( *wordRange, ptr ) ) {
             wordRange->setFlags( 0x10000 );
             getDocView()->getDocument()->getSelections().clear();
-            getDocView()->getDocument()->getSelections().add( wordRange );
+            // selection list adopts exclusive ownership of the range.
+            getDocView()->getDocument()->getSelections().add(
+                    wordRange.release());
             getDocView()->updateSelections();
-        } else {
-            delete wordRange;
         }
         if ( !href.empty() ) {
             getDocView()->goLink( href );

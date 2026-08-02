@@ -21,6 +21,8 @@
 #ifndef _HISTLIST_H_
 #define _HISTLIST_H_
 
+#include <memory>
+
 #include <wx/listctrl.h>
 
 /**
@@ -33,7 +35,7 @@ class
 HistList : public wxListView
 {
     private:
-        LVPtrVector<CRFileHistRecord> * _records;
+        std::unique_ptr< LVPtrVector<CRFileHistRecord> > _records;
     public:
         HistList();
         virtual ~HistList();

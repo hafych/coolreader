@@ -99,8 +99,7 @@ public class FileInfo implements Parcelable {
 	public FileInfo parent; // parent item
 	public Object tag; // some additional information
 	
-	private ArrayList<FileInfo> files;// files
-	private ArrayList<FileInfo> dirs; // directories
+	private final FileInfoChildren children = new FileInfoChildren();
 
 	// 16 lower bits reserved for document flags
 	public static final int DONT_USE_DOCUMENT_STYLES_FLAG = 1;
@@ -300,8 +299,9 @@ public class FileInfo implements Parcelable {
 		domVersion = in.readInt();
 		blockRenderingFlags = in.readInt();
 		parent = in.readParcelable(FileInfo.class.getClassLoader());
-		files = in.createTypedArrayList(FileInfo.CREATOR);
-		dirs = in.createTypedArrayList(FileInfo.CREATOR);
+		children.setFromParcel(
+				in.createTypedArrayList(FileInfo.CREATOR),
+				in.createTypedArrayList(FileInfo.CREATOR));
 	}
 
 	public FileInfo( String pathName )
@@ -666,12 +666,12 @@ public class FileInfo implements Parcelable {
 
 	public int dirCount()
 	{
-		return dirs!=null ? dirs.size() : 0;
+		return children.dirCount();
 	}
 
 	public int fileCount()
 	{
-		return files!=null ? files.size() : 0;
+		return children.fileCount();
 	}
 
 	public int itemCount()
@@ -681,17 +681,13 @@ public class FileInfo implements Parcelable {
 
 	public void addDir( FileInfo dir )
 	{
-		if ( dirs==null )
-			dirs = new ArrayList<FileInfo>();
-		dirs.add(dir);
+		children.addDir(dir);
 		if (dir.parent == null)
 			dir.parent = this;
 	}
 	public void addFile( FileInfo file )
 	{
-		if ( files==null )
-			files = new ArrayList<FileInfo>();
-		files.add(file);
+		children.addFile(file);
 	}
 	public void addItems( Collection<FileInfo> items )
 	{
@@ -705,26 +701,21 @@ public class FileInfo implements Parcelable {
 	}
 	public void replaceItems( Collection<FileInfo> items )
 	{
-		files = null;
-		dirs = null;
+		children.clear();
 		addItems( items );
 	}
 	public boolean updateItem( FileInfo item ) {
-		if (null != dirs) {
-			for (FileInfo dir : dirs) {
-				if (dir.pathNameEquals(item)) {
-					dir.assign(item);
-					dir.setItems(item);
-					return true;
-				}
+		for (FileInfo dir : children.dirsView()) {
+			if (dir.pathNameEquals(item)) {
+				dir.assign(item);
+				dir.setItems(item);
+				return true;
 			}
 		}
-		if (null != files) {
-			for (FileInfo file : files) {
-				if (file.pathNameEquals(item)) {
-					file.assign(item);
-					return true;
-				}
+		for (FileInfo file : children.filesView()) {
+			if (file.pathNameEquals(item)) {
+				file.assign(item);
+				return true;
 			}
 		}
 		return false;
@@ -738,27 +729,25 @@ public class FileInfo implements Parcelable {
 		if ( index<0 )
 			throw new IndexOutOfBoundsException();
 		if ( index<dirCount())
-			return dirs.get(index);
+			return children.getDir(index);
 		index -= dirCount();
 		if ( index<fileCount())
-			return files.get(index);
+			return children.getFile(index);
 		Log.e("cr3", "Index out of bounds " + index + " at FileInfo.getItem() : returning 0");
 		//throw new IndexOutOfBoundsException();
 		return null;
 	}
 	public FileInfo findItemByPathName( String pathName )
 	{
-		if ( dirs!=null )
-			for ( FileInfo dir : dirs )
-				if ( isOnSDCard() && pathName.compareToIgnoreCase(dir.getPathName()) == 0 || pathName.equals(dir.getPathName()) )
-					return dir;
-		if ( files!=null )
-			for ( FileInfo file : files ) {
-				if ( isOnSDCard() && pathName.compareToIgnoreCase(file.getPathName()) == 0 || pathName.equals(file.getPathName()) )
-					return file;
-				if ( isOnSDCard() && file.getPathName().toLowerCase().startsWith(pathName.toLowerCase()+"@/") || file.getPathName().startsWith(pathName+"@/" ))
-					return file;
-			}
+		for ( FileInfo dir : children.dirsView() )
+			if ( isOnSDCard() && pathName.compareToIgnoreCase(dir.getPathName()) == 0 || pathName.equals(dir.getPathName()) )
+				return dir;
+		for ( FileInfo file : children.filesView() ) {
+			if ( isOnSDCard() && pathName.compareToIgnoreCase(file.getPathName()) == 0 || pathName.equals(file.getPathName()) )
+				return file;
+			if ( isOnSDCard() && file.getPathName().toLowerCase().startsWith(pathName.toLowerCase()+"@/") || file.getPathName().startsWith(pathName+"@/" ))
+				return file;
+		}
 		return null;
 	}
 
@@ -819,7 +808,7 @@ public class FileInfo implements Parcelable {
 		if ( index<0 )
 			throw new IndexOutOfBoundsException();
 		if ( index<dirCount())
-			return dirs.get(index);
+			return children.getDir(index);
 		throw new IndexOutOfBoundsException();
 	}
 
@@ -828,7 +817,7 @@ public class FileInfo implements Parcelable {
 		if ( index<0 )
 			throw new IndexOutOfBoundsException();
 		if ( index<fileCount())
-			return files.get(index);
+			return children.getFile(index);
 		throw new IndexOutOfBoundsException();
 	}
 
@@ -849,7 +838,7 @@ public class FileInfo implements Parcelable {
         if ( index<0 )
 			throw new IndexOutOfBoundsException();
 		if (index < fileCount()) {
-			files.set(index, file);
+			children.setFile(index, file);
 			file.parent = this;
 			return;
 		}
@@ -900,13 +889,13 @@ public class FileInfo implements Parcelable {
 
 	public boolean removeEmptyDirs()
 	{
-		if ( parent==null || pathname.startsWith("@") || !isListed || dirs==null )
+		if ( parent==null || pathname.startsWith("@") || !isListed || !children.hasDirs() )
 			return false;
 		boolean removed = false;
 		for ( int i=dirCount()-1; i>=0; i-- ) {
 			FileInfo dir = getDir(i);
 			if ( dir.isListed && dir.dirCount() == 0 && dir.fileCount() == 0) {
-				dirs.remove(i);
+				children.removeDirAt(i);
 				removed = true;
 			}
 		}
@@ -917,19 +906,14 @@ public class FileInfo implements Parcelable {
 	{
 		if ( item.isSpecialDir() )
 			return;
-		if ( files!=null ) {
-			int n = files.indexOf(item);
-			if ( n>=0 && n<files.size() ) {
-				files.remove(n);
-				return;
-			}
+		int n = children.indexOfFile(item);
+		if ( n>=0 ) {
+			children.removeFileAt(n);
+			return;
 		}
-		if ( dirs!=null ) {
-			int n = dirs.indexOf(item);
-			if ( n>=0 && n<dirs.size() ) {
-				dirs.remove(n);
-			}
-		}
+		n = children.indexOfDir(item);
+		if ( n>=0 )
+			children.removeDirAt(n);
 	}
 	
 	public boolean deleteFile()
@@ -1088,8 +1072,7 @@ public class FileInfo implements Parcelable {
 
 	public void clear()
 	{
-		dirs = null;
-		files = null;
+		children.clear();
 	}
 
 	@Override
@@ -1137,8 +1120,8 @@ public class FileInfo implements Parcelable {
 		dest.writeInt(domVersion);
 		dest.writeInt(blockRenderingFlags);
 		dest.writeParcelable(parent, flags);
-		dest.writeTypedList(files);
-		dest.writeTypedList(dirs);
+		dest.writeTypedList(children.filesOrNull());
+		dest.writeTypedList(children.dirsOrNull());
 	}
 
 	public static enum SortOrder {
@@ -1290,15 +1273,15 @@ public class FileInfo implements Parcelable {
 		
 	public void sort( SortOrder SortOrder )
 	{
-		if ( dirs!=null ) {
-			ArrayList<FileInfo> newDirs = new ArrayList<FileInfo>(dirs);
+		ArrayList<FileInfo> newDirs = children.copyDirs();
+		if ( newDirs!=null ) {
 			Collections.sort( newDirs, SortOrder.getComparator() );
-			dirs = newDirs;
+			children.replaceDirs(newDirs);
 		}
-		if ( files!=null ) {
-			ArrayList<FileInfo> newFiles = new ArrayList<FileInfo>(files);
+		ArrayList<FileInfo> newFiles = children.copyFiles();
+		if ( newFiles!=null ) {
 			Collections.sort( newFiles, SortOrder.getComparator() );
-			files = newFiles;
+			children.replaceFiles(newFiles);
 		}
 	}
 	
@@ -1318,10 +1301,10 @@ public class FileInfo implements Parcelable {
 				+ ((scanFingerprint == null)
 						? 0 : scanFingerprint.hashCode());
 		result = prime * result + (int) (createTime ^ (createTime >>> 32));
-		result = prime * result + ((dirs == null) ? 0 : dirs.hashCode());
+		result = prime * result + children.dirsHash();
 		result = prime * result
 				+ ((filename == null) ? 0 : filename.hashCode());
-		result = prime * result + ((files == null) ? 0 : files.hashCode());
+		result = prime * result + children.filesHash();
 		result = prime * result + flags;
 		result = prime * result + ((format == null) ? 0 : format.hashCode());
 		result = prime * result + (isArchive ? 1231 : 1237);
@@ -1378,20 +1361,14 @@ public class FileInfo implements Parcelable {
 			return false;
 		if (createTime != other.createTime)
 			return false;
-		if (dirs == null) {
-			if (other.dirs != null)
-				return false;
-		} else if (!dirs.equals(other.dirs))
+		if (!children.dirsEqual(other.children))
 			return false;
 		if (filename == null) {
 			if (other.filename != null)
 				return false;
 		} else if (!filename.equals(other.filename))
 			return false;
-		if (files == null) {
-			if (other.files != null)
-				return false;
-		} else if (!files.equals(other.files))
+		if (!children.filesEqual(other.children))
 			return false;
 		if (flags != other.flags)
 			return false;

@@ -37,7 +37,8 @@ public class OnlineStoreLoginDialog extends BaseDialog {
 	private BaseActivity mActivity;
 	private OnlineStoreWrapper mPlugin;
 	private LayoutInflater mInflater;
-	private Runnable mOnLoginHandler;
+	private final CancelActionState onLoginHandler =
+			new CancelActionState();
 	private final ServiceLifecycle mServiceLifecycle;
 	private final OnlineStoreDialogSession session =
 			new OnlineStoreDialogSession();
@@ -50,7 +51,7 @@ public class OnlineStoreLoginDialog extends BaseDialog {
 		activity.getWindowManager().getDefaultDisplay().getMetrics(outMetrics);
 		this.mActivity = activity;
 		this.mPlugin = plugin;
-		this.mOnLoginHandler = onLoginHandler;
+		this.onLoginHandler.set(onLoginHandler);
 	}
 
 	@Override
@@ -162,11 +163,14 @@ public class OnlineStoreLoginDialog extends BaseDialog {
 				return;
 			progress.hide();
 			btnLogin.setEnabled(true);
+			// Take before dismiss: BaseDialog dismiss → onClose closes
+			// the slot, which would drop a post-dismiss take().
+			Runnable loginHandler = onLoginHandler.take();
 			dismiss();
 			mActivity.showToast(
 					R.string.online_store_error_successful_login);
-			if (mOnLoginHandler != null)
-				mOnLoginHandler.run();
+			if (loginHandler != null)
+				loginHandler.run();
 		});
 	}
 
@@ -178,6 +182,7 @@ public class OnlineStoreLoginDialog extends BaseDialog {
 	@Override
 	protected void onClose() {
 		session.close();
+		onLoginHandler.close();
 		if (progress != null)
 			progress.hide();
 		super.onClose();
