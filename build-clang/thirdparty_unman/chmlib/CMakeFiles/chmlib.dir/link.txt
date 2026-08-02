@@ -1,0 +1,2 @@
+/usr/bin/ar qc libchmlib.a CMakeFiles/chmlib.dir/src/chm_lib.c.o CMakeFiles/chmlib.dir/src/lzx.c.o
+/usr/bin/ranlib libchmlib.a

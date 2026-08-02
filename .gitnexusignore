@@ -1,0 +1,8 @@
+*.ts
+*.pattern
+*.po
+*.mo
+crengine/include/encodings/
+thirdparty_unman/
+thirdparty_repo/
+packages/
