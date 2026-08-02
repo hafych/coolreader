@@ -22,6 +22,8 @@
 #ifndef _CR3_H_
 #define _CR3_H_
 
+#include <memory>
+
 #include "view.h"
 #include "histlist.h"
 
@@ -104,6 +106,12 @@ cr3Frame : public wxFrame
 
         wxBitmap getIcon16x16( const lChar32 * name );
 	protected:
+        /// Exclusive owners until Create() reparents into this frame.
+        /// After successful reparent, owners are released and the raw
+        /// pointers remain non-owning compatibility views (wx parent owns).
+        std::unique_ptr<cr3scroll> _scrollBarOwner;
+        std::unique_ptr<cr3view> _viewOwner;
+        std::unique_ptr<HistList> _histOwner;
     	cr3scroll * _scrollBar;
 		cr3view * _view;
     	HistList * _hist;

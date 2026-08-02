@@ -151,14 +151,15 @@ public class SearchDlg extends BaseDialog {
 			return mSearches.size()==0;
 		}
 
-		private ArrayList<DataSetObserver> observers = new ArrayList<>();
+		private final DataSetObserverRegistry observers =
+			new DataSetObserverRegistry();
 
 		public void registerDataSetObserver(DataSetObserver observer) {
-			observers.add(observer);
+		observers.register(observer);
 		}
 
 		public void unregisterDataSetObserver(DataSetObserver observer) {
-			observers.remove(observer);
+		observers.unregister(observer);
 		}
 	}
 

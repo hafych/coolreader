@@ -43,21 +43,17 @@ BEGIN_EVENT_TABLE( HistList, wxListView )
 END_EVENT_TABLE()
 
 HistList::HistList()
-: _records(NULL)
 {
 }
 
 HistList::~HistList()
 {
-    if ( _records )
-        delete _records;
+    _records.reset();
 }
 
 void HistList::SetRecords(LVPtrVector<CRFileHistRecord> & records )
 {
-    if ( _records )
-        delete _records;
-    _records = new LVPtrVector<CRFileHistRecord>( records );
+    _records.reset(new LVPtrVector<CRFileHistRecord>( records ));
     SetItemCount(_records->length());
     UpdateColumns();
     if ( GetItemCount()>0 ) {

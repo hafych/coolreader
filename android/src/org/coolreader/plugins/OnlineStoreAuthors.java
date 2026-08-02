@@ -21,12 +21,10 @@ package org.coolreader.plugins;
 
 import org.coolreader.crengine.Utils;
 
-import java.util.ArrayList;
-import java.util.Collections;
-
 
 public class OnlineStoreAuthors implements AsyncResponse {
-	private ArrayList<OnlineStoreAuthor> list = new ArrayList<>();
+	private final OnlineStoreItemListState<OnlineStoreAuthor> list =
+			new OnlineStoreItemListState<>();
 	public void add(OnlineStoreAuthor author) {
 		list.add(author);
 	}
@@ -37,6 +35,6 @@ public class OnlineStoreAuthors implements AsyncResponse {
 		return list.get(index);
 	}
 	public void sortByName() {
-		Collections.sort(list, (lhs, rhs) -> Utils.cmp(lhs.lastName, rhs.lastName));
+		list.sort((lhs, rhs) -> Utils.cmp(lhs.lastName, rhs.lastName));
 	}
 }

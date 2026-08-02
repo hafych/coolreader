@@ -52,6 +52,7 @@
 
 #include <../../crengine/include/fb2def.h>
 
+#include <memory>
 #define XS_IMPLEMENT_SCHEME 1
 #include <../../crengine/include/fb2def.h>
 
@@ -154,7 +155,8 @@ static bool GetEPUBBookProperties(const char *name, LVStreamRef stream, BookProp
     if ( content_stream.isNull() )
         return false;
 
-    ldomDocument * doc = LVParseXMLStream( content_stream );
+    std::unique_ptr<ldomDocument> doc(
+            LVParseXMLStream( content_stream ));
     if ( !doc )
         return false;
 
@@ -206,8 +208,6 @@ static bool GetEPUBBookProperties(const char *name, LVStreamRef stream, BookProp
     pBookProps->filename = lString32(name);
     pBookProps->filedate = getDateTimeString( t );
     pBookProps->crc32 = stream->getcrc32();
-
-    delete doc;
 
     return true;
 }
@@ -287,7 +287,8 @@ static bool GetODTBookProperties(const char *name, LVStreamRef stream, BookPrope
 	LVStreamRef meta_stream = arc->OpenStream(U"meta.xml", LVOM_READ);
 	if ( meta_stream.isNull() )
 		return false;
-	ldomDocument * metaDoc = LVParseXMLStream( meta_stream );
+	std::unique_ptr<ldomDocument> metaDoc(
+			LVParseXMLStream( meta_stream ));
 	if ( !metaDoc ) {
 		CRLog::error("Couldn't parse document meta data");
 		return false;
@@ -300,7 +301,6 @@ static bool GetODTBookProperties(const char *name, LVStreamRef stream, BookPrope
 		doc_props->setString(DOC_PROP_TITLE, title);
 		doc_props->setString(DOC_PROP_AUTHORS, author );
 		doc_props->setString(DOC_PROP_DESCRIPTION, description );
-		delete metaDoc;
 	}
 
 	time_t t = (time_t)time(0);
@@ -479,7 +479,10 @@ jboolean initInternal(JNIEnv *penv, jclass obj, jobjectArray fontArray, jint sdk
     // set fatal error handler
     crSetFatalErrorHandler(&cr3androidFatalErrorHandler);
     LOGD("Redirecting CDRLog to Android");
-    CRLog::setLogger(new JNICDRLogger());
+    {
+        std::unique_ptr<CRLog> logger(new JNICDRLogger());
+        CRLog::setLogger(logger.release()); // process logger adopts ownership
+    }
     CRLog::setLogLevel(CRLog::LL_TRACE);
     CRLog::info("CREngine log redirected");
     CRLog::info("CRENGINE version %s %s", CR_ENGINE_VERSION, CR_ENGINE_BUILD_DATE);
@@ -540,8 +543,11 @@ void drawBookCoverInternal(JNIEnv * _env, jclass _engine, jobject bitmap, jbyteA
             }
         }
         LVDrawBuf * drawbuf2 = drawbuf;
-        if (factor > 1)
-            drawbuf2 = new LVColorDrawBuf(dx, dy, drawbuf->GetBitsPerPixel());
+        std::unique_ptr<LVDrawBuf> scaledOwner;
+        if (factor > 1) {
+            scaledOwner.reset(new LVColorDrawBuf(dx, dy, drawbuf->GetBitsPerPixel()));
+            drawbuf2 = scaledOwner.get();
+        }
 
         if (bpp >= 16) {
             // native color resolution
@@ -558,7 +564,7 @@ void drawBookCoverInternal(JNIEnv * _env, jclass _engine, jobject bitmap, jbyteA
         if (factor > 1) {
             CRLog::debug("drawBookCoverInternal : rescaling");
             drawbuf->DrawRescaled(drawbuf2, 0, 0, drawbuf->GetWidth(), drawbuf->GetHeight(), 0);
-            delete drawbuf2;
+            scaledOwner.reset();
         }
 
         //CRLog::trace("getPageImageInternal calling bitmap->unlock");
@@ -713,13 +719,24 @@ jboolean initDictionaries(JNIEnv *penv, jclass clazz, jobjectArray dictArray) {
         lString32 dict_code = env.fromJavaString(code);
         lString32 dict_name = env.fromJavaString(name);
         lString32 dict_langTag = env.fromJavaString(language);
-        dict = new HyphDictionary(dict_type, dict_name, dict_code, dict_langTag, dict_code);
-        if (!HyphMan::addDictionaryItem(dict))
-            delete dict;
+        std::unique_ptr<HyphDictionary> ownedDict(
+                new HyphDictionary(
+                        dict_type,
+                        dict_name,
+                        dict_code,
+                        dict_langTag,
+                        dict_code));
+        if (HyphMan::addDictionaryItem(ownedDict.get()))
+            ownedDict.release(); // registry adopts ownership
     }
     JavaVM *jvm;
     env->GetJavaVM(&jvm);
-    HyphMan::setDataLoader(new HyphDataLoaderProxy(jvm));
+    // setDataLoader is an explicit ownership-transfer boundary.
+    {
+        std::unique_ptr<HyphDataLoader> loader(
+                new HyphDataLoaderProxy(jvm));
+        HyphMan::setDataLoader(loader.release()); // registry adopts ownership
+    }
     return JNI_TRUE;
 }
 

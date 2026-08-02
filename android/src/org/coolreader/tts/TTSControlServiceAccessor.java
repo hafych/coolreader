@@ -26,17 +26,14 @@ import android.content.ServiceConnection;
 import android.os.IBinder;
 import org.coolreader.crengine.Log;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class TTSControlServiceAccessor {
 	private final static String TAG = "ttssrv";
 	private final Context mContext;
 	private final Object mLocker = new Object();
-	private final ArrayList<TTSControlBinder.Callback> onConnectCallbacks =
-			new ArrayList<>();
-	private TTSControlBinder mServiceBinder;
-	private boolean mBindingRegistered;
+	private final TtsBindingSessionState sessionState =
+			new TtsBindingSessionState();
 
 	public interface Callback {
 		void run(TTSControlServiceAccessor ttsacc);
@@ -49,15 +46,16 @@ public class TTSControlServiceAccessor {
 	public boolean bind(
 			final TTSControlBinder.Callback boundCallback) {
 		TTSControlBinder connectedBinder;
+		boolean bound = true;
 		synchronized (mLocker) {
-			connectedBinder = mServiceBinder;
+			connectedBinder = sessionState.getBinder();
 			if (connectedBinder == null) {
 				if (boundCallback != null)
-					onConnectCallbacks.add(boundCallback);
-				if (mBindingRegistered)
+					sessionState.addPending(boundCallback);
+				if (sessionState.isBindingRegistered())
 					return true;
-				mBindingRegistered = true;
-				boolean bound;
+				if (!sessionState.beginBinding())
+					return true;
 				RuntimeException bindError = null;
 				try {
 					bound = mContext.bindService(
@@ -79,8 +77,7 @@ public class TTSControlServiceAccessor {
 							TAG,
 							"cannot bind TTSControlService",
 							bindError);
-					mBindingRegistered = false;
-					onConnectCallbacks.clear();
+					sessionState.bindingFailed();
 				}
 				return bound;
 			}
@@ -96,10 +93,7 @@ public class TTSControlServiceAccessor {
 		Log.v(TAG, "unbinding TTSControlService");
 		boolean shouldUnbind;
 		synchronized (mLocker) {
-			shouldUnbind = mBindingRegistered;
-			mBindingRegistered = false;
-			mServiceBinder = null;
-			onConnectCallbacks.clear();
+			shouldUnbind = sessionState.unbind();
 		}
 		if (shouldUnbind)
 			mContext.unbindService(mServiceConnection);
@@ -110,11 +104,10 @@ public class TTSControlServiceAccessor {
 			List<TTSControlBinder.Callback> callbacks;
 			TTSControlBinder binder = (TTSControlBinder) service;
 			synchronized (mLocker) {
-				if (!mBindingRegistered)
+				if (!sessionState.isBindingRegistered())
 					return;
-				mServiceBinder = binder;
-				callbacks = new ArrayList<>(onConnectCallbacks);
-				onConnectCallbacks.clear();
+				sessionState.setBinder(binder);
+				callbacks = sessionState.takePending();
 			}
 			Log.i(TAG, "connected to TTSControlService");
 			for (TTSControlBinder.Callback callback : callbacks)
@@ -123,7 +116,7 @@ public class TTSControlServiceAccessor {
 
 		public void onServiceDisconnected(ComponentName className) {
 			synchronized (mLocker) {
-				mServiceBinder = null;
+				sessionState.clearBinder();
 			}
 			Log.i(TAG, "Connection to the TTSControlService has been lost");
 		}

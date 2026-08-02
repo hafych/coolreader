@@ -27,6 +27,7 @@
 
 
 #include <crengine.h>
+#include <memory>
 #include "cr3.h"
 #include "wolopt.h"
 #include "toc.h"
@@ -141,14 +142,14 @@ class CRFileProperties {
         {
             LVStreamRef container_stream = arc->OpenStream(U"META-INF/container.xml", LVOM_READ);
             if ( !container_stream.isNull() ) {
-                ldomDocument * doc = LVParseXMLStream( container_stream );
+                std::unique_ptr<ldomDocument> doc(
+                        LVParseXMLStream( container_stream ));
                 if ( doc ) {
                     ldomNode * rootfile = doc->nodeFromXPath( lString32("container/rootfiles/rootfile") );
                     if ( rootfile && rootfile->isElement() ) {
                         rootfilePath = rootfile->getAttributeValue("full-path");
                         rootfileMediaType = rootfile->getAttributeValue("media-type");
                     }
-                    delete doc;
                 }
             }
         }
@@ -165,11 +166,13 @@ class CRFileProperties {
             }
             LVStreamRef content_stream = arc->OpenStream(rootfilePath.c_str(), LVOM_READ);
             if ( !content_stream.isNull() ) {
-                ldomDocument * doc = LVParseXMLStream( content_stream );
+                std::unique_ptr<ldomDocument> doc(
+                        LVParseXMLStream( content_stream ));
                 if ( doc ) {
                     lString32 title = doc->textFromXPath( lString32("package/metadata/title") );
                     lString32 authors = doc->textFromXPath( lString32("package/metadata/creator") );
-                    delete doc;
+                    (void)title;
+                    (void)authors;
                 }
             }
         }
@@ -414,7 +417,7 @@ void testFormatting()
 }
 
 
-ResourceContainer * resources = NULL;
+static std::unique_ptr<ResourceContainer> resources;
 
 static lChar32 detectSlash( lString32 path )
 {
@@ -546,7 +549,7 @@ lString8 readFileToString( const char * fname )
 int cr3app::OnExit()
 {
     ShutdownFontManager();
-    delete resources;
+    resources.reset();
     HyphMan::uninit();
 #if LDOM_USE_OWN_MEM_MAN == 1
     //ldomFreeStorage();
@@ -657,7 +660,7 @@ cr3app::OnInit()
 #endif
 
     wxImage::AddHandler(new wxPNGHandler);
-    resources = new ResourceContainer();
+    resources.reset(new ResourceContainer());
 
     lString32 appname = wx2cr(argv[0]);
     int lastSlash=-1;
@@ -989,8 +992,13 @@ void cr3Frame::SetToolbarSize( int size )
     wxToolBar* toolBar = GetToolBar();
 
     long style = toolBar ? toolBar->GetWindowStyle() : TOOLBAR_STYLE;
-    delete toolBar;
+    // Detach before destroy so the frame does not observe a dangling toolbar.
     SetToolBar(NULL);
+    if (toolBar) {
+        // wx window teardown (not a bare heap free of an orphan).
+        toolBar->Destroy();
+        toolBar = NULL;
+    }
     style &= ~(wxTB_HORIZONTAL | wxTB_VERTICAL | wxTB_BOTTOM | wxTB_RIGHT | wxTB_HORZ_LAYOUT);
     int mode = _props->getIntDef( PROP_WINDOW_TOOLBAR_POSITION, 0 );
     switch ( mode ) {
@@ -1116,15 +1124,20 @@ void cr3Frame::SetToolbarSize( int size )
 
 void cr3Frame::OnInitDialog(wxInitDialogEvent& event)
 {
-    _scrollBar = new cr3scroll(_view);
+    _scrollBarOwner = std::make_unique<cr3scroll>(_view);
+    _scrollBar = _scrollBarOwner.get();
 
     _view->SetScrollBar( _scrollBar );
     _view->Create(this, Window_Id_View,
         wxDefaultPosition, wxDefaultSize, 0, wxT("cr3view"));
+    // Frame now owns the child window graph; drop exclusive pre-reparent owners.
+    _viewOwner.release();
     _hist->Create(this, Window_Id_HistList);
+    _histOwner.release();
 
     _scrollBar->Create(this, Window_Id_Scrollbar,
         wxDefaultPosition, wxDefaultSize, wxSB_VERTICAL);
+    _scrollBarOwner.release();
 
 
     wxIcon icon = wxICON(cr3);
@@ -1311,8 +1324,12 @@ cr3Frame::cr3Frame(const wxString& title, const wxPoint& pos, const wxSize& size
             _props->loadFromStream(stream.get());
     }
 
-    _view = new cr3view( _props, appDir );
-    _hist = new HistList();
+    // Stage exclusive ownership until OnInitDialog reparents into this frame.
+    _viewOwner = std::make_unique<cr3view>(_props, appDir);
+    _view = _viewOwner.get();
+    _histOwner = std::make_unique<HistList>();
+    _hist = _histOwner.get();
+    _scrollBar = NULL;
 
     InitDialog();
 }

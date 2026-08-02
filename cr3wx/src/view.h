@@ -23,6 +23,8 @@
 #ifndef _CR3VIEW_H_
 #define _CR3VIEW_H_
 
+#include <memory>
+
 #include <crgui.h>
 /**
  * @short XML Document View window
@@ -75,9 +77,9 @@ cr3view : public wxPanel, public LVDocViewCallback
         //LVDocView * _docview;
         wxScrollBar * _scrollbar;
 
-        wxTimer * _renderTimer;
-        wxTimer * _clockTimer;
-        wxTimer * _cursorTimer;
+        std::unique_ptr<wxTimer> _renderTimer;
+        std::unique_ptr<wxTimer> _clockTimer;
+        std::unique_ptr<wxTimer> _cursorTimer;
         bool _firstRender;
         bool _allowRender;
         CRPropRef _props;
@@ -86,6 +88,8 @@ cr3view : public wxPanel, public LVDocViewCallback
 
         CRWxScreen _screen;
         CRGUIWindowManager _wm;
+        /// Non-owning view; exclusive ownership is transferred to `_wm`
+        /// via `activateWindow(unique_ptr)` at construction.
         CRDocViewWindow * _docwin;
 
         DECLARE_EVENT_TABLE()

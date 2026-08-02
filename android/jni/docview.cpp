@@ -27,6 +27,8 @@
 #include "lvstreamutils.h"
 //#include "crgl.h"
 
+#include <memory>
+
 #if defined(__arm__) || defined(__aarch64__) || defined(__i386__) || defined(__mips__)
 #define USE_COFFEECATCH 1
 #endif
@@ -855,9 +857,9 @@ static void getBatteryIcons(LVRefVec<LVImageSource> & icons, lUInt32 color, int 
 }
 
 DocViewNative::DocViewNative()
+	: _docviewOwner(new LVDocView(16)) //16bpp
+	, _docview(_docviewOwner.get())
 {
-	_docview = new LVDocView(16); //16bpp
-
 	_batteryIconColor = 0x000000;
 	_batteryIconSize = 28;
     LVRefVec<LVImageSource> icons;
@@ -880,7 +882,8 @@ DocViewNative::DocViewNative()
 
 DocViewNative::~DocViewNative()
 {
-	delete _docview;
+	_docview = NULL;
+	_docviewOwner.reset();
 }
 
 static DocViewNative * getNative(JNIEnv * env, jobject _this)
@@ -1192,7 +1195,7 @@ bool DocViewNative::checkImage(int x, int y, int bufWidth, int bufHeight, int &d
 		dx /= scale;
 		dy /= scale;
 	}
-	LVColorDrawBuf * buf = new LVColorDrawBuf(dx, dy);
+	std::unique_ptr<LVColorDrawBuf> buf(new LVColorDrawBuf(dx, dy));
 	buf->Clear(0xFF000000); // transparent
 	buf->Draw(_currentImage, 0, 0, dx, dy, false);
 	if (needRotate) {
@@ -1201,7 +1204,8 @@ bool DocViewNative::checkImage(int x, int y, int bufWidth, int bufHeight, int &d
 		dy = c;
 		buf->Rotate(CR_ROTATE_ANGLE_90);
 	}
-	_currentImage = LVCreateDrawBufImageSource(buf, true);
+	// own=true: image source adopts the exclusive draw buffer at this boundary.
+	_currentImage = LVCreateDrawBufImageSource(buf.release(), true);
 	return true;
 }
 
@@ -1314,9 +1318,10 @@ JNIEXPORT void JNICALL Java_org_coolreader_crengine_DocView_createInternal
 	CRLog::info("******************************************************************");
     jclass rvClass = env->FindClass("org/coolreader/crengine/DocView");
     gNativeObjectID = env->GetFieldID(rvClass, "mNativeObject", "J");
-    DocViewNative * obj = new DocViewNative();
-    env->SetLongField(_this, gNativeObjectID, (jlong)obj);
-    obj->_docview->setFontSize(24); 
+    std::unique_ptr<DocViewNative> obj(new DocViewNative());
+    env->SetLongField(_this, gNativeObjectID, (jlong)obj.get());
+    obj->_docview->setFontSize(24);
+    obj.release(); // ownership moves to Java mNativeObject
 }
 
 /*
@@ -1332,11 +1337,11 @@ JNIEXPORT void JNICALL Java_org_coolreader_crengine_DocView_destroyInternal
     	CRLog::info("******************************************************************");
 		CRLog::info("Destroying RenderView");
 		CRLog::info("******************************************************************");
-    	delete p;
 	    jclass rvClass = env->FindClass("org/coolreader/crengine/DocView");
 	    gNativeObjectID = env->GetFieldID(rvClass, "mNativeObject", "J");
 	    env->SetLongField(view, gNativeObjectID, 0);
 	    gNativeObjectID = 0;
+	    std::unique_ptr<DocViewNative> owned(p);
 	} else {
 		CRLog::error("RenderView is already destroyed");
 	}
@@ -2424,9 +2429,11 @@ JNIEXPORT void JNICALL Java_org_coolreader_crengine_DocView_hilightBookmarksInte
     	    CRStringField startPos(bmk, "startPos");
     	    CRStringField endPos(bmk, "endPos");
     	    CRIntField type(bmk, "type");
-    	    CRBookmark * bookmark = new CRBookmark(startPos.get(), endPos.get());
+    	    std::unique_ptr<CRBookmark> bookmark(
+    	    		new CRBookmark(startPos.get(), endPos.get()));
     	    bookmark->setType(type.get());
-    	    bookmarks.add(bookmark);
+    	    // LVPtrVector adopts exclusive ownership of the raw pointer.
+    	    bookmarks.add(bookmark.release());
     	    env->DeleteLocalRef(obj);
     	}
     }

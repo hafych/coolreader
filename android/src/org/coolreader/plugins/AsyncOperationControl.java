@@ -20,21 +20,20 @@
 package org.coolreader.plugins;
 
 public class AsyncOperationControl {
-	private volatile boolean finished;
-	private volatile boolean cancelled;
+	private final AsyncOperationState state = new AsyncOperationState();
 	public void cancel() {
-		cancelled = true;
+		state.cancel();
 	}
 	public boolean isCancelled() {
-		return cancelled;
+		return state.isCancelled();
 	}
 	public void finished() {
-		finished = true;
+		state.finished();
 	}
 	public boolean isFinished() {
-		return finished;
+		return state.isFinished();
 	}
 	public boolean isActive() {
-		return !finished && !cancelled;
+		return state.isActive();
 	}
 }

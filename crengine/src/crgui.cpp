@@ -244,7 +244,9 @@ void CRGUIWindowManager::reconfigure( int dx, int dy, cr_rotate_angle_t orientat
         for ( int i=static_cast<int>( _windows.size() )-1; i>=0; i-- ) {
             _windows[i]->reconfigure( flags );
         }
-        postEvent( new CRGUIUpdateEvent(true) );
+        std::unique_ptr<CRGUIEvent> update(
+                new CRGUIUpdateEvent(true));
+        postEvent( update.release() );
     }
 }
 
@@ -315,7 +317,9 @@ void CRGUIWindowManager::update( bool fullScreenUpdate, bool forceFlushScreen )
         forwardSystemEvents(false);
         if ( !_events.empty() ) {
             // postpone screen update
-            postEvent( new CRGUIUpdateEvent(fullScreenUpdate) );
+            std::unique_ptr<CRGUIEvent> update(
+                    new CRGUIUpdateEvent(fullScreenUpdate));
+            postEvent( update.release() );
             return;
         }
     }
@@ -457,7 +461,9 @@ bool CRGUIWindowManager::handleAllEvents( bool waitForEvent )
 
 void CRGUIWindowManager::postCommand( int command, int params )
 {
-    postEvent(new CRGUICommandEvent(command, params) );
+    std::unique_ptr<CRGUIEvent> event =
+            std::make_unique<CRGUICommandEvent>(command, params);
+    postEvent( event.release() );
 }
 
 void CRGUIWindowManager::postEvent( CRGUIEvent * event )
@@ -2160,8 +2166,11 @@ bool CRGUIKeyDownEvent::handle( CRGUIWindow * window )
     }
     CRGUIWindowManager * wm = window->getWindowManager();
     bool res = window->onKeyPressed( _param1, _param2 );
-    if ( res )
-        wm->postEvent( new CRGUIUpdateEvent(false) );
+    if ( res ) {
+        std::unique_ptr<CRGUIEvent> update(
+                new CRGUIUpdateEvent(false));
+        wm->postEvent( update.release() );
+    }
     return res;
 }
 
@@ -2175,7 +2184,10 @@ bool CRGUICommandEvent::handle( CRGUIWindow * window )
     wm->forwardSystemEvents(false);
     bool res = window->onCommand( _param1, _param2 );
     wm->forwardSystemEvents(false);
-    if ( res )
-        wm->postEvent( new CRGUIUpdateEvent(false) );
+    if ( res ) {
+        std::unique_ptr<CRGUIEvent> update(
+                new CRGUIUpdateEvent(false));
+        wm->postEvent( update.release() );
+    }
     return res;
 }

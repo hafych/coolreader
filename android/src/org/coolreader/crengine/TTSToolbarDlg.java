@@ -92,11 +92,13 @@ public class TTSToolbarDlg implements Settings {
 			new CloseableTaskGate();
 	private final Handler audioBookPosHandler =
 			new Handler(Looper.getMainLooper());
-	private MotionWatchdogHandler mMotionWatchdog;
+	private final MotionWatchdogSlotState motionWatchdogSlot =
+			new MotionWatchdogSlotState();
+	private final TtsToolbarSessionState sessionState =
+			new TtsToolbarSessionState();
+	private final WordTimingCalcHandlerState wordTimingHandlerState =
+			new WordTimingCalcHandlerState();
 	private ReaderViewModeState.Lease viewModeLease;
-	private boolean documentCleanedUp;
-	private boolean closeFinished;
-	private Runnable mOnCloseListener;
 	private Selection mCurrentSelection;
 	private boolean isSpeaking;
 	private boolean isToolbarHidden;
@@ -114,14 +116,10 @@ public class TTSToolbarDlg implements Settings {
 	private boolean allowUseAudiobook;
 	private int mTTSSpeedPercent = 50;		// 50% (normal)
 
-	private File wordTimingFile;
-	private File sentenceInfoFile;
-	private File sentenceTimingCacheFile;
+	private final TtsAudiobookFilesState audiobookFiles =
+			new TtsAudiobookFilesState();
 	private WordTimingAudiobookMatcher wordTimingAudiobookMatcher;
 	private SentenceInfo currentSentenceInfo;
-
-	private HandlerThread wordTimingCalcHandlerThread;
-	private Handler wordTimingCalcHandler;
 
 	static TTSToolbarDlg showDialog(
 			CoolReader coolReader,
@@ -142,7 +140,7 @@ public class TTSToolbarDlg implements Settings {
 	}
 
 	public void setOnCloseListener(Runnable handler) {
-		mOnCloseListener = handler;
+		sessionState.setOnCloseListener(handler);
 	}
 
 	public void stopAndClose() {
@@ -161,16 +159,20 @@ public class TTSToolbarDlg implements Settings {
 
 	private void finishClose() {
 		BackgroundThread.instance().postGUI(() -> {
-			if (closeFinished)
+			if (!sessionState.beginFinishClose())
 				return;
-			closeFinished = true;
 			mTTSControl.unbind();
 			Intent intent = new Intent(
 					mCoolReader, TTSControlService.class);
 			mCoolReader.stopService(intent);
 			cleanupDocument();
-			if (mOnCloseListener != null)
-				mOnCloseListener.run();
+			Runnable onClose = sessionState.takeOnCloseListener();
+			if (onClose != null)
+				onClose.run();
+			sessionState.close();
+			motionWatchdogSlot.close();
+			wordTimingHandlerState.close();
+			audiobookFiles.close();
 			if (mWindow.isShowing())
 				mWindow.dismiss();
 		});
@@ -184,9 +186,8 @@ public class TTSToolbarDlg implements Settings {
 
 	private void cleanupDocument() {
 		BackgroundThread.ensureGUI();
-		if (documentCleanedUp)
+		if (!sessionState.beginDocumentCleanup())
 			return;
-		documentCleanedUp = true;
 		restoreReaderMode();
 		documentHandler.clearSelection();
 		documentHandler.savePosition();
@@ -194,13 +195,14 @@ public class TTSToolbarDlg implements Settings {
 
 	private void stopAudiobookWork() {
 		audioBookPosHandler.removeCallbacksAndMessages(null);
-		if (wordTimingCalcHandler != null)
-			wordTimingCalcHandler.removeCallbacksAndMessages(null);
-		if (wordTimingCalcHandlerThread != null) {
-			wordTimingCalcHandlerThread.quit();
-			wordTimingCalcHandlerThread = null;
+		WordTimingCalcHandlerState.Running running =
+				wordTimingHandlerState.takeRunning();
+		if (running != null) {
+			if (running.handler != null)
+				running.handler.removeCallbacksAndMessages(null);
+			if (running.thread != null)
+				running.thread.quit();
 		}
-		wordTimingCalcHandler = null;
 	}
 
 	private void postGuiIfOpen(Runnable task) {
@@ -374,14 +376,16 @@ public class TTSToolbarDlg implements Settings {
 		HandlerThread thread =
 				new HandlerThread("MotionWatchdog");
 		thread.start();
-		mMotionWatchdog = new MotionWatchdogHandler(
-				this, mCoolReader, thread, mMotionTimeout);
+		MotionWatchdogHandler previous = motionWatchdogSlot.install(
+				new MotionWatchdogHandler(
+						this, mCoolReader, thread, mMotionTimeout));
+		if (previous != null)
+			previous.close();
 		Log.d(TAG, "startMotionWatchdog() exit");
 	}
 
 	private synchronized void stopMotionWatchdog() {
-		MotionWatchdogHandler watchdog = mMotionWatchdog;
-		mMotionWatchdog = null;
+		MotionWatchdogHandler watchdog = motionWatchdogSlot.take();
 		if (watchdog != null)
 			watchdog.close();
 	}
@@ -883,9 +887,7 @@ public class TTSToolbarDlg implements Settings {
 		panel.requestFocus();
 
 		// All tasks below after service start.
-		wordTimingFile = null;
-		sentenceInfoFile = null;
-		sentenceTimingCacheFile = null;
+		audiobookFiles.clear();
 		String pathName = documentSnapshot.getPath();
 		if (pathName != null) {
 			mBookCover = Bitmap.createBitmap(
@@ -911,11 +913,10 @@ public class TTSToolbarDlg implements Settings {
 							".sentencetimingcache");
 			if (wordTimingPath.matches(
 					".*\\.wordtiming$")) {
-				wordTimingFile = new File(wordTimingPath);
-				sentenceInfoFile = new File(
-						sentenceInfoPath);
-				sentenceTimingCacheFile = new File(
-						sentenceTimingCachePath);
+				audiobookFiles.set(
+						new File(wordTimingPath),
+						new File(sentenceInfoPath),
+						new File(sentenceTimingCachePath));
 			}
 		}
 		// Show volume
@@ -953,12 +954,16 @@ public class TTSToolbarDlg implements Settings {
 		if (token == null)
 			return;
 		audioBookPosHandler.removeCallbacksAndMessages(null);
-		if (wordTimingCalcHandler != null)
-			wordTimingCalcHandler.removeCallbacksAndMessages(null);
+		Handler existingWordTiming = wordTimingHandlerState.get();
+		if (existingWordTiming != null)
+			existingWordTiming.removeCallbacksAndMessages(null);
 
-		final File timingFile = wordTimingFile;
-		final File infoFile = sentenceInfoFile;
-		final File timingCacheFile = sentenceTimingCacheFile;
+		TtsAudiobookFilesState.Snapshot audiobookSnapshot =
+				audiobookFiles.snapshot();
+		final File timingFile = audiobookSnapshot.wordTimingFile;
+		final File infoFile = audiobookSnapshot.sentenceInfoFile;
+		final File timingCacheFile =
+				audiobookSnapshot.sentenceTimingCacheFile;
 		if (!allowUseAudiobook
 				|| timingFile == null
 				|| !timingFile.exists()) {
@@ -966,12 +971,24 @@ public class TTSToolbarDlg implements Settings {
 			return;
 		}
 
+		Handler wordTimingCalcHandler = wordTimingHandlerState.get();
 		if (wordTimingCalcHandler == null) {
-			wordTimingCalcHandlerThread =
+			HandlerThread wordTimingCalcHandlerThread =
 					new HandlerThread("word-timing-calc-handler");
 			wordTimingCalcHandlerThread.start();
-			wordTimingCalcHandler =
+			Handler createdHandler =
 					new Handler(wordTimingCalcHandlerThread.getLooper());
+			wordTimingCalcHandler = wordTimingHandlerState.ensure(
+					wordTimingCalcHandlerThread, createdHandler);
+			if (wordTimingCalcHandler == null) {
+				// permanently closed while installing
+				wordTimingCalcHandlerThread.quit();
+				return;
+			}
+			if (wordTimingCalcHandler != createdHandler) {
+				// lost install race: quit orphan thread
+				wordTimingCalcHandlerThread.quit();
+			}
 		}
 
 		mPlayPauseButton.setVisibility(View.GONE);

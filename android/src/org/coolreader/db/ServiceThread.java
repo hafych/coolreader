@@ -19,7 +19,7 @@
 
 package org.coolreader.db;
 
-import java.util.LinkedList;
+import java.util.List;
 
 import org.coolreader.crengine.L;
 import org.coolreader.crengine.Logger;
@@ -35,6 +35,9 @@ import android.os.Message;
 public class ServiceThread extends Thread {
 
 	public static final Logger log = L.create("st");
+
+	private final ServiceThreadState threadState =
+			new ServiceThreadState();
 	
 	public ServiceThread(String name) {
 		super(name);
@@ -45,14 +48,14 @@ public class ServiceThread extends Thread {
 	 * @param task is runnable to call
 	 */
 	public void post(Runnable task) {
-		synchronized (mQueue) {
-			if (mHandler == null || mStopped) {
-				log.w("Thread is not yet started, just adding to queue " + task);
-				mQueue.addLast(task);
-			} else {
-				postQueuedTasks();
-				mHandler.post(task);
-			}
+		if (threadState.enqueueIfStopped(task)) {
+			log.w("Thread is not yet started, just adding to queue " + task);
+			return;
+		}
+		Handler handler = threadState.getHandler();
+		if (handler != null) {
+			drainQueued(handler);
+			handler.post(task);
 		}
 	}
 	
@@ -61,13 +64,12 @@ public class ServiceThread extends Thread {
 	 * @param task is runnable to call
 	 */
 	public void postAtFrontOfQueue(Runnable task) {
-		synchronized (mQueue) {
-			if (mHandler == null || mStopped)
-				mQueue.addLast(task);
-			else {
-				postQueuedTasks();
-				mHandler.postAtFrontOfQueue(task);
-			}
+		if (threadState.enqueueIfStopped(task))
+			return;
+		Handler handler = threadState.getHandler();
+		if (handler != null) {
+			drainQueued(handler);
+			handler.postAtFrontOfQueue(task);
 		}
 	}
 	
@@ -76,28 +78,30 @@ public class ServiceThread extends Thread {
 	 * @param task is runnable to call
 	 */
 	public void postDelayed(Runnable task, long delayMillis) {
-		synchronized (mQueue) {
-			if (mHandler == null || mStopped)
-				mQueue.addLast(task);
-			else {
-				postQueuedTasks();
-				mHandler.postDelayed(task, delayMillis);
-			}
+		if (threadState.enqueueIfStopped(task))
+			return;
+		Handler handler = threadState.getHandler();
+		if (handler != null) {
+			drainQueued(handler);
+			handler.postDelayed(task, delayMillis);
 		}
 	}
 	
-	private void postQueuedTasks() {
-		while (mQueue.size() > 0) {
-			Runnable t = mQueue.removeFirst();
+	private void drainQueued(Handler handler) {
+		List<Runnable> queued = threadState.drainQueue();
+		for (Runnable t : queued) {
 			log.w("Executing queued task " + t);
-			mHandler.post(t);
+			handler.post(t);
 		}
 	}
 	
 	public boolean waitForCompletion(long timeout) {
 		final Object lock = new Object();
+		Handler handler = threadState.getHandler();
+		if (handler == null)
+			return false;
 		synchronized (lock) {
-			mHandler.post(() -> {
+			handler.post(() -> {
 				synchronized (lock) {
 					lock.notify();
 				}
@@ -115,34 +119,33 @@ public class ServiceThread extends Thread {
 	public void stop(final long timeout) {
 		L.i("Stop is called. Not supported.");
 		waitForCompletion(timeout);
-		mHandler.getLooper().quit();
+		Handler handler = threadState.getHandler();
+		if (handler != null)
+			handler.getLooper().quit();
 	}
 	
 	public boolean isStopped() {
-		return mStopped;
+		return threadState.isStopped();
 	}
-
-	private LinkedList<Runnable> mQueue = new LinkedList<Runnable>();
 
 	@Override
 	public void run() {
 		log.i("Running service thread");
 		Looper.prepare();
-		mHandler = new Handler() {
+		threadState.setHandler(new Handler() {
 			public void handleMessage( Message message )
 			{
 				log.d("message: " + message);
 			}
-		};
+		});
 		log.i("Service thread handler is created");
-		synchronized (mQueue) {
-			postQueuedTasks();
-			mStopped = false;
-		}
+		Handler handler = threadState.getHandler();
+		if (handler != null)
+			drainQueued(handler);
+		threadState.setStopped(false);
 		Looper.loop();
-		mHandler = null;
+		threadState.clearHandler();
+		threadState.setStopped(true);
 		log.i("Exiting background thread");
 	}
-	private Handler mHandler;
-	private boolean mStopped = true;
 }

@@ -3,6 +3,7 @@ package org.coolreader.crengine;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ReaderNativeLifecycleTest {
@@ -26,6 +27,7 @@ public class ReaderNativeLifecycleTest {
 		assertFalse(lifecycle.isInitialized());
 		assertTrue(lifecycle.claimDestroy());
 		assertFalse(lifecycle.claimDestroy());
+		assertNull(lifecycle.takeDoc());
 	}
 
 	@Test
@@ -39,6 +41,7 @@ public class ReaderNativeLifecycleTest {
 		assertFalse(lifecycle.markCreated());
 		assertFalse(lifecycle.markInitialized());
 		assertFalse(lifecycle.claimDestroy());
+		assertFalse(lifecycle.attach(null));
 	}
 
 	@Test
@@ -79,5 +82,18 @@ public class ReaderNativeLifecycleTest {
 		assertFalse(lifecycle.isActive());
 		assertFalse(lifecycle.isInitialized());
 		assertFalse(lifecycle.claimDestroy());
+	}
+
+	@Test
+	public void takeDocRequiresDestroyClaim() {
+		ReaderNativeLifecycle lifecycle =
+				new ReaderNativeLifecycle();
+		assertNull(lifecycle.takeDoc());
+		assertTrue(lifecycle.claimCreate());
+		assertTrue(lifecycle.markCreated());
+		assertNull(lifecycle.takeDoc());
+		assertTrue(lifecycle.close());
+		assertTrue(lifecycle.claimDestroy());
+		assertNull(lifecycle.takeDoc());
 	}
 }

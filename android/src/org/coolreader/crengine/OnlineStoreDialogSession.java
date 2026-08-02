@@ -49,7 +49,7 @@ final class OnlineStoreDialogSession {
 					"cancelAction must not be null");
 		synchronized (this) {
 			if (isActive(request)) {
-				request.cancelAction = cancelAction;
+				request.cancelAction.set(cancelAction);
 				return true;
 			}
 			if (request != null && request.completed)
@@ -69,7 +69,7 @@ final class OnlineStoreDialogSession {
 			return false;
 		current[request.channel.ordinal()] = null;
 		request.completed = true;
-		request.cancelAction = null;
+		request.cancelAction.clear();
 		return true;
 	}
 
@@ -108,15 +108,15 @@ final class OnlineStoreDialogSession {
 	private static void cancel(Request request) {
 		if (request == null)
 			return;
-		Runnable cancelAction = request.cancelAction;
-		request.cancelAction = null;
+		Runnable cancelAction = request.cancelAction.take();
 		if (cancelAction != null)
 			cancelAction.run();
 	}
 
 	static final class Request {
 		private final Channel channel;
-		private Runnable cancelAction;
+		private final CancelActionState cancelAction =
+				new CancelActionState();
 		private boolean completed;
 
 		private Request(Channel channel) {

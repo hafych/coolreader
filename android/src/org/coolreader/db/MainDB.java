@@ -866,7 +866,7 @@ public class MainDB extends BaseDB {
 	
 	private SQLiteStatement seriesStmt;
 	private SQLiteStatement seriesSelectStmt;
-	private HashMap<String,Long> seriesCache = new HashMap<String,Long>();
+	private final StringIdCacheState seriesCache = new StringIdCacheState();
 	public Long getSeriesId( String seriesName )
 	{
 		if ( seriesName==null || seriesName.trim().length()==0 )
@@ -896,7 +896,7 @@ public class MainDB extends BaseDB {
 	
 	private SQLiteStatement folderStmt;
 	private SQLiteStatement folderSelectStmt;
-	private HashMap<String,Long> folderCache = new HashMap<String,Long>();
+	private final StringIdCacheState folderCache = new StringIdCacheState();
 	public Long getFolderId( String folderName )
 	{
 		if ( folderName==null || folderName.trim().length()==0 )
@@ -926,7 +926,7 @@ public class MainDB extends BaseDB {
 	
 	private SQLiteStatement authorStmt;
 	private SQLiteStatement authorSelectStmt;
-	private HashMap<String,Long> authorCache = new HashMap<String,Long>();
+	private final StringIdCacheState authorCache = new StringIdCacheState();
 	private Long getAuthorId( String authorName ) {
 		if ( authorName==null || authorName.trim().length()==0 )
 			return null;

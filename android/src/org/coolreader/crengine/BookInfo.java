@@ -35,7 +35,7 @@ import android.os.Parcelable;
 public class BookInfo implements Parcelable {
 	private FileInfo fileInfo;
 	private Bookmark lastPosition;
-	private ArrayList<Bookmark> bookmarks = new ArrayList<Bookmark>();
+	private final BookInfoBookmarksState bookmarks = new BookInfoBookmarksState();
 
 	public static final Creator<BookInfo> CREATOR = new Creator<BookInfo>() {
 		@Override
@@ -65,7 +65,7 @@ public class BookInfo implements Parcelable {
 	
 	synchronized public Bookmark findShortcutBookmark( int shortcut )
 	{
-		for ( Bookmark bm : bookmarks )
+		for ( Bookmark bm : bookmarks.snapshot() )
 			if ( bm.getType()==Bookmark.TYPE_POSITION && bm.getShortcut()==shortcut )
 				return bm;
 		return null;
@@ -106,7 +106,7 @@ public class BookInfo implements Parcelable {
 	protected BookInfo(Parcel in) {
 		fileInfo = in.readParcelable(FileInfo.class.getClassLoader());
 		lastPosition = in.readParcelable(Bookmark.class.getClassLoader());
-		bookmarks = in.createTypedArrayList(Bookmark.CREATOR);
+		bookmarks.replaceAll(in.createTypedArrayList(Bookmark.CREATOR));
 	}
 
 	public Bookmark getLastPosition()
@@ -160,7 +160,7 @@ public class BookInfo implements Parcelable {
 		ArrayList<Bookmark> list = new ArrayList<Bookmark>(bookmarks.size() + 1);
 		if (lastPosition != null)
 			list.add(lastPosition);
-		list.addAll(bookmarks);
+		list.addAll(bookmarks.copyAsArrayList());
 		return list;
 	}
 
@@ -176,14 +176,7 @@ public class BookInfo implements Parcelable {
 
 	private int findBookmarkIndex(Bookmark bm)
 	{
-		if (bm == null)
-			return -1;
-		for ( int i=0; i<bookmarks.size(); i++ ) {
-			Bookmark item = bookmarks.get(i);
-			if (item.equalUniqueKey(bm))
-				return i;
-		}
-		return -1;
+		return bookmarks.findIndex(bm);
 	}
 
 	synchronized public Bookmark syncBookmark(Bookmark bm)
@@ -233,7 +226,7 @@ public class BookInfo implements Parcelable {
 	}
 
 	synchronized public void sortBookmarks() {
-		Collections.sort(bookmarks, new Comparator<Bookmark>() {
+		bookmarks.sort(new Comparator<Bookmark>() {
 			@Override
 			public int compare(Bookmark bm1, Bookmark bm2) {
 				if ( bm1.getPercent() < bm2.getPercent() )
@@ -253,7 +246,7 @@ public class BookInfo implements Parcelable {
 		buf.append("# book title: " + fileInfo.title + "\n");
 		buf.append("# author: " + fileInfo.authors + "\n");
 		buf.append("\n");
-		for ( Bookmark bm : bookmarks ) {
+		for ( Bookmark bm : bookmarks.snapshot() ) {
 			if ( bm.getType()!=Bookmark.TYPE_COMMENT && bm.getType()!=Bookmark.TYPE_CORRECTION )
 				continue;
 			int percent = bm.getPercent();
@@ -286,7 +279,7 @@ public class BookInfo implements Parcelable {
 			writer.write("# author: " + fileInfo.authors + "\r\n");
 			writer.write("# series: " + fileInfo.series + "\r\n");
 			writer.write("\r\n");
-			for ( Bookmark bm : bookmarks ) {
+			for ( Bookmark bm : bookmarks.snapshot() ) {
 				if ( bm.getType()!=Bookmark.TYPE_COMMENT && bm.getType()!=Bookmark.TYPE_CORRECTION )
 					continue;
 				int percent = bm.getPercent();
@@ -318,7 +311,7 @@ public class BookInfo implements Parcelable {
 	synchronized public void setBookmarks(ArrayList<Bookmark> list)
 	{
 		lastPosition = null;
-		bookmarks = new ArrayList<Bookmark>();
+		bookmarks.clear();
 		if (list == null)
 			return;
 		for (Bookmark bm : list)
@@ -341,7 +334,7 @@ public class BookInfo implements Parcelable {
 	public void writeToParcel(Parcel dest, int flags) {
 		dest.writeParcelable(fileInfo, flags);
 		dest.writeParcelable(lastPosition, flags);
-		dest.writeTypedList(bookmarks);
+		dest.writeTypedList(bookmarks.copyAsArrayList());
 	}
 
 	@Override
@@ -363,33 +356,22 @@ public class BookInfo implements Parcelable {
 				return false;
 		} else if (!lastPosition.equals(other.lastPosition))
 			return false;
-		if (null == bookmarks) {
-			if (null != other.bookmarks)
-				return false;
-		} else {
-			if (null == other.bookmarks) {
-				return false;
-			} else {
-				if (bookmarks.size() != other.bookmarks.size())
-					return false;
-				else {
-					try {
-						for (int i = 0; i < bookmarks.size(); i++) {
-							// it is assumed that the bookmarks in both objects are in the same order
-							Bookmark bk = bookmarks.get(i);
-							Bookmark other_bk = other.bookmarks.get(i);
-							if (null == bk) {
-								if (null != other_bk)
-									return false;
-							} else if (!bk.equals(other_bk))
-								return false;
-						}
-					} catch (Exception e) {
-						// for example ClassCastException
+		if (bookmarks.size() != other.bookmarks.size())
+			return false;
+		try {
+			for (int i = 0; i < bookmarks.size(); i++) {
+				// it is assumed that the bookmarks in both objects are in the same order
+				Bookmark bk = bookmarks.get(i);
+				Bookmark other_bk = other.bookmarks.get(i);
+				if (null == bk) {
+					if (null != other_bk)
 						return false;
-					}
-				}
+				} else if (!bk.equals(other_bk))
+					return false;
 			}
+		} catch (Exception e) {
+			// for example ClassCastException
+			return false;
 		}
 		return true;
 	}

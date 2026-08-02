@@ -58,8 +58,22 @@ def main() -> None:
     engine = (
         ANDROID_SOURCE / "org" / "coolreader" / "crengine" / "Engine.java"
     ).read_text(encoding="utf-8")
-    if "mountedRootsMap = Collections.emptyMap();" not in engine:
+    # Legacy shared-storage roots must stay empty; only app-private paths
+    # and SAF-selected library roots are allowed for discovery.
+    has_empty_roots_map = (
+            "MOUNTED_ROOTS_MAP =\n\t\t\tCollections.emptyMap();" in engine
+            or "MOUNTED_ROOTS_MAP = Collections.emptyMap();" in engine
+            or "mountedRootsMap = Collections.emptyMap();" in engine
+    )
+    has_empty_roots_list = (
+            "MOUNTED_ROOTS =\n\t\t\tCollections.emptyList();" in engine
+            or "MOUNTED_ROOTS = Collections.emptyList();" in engine
+    )
+    if not (has_empty_roots_map and has_empty_roots_list):
         violations.append("Engine does not disable legacy filesystem roots")
+    if "Legacy filesystem root discovery is disabled" not in engine:
+        violations.append(
+            "Engine does not document disabled legacy filesystem discovery")
     if 'new File(mAppContext.getCacheDir(), "engine")' not in engine:
         violations.append("native engine cache is not app-private")
 

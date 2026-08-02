@@ -113,14 +113,15 @@ public class DictsDlg extends BaseDialog {
 			return Dictionaries.getDictList().length==0;
 		}
 
-		private ArrayList<DataSetObserver> observers = new ArrayList<>();
+		private final DataSetObserverRegistry observers =
+			new DataSetObserverRegistry();
 		
 		public void registerDataSetObserver(DataSetObserver observer) {
-			observers.add(observer);
+		observers.register(observer);
 		}
 
 		public void unregisterDataSetObserver(DataSetObserver observer) {
-			observers.remove(observer);
+		observers.unregister(observer);
 		}
 	}
 	
@@ -148,7 +149,10 @@ public class DictsDlg extends BaseDialog {
 			//	mThis.dismiss();
 			//	return true;
 			//selectedItem = position;
-			mCoolReader.mDictionaries.setAdHocDict(Dictionaries.getDictListExt(mCoolReader,true).get(position));
+			Dictionaries dictionaries = mCoolReader.getDictionaries();
+			if (dictionaries == null)
+				return true;
+			dictionaries.setAdHocDict(Dictionaries.getDictListExt(mCoolReader,true).get(position));
 			mCoolReader.findInDictionary(mSearchText);
 			if (!selectionHandler.shouldPersistSelection())
 				selectionHandler.clearSelection();

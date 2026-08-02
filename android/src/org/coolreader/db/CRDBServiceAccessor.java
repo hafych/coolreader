@@ -37,8 +37,7 @@ public class CRDBServiceAccessor {
 	private final Object mLocker = new Object();
 	private final ServiceBindingState<CRDBService.LocalBinder> bindingState =
 			new ServiceBindingState<>();
-	private Binding currentBinding;
-	private MountPathCorrector pathCorrector;
+	private final CrdbAccessorSessionState sessionState;
 
 	public CRDBService.LocalBinder get() {
 		CRDBService.LocalBinder binder = getOrNull();
@@ -53,12 +52,12 @@ public class CRDBServiceAccessor {
     
 	public CRDBServiceAccessor(Context context, MountPathCorrector pathCorrector) {
 		mContext = context.getApplicationContext();
-		this.pathCorrector = pathCorrector;
+		sessionState = new CrdbAccessorSessionState(pathCorrector);
 	}
 
 	public void setPathCorrector(MountPathCorrector pathCorrector) {
 		synchronized (mLocker) {
-			this.pathCorrector = pathCorrector;
+			sessionState.setPathCorrector(pathCorrector);
 			CRDBService.LocalBinder binder =
 					bindingState.getBinder();
 			if (binder != null && pathCorrector != null)
@@ -77,8 +76,9 @@ public class CRDBServiceAccessor {
 						request.getRegistration();
 				ServiceConnection connection =
 						createServiceConnection(registration);
-				currentBinding =
-						new Binding(registration, connection);
+				sessionState.setBinding(
+						new CrdbAccessorSessionState.Binding(
+								registration, connection));
 				boolean bound;
 				RuntimeException bindError = null;
 				try {
@@ -102,7 +102,7 @@ public class CRDBServiceAccessor {
 							"cannot bind CRDBService",
 							bindError);
 					bindingState.bindingFailed(registration);
-					currentBinding = null;
+					sessionState.takeIfMatches(registration);
 				}
 			}
 		}
@@ -114,20 +114,16 @@ public class CRDBServiceAccessor {
 
 	public void unbind() {
 		Log.v(TAG, "unbinding CRDBService");
-		Binding binding;
+		CrdbAccessorSessionState.Binding binding;
 		synchronized (mLocker) {
 			ServiceBindingState.Registration registration =
 					bindingState.unbind();
-			binding =
-					currentBinding != null
-									&& currentBinding.registration
-											== registration
-							? currentBinding
-							: null;
-			currentBinding = null;
+			binding = sessionState.takeIfMatches(registration);
+			if (binding == null)
+				sessionState.takeBinding();
 		}
 		if (binding != null)
-			unbindPlatformConnection(binding.connection);
+			unbindPlatformConnection(binding.connection());
 	}
 
 	private ServiceConnection createServiceConnection(
@@ -143,6 +139,8 @@ public class CRDBServiceAccessor {
 				synchronized (mLocker) {
 					if (!bindingState.isCurrent(registration))
 						return;
+					MountPathCorrector pathCorrector =
+							sessionState.getPathCorrector();
 					if (pathCorrector != null)
 						binder.setPathCorrector(pathCorrector);
 					callbacks =
@@ -199,11 +197,7 @@ public class CRDBServiceAccessor {
 		synchronized (mLocker) {
 			if (bindingState.bindingFailed(registration)) {
 				shouldUnbind =
-						currentBinding != null
-								&& currentBinding.registration
-										== registration;
-				if (shouldUnbind)
-					currentBinding = null;
+						sessionState.clearIfMatches(registration);
 			}
 		}
 		if (shouldUnbind) {
@@ -221,18 +215,6 @@ public class CRDBServiceAccessor {
 					TAG,
 					"CRDBService connection was already unbound",
 					e);
-		}
-	}
-
-	private static final class Binding {
-		private final ServiceBindingState.Registration registration;
-		private final ServiceConnection connection;
-
-		private Binding(
-				ServiceBindingState.Registration registration,
-				ServiceConnection connection) {
-			this.registration = registration;
-			this.connection = connection;
 		}
 	}
 }

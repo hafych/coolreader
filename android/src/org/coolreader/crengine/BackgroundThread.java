@@ -55,11 +55,11 @@ public class BackgroundThread extends Thread {
 	
 	public static Handler getBackgroundHandler() {
 		BackgroundThread current = instance;
-		return current == null ? null : current.handler;
+		return current == null ? null : current.handlerState.get();
 	}
 
 	public static Handler getGUIHandler() {
-		return instance().guiHandler;
+		return instance().guiHandlerState.get();
 	}
 
 	public final static boolean CHECK_THREAD_CONTEXT = true; 
@@ -87,10 +87,12 @@ public class BackgroundThread extends Thread {
 	}
 	
 	// 
-	private volatile Handler handler;
+	private final BackgroundThreadHandlerState handlerState =
+			new BackgroundThreadHandlerState();
 	private final DeferredTaskQueue<Runnable> backgroundTasks =
 			new DeferredTaskQueue<>();
-	private volatile Handler guiHandler;
+	private final BackgroundThreadHandlerState guiHandlerState =
+			new BackgroundThreadHandlerState();
 	private final DeferredTaskQueue<Runnable> guiTasks =
 			new DeferredTaskQueue<>();
 
@@ -99,13 +101,14 @@ public class BackgroundThread extends Thread {
 	 * @param guiTarget is view to post GUI tasks to.
 	 */
 	public void setGUIHandler(Handler guiHandler) {
-		this.guiHandler = guiHandler;
+		guiHandlerState.set(guiHandler);
+		final Handler target = guiHandler;
 		int delivered = guiTasks.attach(
-				guiHandler == null
+				target == null
 						? null
 						: (task, delay) -> delay > 0
-								? guiHandler.postDelayed(task, delay)
-								: guiHandler.post(task));
+								? target.postDelayed(task, delay)
+								: target.post(task));
 		if (delivered > 0)
 			L.d("Engine.setGUI: " + delivered + " queued tasks delivered");
 	}
@@ -129,7 +132,7 @@ public class BackgroundThread extends Thread {
 				Log.d("cr3", "message: " + message);
 			}
 		};
-		handler = currentHandler;
+		handlerState.set(currentHandler);
 		Log.i("cr3", "Background thread handler is created");
 		backgroundTasks.attach((task, delay) -> {
 			if (delay > 0) {
@@ -142,7 +145,7 @@ public class BackgroundThread extends Thread {
 			Looper.loop();
 		} finally {
 			backgroundTasks.attach(null);
-			handler = null;
+			handlerState.take();
 			synchronized (LOCK) {
 				if (instance == this)
 					instance = null;
@@ -363,6 +366,7 @@ public class BackgroundThread extends Thread {
 	
 	public void quit() {
 		postBackground(() -> {
+			Handler handler = handlerState.get();
 			if (handler != null) {
 				L.i("Calling quit() on background thread looper.");
 				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2)

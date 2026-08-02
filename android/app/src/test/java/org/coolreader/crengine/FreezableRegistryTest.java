@@ -54,4 +54,18 @@ public class FreezableRegistryTest {
 			assertEquals(0, registry.snapshot().size());
 		}
 	}
+
+	@Test
+	public void closeIsPermanentAndFreezesBuilder() {
+		FreezableRegistry<String> registry = new FreezableRegistry<>();
+		registry.add("first");
+		assertTrue(registry.close());
+		assertTrue(registry.isClosed());
+		assertTrue(registry.isFrozen());
+		assertFalse(registry.add("late"));
+		assertEquals(
+				java.util.Collections.singletonList("first"),
+				registry.snapshot());
+		assertFalse(registry.close());
+	}
 }

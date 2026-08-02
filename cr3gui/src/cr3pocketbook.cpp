@@ -482,6 +482,11 @@ public:
 };
 
 CRPocketBookWindowManager * CRPocketBookWindowManager::instance = NULL;
+/// Process-long exclusive owner after successful InitDoc open.
+/// Non-owning `instance` remains the compatibility lookup.
+static std::unique_ptr<CRPocketBookWindowManager> g_windowManagerOwner;
+/// Process-long exclusive owner for PocketBook globals; `pbGlobals` is non-owning.
+static std::unique_ptr<CRPocketBookGlobals> g_pocketBookGlobalsOwner;
 V3DocViewWin * main_win = NULL;
 
 void executeCommand(int commandId, int commandParam)
@@ -616,7 +621,9 @@ public:
     }
     virtual bool onKeyPressed( int key, int flags )
     {
-        _wm->postEvent( new CRGUIKeyDownEvent(key, flags) );
+        std::unique_ptr<CRGUIEvent> event =
+                std::make_unique<CRGUIKeyDownEvent>(key, flags);
+        _wm->postEvent( event.release() );
         _wm->closeWindow( this );
         return true;
     }
@@ -2540,7 +2547,9 @@ int InitDoc(const char *exename, char *fileName)
 
     CRLog::trace("InitDoc()");
 
-    pbGlobals = new CRPocketBookGlobals(fileName);
+    g_pocketBookGlobalsOwner =
+            std::make_unique<CRPocketBookGlobals>(fileName);
+    pbGlobals = g_pocketBookGlobalsOwner.get();
     lString32 manualFile =
             Utf8ToUnicode(lString8(
                     USERDATA
@@ -2621,7 +2630,9 @@ int InitDoc(const char *exename, char *fileName)
 
     {
         CRLog::trace("creating window manager...");
-        CRPocketBookWindowManager * wm = new CRPocketBookWindowManager(ScreenWidth(), ScreenHeight());
+        std::unique_ptr<CRPocketBookWindowManager> wm =
+                std::make_unique<CRPocketBookWindowManager>(
+                        ScreenWidth(), ScreenHeight());
 
         const char * keymap_locations [] = {
             CONFIGPATH"/cr3/keymaps",
@@ -2661,7 +2672,7 @@ int InitDoc(const char *exename, char *fileName)
                     PB_CR3_CACHE_SIZE);
         CRLog::trace("creating main window...");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
-                std::make_unique<CRPocketBookDocView>(wm);
+                std::make_unique<CRPocketBookDocView>(wm.get());
         main_win = mainWindowOwner.get();
         CRLog::trace("setting colors...");
         main_win->getDocView()->setBackgroundColor(0xFFFFFF);
@@ -2724,9 +2735,13 @@ int InitDoc(const char *exename, char *fileName)
         if ( !main_win->loadDocument(
                     Utf8ToUnicode(lString8(fileName))) ) {
             printf("Cannot open book file %s\n", fileName);
-            delete wm;
+            main_win = NULL;
+            // Scoped wm owner tears down on return.
             return 0;
         }
+        // Successful open: process-long exclusive owner.
+        // instance remains a non-owning compatibility view.
+        g_windowManagerOwner = std::move(wm);
     }
     return 1;
 }

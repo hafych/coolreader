@@ -26,6 +26,7 @@
 
 #include <dlfcn.h>
 #include <android/api-level.h>
+#include <memory>
 
 uint8_t CRJNIEnv::sdk_int = 0;
 
@@ -266,13 +267,15 @@ public:
 		    pixels = NULL;
 		}
 	    //CRLog::trace("JNIGraphicsLib::lock pixels locked!" );
-		return new LVColorDrawBufEx( width, height, pixels, bpp );
+		std::unique_ptr<LVDrawBuf> owned(
+				new LVColorDrawBufEx( width, height, pixels, bpp ));
+		return owned.release(); // unlock() reclaims exclusive ownership
     } 
     virtual void unlock(JNIEnv* env, jobject jbitmap, LVDrawBuf * buf ) {
+    	std::unique_ptr<LVDrawBuf> owned(buf);
     	LVColorDrawBufEx * bmp = (LVColorDrawBufEx*)buf;
     	bmp->convert();
     	AndroidBitmap_unlockPixels(env, jbitmap);
-    	delete buf;
     } 
 
     void * getProc( const char * procName )
@@ -398,12 +401,13 @@ public:
 	    lUInt8 * pixels = (lUInt8 *)env->GetIntArrayElements(_array, 0);
 	    //CRLog::trace("Pixels address %08x", (int)(pixels));
 	    //CRLog::trace("JNIGraphicsReplacement::lock exiting");
-		LVDrawBuf * buf = new LVColorDrawBufEx(width, height, pixels, bpp);
+		std::unique_ptr<LVDrawBuf> owned(
+				new LVColorDrawBufEx(width, height, pixels, bpp));
 	    //CRLog::trace("Last row address %08x", (int)buf->GetScanLine(height-1));
 	    //pixels[0] = 0x12;
 	    //pixels[width*height*4-1] = 0x34;
 	    //CRLog::trace("Write access ok");
-		return buf;
+		return owned.release(); // unlock() reclaims exclusive ownership
     }
     void reallocArray(JNIEnv* env, int len )
     {
@@ -426,6 +430,7 @@ public:
 	    //CRLog::trace("JNIGraphicsReplacement::unlock entering");
     	if ( !buf)
     		return;
+    	std::unique_ptr<LVDrawBuf> owned(buf);
     	LVColorDrawBufEx * bmp = (LVColorDrawBufEx*)buf;
     	bmp->convert();
     	lUInt8 * pixels = bmp->getData();
@@ -440,7 +445,6 @@ public:
 		env->CallVoidMethod(jbitmap, mid, jbuf);
 		env->DeleteLocalRef(jbuf);
 	    //CRLog::trace("JNIGraphicsReplacement::unlock exiting");
-		delete buf;
     }
     JNIGraphicsReplacement() : _array(NULL) {
     }
@@ -448,18 +452,17 @@ public:
     }
 };
 
-static BitmapAccessorInterface * _bitmapAccessorInstance = NULL; 
+static std::unique_ptr<BitmapAccessorInterface> _bitmapAccessorInstance;
 BitmapAccessorInterface * BitmapAccessorInterface::getInstance()
 {
-	if ( _bitmapAccessorInstance==NULL ) {
-		JNIGraphicsLib * lib = new JNIGraphicsLib();
+	if ( !_bitmapAccessorInstance ) {
+		std::unique_ptr<JNIGraphicsLib> lib(new JNIGraphicsLib());
 		if ( !lib->load("libjnigraphics.so") ) {
-			delete lib;
 			CRLog::error("Cannot load libjnigraphics.so : will use slower replacement instead");
-			_bitmapAccessorInstance = new JNIGraphicsReplacement(); 
+			_bitmapAccessorInstance.reset(new JNIGraphicsReplacement());
 		} else {
-			_bitmapAccessorInstance = lib;
+			_bitmapAccessorInstance = std::move(lib);
 		}
 	}
-	return _bitmapAccessorInstance;
-} 
+	return _bitmapAccessorInstance.get();
+}

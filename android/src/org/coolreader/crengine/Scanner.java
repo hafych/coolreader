@@ -47,23 +47,23 @@ public class Scanner extends FileInfoChangeSource {
 	
 	HashMap<String, FileInfo> mFileList = new HashMap<>();
 //	ArrayList<FileInfo> mFilesForParsing = new ArrayList<FileInfo>();
-	FileInfo mRoot;
+	private final ScannerRootState rootState = new ScannerRootState();
 	
-	boolean mHideEmptyDirs = true;
+	private final ScannerScanOptionsState scanOptions =
+			new ScannerScanOptionsState();
 	
 	public void setHideEmptyDirs( boolean flgHide ) {
-		mHideEmptyDirs = flgHide;
+		scanOptions.setHideEmptyDirs(flgHide);
 	}
 
-	private boolean dirScanEnabled = true;
 	public boolean getDirScanEnabled()
 	{
-		return dirScanEnabled;
+		return scanOptions.isDirScanEnabled();
 	}
 	
 	public void setDirScanEnabled(boolean dirScanEnabled)
 	{
-		this.dirScanEnabled = dirScanEnabled;
+		scanOptions.setDirScanEnabled(dirScanEnabled);
 	}
 	
 	private FileInfo scanZip(FileInfo zip, ScanControl control)
@@ -432,8 +432,8 @@ public class Scanner extends FileInfoChangeSource {
 		private final boolean directoryUnchanged;
 		private final MetadataScanCompleteListener readyCallback;
 		private final ScanBatchCursor batches;
-		private boolean finished;
-		private boolean complete = true;
+		private final MetadataScanSessionState sessionState =
+				new MetadataScanSessionState();
 
 		MetadataScanSession(
 				LibraryMetadataStore metadataStore,
@@ -476,7 +476,7 @@ public class Scanner extends FileInfoChangeSource {
 			log.v("onFileInfoListLoaded("
 					+ batch.start + ", " + batch.end + ")");
 			if (control.isStopped()) {
-				complete = false;
+				sessionState.markIncomplete();
 				finish();
 				return;
 			}
@@ -532,7 +532,7 @@ public class Scanner extends FileInfoChangeSource {
 				}
 			}
 			if (control.isStopped()) {
-				complete = false;
+				sessionState.markIncomplete();
 				finish();
 				return;
 			}
@@ -558,7 +558,7 @@ public class Scanner extends FileInfoChangeSource {
 								.extractProperties(item))
 							filesForSave.add(item);
 						else
-							complete = false;
+							sessionState.markIncomplete();
 						setProgress(++completed);
 					}
 					for (int i = 0; i < count2; i++) {
@@ -569,11 +569,11 @@ public class Scanner extends FileInfoChangeSource {
 								.updateFileFingerprint(item))
 							filesForSave.add(item);
 						else
-							complete = false;
+							sessionState.markIncomplete();
 						setProgress(++completed);
 					}
 				} catch (Exception e) {
-					complete = false;
+					sessionState.markIncomplete();
 					L.e("Exception while scanning", e);
 				}
 				BackgroundThread.instance().postGUI(
@@ -593,7 +593,7 @@ public class Scanner extends FileInfoChangeSource {
 				L.e("Exception while saving scan batch", e);
 			}
 			if (control.isStopped()) {
-				complete = false;
+				sessionState.markIncomplete();
 				finish();
 				return;
 			}
@@ -608,10 +608,9 @@ public class Scanner extends FileInfoChangeSource {
 		}
 
 		private void finish() {
-			if (finished)
+			if (!sessionState.beginFinish())
 				return;
-			finished = true;
-			readyCallback.onComplete(complete);
+			readyCallback.onComplete(sessionState.isComplete());
 		}
 
 		private boolean restoreUnchangedBatch(
@@ -641,7 +640,8 @@ public class Scanner extends FileInfoChangeSource {
 		private final ScanCompleteListener readyListener;
 		private final boolean recursiveScan;
 		private final ArrayDeque<FileInfo> pending = new ArrayDeque<>();
-		private boolean finished;
+		private final MetadataScanSessionState iteratorState =
+				new MetadataScanSessionState();
 
 		DirectoryMetadataIterator(
 				LibraryMetadataStore metadataStore,
@@ -725,9 +725,8 @@ public class Scanner extends FileInfoChangeSource {
 		}
 
 		private void finish() {
-			if (finished)
+			if (!iteratorState.beginFinish())
 				return;
-			finished = true;
 			progress.hide();
 			readyListener.onComplete(control);
 		}
@@ -765,7 +764,7 @@ public class Scanner extends FileInfoChangeSource {
 				new CrdbLibraryMetadataStore(db);
 		LibraryMetadataExtractor metadataExtractor =
 				new EngineLibraryMetadataExtractor(engine);
-		boolean fullDiscovery = recursiveScan || mHideEmptyDirs;
+		boolean fullDiscovery = recursiveScan || scanOptions.isHideEmptyDirs();
 
 		listSubtreeBg(
 				baseDir,
@@ -794,8 +793,8 @@ public class Scanner extends FileInfoChangeSource {
 
 	private FileInfo findRoot(String pathname) {
 		String normalized = engine.getPathCorrector().normalizeIfPossible(pathname);
-		for (int i = 0; i<mRoot.dirCount(); i++) {
-			FileInfo dir = mRoot.getDir(i);
+		for (int i = 0; i<rootState.require().dirCount(); i++) {
+			FileInfo dir = rootState.require().getDir(i);
 			if (normalized.equals(engine.getPathCorrector().normalizeIfPossible(dir.getPathName())))
 				return dir;
 		}
@@ -824,8 +823,8 @@ public class Scanner extends FileInfoChangeSource {
 			}
 			log.i("Adding FS root: " + pathname + "  " + filename);
 		}
-		mRoot.addDir(dir);
-		dir.parent = mRoot;
+		rootState.require().addDir(dir);
+		dir.parent = rootState.require();
 		if (!listIt) {
 			dir.isListed = true;
 			dir.isScanned = true;
@@ -894,8 +893,8 @@ public class Scanner extends FileInfoChangeSource {
 	}
 
 	private void addRoot(FileInfo dir) {
-		dir.parent = mRoot;
-		mRoot.addDir(dir);
+		dir.parent = rootState.require();
+		rootState.require().addDir(dir);
 	}
 
 	public FileInfo createRecentRoot() {
@@ -953,7 +952,7 @@ public class Scanner extends FileInfoChangeSource {
 	}
 	
 	public FileInfo createOPDSDir(String path) {
-		FileInfo opds = mRoot.findItemByPathName(FileInfo.OPDS_LIST_TAG);
+		FileInfo opds = rootState.require().findItemByPathName(FileInfo.OPDS_LIST_TAG);
 		if (opds == null)
 			return null;
 		return opds.findItemByPathName(path);
@@ -1210,7 +1209,7 @@ public class Scanner extends FileInfoChangeSource {
 					@Override
 					public void onCompleted(
 							FileInfo directory, boolean fullDepth) {
-						if (fullDepth && mHideEmptyDirs)
+						if (fullDepth && scanOptions.isHideEmptyDirs())
 							directory.removeEmptyDirs();
 						scanControl.completeDirectory();
 						progress.setDiscoveryProgress(
@@ -1221,8 +1220,8 @@ public class Scanner extends FileInfoChangeSource {
 
 	public FileInfo setSearchResults( FileInfo[] results ) {
 		FileInfo existingResults = null;
-		for ( int i=0; i<mRoot.dirCount(); i++ ) {
-			FileInfo dir = mRoot.getDir(i);
+		for ( int i=0; i<rootState.require().dirCount(); i++ ) {
+			FileInfo dir = rootState.require().getDir(i);
 			if ( dir.isSearchDir() ) {
 				existingResults = dir;
 				dir.clear();
@@ -1235,10 +1234,10 @@ public class Scanner extends FileInfoChangeSource {
 			dir.pathname = FileInfo.SEARCH_RESULT_DIR_TAG;
 			dir.filename = mContext.getString(
 					R.string.dir_search_results);
-			dir.parent = mRoot;
+			dir.parent = rootState.require();
 			dir.isListed = true;
 			dir.isScanned = true;
-			mRoot.addDir(dir);
+			rootState.require().addDir(dir);
 			existingResults = dir;
 		}
 		for ( FileInfo item : results )
@@ -1248,7 +1247,7 @@ public class Scanner extends FileInfoChangeSource {
 	
 	public void initRoots(Map<String, String> fsRoots, Map<String, String> privateDirs) {
 		Log.d("cr3", "Scanner.initRoots(" + fsRoots + ")");
-		mRoot.clear();
+		rootState.require().clear();
 		// create recent books dir
 		addRoot( FileInfo.RECENT_DIR_TAG, R.string.dir_recent_books, false);
 
@@ -1294,18 +1293,18 @@ public class Scanner extends FileInfoChangeSource {
 //		long start = System.currentTimeMillis();
 //		mFileList.clear();
 //		mFilesForParsing.clear();
-//		mRoot.clear();
+//		rootState.require().clear();
 //		// create recent books dir
 //		FileInfo recentDir = new FileInfo();
 //		recentDir.isDirectory = true;
 //		recentDir.pathname = "@recent";
 //		recentDir.filename = "Recent Books";
-//		mRoot.addDir(recentDir);
+//		rootState.require().addDir(recentDir);
 //		recentDir.parent = mRoot;
 //		// scan directories
 //		lastPercent = -1;
 //		lastProgressUpdate = System.currentTimeMillis() - 500;
-//		boolean res = scanDirectories( mRoot );
+//		boolean res = scanDirectories( rootState.require() );
 //		// process found files
 //		lookupDB();
 //		parseBookProperties();
@@ -1330,8 +1329,8 @@ public class Scanner extends FileInfoChangeSource {
 	}
 	
 	public FileInfo getDownloadDirectory() {
-		for ( int i=0; i<mRoot.dirCount(); i++ ) {
-			FileInfo item = mRoot.getDir(i);
+		for ( int i=0; i<rootState.require().dirCount(); i++ ) {
+			FileInfo item = rootState.require().getDir(i);
 			if (!item.isWritableDirectory())
 				continue;
 			if ( !item.isSpecialDir() && !item.isArchive ) {
@@ -1379,8 +1378,8 @@ public class Scanner extends FileInfoChangeSource {
 	}
 
 	public FileInfo getSharedDownloadDirectory() {
-		for ( int i=0; i<mRoot.dirCount(); i++ ) {
-			FileInfo item = mRoot.getDir(i);
+		for ( int i=0; i<rootState.require().dirCount(); i++ ) {
+			FileInfo item = rootState.require().getDir(i);
 			if (!item.isWritableDirectory())
 				continue;
 			if ( !item.isSpecialDir() && !item.isArchive ) {
@@ -1404,14 +1403,14 @@ public class Scanner extends FileInfoChangeSource {
 
 	public FileInfo getRoot() 
 	{
-		return mRoot;
+		return rootState.require();
 	}
 
 	public FileInfo getOPDSRoot() 
 	{
-		for ( int i=0; i<mRoot.dirCount(); i++ ) {
-			if ( mRoot.getDir(i).isOPDSRoot() )
-				return mRoot.getDir(i);
+		for ( int i=0; i<rootState.require().dirCount(); i++ ) {
+			if ( rootState.require().getDir(i).isOPDSRoot() )
+				return rootState.require().getDir(i);
 		}
 		L.w("OPDS root directory not found!");
 		return null;
@@ -1419,9 +1418,9 @@ public class Scanner extends FileInfoChangeSource {
 	
 	public FileInfo getRecentDir() 
 	{
-		for ( int i=0; i<mRoot.dirCount(); i++ ) {
-			if ( mRoot.getDir(i).isRecentDir())
-				return mRoot.getDir(i);
+		for ( int i=0; i<rootState.require().dirCount(); i++ ) {
+			if ( rootState.require().getDir(i).isRecentDir())
+				return rootState.require().getDir(i);
 		}
 		L.w("Recent books directory not found!");
 		return null;
@@ -1435,13 +1434,15 @@ public class Scanner extends FileInfoChangeSource {
 			throw new IllegalStateException(
 					"Application context is unavailable");
 		this.mContext = applicationContext;
-		mRoot = new FileInfo();
-		mRoot.path = FileInfo.ROOT_DIR_TAG;	
-		mRoot.filename = "File Manager";
-		mRoot.pathname = FileInfo.ROOT_DIR_TAG;
-		mRoot.isListed = true;
-		mRoot.isScanned = true;
-		mRoot.isDirectory = true;
+		FileInfo root = new FileInfo();
+		root.path = FileInfo.ROOT_DIR_TAG;	
+		root.filename = "File Manager";
+		root.pathname = FileInfo.ROOT_DIR_TAG;
+		root.isListed = true;
+		root.isScanned = true;
+		root.isDirectory = true;
+		if (!rootState.install(root))
+			throw new IllegalStateException("Scanner root already installed");
 	}
 
 	private final Engine engine;

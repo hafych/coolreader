@@ -1887,6 +1887,24 @@ static int testGuiRuntimeOwnership() {
     if (eventDestroyed.load(std::memory_order_relaxed) != 4)
         return fail("GUI manager teardown leaked a queued event");
 
+    // postCommand stages a unique_ptr candidate and releases only at the
+    // postEvent adoption boundary. Drive the real entry point and verify
+    // published params plus clean dispatch/teardown.
+    {
+        GuiScreenOwnershipWindowManager manager(screen.get());
+        manager.postCommand(42, 7);
+        CRGUIEvent *head = manager.peekEvent();
+        if (!head || head->getType() != CREV_COMMAND
+                || head->getParam1() != 42
+                || head->getParam2() != 7)
+            return fail("GUI postCommand did not publish a command event");
+        if (!manager.processPostedEvents())
+            return fail("GUI postCommand dispatch path failed");
+        if (manager.peekEvent())
+            return fail("GUI postCommand left a residual event");
+    }
+
+
     std::atomic<int> menuItemDestroyed(0);
     bool menuBuildFailed = false;
     try {

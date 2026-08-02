@@ -183,6 +183,10 @@ public:
                 new CRJinkeScreen( dx, dy ) ) );
         instance = this;
     }
+    ~CRJinkeWindowManager() override
+    {
+        instance = NULL;
+    }
     // runs event loop
     int runEventLoop() override
     {
@@ -198,6 +202,9 @@ public:
 };
 
 CRJinkeWindowManager * CRJinkeWindowManager::instance = NULL;
+/// Process-long exclusive owner after successful InitDoc open.
+/// Non-owning `instance` remains the compatibility lookup.
+static std::unique_ptr<CRJinkeWindowManager> g_windowManagerOwner;
 V3DocViewWin * main_win = NULL;
 
 class CRJinkeDocView : public V3DocViewWin {
@@ -879,7 +886,8 @@ int InitDoc(char *fileName)
 
     {
         CRLog::trace("creating window manager...");
-        CRJinkeWindowManager * wm = new CRJinkeWindowManager(600,800);
+        std::unique_ptr<CRJinkeWindowManager> wm =
+                std::make_unique<CRJinkeWindowManager>(600, 800);
 
         const char * keymap_locations [] = {
             "/root/crengine/",
@@ -908,13 +916,16 @@ int InitDoc(char *fileName)
 
         CRLog::trace("creating main window...");
         std::unique_ptr<V3DocViewWin> mainWindowOwner =
-                std::make_unique<CRJinkeDocView>(wm);
+                std::make_unique<CRJinkeDocView>(wm.get());
         main_win = mainWindowOwner.get();
 
 #ifdef ALLOW_RUN_EXE
     {
         if( strstr(fileName, ".exe.txt") || strstr(fileName, ".exe.fb2")) {
             EXE_FILE_NAME = fileName;
+            // Scoped wm owner tears down on return; process
+            // continues with EXE path without a live viewer.
+            main_win = NULL;
             return true;
         }
     }
@@ -971,10 +982,12 @@ int InitDoc(char *fileName)
         if ( !main_win->loadDocument(
                     Utf8ToUnicode(lString8(fileName))) ) {
             printf("Cannot open book file %s\n", fileName);
-            delete wm;
+            main_win = NULL;
+            // Scoped wm owner tears down on return.
             return 0;
-        } else {
         }
+        // Successful open: process-long exclusive owner.
+        g_windowManagerOwner = std::move(wm);
     }
 
     //_docview->setVisiblePageCount( 1 );

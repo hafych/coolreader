@@ -54,8 +54,12 @@ public class CRToolBar extends ViewGroup {
 	private static final Logger log = L.create("tb");
 	
 	final private BaseActivity activity;
-	private ArrayList<ReaderAction> actions = new ArrayList<>();
-	private ArrayList<ReaderAction> iconActions = new ArrayList<>();
+	private final ReaderActionListState actions =
+			new ReaderActionListState();
+	private final ReaderActionListState iconActions =
+			new ReaderActionListState();
+	private final ReaderActionListState itemsOverflow =
+			new ReaderActionListState();
 	private int buttonHeight;
 	private int buttonWidth;
 	private int itemHeight; // multiline mode, line height 
@@ -81,8 +85,6 @@ public class CRToolBar extends ViewGroup {
 		this.popup = popup;
 		this.popupLocation = popupLocation;
 	}
-
-	private ArrayList<ReaderAction> itemsOverflow = new ArrayList<>();
 	
 	public void setButtonAlpha(int alpha) {
 		this.buttonAlpha = alpha;
@@ -133,7 +135,7 @@ public class CRToolBar extends ViewGroup {
 	public CRToolBar(BaseActivity context, ArrayList<ReaderAction> actions, boolean multiline) {
 		super(context);
 		this.activity = context;
-		this.actions = actions;
+		this.actions.replaceAll(actions);
 		this.isMultiline = multiline;
 		this.preferredItemHeight = activity.getPreferredItemHeight(); //context.getPreferredItemHeight();
 		this.inflater = LayoutInflater.from(activity);
@@ -202,7 +204,7 @@ public class CRToolBar extends ViewGroup {
 				buttonHeight = h;
 			}
 		}
-		if (isMultiline) {
+		if (isMultiline && iconActions.size() > 0) {
 			LinearLayout item = inflateItem(iconActions.get(0));
 			itemHeight = item.getMeasuredHeight() + BUTTON_SPACING;
 		}
@@ -230,7 +232,7 @@ public class CRToolBar extends ViewGroup {
 	@Override
 	protected void onCreateContextMenu(ContextMenu menu) {
 		int order = 0;
-		for (ReaderAction action : itemsOverflow) {
+		for (ReaderAction action : itemsOverflow.snapshot()) {
 			menu.add(0, action.menuItemId, order++, action.nameId);
 		}
 	}
@@ -245,18 +247,28 @@ public class CRToolBar extends ViewGroup {
 	
 	public void showOverflowMenu() {
 		if (itemsOverflow.size() > 0) {
+			ArrayList<ReaderAction> overflowCopy =
+					itemsOverflow.copyAsArrayList();
 			if (onOverflowHandler != null)
-				onOverflowHandler.onOverflowActions(itemsOverflow);
+				onOverflowHandler.onOverflowActions(overflowCopy);
 			else {
 				if (!isMultiline && visibleNonButtonCount == 0) {
-					showPopup(activity, activity.getContentView(), actions, onActionHandler, onOverflowHandler, actions.size(), Settings.VIEWER_TOOLBAR_TOP);
+					showPopup(activity, activity.getContentView(),
+							actions.copyAsArrayList(), onActionHandler,
+							onOverflowHandler, actions.size(),
+							Settings.VIEWER_TOOLBAR_TOP);
 				} else {
-					if (allActionsHaveIcon(itemsOverflow)) {
+					if (allActionsHaveIcon(overflowCopy)) {
 						if (popup != null)
 							popup.dismiss();
-						showPopup(activity, activity.getContentView(), itemsOverflow, onActionHandler, onOverflowHandler, actions.size(), isMultiline ? popupLocation : Settings.VIEWER_TOOLBAR_BOTTOM);
+						showPopup(activity, activity.getContentView(),
+								overflowCopy, onActionHandler,
+								onOverflowHandler, actions.size(),
+								isMultiline ? popupLocation
+										: Settings.VIEWER_TOOLBAR_BOTTOM);
 					} else
-						activity.showActionsPopupMenu(itemsOverflow, onActionHandler);
+						activity.showActionsPopupMenu(
+								overflowCopy, onActionHandler);
 				}
 			}
 //			PopupMenu menu = new PopupMenu(activity, this);
@@ -564,7 +576,9 @@ public class CRToolBar extends ViewGroup {
 		super.onDraw(canvas);
 	}
 	public PopupWindow showAsPopup(View anchor, OnActionHandler onActionHandler, OnOverflowHandler onOverflowHandler) {
-		return showPopup(activity, anchor, actions, onActionHandler, onOverflowHandler, 3, Settings.VIEWER_TOOLBAR_BOTTOM);
+		return showPopup(activity, anchor, actions.copyAsArrayList(),
+				onActionHandler, onOverflowHandler, 3,
+				Settings.VIEWER_TOOLBAR_BOTTOM);
 	}
 	
 	private void setMaxLines(int maxLines) {

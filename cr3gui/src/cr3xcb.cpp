@@ -1259,7 +1259,11 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
             {
                 if ( visibility != XCB_VISIBILITY_FULLY_OBSCURED ) {
                     printf("EXPOSE\n");
-                    postEvent( new CRGUIUpdateEvent(true) );
+                    {
+                        std::unique_ptr<CRGUIEvent> updateEvent =
+                                std::make_unique<CRGUIUpdateEvent>(true);
+                        postEvent( updateEvent.release() );
+                    }
                 }
             }
             break;
@@ -1281,7 +1285,12 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
                 if (_screen->getWidth() != conf->width || _screen->getHeight() != conf->height) {
                     cr_rotate_angle_t angle = readXCBScreenRotationAngle();
                     CRLog::info("Setting new window size: %d x %d, angle: %d", conf->width, conf->height, (int)angle );
-                    postEvent( new CRGUIResizeEvent(conf->width, conf->height, angle) );
+                    {
+                        std::unique_ptr<CRGUIEvent> resizeEvent =
+                                std::make_unique<CRGUIResizeEvent>(
+                                        conf->width, conf->height, angle);
+                        postEvent( resizeEvent.release() );
+                    }
                 }
 
                 break;
@@ -1308,7 +1317,11 @@ void CRXCBWindowManager::forwardSystemEvents( bool waitForEvent )
                                         key,
                                         XCB_LOOKUP_CHARS_T); //xcb_lookup_key_sym_t xcb_lookup_chars_t
                 printf("Key released keycode=%d char=%04x state=%d\n", (int)key, (int)sym, state );
-                postEvent( new CRGUIKeyDownEvent( sym, state ) );
+                {
+                    std::unique_ptr<CRGUIEvent> keyEvent =
+                            std::make_unique<CRGUIKeyDownEvent>(sym, state);
+                    postEvent( keyEvent.release() );
+                }
                 //printf("page number = %d\n", main_win->getDocView()->getCurPage());
             }
             break;

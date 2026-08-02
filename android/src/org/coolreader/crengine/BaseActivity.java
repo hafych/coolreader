@@ -88,21 +88,63 @@ import java.util.Set;
 public class BaseActivity extends ComponentActivity implements Settings {
 
 	private static final Logger log = L.create("ba");
-	private View mDecorView;
+	private final ContentViewState contentViewState = new ContentViewState();
 	private final ToastView mToastView = new ToastView();
 
-	private CRDBServiceAccessor mCRDBService;
+	private final CrdbServiceConnectionState crdbService =
+			new CrdbServiceConnectionState();
 	private final Services mServices = new Services();
-	private ServiceDependencies mServiceDependencies;
-	protected Dictionaries mDictionaries;
+	private final BaseServiceDependenciesState serviceDependencies =
+			new BaseServiceDependenciesState();
+	private final ActivityRunState runState = new ActivityRunState();
+	private final InterfaceThemeState themeState =
+			new InterfaceThemeState();
+	private final ActivityProfileState profileState =
+			new ActivityProfileState();
+	private final EinkScreenOwner einkScreenOwner = new EinkScreenOwner();
+	private final NoticeDialogState noticeDialogState =
+			new NoticeDialogState();
+	private final NightModeState nightModeState = new NightModeState();
+	private final DisplayMetricsState displayMetrics =
+			new DisplayMetricsState();
+	private final ScreenBrightnessState screenBrightness =
+			new ScreenBrightnessState(
+					DeviceInfo.SAMSUNG_BUTTONS_HIGHLIGHT_PATCH);
+	private final KeyBacklightState keyBacklightState =
+			new KeyBacklightState();
+	private final EinkUpdateState einkUpdateState = new EinkUpdateState();
+	private final SystemUiVisibilityState systemUiVisibilityState =
+			new SystemUiVisibilityState();
+	private final ActivityLanguageState languageState =
+			new ActivityLanguageState();
+	private final SensorOrientationState sensorOrientationState =
+			new SensorOrientationState();
+	private final HardwareMenuKeyState hardwareMenuKeyState =
+			new HardwareMenuKeyState();
+	private final ScreenBacklightDurationState backlightDurationState =
+			new ScreenBacklightDurationState(
+					DEF_SCREEN_BACKLIGHT_TIMER_INTERVAL);
+	private final ScreenBacklightSessionState backlightSessionState =
+			new ScreenBacklightSessionState();
+	private final ActivityVersionState versionState =
+			new ActivityVersionState("3.1");
+	private final DictionariesOwner dictionariesOwner =
+			new DictionariesOwner();
+	private final FullscreenState fullscreenState = new FullscreenState();
+	private final ScreenOrientationState screenOrientationState =
+			new ScreenOrientationState();
+	private final SettingsManagerOwner settingsManagerOwner =
+			new SettingsManagerOwner();
 	private final ActivityResultLauncher<Intent> mDictionaryLauncher =
 			registerForActivityResult(
 					new ActivityResultContracts.StartActivityForResult(),
 					result -> {
-						if (mDictionaries == null)
+						Dictionaries dictionaries =
+								dictionariesOwner.get();
+						if (dictionaries == null)
 							return;
 						try {
-							mDictionaries.handleDictanResult(
+							dictionaries.handleDictanResult(
 									result.getResultCode(),
 									result.getData());
 						} catch (Dictionaries.DictionaryException e) {
@@ -111,18 +153,19 @@ public class BaseActivity extends ComponentActivity implements Settings {
 					});
 
 	protected void unbindCRDBService() {
-		if (mCRDBService != null) {
-			mCRDBService.unbind();
-			mCRDBService = null;
-		}
+		CRDBServiceAccessor accessor = crdbService.close();
+		if (accessor != null)
+			accessor.unbind();
 	}
 
 	protected void bindCRDBService() {
-		if (mCRDBService == null) {
-			mCRDBService = new CRDBServiceAccessor(
-					this, getServiceDependencies().getEngine().getPathCorrector());
-		}
-		mCRDBService.bind(null);
+		CRDBServiceAccessor accessor = crdbService.ensure(
+				() -> new CRDBServiceAccessor(
+						this,
+						getServiceDependencies().getEngine()
+								.getPathCorrector()));
+		if (accessor != null)
+			accessor.bind(null);
 	}
 
 	/**
@@ -131,55 +174,57 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	 * @param readyCallback to be called after DB is ready
 	 */
 	public synchronized void waitForCRDBService(Runnable readyCallback) {
-		if (mCRDBService == null) {
-			mCRDBService = new CRDBServiceAccessor(
-					this, getServiceDependencies().getEngine().getPathCorrector());
-		}
-		mCRDBService.bind(readyCallback);
+		CRDBServiceAccessor accessor = crdbService.ensure(
+				() -> new CRDBServiceAccessor(
+						this,
+						getServiceDependencies().getEngine()
+								.getPathCorrector()));
+		if (accessor != null)
+			accessor.bind(readyCallback);
 	}
 
 	public CRDBServiceAccessor getDBService() {
-		return mCRDBService;
+		return crdbService.get();
 	}
 
 	public CRDBService.LocalBinder getDB() {
-		return mCRDBService != null
-				? mCRDBService.getOrNull()
-				: null;
+		CRDBServiceAccessor accessor = crdbService.get();
+		return accessor != null ? accessor.getOrNull() : null;
 	}
 
 	public final ServiceDependencies getServiceDependencies() {
-		if (mServiceDependencies == null)
+		ServiceDependencies dependencies = serviceDependencies.get();
+		if (dependencies == null)
 			throw new IllegalStateException("Services have not been started");
-		return mServiceDependencies;
+		return dependencies;
 	}
 
 	public Properties settings() {
-		return mSettingsManager.mSettings;
+		return settingsManagerOwner.require().get();
 	}
 
-	private SettingsManager mSettingsManager;
-
-	private EinkScreen mEinkScreen;
-
 	public EinkScreen getEinkScreen() {
-		return mEinkScreen;
+		return einkScreenOwner.get();
 	}
 
 	protected void startServices() {
+		EinkScreen screen;
 		if (DeviceInfo.EINK_NOOK)
-			mEinkScreen = new EinkScreenNook();
+			screen = new EinkScreenNook();
 		else if (DeviceInfo.EINK_TOLINO)
-			mEinkScreen = new EinkScreenTolino();
+			screen = new EinkScreenTolino();
 		/*
 		 * Support for ONYX devices is disabled until the ONYX SDK is released under a GPL compatible license.
 		 * When enabling this code don't forget to update related code in DeviceInfo.java and EinkScreenOnyx.java
 		 *
 		else if (DeviceInfo.EINK_ONYX)
-			mEinkScreen = new EinkScreenOnyx();
+			screen = new EinkScreenOnyx();
 		 */
 		else
-			mEinkScreen = new EinkScreenDummy();
+			screen = new EinkScreenDummy();
+		if (!einkScreenOwner.install(screen))
+			throw new IllegalStateException(
+					"EinkScreen already installed or closed");
 
 		DisplayMetrics dm = new DisplayMetrics();
 		getWindowManager().getDefaultDisplay().getMetrics(dm);
@@ -189,34 +234,43 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			if (fld != null) {
 				Object v = fld.get(dm);
 				if (v != null && v instanceof Integer) {
-					densityDpi = ((Integer) v).intValue();
-					log.i("Screen density detected: " + densityDpi + "DPI");
+					displayMetrics.setDensityDpi(((Integer) v).intValue());
+					log.i("Screen density detected: "
+							+ displayMetrics.getDensityDpi() + "DPI");
 				}
 			}
 		} catch (Exception e) {
 			log.e("Cannot find field densityDpi, using default value");
 		}
-		float widthInches = (float)dm.widthPixels / (float)densityDpi;
-		float heightInches = (float)dm.heightPixels / (float)densityDpi;
-		diagonalInches = (float) Math.sqrt(widthInches * widthInches + heightInches * heightInches);
-		log.i("diagonal=" + diagonalInches + "  isSmartphone=" + isSmartphone());
+		int density = displayMetrics.getDensityDpi();
+		float widthInches = (float)dm.widthPixels / (float)density;
+		float heightInches = (float)dm.heightPixels / (float)density;
+		displayMetrics.setDiagonalInches(
+				(float) Math.sqrt(widthInches * widthInches
+						+ heightInches * heightInches));
+		log.i("diagonal=" + displayMetrics.getDiagonalInches()
+				+ "  isSmartphone=" + isSmartphone());
 
 		int sz = dm.widthPixels;
 		if (sz > dm.heightPixels)
 			sz = dm.heightPixels;
-		minFontSize = 5*densityDpi/72;			// 5pt
-		//maxFontSize = 100*densityDpi/72;		// 100pt
-		maxFontSize = sz/8;
+		displayMetrics.setFontSizeBounds(
+				5 * density / 72, // 5pt
+				sz / 8);
 
 		// create settings
-		mSettingsManager = new SettingsManager(this);
+		if (!settingsManagerOwner.install(new SettingsManager(this)))
+			throw new IllegalStateException(
+					"Settings manager already installed or closed");
 		// create rest of settings
-		mServiceDependencies = mServices.startServices(this);
+		if (!serviceDependencies.install(mServices.startServices(this)))
+			throw new IllegalStateException(
+					"Service dependencies already installed or closed");
 	}
 
 	protected final void stopServices() {
 		mServices.stopServices(this);
-		mServiceDependencies = null;
+		serviceDependencies.close();
 	}
 
 	@SuppressLint("NewApi")
@@ -234,15 +288,18 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	protected void onCreate(Bundle savedInstanceState) {
 		log.i("BaseActivity.onCreate() entered");
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		mDecorView = getWindow().getDecorView();
+		contentViewState.setDecorView(getWindow().getDecorView());
 
 		super.onCreate(savedInstanceState);
 
-		mDictionaries = new Dictionaries(this, mDictionaryLauncher);
+		if (!dictionariesOwner.install(
+				new Dictionaries(this, mDictionaryLauncher)))
+			throw new IllegalStateException(
+					"Dictionaries already installed or closed");
 
 		try {
 			PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
-			mVersion = pi.versionName;
+			versionState.set(pi.versionName);
 		} catch (NameNotFoundException e) {
 			// ignore
 		}
@@ -311,6 +368,28 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				dialog.dismiss();
 		}
 		mToastView.close();
+		runState.close();
+		themeState.close();
+		profileState.close();
+		noticeDialogState.close();
+		nightModeState.close();
+		einkScreenOwner.close();
+		displayMetrics.close();
+		screenBrightness.close();
+		keyBacklightState.close();
+		einkUpdateState.close();
+		systemUiVisibilityState.close();
+		languageState.close();
+		sensorOrientationState.close();
+		hardwareMenuKeyState.close();
+		backlightDurationState.close();
+		backlightSessionState.close();
+		versionState.close();
+		contentViewState.close();
+		dictionariesOwner.close();
+		fullscreenState.close();
+		screenOrientationState.close();
+		settingsManagerOwner.close();
 		super.onDestroy();
 		unbindCRDBService();
 	}
@@ -323,22 +402,20 @@ public class BaseActivity extends ComponentActivity implements Settings {
 //		String theme = props.getProperty(ReaderView.PROP_APP_THEME, DeviceInfo.FORCE_HC_THEME ? "WHITE" : "LIGHT");
 //		setCurrentTheme(theme);
 
-		mIsStarted = true;
-		mPaused = false;
+		runState.onStart();
 		onUserActivity();
 	}
 
 	@Override
 	protected void onStop() {
-		mIsStarted = false;
+		runState.onStop();
 		super.onStop();
 	}
 
 	@Override
 	protected void onPause() {
 		log.i("CoolReader.onPause() : saving reader state");
-		mIsStarted = false;
-		mPaused = true;
+		runState.onPause();
 		releaseBacklightControl();
 		super.onPause();
 	}
@@ -353,8 +430,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	@Override
 	protected void onResume() {
 		log.i("CoolReader.onResume()");
-		mPaused = false;
-		mIsStarted = true;
+		runState.onResume();
 		backlightControl.onUserActivity();
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD) {
 			Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
@@ -365,69 +441,58 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		super.onResume();
 	}
 
-	private boolean mIsStarted = false;
-	private boolean mPaused = false;
-
 	public boolean isStarted() {
-		return mIsStarted;
+		return runState.isStarted();
 	}
 
-	private String mVersion = "3.1";
-
 	public String getVersion() {
-		return mVersion;
+		return versionState.get();
 	}
 
 	public Properties loadSettings(int profile) {
-		return mSettingsManager.loadSettings(profile);
+		return settingsManagerOwner.require().loadSettings(profile);
 	}
 
 	public void saveSettings(int profile, Properties settings) {
-		mSettingsManager.saveSettings(profile, settings);
+		settingsManagerOwner.require().saveSettings(profile, settings);
 	}
 
 	public void saveSettings(File f, Properties settings) {
-		mSettingsManager.saveSettings(f, settings);
+		settingsManagerOwner.require().saveSettings(f, settings);
 	}
 
 	public int getPalmTipPixels() {
-		return densityDpi / 3; // 1/3"
+		return displayMetrics.getPalmTipPixels(); // 1/3"
 	}
 
 	public int getDensityDpi() {
-		return densityDpi;
+		return displayMetrics.getDensityDpi();
 	}
 
 	public float getDensityFactor() {
-		return ((float) densityDpi) / 160f;
+		return displayMetrics.getDensityFactor();
 	}
 
 	public float getDiagonalInches() {
-		return diagonalInches;
+		return displayMetrics.getDiagonalInches();
 	}
 
 	public String getSettingsFile(int profile) {
-		File file = mSettingsManager.getSettingsFile(profile);
+		File file = settingsManagerOwner.require().getSettingsFile(profile);
 		if (file.exists())
 			return file.getAbsolutePath();
 		return null;
 	}
 
 	public boolean isSmartphone() {
-		return diagonalInches <= 6.8; //5.8;
+		return displayMetrics.isSmartphone();
 	}
 
-	private int densityDpi = 160;
-	private float diagonalInches = 5;
-
-
-	private InterfaceTheme currentTheme = null;
 	private final InterfaceThemeCatalog interfaceThemes =
 			InterfaceThemeCatalog.create(DeviceInfo.EINK_SCREEN);
-	private ActionIconSet actionIcons = ActionIconSet.empty();
 
 	public InterfaceTheme getCurrentTheme() {
-		return currentTheme;
+		return themeState.getTheme();
 	}
 
 	InterfaceThemeCatalog getInterfaceThemes() {
@@ -435,7 +500,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	int getActionIconId(ReaderAction action) {
-		return actionIcons.iconFor(action);
+		return themeState.iconFor(action);
 	}
 
 	public void setCurrentTheme(String themeCode) {
@@ -445,27 +510,21 @@ public class BaseActivity extends ComponentActivity implements Settings {
 					DeviceInfo.FORCE_HC_THEME
 							? "HICONTRAST1"
 							: "LIGHT");
-		if (currentTheme != theme) {
+		if (themeState.getTheme() != theme) {
 			setCurrentTheme(theme);
 		}
 	}
 
-	private int preferredItemHeight = 36;
-
 	public int getPreferredItemHeight() {
-		return preferredItemHeight;
+		return displayMetrics.getPreferredItemHeight();
 	}
-
-	private int minFontSize = 9;
 
 	public int getMinFontSize() {
-		return minFontSize;
+		return displayMetrics.getMinFontSize();
 	}
 
-	private int maxFontSize = 90;
-
 	public int getMaxFontSize() {
-		return maxFontSize;
+		return displayMetrics.getMaxFontSize();
 	}
 
 	public void updateBackground() {
@@ -474,18 +533,20 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		//int clText = a.getColor(1, 0);
 		int clBackground = a.getColor(2, 0);
 		//int clForeground = a.getColor(3, 0);
-		preferredItemHeight = densityDpi / 3; //a.getDimensionPixelSize(5, 36);
+		displayMetrics.setPreferredItemHeight(
+				displayMetrics.getDensityDpi() / 3); //a.getDimensionPixelSize(5, 36);
 		//View contentView = getContentView();
-		if (contentView != null) {
+		View content = contentViewState.getContentView();
+		if (content != null) {
 			if (bgRes != 0) {
 				//Drawable d = getResources().getDrawable(bgRes);
 				//log.v("Setting background resource " + d.getIntrinsicWidth() + "x" + d.getIntrinsicHeight());
 				//contentView.setBackgroundResource(null);
-				contentView.setBackgroundResource(bgRes);
+				content.setBackgroundResource(bgRes);
 				//getWindow().setBackgroundDrawableResource(bgRes);//Drawable(d);
 				//getWindow().setBackgroundDrawable(d);
 			} else if (clBackground != 0) {
-				contentView.setBackgroundColor(clBackground);
+				content.setBackgroundColor(clBackground);
 				//getWindow().setBackgroundDrawable(Utils.solidColorDrawable(clBackground));
 			}
 		} else {
@@ -533,7 +594,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		int btnLogDrawableRes = a.getResourceId(22, 0);
 		int btnLightDrawableRes = a.getResourceId(23, 0);
 		a.recycle();
-		actionIcons = ActionIconSet.builder()
+		themeState.setActionIcons(ActionIconSet.builder()
 				.override(ReaderAction.GO_BACK, btnPrevDrawableRes)
 				.override(ReaderAction.FILE_BROWSER_UP, btnPrevDrawableRes)
 				.override(ReaderAction.GO_FORWARD, btnNextDrawableRes)
@@ -562,24 +623,29 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				.override(
 						ReaderAction.SHOW_SYSTEM_BACKLIGHT_DIALOG,
 						btnLightDrawableRes)
-				.build();
+				.build());
 	}
 
 	public void setCurrentTheme(InterfaceTheme theme) {
 		log.i("setCurrentTheme(" + theme + ")");
-		currentTheme = theme;
+		themeState.setTheme(theme);
 		getApplication().setTheme(theme.getThemeId());
 		setTheme(theme.getThemeId());
 		updateBackground();
 		updateActionsIcons();
 	}
 
-	int screenOrientation = ActivityInfo.SCREEN_ORIENTATION_USER;
+	/**
+	 * Activity-owned dictionary helper. Null after destroy.
+	 */
+	public Dictionaries getDictionaries() {
+		return dictionariesOwner.get();
+	}
 
 	public void applyScreenOrientation(Window wnd) {
 		if (wnd != null) {
 			WindowManager.LayoutParams attrs = wnd.getAttributes();
-			attrs.screenOrientation = screenOrientation;
+			attrs.screenOrientation = screenOrientationState.get();
 			wnd.setAttributes(attrs);
 			if (DeviceInfo.EINK_SCREEN) {
 				//TODO:
@@ -589,7 +655,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	public int getScreenOrientation() {
-		switch (screenOrientation) {
+		switch (screenOrientationState.get()) {
 			case ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:
 				return 0;
 			case ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE:
@@ -601,17 +667,19 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			case ActivityInfo.SCREEN_ORIENTATION_USER:
 				return 5;
 			default:
-				return orientationFromSensor;
+				return sensorOrientationState.get();
 		}
 	}
 
 	@TargetApi(Build.VERSION_CODES.GINGERBREAD)
 	private boolean isReverseLandscape() {
-		return screenOrientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+		return screenOrientationState.get()
+				== ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
 	}
 
 	public boolean isLandscape() {
-		if (screenOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+		if (screenOrientationState.get()
+				== ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
 			return true;
 		if (DeviceInfo.getSDKLevel() >= 9 && isReverseLandscape())
 			return true;
@@ -626,7 +694,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	final static public int ActivityInfo_SCREEN_ORIENTATION_FULL_SENSOR = 10;
 
 	public void setScreenOrientation(int angle) {
-		int newOrientation = screenOrientation;
+		int previous = screenOrientationState.get();
+		int newOrientation = previous;
 		boolean level9 = DeviceInfo.getSDKLevel() >= 9;
 		switch (angle) {
 			case 0:
@@ -648,25 +717,26 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				newOrientation = ActivityInfo.SCREEN_ORIENTATION_USER;
 				break;
 		}
-		if (newOrientation != screenOrientation) {
+		if (newOrientation != previous) {
 			log.d("setScreenOrientation(" + angle + ")");
-			screenOrientation = newOrientation;
-			setRequestedOrientation(screenOrientation);
+			screenOrientationState.set(newOrientation);
+			setRequestedOrientation(newOrientation);
 			applyScreenOrientation(getWindow());
 		}
 	}
 
 
-	private int orientationFromSensor = 0;
-
 	public int getOrientationFromSensor() {
-		return orientationFromSensor;
+		return sensorOrientationState.get();
 	}
 
 	@Override
 	public void onConfigurationChanged(Configuration newConfig) {
 		// pass
-		orientationFromSensor = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE ? 1 : 0;
+		sensorOrientationState.set(
+				newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+						? 1
+						: 0);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD) {
 			Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
 			if (null != display) {
@@ -700,14 +770,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		// Override this...
 	}
 
-	private boolean mFullscreen = false;
-
 	public boolean isFullscreen() {
-		return mFullscreen;
+		return fullscreenState.isFullscreen();
 	}
 
 	public void applyFullscreen(Window wnd) {
-		if (mFullscreen) {
+		if (fullscreenState.isFullscreen()) {
 			//mActivity.getWindow().requestFeature(Window.)
 			wnd.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
 					WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -715,13 +783,13 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			wnd.setFlags(0, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 		}
 		// enforce new window ui visibility flags
-		lastSystemUiVisibility = -1;
+		systemUiVisibilityState.invalidateCache();
 		setSystemUiVisibility();
 	}
 
 	public void setFullscreen(boolean fullscreen) {
-		if (mFullscreen != fullscreen) {
-			mFullscreen = fullscreen;
+		if (fullscreenState.isFullscreen() != fullscreen) {
+			fullscreenState.set(fullscreen);
 			applyFullscreen(getWindow());
 		}
 	}
@@ -804,29 +872,30 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 
-	private int lastSystemUiVisibility = -1;
-	private boolean systemUiVisibilityListenerIsSet = false;
-
 	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	@SuppressLint("NewApi")
 	private boolean setSystemUiVisibility(int value) {
 		if (DeviceInfo.getSDKLevel() >= DeviceInfo.HONEYCOMB) {
-			if (!systemUiVisibilityListenerIsSet && null != mDecorView) {
-				mDecorView.setOnSystemUiVisibilityChangeListener(visibility -> lastSystemUiVisibility = visibility);
-				systemUiVisibilityListenerIsSet = true;
+			View decor = contentViewState.getDecorView();
+			if (!systemUiVisibilityState.isListenerSet()
+					&& null != decor) {
+				decor.setOnSystemUiVisibilityChangeListener(
+						visibility -> systemUiVisibilityState
+								.setLastVisibility(visibility));
+				systemUiVisibilityState.markListenerSet();
 			}
 			boolean a4 = DeviceInfo.getSDKLevel() >= DeviceInfo.ICE_CREAM_SANDWICH;
 			if (!a4)
 				value &= View.SYSTEM_UI_FLAG_LOW_PROFILE;
-			if (value == lastSystemUiVisibility)// && a4)
+			if (value == systemUiVisibilityState.getLastVisibility())// && a4)
 				return false;
 			//lastSystemUiVisibility = value;
 
-			if (null == mDecorView)
+			if (null == decor)
 				return false;
 			try {
-				Method m = mDecorView.getClass().getMethod("setSystemUiVisibility", int.class);
-				m.invoke(mDecorView, value);
+				Method m = decor.getClass().getMethod("setSystemUiVisibility", int.class);
+				m.invoke(decor, value);
 				return true;
 			} catch (SecurityException e) {
 				// ignore
@@ -843,14 +912,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		return false;
 	}
 
-	private int currentKeyBacklightLevel = 1;
-
 	public int getKeyBacklight() {
-		return currentKeyBacklightLevel;
+		return keyBacklightState.getLevel();
 	}
 
 	public boolean setKeyBacklight(int value) {
-		currentKeyBacklightLevel = value;
+		keyBacklightState.setLevel(value);
 		// Try ICS way
 		if (DeviceInfo.getSDKLevel() >= DeviceInfo.HONEYCOMB) {
 			setSystemUiVisibility();
@@ -859,33 +926,37 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		return getServiceDependencies().getEngine().setKeyBacklight(value);
 	}
 
-
-	private boolean keyBacklightOff = true;
-
 	public boolean isKeyBacklightDisabled() {
-		return keyBacklightOff;
+		return keyBacklightState.isDisabled();
 	}
 
 	public void setKeyBacklightDisabled(boolean disabled) {
-		keyBacklightOff = disabled;
+		keyBacklightState.setDisabled(disabled);
 		onUserActivity();
 	}
 
 	public int getScreenBacklightLevel() {
 		if (!DeviceInfo.EINK_SCREEN)
-			return screenBacklightBrightness;
+			return screenBrightness.getColdLevel();
 		else if (DeviceInfo.EINK_HAVE_FRONTLIGHT) {
 			// on E-INK devices fetch the system backlight level
-			return mEinkScreen.getFrontLightValue(this);
+			EinkScreen screen = einkScreenOwner.get();
+			return screen != null
+					? screen.getFrontLightValue(this)
+					: 0;
 		}
 		return 0;
 	}
 
 	public int getWarmBacklightLevel() {
 		if (!DeviceInfo.EINK_SCREEN)
-			return screenWarmBacklightBrightness;
-		else if (DeviceInfo.EINK_HAVE_NATURAL_BACKLIGHT)
-			return mEinkScreen.getWarmLightValue(this);
+			return screenBrightness.getWarmLevel();
+		else if (DeviceInfo.EINK_HAVE_NATURAL_BACKLIGHT) {
+			EinkScreen screen = einkScreenOwner.get();
+			return screen != null
+					? screen.getWarmLightValue(this)
+					: 0;
+		}
 		return 0;
 	}
 
@@ -894,11 +965,14 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			value = -1;
 		else if (value > DeviceInfo.MAX_SCREEN_BRIGHTNESS_VALUE)
 			value = -1;
-		screenBacklightBrightness = value;
+		screenBrightness.setColdLevel(value);
 		if (!DeviceInfo.EINK_SCREEN)
 			onUserActivity();
-		else if (null != mEinkScreen)
-			mEinkScreen.setFrontLightValue(this, value);
+		else {
+			EinkScreen screen = einkScreenOwner.get();
+			if (screen != null)
+				screen.setFrontLightValue(this, value);
+		}
 	}
 
 	public void setScreenWarmBacklightLevel(int value) {
@@ -906,16 +980,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			value = -1;
 		else if (value > DeviceInfo.MAX_SCREEN_BRIGHTNESS_WARM_VALUE)
 			value = -1;
-		if (null != mEinkScreen) {
-			if (mEinkScreen.setWarmLightValue(this, value))
-				screenWarmBacklightBrightness = value;
+		EinkScreen screen = einkScreenOwner.get();
+		if (screen != null) {
+			if (screen.setWarmLightValue(this, value))
+				screenBrightness.setWarmLevel(value);
 		}
 	}
-
-	private int screenBacklightBrightness = -1; // use default
-	private int screenWarmBacklightBrightness = -1; // use default
-	//private boolean brightnessHackError = false;
-	private boolean brightnessHackError = DeviceInfo.SAMSUNG_BUTTONS_HIGHLIGHT_PATCH;
 
 	private void turnOffKeyBacklight() {
 		if (!isStarted())
@@ -993,7 +1063,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			boolean changed = false;
 			// hack to set buttonBrightness field
 			//float buttonBrightness = keyBacklightOff ? 0.0f : -1.0f;
-			if (!brightnessHackError)
+			if (!screenBrightness.isBrightnessHackError())
 				try {
 					Field bb = attrs.getClass().getField("buttonBrightness");
 					if (bb != null) {
@@ -1005,14 +1075,14 @@ public class BaseActivity extends ComponentActivity implements Settings {
 					}
 				} catch (Exception e) {
 					log.e("WindowManager.LayoutParams.buttonBrightness field is not found, cannot turn buttons backlight off");
-					brightnessHackError = true;
+					screenBrightness.setBrightnessHackError(true);
 				}
 			//attrs.buttonBrightness = 0;
 			if (changed) {
 				log.d("Window attribute changed: " + attrs);
 				wnd.setAttributes(attrs);
 			}
-			if (keyBacklightOff)
+			if (keyBacklightState.isDisabled())
 				turnOffKeyBacklight();
 			else
 				turnOnKeyBacklight();
@@ -1042,8 +1112,9 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				float b;
 				int dimmingAlpha = 255;
 				// screenBacklightBrightness is 0..100
-				if (screenBacklightBrightness >= 0) {
-					int percent = screenBacklightBrightness;
+				int coldLevel = screenBrightness.getColdLevel();
+				if (coldLevel >= 0) {
+					int percent = coldLevel;
 					if (!allowLowBrightness() && percent < MIN_BRIGHTNESS_IN_BROWSER)
 						percent = MIN_BRIGHTNESS_IN_BROWSER;
 					float minb = MIN_BACKLIGHT_LEVEL_PERCENT / 100.0f;
@@ -1067,7 +1138,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				setDimmingAlpha(dimmingAlpha);
 				//log.v("Brightness: " + b + ", dim: " + dimmingAlpha);
 				updateBacklightBrightness(b);
-				updateButtonsBrightness(keyBacklightOff ? 0.0f : -1.0f);
+				updateButtonsBrightness(
+						keyBacklightState.isDisabled() ? 0.0f : -1.0f);
 			} catch (Exception e) {
 				// ignore
 			}
@@ -1076,7 +1148,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 
 	public boolean isWakeLockEnabled() {
-		return screenBacklightDuration > 0;
+		return backlightDurationState.isEnabled();
 	}
 
 	/**
@@ -1085,9 +1157,10 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	public void setScreenBacklightDuration(int backlightDurationMinutes) {
 		if (backlightDurationMinutes == 1)
 			backlightDurationMinutes = 3;
-		if (screenBacklightDuration != backlightDurationMinutes * 60 * 1000) {
-			screenBacklightDuration = backlightDurationMinutes * 60 * 1000;
-			if (screenBacklightDuration == 0)
+		int next = backlightDurationMinutes * 60 * 1000;
+		if (backlightDurationState.getDurationMs() != next) {
+			backlightDurationState.setDurationMs(next);
+			if (!backlightDurationState.isEnabled())
 				backlightControl.release();
 			else
 				backlightControl.onUserActivity();
@@ -1095,25 +1168,25 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	public static final int DEF_SCREEN_BACKLIGHT_TIMER_INTERVAL = 3 * 60 * 1000;
-	private int screenBacklightDuration = DEF_SCREEN_BACKLIGHT_TIMER_INTERVAL;
 
 	private class ScreenBacklightControl {
-		private PowerManager.WakeLock wl;
-		private Runnable backlightTimerTask;
-		private long lastUserActivityTime;
-		private long lastUpdateTimeStamp;
-
 		public void onUserActivity() {
-			lastUserActivityTime = Utils.timeStamp();
-			if (Utils.timeInterval(lastUpdateTimeStamp) < 5000)
+			backlightSessionState.setLastUserActivityTime(
+					Utils.timeStamp());
+			if (Utils.timeInterval(
+					backlightSessionState.getLastUpdateTimeStamp()) < 5000)
 				return;
-			lastUpdateTimeStamp = android.os.SystemClock.uptimeMillis();
+			backlightSessionState.setLastUpdateTimeStamp(
+					android.os.SystemClock.uptimeMillis());
 			if (!isWakeLockEnabled())
 				return;
+			PowerManager.WakeLock wl =
+					backlightSessionState.getWakeLock();
 			if (wl == null) {
 				PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
 				wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
 						/* | PowerManager.ON_AFTER_RELEASE */, "cr3:wakelock");
+				backlightSessionState.setWakeLock(wl);
 				log.d("ScreenBacklightControl: WakeLock created");
 			}
 			if (!isStarted()) {
@@ -1127,50 +1200,55 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				wl.acquire();
 			}
 
-			if (backlightTimerTask == null) {
+			if (backlightSessionState.getTimerTask() == null) {
 				log.v("ScreenBacklightControl: timer task started");
-				backlightTimerTask = new BacklightTimerTask();
-				BackgroundThread.instance().postGUI(backlightTimerTask,
-						screenBacklightDuration / 10);
+				Runnable task = new BacklightTimerTask();
+				backlightSessionState.setTimerTask(task);
+				BackgroundThread.instance().postGUI(task,
+						backlightDurationState.getDurationMs() / 10);
 			}
 		}
 
 		public boolean isHeld() {
+			PowerManager.WakeLock wl =
+					backlightSessionState.getWakeLock();
 			return wl != null && wl.isHeld();
 		}
 
 		public void release() {
+			PowerManager.WakeLock wl =
+					backlightSessionState.clearForRelease();
 			if (wl != null && wl.isHeld()) {
 				log.d("ScreenBacklightControl: wl.release()");
 				wl.release();
 			}
-			backlightTimerTask = null;
-			lastUpdateTimeStamp = 0;
 		}
 
 		private class BacklightTimerTask implements Runnable {
 
 			@Override
 			public void run() {
-				if (backlightTimerTask == null)
+				if (backlightSessionState.getTimerTask() != this)
 					return;
-				long interval = Utils.timeInterval(lastUserActivityTime);
+				long interval = Utils.timeInterval(
+						backlightSessionState.getLastUserActivityTime());
 //				log.v("ScreenBacklightControl: timer task, lastActivityMillis = "
 //						+ interval);
+				int durationMs = backlightDurationState.getDurationMs();
 				int nextTimerInterval =
 						BacklightTimeoutPolicy.nextCheckDelay(
 								interval,
-								screenBacklightDuration);
+								durationMs);
 				boolean dim = BacklightTimeoutPolicy.shouldDim(
 						interval,
-						screenBacklightDuration);
+						durationMs);
 				if (BacklightTimeoutPolicy.isExpired(
 						interval,
-						screenBacklightDuration)) {
+						durationMs)) {
 					log.v("ScreenBacklightControl: interval is expired");
 					release();
 				} else {
-					BackgroundThread.instance().postGUI(backlightTimerTask, nextTimerInterval);
+					BackgroundThread.instance().postGUI(this, nextTimerInterval);
 					if (dim) {
 						updateBacklightBrightness(-0.9f); // reduce by 9%
 					}
@@ -1191,34 +1269,38 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			new ScreenBacklightControl();
 
 
-	private EinkScreen.EinkUpdateMode mScreenUpdateMode = EinkScreen.EinkUpdateMode.Clear;
-
 	public EinkScreen.EinkUpdateMode getScreenUpdateMode() {
-		return mScreenUpdateMode;
+		return einkUpdateState.getMode();
 	}
 
 	public void setScreenUpdateMode(EinkScreen.EinkUpdateMode screenUpdateMode, View view) {
 		//if (mReaderView != null) {
-		if (null != mEinkScreen) {
-			mScreenUpdateMode = screenUpdateMode;
-			if (mEinkScreen.getUpdateMode() != screenUpdateMode || mEinkScreen.getUpdateMode() == EinkScreen.EinkUpdateMode.Active) {
-				mEinkScreen.setupController(mScreenUpdateMode, mScreenUpdateInterval, view);
+		EinkScreen screen = einkScreenOwner.get();
+		if (screen != null) {
+			einkUpdateState.setMode(screenUpdateMode);
+			if (screen.getUpdateMode() != screenUpdateMode || screen.getUpdateMode() == EinkScreen.EinkUpdateMode.Active) {
+				screen.setupController(
+						einkUpdateState.getMode(),
+						einkUpdateState.getInterval(),
+						view);
 			}
 		}
 		//}
 	}
 
-	private int mScreenUpdateInterval = 0;
-
 	public int getScreenUpdateInterval() {
-		return mScreenUpdateInterval;
+		return einkUpdateState.getInterval();
 	}
 
 	public void setScreenUpdateInterval(int screenUpdateInterval, View view) {
-		if (null != mEinkScreen) {
-			mScreenUpdateInterval = screenUpdateInterval;
-			if (mEinkScreen.getUpdateInterval() != screenUpdateInterval) {
-				mEinkScreen.setupController(mScreenUpdateMode, screenUpdateInterval, view);
+		EinkScreen screen = einkScreenOwner.get();
+		if (screen != null) {
+			einkUpdateState.setInterval(screenUpdateInterval);
+			if (screen.getUpdateInterval() != screenUpdateInterval) {
+				screen.setupController(
+						einkUpdateState.getMode(),
+						screenUpdateInterval,
+						view);
 			}
 		}
 	}
@@ -1262,29 +1344,25 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 
-	protected View contentView;
-
 	public View getContentView() {
-		return contentView;
+		return contentViewState.getContentView();
 	}
 
 	public void setContentView(View view) {
-		this.contentView = view;
+		contentViewState.setContentView(view);
 		super.setContentView(view);
 		//systemUiVisibilityListenerIsSet = false;
 		//updateBackground();
-		setCurrentTheme(currentTheme);
+		setCurrentTheme(themeState.getTheme());
 	}
 
 
-	private boolean mNightMode = false;
-
 	public boolean isNightMode() {
-		return mNightMode;
+		return nightModeState.isNightMode();
 	}
 
 	public void setNightMode(boolean nightMode) {
-		mNightMode = nightMode;
+		nightModeState.set(nightMode);
 	}
 
 
@@ -1314,7 +1392,6 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 
-	private String currentLanguage;
 	private final Locale systemLocale = currentSystemLocale();
 
 	private static Locale currentSystemLocale() {
@@ -1330,7 +1407,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	public String getCurrentLanguage() {
-		return currentLanguage;
+		return languageState.get();
 	}
 
 	public void setLanguage(String lang) {
@@ -1348,7 +1425,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			AppLocaleSelection selection =
 					AppLocaleSelection.resolve(lang, systemLocale);
 			conf.locale = selection.locale();
-			currentLanguage = selection.code();
+			languageState.set(selection.code());
 			res.updateConfiguration(conf, dm);
 		} catch (Exception e) {
 			log.e("error while setting locale " + lang, e);
@@ -1389,13 +1466,12 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		// On e-ink in ReaderView gesture handlers setScreenBacklightLevel() & setScreenWarmBacklightLevel() called directly
 	}
 
-	private boolean noticeDialogVisible = false;
 	public void validateSettings() {
-		if (noticeDialogVisible)
+		if (noticeDialogState.isVisible())
 			return;
 		Properties props = settings();
 		DefaultInputActions inputDefaults =
-				mSettingsManager.getDefaultInputActions();
+				settingsManagerOwner.require().getDefaultInputActions();
 		boolean menuKeyActionFound =
 				inputDefaults.hasAvailableMenuKey(hasHardwareMenuKey());
 		boolean menuTapActionFound = inputDefaults.hasMenuTap(props);
@@ -1403,6 +1479,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		boolean toolbarEnabled = ((propToolbarEnabled && !isFullscreen())
 				|| (propToolbarEnabled && isFullscreen() && !props.getBool(PROP_TOOLBAR_HIDE_IN_FULLSCREEN, false)));
 		if (!menuTapActionFound && !menuKeyActionFound && !toolbarEnabled) {
+			if (!noticeDialogState.beginShow())
+				return;
 			showNotice(R.string.inconsistent_options,
 					R.string.inconsistent_options_toolbar, () -> {
 						// enabled toolbar
@@ -1413,9 +1491,8 @@ public class BaseActivity extends ComponentActivity implements Settings {
 						String paramName = ReaderView.PROP_APP_TAP_ZONE_ACTIONS_TAP + ".5";
 						setSetting(paramName, ReaderAction.READER_MENU.id, true);
 					},
-					() -> noticeDialogVisible = false
+					noticeDialogState::endShow
 			);
-			noticeDialogVisible = true;
 		}
 		// TODO: check any other options for compatibility
 	}
@@ -1526,8 +1603,11 @@ public class BaseActivity extends ComponentActivity implements Settings {
 	}
 
 	public void showActionsPopupMenu(final ArrayList<ReaderAction> actions, final CRToolBar.OnActionHandler onActionHandler) {
-		registerForContextMenu(contentView);
-		contentView.setOnCreateContextMenuListener((menu, v, menuInfo) -> {
+		View content = contentViewState.getContentView();
+		if (content == null)
+			return;
+		registerForContextMenu(content);
+		content.setOnCreateContextMenuListener((menu, v, menuInfo) -> {
 			//populate only it is not populated by children
 			if (menu.size() == 0) {
 				int order = 0;
@@ -1537,7 +1617,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 				}
 			}
 		});
-		contentView.showContextMenu();
+		content.showContextMenu();
 	}
 
 	public void showBrowserOptionsDialog() {
@@ -1550,49 +1630,50 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		dlg.show();
 	}
 
-	private int currentProfile = 0;
-
 	public int getCurrentProfile() {
-		if (currentProfile == 0) {
-			currentProfile = mSettingsManager.getInt(PROP_PROFILE_NUMBER, 1);
-			if (currentProfile < 1 || currentProfile > MAX_PROFILES)
-				currentProfile = 1;
-		}
-		return currentProfile;
+		return profileState.getOrLoad(
+				MAX_PROFILES,
+				() -> settingsManagerOwner.require()
+						.getInt(PROP_PROFILE_NUMBER, 1));
 	}
 
 	public void setCurrentProfile(int profile) {
 		if (profile == 0 || profile == getCurrentProfile())
 			return;
-		log.i("Switching from profile " + currentProfile + " to " + profile);
-		mSettingsManager.saveSettings(currentProfile, null);
-		final Properties loadedSettings = mSettingsManager.loadSettings(profile);
-		mSettingsManager.setSettings(loadedSettings, 0, true);
-		currentProfile = profile;
+		int previous = getCurrentProfile();
+		log.i("Switching from profile " + previous + " to " + profile);
+		SettingsManager manager = settingsManagerOwner.require();
+		manager.saveSettings(previous, null);
+		final Properties loadedSettings = manager.loadSettings(profile);
+		manager.setSettings(loadedSettings, 0, true);
+		profileState.set(profile, MAX_PROFILES);
 	}
 
 	public void setSetting(String name, String value, boolean notify) {
-		mSettingsManager.setSetting(name, value, notify);
+		settingsManagerOwner.require().setSetting(name, value, notify);
 	}
 
 	public void setSettings(Properties settings, int delayMillis, boolean notify) {
-		mSettingsManager.setSettings(settings, delayMillis, notify);
+		settingsManagerOwner.require().setSettings(settings, delayMillis, notify);
 	}
 
 	public void mergeSettings(Properties settings, boolean notify) {
-		mSettingsManager.mergeSettings(settings, notify);
+		settingsManagerOwner.require().mergeSettings(settings, notify);
 	}
 
 	public void notifySettingsChanged() {
-		setSettings(mSettingsManager.get(), -1, true);
+		setSettings(settingsManagerOwner.require().get(), -1, true);
 	}
 
-	private static class SettingsManager {
+	// Package-private so SettingsManagerOwner and JVM tests can type the
+	// Activity-owned manager without reflection.
+	static class SettingsManager {
 
 		public static final Logger log = L.create("cr");
 
 		private final BaseActivity mActivity;
-		private Properties mSettings;
+		private final SettingsPropertiesState settingsProperties =
+				new SettingsPropertiesState();
 		private final File defaultSettingsDir;
 		private final DefaultInputActions defaultInputActions;
 		private final ProfileSettingsFilter profileSettingsFilter =
@@ -1607,7 +1688,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 					DeviceInfo.NAVIGATE_LEFTRIGHT,
 					DeviceInfo.EINK_NOOK);
 			defaultSettingsDir = activity.getDir("settings", Context.MODE_PRIVATE);
-			mSettings = loadSettings();
+			settingsProperties.replace(loadSettings());
 		}
 
 		DefaultInputActions getDefaultInputActions() {
@@ -1615,28 +1696,29 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		}
 
 		public void setSettings(Properties settings, int delayMillis, boolean notify) {
-			Properties oldSettings = mSettings;
-			mSettings = new Properties(settings);
-			saveSettings(mSettings);
+			Properties oldSettings = settingsProperties.replace(settings);
+			Properties published = settingsProperties.copy();
+			saveSettings(published);
 			if (notify)
-				mActivity.onSettingsChanged(mSettings, oldSettings);
+				mActivity.onSettingsChanged(published, oldSettings);
 		}
 
 		public void mergeSettings(Properties settings, boolean notify) {
-			Properties oldSettings = mSettings;
-			mSettings = new Properties(oldSettings);
+			Properties merged = new Properties(settingsProperties.snapshot());
 			Set<Entry<Object, Object>> entries = settings.entrySet();
 			for (Entry<Object, Object> entry : entries) {
-				mSettings.put(entry.getKey(), entry.getValue());
+				merged.put(entry.getKey(), entry.getValue());
 			}
-			saveSettings(mSettings);
+			Properties oldSettings = settingsProperties.replace(merged);
+			Properties published = settingsProperties.copy();
+			saveSettings(published);
 			if (notify)
-				mActivity.onSettingsChanged(mSettings, oldSettings);
+				mActivity.onSettingsChanged(published, oldSettings);
 		}
 
 		public void setSetting(String name, String value, boolean notify) {
-			Properties props = new Properties(mSettings);
-			if (value.equals(mSettings.getProperty(name)))
+			Properties props = new Properties(settingsProperties.snapshot());
+			if (value.equals(settingsProperties.getProperty(name)))
 				return;
 			props.setProperty(name, value);
 			setSettings(props, 1000, notify);
@@ -1794,10 +1876,11 @@ public class BaseActivity extends ComponentActivity implements Settings {
 			props.applyDefault(ReaderView.PROP_LANDSCAPE_PAGES, DeviceInfo.ONE_COLUMN_IN_LANDSCAPE ? "0" : "1");
 			//props.applyDefault(ReaderView.PROP_TOOLBAR_APPEARANCE, "0");
 			// autodetect best initial font size based on display resolution
-			int fontSize = 12*activity.densityDpi/72;			// 12pt
-			int statusFontSize = 8*activity.densityDpi/72;		// 8pt
-			int hmargin = activity.densityDpi/16;
-			int vmargin = activity.densityDpi/32;
+			int densityDpi = activity.getDensityDpi();
+			int fontSize = 12*densityDpi/72;			// 12pt
+			int statusFontSize = 8*densityDpi/72;		// 8pt
+			int hmargin = densityDpi/16;
+			int vmargin = densityDpi/32;
 			if (DeviceInfo.DEF_FONT_SIZE != null)
 				fontSize = DeviceInfo.DEF_FONT_SIZE;
 
@@ -1993,7 +2076,7 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 		public void saveSettings(int profile, Properties settings) {
 			if (settings == null)
-				settings = mSettings;
+				settings = settingsProperties.copy();
 			File f = getSettingsFile(profile);
 			if (profile != 0) {
 				settings = profileSettingsFilter.filter(settings);
@@ -2018,23 +2101,27 @@ public class BaseActivity extends ComponentActivity implements Settings {
 
 
 		public String getSetting(String name) {
-			return mSettings.getProperty(name);
+			return settingsProperties.getProperty(name);
 		}
 
 		public String getSetting(String name, String defaultValue) {
-			return mSettings.getProperty(name, defaultValue);
+			return settingsProperties.getProperty(name, defaultValue);
 		}
 
 		public boolean getBool(String name, boolean defaultValue) {
-			return mSettings.getBool(name, defaultValue);
+			return settingsProperties.getBool(name, defaultValue);
 		}
 
 		public int getInt(String name, int defaultValue) {
-			return mSettings.getInt(name, defaultValue);
+			return settingsProperties.getInt(name, defaultValue);
 		}
 
 		public Properties get() {
-			return new Properties(mSettings);
+			return settingsProperties.copy();
+		}
+
+		void close() {
+			settingsProperties.close();
 		}
 
 	}
@@ -2054,37 +2141,38 @@ public class BaseActivity extends ComponentActivity implements Settings {
 		}
 	}
 
-	private Boolean hasHardwareMenuKey = null;
-
 	public boolean hasHardwareMenuKey() {
-		if (hasHardwareMenuKey == null) {
-			ViewConfiguration vc = ViewConfiguration.get(this);
-			if (DeviceInfo.getSDKLevel() >= 14) {
-				//boolean vc.hasPermanentMenuKey();
+		Boolean cached = hardwareMenuKeyState.get();
+		if (cached != null)
+			return cached;
+		Boolean detected = null;
+		ViewConfiguration vc = ViewConfiguration.get(this);
+		if (DeviceInfo.getSDKLevel() >= 14) {
+			//boolean vc.hasPermanentMenuKey();
+			try {
+				Method m = vc.getClass().getMethod("hasPermanentMenuKey", new Class<?>[]{});
 				try {
-					Method m = vc.getClass().getMethod("hasPermanentMenuKey", new Class<?>[]{});
-					try {
-						hasHardwareMenuKey = (Boolean) m.invoke(vc, new Object[]{});
-					} catch (IllegalArgumentException e) {
-						hasHardwareMenuKey = false;
-					} catch (IllegalAccessException e) {
-						hasHardwareMenuKey = false;
-					} catch (InvocationTargetException e) {
-						hasHardwareMenuKey = false;
-					}
-				} catch (NoSuchMethodException e) {
-					hasHardwareMenuKey = false;
+					detected = (Boolean) m.invoke(vc, new Object[]{});
+				} catch (IllegalArgumentException e) {
+					detected = false;
+				} catch (IllegalAccessException e) {
+					detected = false;
+				} catch (InvocationTargetException e) {
+					detected = false;
 				}
-			}
-			if (hasHardwareMenuKey == null) {
-				if (DeviceInfo.EINK_SCREEN)
-					hasHardwareMenuKey = false;
-				else if (DeviceInfo.getSDKLevel() < DeviceInfo.ICE_CREAM_SANDWICH)
-					hasHardwareMenuKey = true;
-				else
-					hasHardwareMenuKey = false;
+			} catch (NoSuchMethodException e) {
+				detected = false;
 			}
 		}
-		return hasHardwareMenuKey;
+		if (detected == null) {
+			if (DeviceInfo.EINK_SCREEN)
+				detected = false;
+			else if (DeviceInfo.getSDKLevel() < DeviceInfo.ICE_CREAM_SANDWICH)
+				detected = true;
+			else
+				detected = false;
+		}
+		hardwareMenuKeyState.set(detected);
+		return detected;
 	}
 }

@@ -27,6 +27,8 @@
 #include "org_coolreader_crengine_Engine.h"
 #include "lvdocview.h"
 
+#include <memory>
+
 #define READERVIEW_DCMD_START 2000
 //==========================================================
 #define DCMD_OPEN_RECENT_BOOK (READERVIEW_DCMD_START+0)
@@ -41,7 +43,9 @@ class DocViewNative {
 	LVImageSourceRef _currentImage;
 	lUInt32 _batteryIconColor;
 	int _batteryIconSize;
+	std::unique_ptr<LVDocView> _docviewOwner;
 public:
+	// Non-owning compatibility view of the exclusive owner above.
 	LVDocView * _docview;
 	DocViewNative();
 	~DocViewNative();
