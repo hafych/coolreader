@@ -1,0 +1,12 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/nazarii/coolreader/build_wgate/cmake_install.cmake",
+		"/Users/nazarii/coolreader/build_wgate/thirdparty_unman/qimagescale/cmake_install.cmake",
+		"/Users/nazarii/coolreader/build_wgate/thirdparty_unman/chmlib/cmake_install.cmake",
+		"/Users/nazarii/coolreader/build_wgate/thirdparty_unman/antiword/cmake_install.cmake",
+		"/Users/nazarii/coolreader/build_wgate/crengine/cmake_install.cmake",
+		"/Users/nazarii/coolreader/build_wgate/fb2props/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

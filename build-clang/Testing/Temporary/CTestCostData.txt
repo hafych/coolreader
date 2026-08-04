@@ -1,0 +1,13 @@
+core_safety 37 0.0150046
+thread_safety 34 0.00414052
+document_regression 29 0.00977892
+unicode_regression 29 0.000509802
+typography_regression 29 0.00290501
+css_regression 29 0.00239313
+hyphenation_regression 29 0.0109143
+hyphenation_resource_sync 29 0.00242326
+epub3_regression 29 0.00369669
+tinydict_regression 29 0.000178595
+native_state_policy 30 0.0106926
+fb2props_metadata_smoke 29 0.00101485
+---

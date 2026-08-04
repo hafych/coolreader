@@ -1,0 +1,35 @@
+Start testing: Aug 02 13:29 CEST
+----------------------------------------------------------
+1/12 Testing: core_safety
+1/12 Test: core_safety
+Command: "/Users/nazarii/coolreader/build-clang/core_safety_test"
+Directory: /Users/nazarii/coolreader/build-clang
+"core_safety" start time: Aug 02 13:29 CEST
+Output:
+----------------------------------------------------------
+FATAL ERROR #1111: Exiting: UnitTest assertion failed
+CRE: styles re-init needed after load, re-rendering
+<end of output>
+Test time =   0.56 sec
+----------------------------------------------------------
+Test Passed.
+"core_safety" end time: Aug 02 13:29 CEST
+"core_safety" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/12 Testing: thread_safety
+2/12 Test: thread_safety
+Command: "/Users/nazarii/coolreader/build-clang/thread_safety_test"
+Directory: /Users/nazarii/coolreader/build-clang
+"thread_safety" start time: Aug 02 13:29 CEST
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"thread_safety" end time: Aug 02 13:29 CEST
+"thread_safety" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Aug 02 13:29 CEST
