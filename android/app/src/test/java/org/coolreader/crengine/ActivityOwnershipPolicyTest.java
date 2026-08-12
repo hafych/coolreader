@@ -305,19 +305,100 @@ public class ActivityOwnershipPolicyTest {
 		assertFinalStaticField(Engine.class, "DOM_VERSION_CURRENT");
 		assertFinalStaticField(Engine.class, "MOUNTED_ROOTS");
 		assertFinalStaticField(Engine.class, "MOUNTED_ROOTS_MAP");
+		assertFinalStaticField(Engine.class, "SO_NAME");
 
 		Field pathCorrector =
 				Engine.class.getDeclaredField("mPathCorrector");
 		assertTrue(Modifier.isFinal(pathCorrector.getModifiers()));
 		assertFalse(Modifier.isStatic(pathCorrector.getModifiers()));
+		assertPrivateFinalField(
+				Engine.class,
+				"activityBinding",
+				EngineActivityBindingState.class);
+		assertTrue(Modifier.isFinal(
+				EngineActivityBindingState.class.getModifiers()));
+		for (Field field :
+				EngineActivityBindingState.class.getDeclaredFields()) {
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+		}
 		for (String legacy : new String[]{
 				"mountedRootsList",
 				"mountedRootsMap",
 				"pathCorrector",
-				"mFonts"}) {
+				"mFonts",
+				"mActivityRef"}) {
 			for (Field field : Engine.class.getDeclaredFields()) {
 				assertFalse(
 						"Engine retains mutable process field " + legacy,
+						field.getName().equals(legacy));
+			}
+		}
+	}
+
+	@Test
+	public void fileBrowserResidualStateBelongsToOneBrowserGeneration()
+			throws Exception {
+		for (String name : new String[]{
+				"directoryState",
+				"viewOptionsState",
+				"coverDisplayState",
+				"selectionState"}) {
+			Field field = FileBrowser.class.getDeclaredField(name);
+			assertFalse(Modifier.isStatic(field.getModifiers()));
+			assertTrue(Modifier.isPrivate(field.getModifiers()));
+			assertTrue(Modifier.isFinal(field.getModifiers()));
+		}
+		assertEquals(
+				BrowserDirectoryState.class,
+				FileBrowser.class.getDeclaredField("directoryState")
+						.getType());
+		assertEquals(
+				BrowserViewOptionsState.class,
+				FileBrowser.class.getDeclaredField("viewOptionsState")
+						.getType());
+		assertEquals(
+				BrowserCoverDisplayState.class,
+				FileBrowser.class.getDeclaredField("coverDisplayState")
+						.getType());
+		assertEquals(
+				BrowserSelectionState.class,
+				FileBrowser.class.getDeclaredField("selectionState")
+						.getType());
+		for (Class<?> owner : new Class<?>[]{
+				BrowserDirectoryState.class,
+				BrowserViewOptionsState.class,
+				BrowserCoverDisplayState.class,
+				BrowserSelectionState.class}) {
+			assertTrue(Modifier.isFinal(owner.getModifiers()));
+			for (Field field : owner.getDeclaredFields()) {
+				if (Modifier.isStatic(field.getModifiers())) {
+					assertTrue(
+							owner.getSimpleName()
+									+ " static field must be constant "
+									+ field.getName(),
+							Modifier.isFinal(field.getModifiers()));
+					continue;
+				}
+				assertTrue(Modifier.isPrivate(field.getModifiers()));
+			}
+		}
+		for (String legacy : new String[]{
+				"currDirectory",
+				"mSortOrder",
+				"isSimpleViewMode",
+				"mHideEmptyGenres",
+				"mInitStarted",
+				"selectedItem",
+				"coverPagesEnabled",
+				"coverPageHeight",
+				"coverPageWidth",
+				"coverPageSizeOption",
+				"screenWidth",
+				"screenHeight"}) {
+			for (Field field : FileBrowser.class.getDeclaredFields()) {
+				assertFalse(
+						"FileBrowser retains raw residual field " + legacy,
 						field.getName().equals(legacy));
 			}
 		}

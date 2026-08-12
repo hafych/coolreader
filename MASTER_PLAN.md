@@ -884,8 +884,21 @@ DRM или ограничений доступа, подбор/получени�
   `TtsAudiobookFilesState`; MainDB series/folder/author id maps to
   `StringIdCacheState`; FreezableRegistry permanent close. JVM:
   `BackgroundThreadHandlerStateTest`, `TerminalCallbackPairStateTest`,
-  `TtsAudiobookFilesStateTest`, `StringIdCacheStateTest`. Remaining
-  monolit residual is further CoolReader/ReaderView behavior extraction
+  `TtsAudiobookFilesStateTest`, `StringIdCacheStateTest`. Engine Activity
+  weak binding belongs to `EngineActivityBindingState` (attach/get/
+  clearIf/permanent close); raw `mActivityRef` removed and `SO_NAME` is
+  `static final`. FileBrowser residual directory/sort/simple/hide-genres/
+  init, context-menu selection and cover-display options belong to
+  `BrowserDirectoryState`, `BrowserViewOptionsState`,
+  `BrowserSelectionState` and `BrowserCoverDisplayState` with pure cover
+  dimension math; destroy closes all four owners. Raw
+  `currDirectory`/`mSortOrder`/`isSimpleViewMode`/`mHideEmptyGenres`/
+  `mInitStarted`/`selectedItem`/cover size fields removed. JVM:
+  `EngineActivityBindingStateTest`, `BrowserDirectoryStateTest`,
+  `BrowserViewOptionsStateTest`, `BrowserSelectionStateTest`,
+  `BrowserCoverDisplayStateTest` + ownership policy markers. Remaining
+  monolit residual is further CoolReader/ReaderView/FileBrowser behavior
+  extraction (list adapter/progress/download slots, TTS service residual)
   and native RAII.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 

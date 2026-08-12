@@ -36,7 +36,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -62,7 +61,8 @@ public class Engine {
 
 	private final Context mAppContext;
 	private static volatile Context sNativeAppContext;
-	private WeakReference<BaseActivity> mActivityRef;
+	private final EngineActivityBindingState activityBinding =
+			new EngineActivityBindingState();
 	private final MountPathCorrector mPathCorrector =
 			new MountPathCorrector(new File[]{});
 
@@ -576,29 +576,28 @@ public class Engine {
 	}
 
 	private void attachActivity(BaseActivity activity) {
-		mActivityRef = new WeakReference<>(activity);
+		activityBinding.attach(activity);
 	}
 
 	private BaseActivity getActivity() {
-		return mActivityRef != null ? mActivityRef.get() : null;
+		return activityBinding.get();
 	}
 
 	boolean isAttachedTo(BaseActivity activity) {
-		return getActivity() == activity;
+		return activityBinding.isAttachedTo(activity);
 	}
 
 	public void detachActivity(BaseActivity activity) {
-		BaseActivity attached = getActivity();
-		if (attached != activity)
+		if (!activityBinding.clearIf(activity))
 			return;
 		progressUiState.close();
 		keyBacklightState.close();
+		activityBinding.close();
 		ProgressDialog closing = progressDialogState.close();
 		BackgroundThread.instance().executeGUI(() -> {
 			if (closing != null && closing.isShowing())
 				closing.dismiss();
 		});
-		mActivityRef.clear();
 	}
 
 	private void configurePrivateDirectories() {
@@ -1147,7 +1146,7 @@ public class Engine {
 		return resArray;
 	}
 
-	private String SO_NAME = "lib" + LIBRARY_NAME + ".so";
+	private static final String SO_NAME = "lib" + LIBRARY_NAME + ".so";
 //	private static boolean force_install_library = false;
 
 	private static void installLibrary() {
