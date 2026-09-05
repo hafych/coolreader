@@ -32,6 +32,14 @@ cr3gui/data/tessdata/
 /thirdparty
 /thirdparty_tmp
 /build_test/
+/build/
+build-clang/
+build_wgate/
 /android/release-signing.properties
 /android/*.jks
 /android/*.keystore
+/android/app/build/
+/android/genrescollection/build/
+/android/build/
+/android/.gradle/
+/.gradle/

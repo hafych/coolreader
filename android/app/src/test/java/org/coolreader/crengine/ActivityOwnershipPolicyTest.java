@@ -343,7 +343,10 @@ public class ActivityOwnershipPolicyTest {
 				"directoryState",
 				"viewOptionsState",
 				"coverDisplayState",
-				"selectionState"}) {
+				"selectionState",
+				"downloadState",
+				"progressState",
+				"adapterState"}) {
 			Field field = FileBrowser.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -365,11 +368,26 @@ public class ActivityOwnershipPolicyTest {
 				BrowserSelectionState.class,
 				FileBrowser.class.getDeclaredField("selectionState")
 						.getType());
+		assertEquals(
+				BrowserDownloadState.class,
+				FileBrowser.class.getDeclaredField("downloadState")
+						.getType());
+		assertEquals(
+				BrowserProgressState.class,
+				FileBrowser.class.getDeclaredField("progressState")
+						.getType());
+		assertEquals(
+				BrowserListAdapterState.class,
+				FileBrowser.class.getDeclaredField("adapterState")
+						.getType());
 		for (Class<?> owner : new Class<?>[]{
 				BrowserDirectoryState.class,
 				BrowserViewOptionsState.class,
 				BrowserCoverDisplayState.class,
-				BrowserSelectionState.class}) {
+				BrowserSelectionState.class,
+				BrowserDownloadState.class,
+				BrowserProgressState.class,
+				BrowserListAdapterState.class}) {
 			assertTrue(Modifier.isFinal(owner.getModifiers()));
 			for (Field field : owner.getDeclaredFields()) {
 				if (Modifier.isStatic(field.getModifiers())) {
@@ -395,7 +413,11 @@ public class ActivityOwnershipPolicyTest {
 				"coverPageWidth",
 				"coverPageSizeOption",
 				"screenWidth",
-				"screenHeight"}) {
+				"screenHeight",
+				"mDownloadTask",
+				"progress",
+				"progressPopup",
+				"currentListAdapter"}) {
 			for (Field field : FileBrowser.class.getDeclaredFields()) {
 				assertFalse(
 						"FileBrowser retains raw residual field " + legacy,

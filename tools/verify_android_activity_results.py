@@ -1873,8 +1873,22 @@ def main() -> None:
     if re.search(r"\bstatic\s+Engine\s+instance\b", engine_text):
         violations.append(
             f"{relative(ENGINE)} retains the legacy Engine singleton")
+    # Engine may hold the Activity directly via WeakReference or indirectly
+    # via the synchronized EngineActivityBindingState owner (P2 monolith
+    # split). Both keep the same weak-reference contract; the ownership
+    # policy test enforces the exact owner shape.
+    engine_binding = SOURCE / "crengine" / "EngineActivityBindingState.java"
+    has_direct_weak_ref = "WeakReference<BaseActivity>" in engine_text
+    has_owned_binding = (
+        "EngineActivityBindingState" in engine_text
+        and engine_binding.is_file()
+        and "WeakReference<BaseActivity>"
+        in engine_binding.read_text(encoding="utf-8")
+    )
+    if not (has_direct_weak_ref or has_owned_binding):
+        violations.append(
+            f"{relative(ENGINE)} omits marker: WeakReference<BaseActivity>")
     for marker in (
-        "WeakReference<BaseActivity>",
         "mAppContext",
         "detachActivity",
         "private final MountPathCorrector mPathCorrector",

@@ -74,7 +74,8 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	History mHistory;
 	ServiceLifecycle mServiceLifecycle;
 	FileSystemFolders mFileSystemFolders;
-	private OPDSUtil.DownloadTask mDownloadTask;
+	private final BrowserDownloadState downloadState =
+			new BrowserDownloadState();
 	private final OnlineStoreDialogSession onlineStoreSession =
 			new OnlineStoreDialogSession();
 	private final FileBrowserNavigationSession navigationSession =
@@ -215,8 +216,9 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		
 	}
 
-	private void invalidateAdapter(final FileListAdapter adapter) {
-		adapter.notifyInvalidated();
+	private void invalidateAdapter(final BaseListAdapter adapter) {
+		if (adapter != null)
+			adapter.notifyInvalidated();
 	}
 	
 	CoverpageManager.CoverpageReadyListener coverpageListener;
@@ -250,7 +252,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 					found = true;
 			}
 			if (found) // && mListView.getS
-				invalidateAdapter(currentListAdapter);
+				invalidateAdapter(adapterState.get());
 		};
 		this.mCoverpageManager.addCoverpageReadyListener(coverpageListener);
 		super.onAttachedToWindow();
@@ -277,19 +279,20 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		viewOptionsState.close();
 		coverDisplayState.close();
 		selectionState.close();
+		adapterState.close();
 		mScanControl.stop();
 		mActivity.setBrowserProgressStatus(false);
 		onlineStoreSession.close();
-		if (mDownloadTask != null) {
-			mDownloadTask.cancel();
-			mDownloadTask = null;
-		}
+		OPDSUtil.DownloadTask liveDownload = downloadState.close();
+		if (liveDownload != null)
+			liveDownload.cancel();
 		this.mCoverpageManager.removeCoverpageReadyListener(coverpageListener);
 		coverpageListener = null;
 		mHistory.removeListener(this);
 		mScanner.removeListener(this);
-		if (progress != null)
-			progress.hide();
+		ProgressPopup liveProgress = progressState.close();
+		if (liveProgress != null)
+			liveProgress.hide();
 		super.onDetachedFromWindow();
 	}
 
@@ -301,12 +304,10 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 				OnlineStoreDialogSession.Channel.BROWSER);
 		onlineStoreSession.cancel(
 				OnlineStoreDialogSession.Channel.BOOK_INFO);
-		if (mDownloadTask != null) {
-			mDownloadTask.cancel();
-			mDownloadTask = null;
-		}
-		if (progress != null)
-			progress.hide();
+		OPDSUtil.DownloadTask liveDownload = downloadState.take();
+		if (liveDownload != null)
+			liveDownload.cancel();
+		progressState.hide();
 	}
 
 	public CoverpageManager getCoverpageManager() {
@@ -314,10 +315,12 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 	}
 	private CoverpageManager mCoverpageManager;
 	
-	private ProgressPopup progress;
+	private final BrowserProgressState progressState =
+			new BrowserProgressState();
+	private final BrowserListAdapterState adapterState =
+			new BrowserListAdapterState();
 	private void createListView(boolean recreateAdapter) {
-		if (progress != null)
-			progress.hide();
+		progressState.hide();
 		mListView = new FileBrowserListView(mActivity);
 		final GestureDetector detector = new GestureDetector(new MyGestureListener());
 		mListView.setOnTouchListener((v, event) -> {
@@ -328,11 +331,12 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 				return false;
 			}
 		});
-		if (currentListAdapter == null || recreateAdapter) {
-			currentListAdapter = new FileListAdapter();
-			mListView.setAdapter(currentListAdapter);
+		if (adapterState.get() == null || recreateAdapter) {
+			adapterState.install(new FileListAdapter());
+			// Previous adapter is detached with the old ListView; no recycle needed.
+			mListView.setAdapter(adapterState.get());
 		} else {
-			currentListAdapter.notifyDataSetChanged();
+			adapterState.get().notifyDataSetChanged();
 		}
 		mListView.setLayoutParams(new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT));
 		mListView.setCacheColorHint(0);
@@ -340,12 +344,13 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		removeAllViews();
 		addView(mListView);
 		mListView.setVisibility(VISIBLE);
-		progress = new ProgressPopup(mActivity, mListView);
+		progressState.set(new ProgressPopup(mActivity, mListView));
 	}
 	
 	public void onThemeChanged() {
 		createListView(true);
-		currentListAdapter.notifyDataSetChanged();
+		if (adapterState.get() != null)
+			adapterState.get().notifyDataSetChanged();
 	}
 	
 	
@@ -444,8 +449,10 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 				opdsRoot.clear();
 				for (FileInfo f : catalogs)
 					opdsRoot.addDir(f);
-				if (directoryState.get() == opdsRoot)
-					currentListAdapter.notifyDataSetChanged();
+				if (directoryState.get() == opdsRoot) {
+					if (adapterState.get() != null)
+						adapterState.get().notifyDataSetChanged();
+				}
 			});
 		}
 	}
@@ -569,7 +576,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						OnlineStoreDialogSession.Channel.BROWSER);
 		if (request == null)
 			return;
-		progress.show();
+		progressState.show();
 		try {
 			AsyncOperationControl control =
 					plugin.openDirectory(
@@ -606,7 +613,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			if (!mServiceLifecycle.isActive()
 					|| !onlineStoreSession.complete(request))
 				return;
-			progress.hide();
+			progressState.hide();
 			showDirectoryInternal(fileInfo, null);
 		});
 	}
@@ -617,7 +624,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			if (!mServiceLifecycle.isActive()
 					|| !onlineStoreSession.complete(request))
 				return;
-			progress.hide();
+			progressState.hide();
 			mActivity.showToast("Cannot read from server");
 		});
 	}
@@ -661,7 +668,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 									OnlineStoreDialogSession.Channel.BROWSER);
 					if (request == null)
 						return;
-					progress.show();
+					progressState.show();
 					try {
 						AsyncOperationControl control =
 								plugin.authenticate(
@@ -715,7 +722,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			if (!mServiceLifecycle.isActive()
 					|| !onlineStoreSession.complete(request))
 				return;
-			progress.hide();
+			progressState.hide();
 			if (authenticated)
 				openPluginDirectory(plugin, dir);
 			else
@@ -845,7 +852,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 							return false;
 						}
 						if (terminal)
-							mDownloadTask = null;
+							downloadState.take();
 						ArrayList<FileInfo> items = new ArrayList<>();
 						for ( EntryInfo entry : entries ) {
 							OPDSUtil.LinkInfo acquisition = entry.getBestAcquisitionLink();
@@ -877,9 +884,10 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						}
 						if ( items.size()>0 ) {
 							fileOrDir.replaceItems(items);
-							if (directoryState.get() == fileOrDir)
-								currentListAdapter.notifyDataSetChanged();
-							else
+							if (directoryState.get() == fileOrDir) {
+								if (adapterState.get() != null)
+									adapterState.get().notifyDataSetChanged();
+							} else
 								showDirectoryInternal(fileOrDir, null);
 						} else {
 							if (notifyNoEntries)
@@ -907,7 +915,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						if (!mServiceLifecycle.isActive()
 								|| !navigationSession.complete(request))
 							return;
-						mDownloadTask = null;
+						downloadState.take();
 						mEngine.hideProgress();
 						mActivity.showToast(message);
 					}
@@ -947,7 +955,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						if (!mServiceLifecycle.isActive()
 								|| !navigationSession.complete(request))
 							return;
-						mDownloadTask = null;
+						downloadState.take();
                         if (DeviceInfo.EINK_SONY) {
                             SonyBookSelector selector = new SonyBookSelector(mActivity);
                             selector.notifyScanner(file.getAbsolutePath());
@@ -997,13 +1005,14 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						callback,
 						fileOrDir.username,
 						fileOrDir.password);
-				mDownloadTask = task;
+				OPDSUtil.DownloadTask previousDownload = downloadState.install(task);
+				if (previousDownload != null)
+					previousDownload.cancel();
 				navigationSession.attachCancellation(
 						request,
 						() -> {
 							task.cancel();
-							if (mDownloadTask == task)
-								mDownloadTask = null;
+							downloadState.clearIf(task);
 						});
 				task.run();
 			} catch (MalformedURLException e) {
@@ -1075,9 +1084,10 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			}
 		}
 		// refresh
-		if (filePropsOnly)
-			currentListAdapter.notifyInvalidated();
-		else
+		if (filePropsOnly) {
+			if (adapterState.get() != null)
+				adapterState.get().notifyInvalidated();
+		} else
 			showDirectoryInternal(directoryState.get(), null);
 	}
 
@@ -1088,16 +1098,14 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			return null;
 		mScanControl.stop();
 		mActivity.setBrowserProgressStatus(false);
-		if (mDownloadTask != null) {
-			mDownloadTask.cancel();
-			mDownloadTask = null;
-		}
+		OPDSUtil.DownloadTask liveDownload = downloadState.take();
+		if (liveDownload != null)
+			liveDownload.cancel();
 		onlineStoreSession.cancel(
 				OnlineStoreDialogSession.Channel.BROWSER);
 		onlineStoreSession.cancel(
 				OnlineStoreDialogSession.Channel.BOOK_INFO);
-		if (progress != null)
-			progress.hide();
+		progressState.hide();
 		return request;
 	}
 
@@ -1383,8 +1391,6 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		}
 	}
 
-	private FileListAdapter currentListAdapter;
-	
 	private class FileListAdapter extends BaseListAdapter {
 		public boolean areAllItemsEnabled() {
 			return true;
@@ -1746,9 +1752,11 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		}
 		
 		mActivity.setBrowserTitle(title);
-		if (mListView.getAdapter() != currentListAdapter)
-			mListView.setAdapter(currentListAdapter);
-		currentListAdapter.notifyDataSetChanged();
+		BaseListAdapter liveAdapter = adapterState.get();
+		if (mListView.getAdapter() != liveAdapter)
+			mListView.setAdapter(liveAdapter);
+		if (liveAdapter != null)
+			liveAdapter.notifyDataSetChanged();
 		mListView.setSelection(index);
 		mListView.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
 		mListView.invalidate();
@@ -1812,8 +1820,8 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
     			coverDisplayState.setScreenSize(screenWidth, screenHeight);
     	if (dims != null
     			&& mCoverpageManager.setCoverpageSize(dims.width, dims.height)
-    			&& currentListAdapter != null)
-    		currentListAdapter.notifyDataSetChanged();
+    			&& adapterState.get() != null)
+    		adapterState.get().notifyDataSetChanged();
     }
 
     @Override
@@ -1827,13 +1835,15 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
     	if (dims == null)
     		return;
     	if (mCoverpageManager.setCoverpageSize(dims.width, dims.height)
-    			&& currentListAdapter != null)
-    		currentListAdapter.notifyDataSetChanged();
+    			&& adapterState.get() != null)
+    		adapterState.get().notifyDataSetChanged();
     }
 
     public void setCoverPageFontFace(String face) {
-    	if (mCoverpageManager.setFontFace(face))
-    		currentListAdapter.notifyDataSetChanged();
+    	if (mCoverpageManager.setFontFace(face)) {
+    		if (adapterState.get() != null)
+    			adapterState.get().notifyDataSetChanged();
+    	}
     }
 
 	public void setCoverPagesEnabled(boolean coverPagesEnabled)
@@ -1843,13 +1853,14 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 		if ( !coverPagesEnabled ) {
 			//mCoverpageManager.clear();
 		}
-		if (currentListAdapter != null)
-			currentListAdapter.notifyDataSetChanged();
+		if (adapterState.get() != null)
+			adapterState.get().notifyDataSetChanged();
 	}
 
 	public void setCoverpageData(FileInfo fileInfo, byte[] data) {
 		mCoverpageManager.setCoverpageData(mActivity.getDB(), fileInfo, data);
-		currentListAdapter.notifyInvalidated();
+		if (adapterState.get() != null)
+			adapterState.get().notifyInvalidated();
 	}
 	
 	protected void showOnlineCatalogBookDialog(final FileInfo book) {
@@ -1864,7 +1875,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 						OnlineStoreDialogSession.Channel.BOOK_INFO);
 		if (request == null)
 			return;
-		progress.show();
+		progressState.show();
 		try {
 			AsyncOperationControl control =
 					plugin.loadBookInfo(
@@ -1901,7 +1912,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			if (!mServiceLifecycle.isActive()
 					|| !onlineStoreSession.complete(request))
 				return;
-			progress.hide();
+			progressState.hide();
 			mActivity.showToast("Error while loading book info");
 		});
 	}
@@ -1914,7 +1925,7 @@ public class FileBrowser extends LinearLayout implements FileInfoChangeListener 
 			if (!mServiceLifecycle.isActive()
 					|| !onlineStoreSession.complete(request))
 				return;
-			progress.hide();
+			progressState.hide();
 			if (bookInfo == null) {
 				mActivity.showToast(
 						"Error while loading book info");

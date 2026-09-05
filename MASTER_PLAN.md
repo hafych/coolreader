@@ -896,9 +896,18 @@ DRM или ограничений доступа, подбор/получени�
   `mInitStarted`/`selectedItem`/cover size fields removed. JVM:
   `EngineActivityBindingStateTest`, `BrowserDirectoryStateTest`,
   `BrowserViewOptionsStateTest`, `BrowserSelectionStateTest`,
-  `BrowserCoverDisplayStateTest` + ownership policy markers. Remaining
-  monolit residual is further CoolReader/ReaderView/FileBrowser behavior
-  extraction (list adapter/progress/download slots, TTS service residual)
+  `BrowserCoverDisplayStateTest` + ownership policy markers. FileBrowser
+  OPDS download, progress popup and list-adapter slots belong to
+  `BrowserDownloadState` (install/clearIf/take/permanent close with caller
+  cancel), `BrowserProgressState` (set/show/hide/permanent close) and
+  `BrowserListAdapterState` (install/get/permanent close); raw
+  `mDownloadTask`/`progress`/`currentListAdapter` removed, navigation and
+  OPDS callbacks use exact identity and teardown closes all seven
+  FileBrowser owners. JVM: `BrowserDownloadStateTest`,
+  `BrowserProgressStateTest`, `BrowserListAdapterStateTest` + extended
+  ownership policy markers. Remaining
+  monolit residual is further CoolReader/ReaderView behavior
+  extraction (TTS service residual)
   and native RAII.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
