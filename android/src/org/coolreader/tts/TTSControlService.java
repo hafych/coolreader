@@ -87,6 +87,31 @@ public class TTSControlService extends BaseService {
 		STOPPED
 	}
 
+	private static TtsPlaybackState.Status toPlaybackStatus(State state) {
+		if (state == State.PLAYING)
+			return TtsPlaybackState.Status.PLAYING;
+		if (state == State.PAUSED)
+			return TtsPlaybackState.Status.PAUSED;
+		return TtsPlaybackState.Status.STOPPED;
+	}
+
+	private static State toServiceState(TtsPlaybackState.Status status) {
+		if (status == TtsPlaybackState.Status.PLAYING)
+			return State.PLAYING;
+		if (status == TtsPlaybackState.Status.PAUSED)
+			return State.PAUSED;
+		return State.STOPPED;
+	}
+
+	private State currentServiceState() {
+		return toServiceState(playbackState.status());
+	}
+
+	private void publishPlayback(TtsPlaybackState.Status next) {
+		if (playbackState.transitionTo(next) && null != mStatusListener)
+			mStatusListener.onStateChanged(toServiceState(next));
+	}
+
 	public static final Logger log = L.create("ttssvc");
 
 	private static final String CR3_UTTERANCE_ID = "cr3UtteranceId";
@@ -133,15 +158,11 @@ public class TTSControlService extends BaseService {
 	private Voice mVoice;
 	private Runnable mOnUtteranceStopOnce = null;
 	private OnTTSStatusListener mStatusListener;
-	private State mState = State.STOPPED;
-	private State mPrevState = State.STOPPED;
+	private final TtsPlaybackState playbackState = new TtsPlaybackState();
+	private final TtsAudioFocusState audioFocusState = new TtsAudioFocusState();
 	private float mSpeechRate;
-	private int mContinuousErrors = 0;
 	private AudioManager mAudioManager = null;
 	private AudioFocusRequest mAudioFocusRequest = null;
-	private boolean mPlaybackNowAuthorized = false;
-	private boolean mPlaybackDelayed = false;
-	private boolean mResumeOnFocusGain = false;
 	private MediaSession mMediaSession;
 	private MediaSession.Callback mMediaSessionCallback;
 	private PlaybackState.Builder mPlaybackStateBuilder;
@@ -180,12 +201,12 @@ public class TTSControlService extends BaseService {
 				switch (action) {
 					case TTSControlService.TTS_CONTROL_ACTION_PLAY_PAUSE:
 						if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-							if (State.PLAYING == mState)
+							if (playbackState.isPlaying())
 								mMediaSessionCallback.onPause();
 							else
 								mMediaSessionCallback.onPlay();
 						} else {
-							if (State.PLAYING == mState)
+							if (playbackState.isPlaying())
 								pauseWrapper_api_less_than_21();
 							else
 								playWrapper_api_less_than_21();
@@ -201,7 +222,7 @@ public class TTSControlService extends BaseService {
 							}
 							break;
 						}
-						if (State.PLAYING == mState) {
+						if (playbackState.isPlaying()) {
 							stopUtterance_impl(() -> {
 								if (null != mStatusListener)
 									mStatusListener.onNextSentenceRequested(mBinder);
@@ -221,7 +242,7 @@ public class TTSControlService extends BaseService {
 							}
 							break;
 						}
-						if (State.PLAYING == mState) {
+						if (playbackState.isPlaying()) {
 							stopUtterance_impl(() -> {
 								if (null != mStatusListener)
 									mStatusListener.onPreviousSentenceRequested(mBinder);
@@ -262,10 +283,7 @@ public class TTSControlService extends BaseService {
 		switch (focusChange) {
 			case AudioManager.AUDIOFOCUS_GAIN:
 				log.d("audio focus gain");
-				mPlaybackNowAuthorized = true;
-				if (mPlaybackDelayed || mResumeOnFocusGain) {
-					mPlaybackDelayed = false;
-					mResumeOnFocusGain = false;
+				if (audioFocusState.onGain()) {
 					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 						mMediaSessionCallback.onPlay();
 					else
@@ -276,10 +294,8 @@ public class TTSControlService extends BaseService {
 				break;
 			case AudioManager.AUDIOFOCUS_LOSS:
 				log.d("audio focus is lost");
-				mPlaybackNowAuthorized = false;
-				mResumeOnFocusGain = false;
-				mPlaybackDelayed = false;
-				if (State.PLAYING == mState) {
+				audioFocusState.onLoss();
+				if (playbackState.isPlaying()) {
 					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 						mMediaSessionCallback.onPause();
 					} else {
@@ -294,15 +310,13 @@ public class TTSControlService extends BaseService {
 			case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
 				log.d("audio focus temporary lost");
 				// set to pause, and schedule to resume when focus gain again
-				mPlaybackNowAuthorized = false;
-				mResumeOnFocusGain = false;
-				mPlaybackDelayed = false;
-				if (State.PLAYING == mState) {
+				audioFocusState.onTransientLoss();
+				if (playbackState.isPlaying()) {
 					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 						mMediaSessionCallback.onPause();
 					else
 						pauseWrapper_api_less_than_21();
-					mResumeOnFocusGain = true;
+					audioFocusState.armResumeOnGain();
 				}
 				break;
 		}
@@ -346,7 +360,7 @@ public class TTSControlService extends BaseService {
 	public void onCreate() {
 		log.d("onCreate");
 		super.onCreate();
-		mState = State.STOPPED;
+		playbackState.resetSilent();
 		mNotificationManager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
 		mAudioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -387,9 +401,9 @@ public class TTSControlService extends BaseService {
 						return;
 					}
 					// check or request audio focus
-					if (!mPlaybackNowAuthorized)
+					if (!audioFocusState.isAuthorized())
 						requestAudioFocusWrapper();
-					if (!mPlaybackNowAuthorized) {
+					if (!audioFocusState.isAuthorized()) {
 						log.e("Can't say anything, audio focus is locked by other app.");
 						return;
 					}
@@ -416,14 +430,7 @@ public class TTSControlService extends BaseService {
 						ContextCompat.registerReceiver(TTSControlService.this, mBecomingNoisyReceiver,
 								new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
 								ContextCompat.RECEIVER_NOT_EXPORTED);
-						synchronized (mLocker) {
-							mState = State.PLAYING;
-							if (!mState.equals(mPrevState)) {
-								if (null != mStatusListener)
-									mStatusListener.onStateChanged(mState);
-								mPrevState = mState;
-							}
-						}
+						publishPlayback(TtsPlaybackState.Status.PLAYING);
 						// update notification
 						Notification notification = buildNotification(mCurrentUtterance);
 						if (null != notification) {
@@ -461,14 +468,7 @@ public class TTSControlService extends BaseService {
 						return;
 					}
 					stopUtterance_impl(null);
-					synchronized (mLocker) {
-						mState = State.PAUSED;
-						if (!mState.equals(mPrevState)) {
-							if (null != mStatusListener)
-								mStatusListener.onStateChanged(mState);
-							mPrevState = mState;
-						}
-					}
+					publishPlayback(TtsPlaybackState.Status.PAUSED);
 					mMediaSession.setPlaybackState(
 							mPlaybackStateBuilder.setState(PlaybackState.STATE_PAUSED,
 									PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0).build());
@@ -488,14 +488,7 @@ public class TTSControlService extends BaseService {
 				@Override
 				public void onStop() {
 					stopUtterance_impl(null);
-					synchronized (mLocker) {
-						mState = State.STOPPED;
-						if (!mState.equals(mPrevState)) {
-							if (null != mStatusListener)
-								mStatusListener.onStateChanged(mState);
-							mPrevState = mState;
-						}
-					}
+					publishPlayback(TtsPlaybackState.Status.STOPPED);
 					mMediaSession.setPlaybackState(
 							mPlaybackStateBuilder.setState(PlaybackState.STATE_STOPPED,
 									PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0).build());
@@ -580,8 +573,10 @@ public class TTSControlService extends BaseService {
 				mAuthors = data.getString("bookAuthors");
 			}
 			synchronized (mLocker) {
-				mState = State.PAUSED;
+				// Prepare path parks playback without emitting a transition;
+				// the first real play will publish PLAYING exactly once.
 			}
+			playbackState.parkSilent(TtsPlaybackState.Status.PAUSED);
 			// switch this service to foreground
 			Notification notification = buildNotification(null);
 			if (null != notification) {
@@ -609,6 +604,8 @@ public class TTSControlService extends BaseService {
 	@Override
 	public void onDestroy() {
 		log.d("onDestroy");
+		playbackState.close();
+		audioFocusState.close();
 		synchronized (mTtsInitializationState) {
 			mTtsInitializationState.close();
 			TtsInitAttempt pending = mTtsInitAttempt;
@@ -722,7 +719,7 @@ public class TTSControlService extends BaseService {
 		shutdownCurrentTts();
 		mTTSInitialized = false;
 		mTTSEnginePackage = null;
-		final boolean isSpeaking = State.PLAYING == mState;
+		final boolean isSpeaking = playbackState.isPlaying();
 		TtsInitAttempt attempt =
 				new TtsInitAttempt(owner, listener, isSpeaking);
 		mTtsInitAttempt = attempt;
@@ -911,10 +908,7 @@ public class TTSControlService extends BaseService {
 				Notification notification = buildNotification(mCurrentUtterance);
 				if (null != notification) {
 					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ECLAIR) {
-						boolean isSpeaking;
-						synchronized (mLocker) {
-							isSpeaking = State.PLAYING == mState;
-						}
+						boolean isSpeaking = playbackState.isPlaying();
 						if (isSpeaking) {
 							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
 								startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
@@ -945,9 +939,7 @@ public class TTSControlService extends BaseService {
 	}
 
 	private State getState_impl() {
-		synchronized (mLocker) {
-			return mState;
-		}
+		return currentServiceState();
 	}
 
 	/**
@@ -995,19 +987,12 @@ public class TTSControlService extends BaseService {
 			return;
 		}
 		if (null != mCurrentUtterance) {
-			if (!mPlaybackNowAuthorized)
+			if (!audioFocusState.isAuthorized())
 				requestAudioFocusWrapper();
-			if (mPlaybackNowAuthorized) {
+			if (audioFocusState.isAuthorized()) {
 				// start to speech
 				if (say_impl(mCurrentUtterance)) {
-					synchronized (mLocker) {
-						mState = State.PLAYING;
-						if (!mState.equals(mPrevState)) {
-							if (null != mStatusListener)
-								mStatusListener.onStateChanged(mState);
-							mPrevState = mState;
-						}
-					}
+					publishPlayback(TtsPlaybackState.Status.PLAYING);
 					// update notification
 					Notification notification = buildNotification(mCurrentUtterance);
 					if (null != notification) {
@@ -1036,14 +1021,7 @@ public class TTSControlService extends BaseService {
 			return;
 		}
 		stopUtterance_impl(null);
-		synchronized (mLocker) {
-			mState = State.PAUSED;
-			if (!mState.equals(mPrevState)) {
-				if (null != mStatusListener)
-					mStatusListener.onStateChanged(mState);
-				mPrevState = mState;
-			}
-		}
+		publishPlayback(TtsPlaybackState.Status.PAUSED);
 		// update notification
 		Notification notification = buildNotification(null);
 		if (null != notification) {
@@ -1060,14 +1038,7 @@ public class TTSControlService extends BaseService {
 
 	private void stopWrapper_api_less_than_21() {
 		stopUtterance_impl(null);
-		synchronized (mLocker) {
-			mState = State.STOPPED;
-			if (!mState.equals(mPrevState)) {
-				if (null != mStatusListener)
-					mStatusListener.onStateChanged(mState);
-				mPrevState = mState;
-			}
-		}
+		publishPlayback(TtsPlaybackState.Status.STOPPED);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ECLAIR)
 			stopForeground(true);
 		mNotificationManager.cancel(NOTIFICATION_ID);
@@ -1304,9 +1275,7 @@ public class TTSControlService extends BaseService {
 					mMediaSessionCallback.onPlay();
 				else
 					playWrapper_api_less_than_21();
-				synchronized (mLocker) {
-					result = State.PLAYING == mState;
-				}
+				result = playbackState.isPlaying();
 				if (null != callback) {
 					sendTask(handler, () -> callback.onResult(result));
 				}
@@ -1327,9 +1296,7 @@ public class TTSControlService extends BaseService {
 					mMediaSessionCallback.onPause();
 				else
 					pauseWrapper_api_less_than_21();
-				synchronized (mLocker) {
-					result = State.PAUSED == mState;
-				}
+				result = playbackState.isPaused();
 				if (null != callback) {
 					sendTask(handler, () -> callback.onResult(result));
 				}
@@ -1358,9 +1325,7 @@ public class TTSControlService extends BaseService {
 					mMediaSessionCallback.onStop();
 				else
 					stopWrapper_api_less_than_21();
-				synchronized (mLocker) {
-					result = State.PAUSED == mState;
-				}
+				result = playbackState.isPaused();
 				if (null != callback)
 					sendTask(handler, () -> callback.onResult(result));
 			}
@@ -1488,7 +1453,7 @@ public class TTSControlService extends BaseService {
 					SentenceInfo nextSentenceInfo = sentenceInfo.nextSentence;
 					if(sentenceInfo.sentenceTiming.audioFile == TTSControlService.this.audioFile){
 						if(nextSentenceInfo.sentenceTiming.isFirstSentenceInAudioFile){
-							if(mState == State.PLAYING && (mMediaPlayer == null || !mMediaPlayer.isPlaying())){
+							if(playbackState.isPlaying() && (mMediaPlayer == null || !mMediaPlayer.isPlaying())){
 								//this is the last sentence in the file, and the media player ended
 								isAfterSentence = true;
 							}
@@ -1554,7 +1519,7 @@ public class TTSControlService extends BaseService {
 		this.audioFile = audioFile;
 		this.startTime = startTime;
 
-		if(mState == State.PLAYING){
+		if(playbackState.isPlaying()){
 			ensureAudioBookPlaying();
 		}
 	}
@@ -1587,8 +1552,12 @@ public class TTSControlService extends BaseService {
 		mMediaSession.setPlaybackState(
 			mPlaybackStateBuilder.setState(PlaybackState.STATE_PLAYING,
 					PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0).build());
-		mState = State.PLAYING;
-		mStatusListener.onStateChanged(mState);
+		State published = State.PLAYING;
+		// Audiobook path always publishes (legacy behavior emits even on
+		// repeat PLAYING); keep exact notification while owning the status.
+		playbackState.transitionTo(TtsPlaybackState.Status.PLAYING);
+		if (null != mStatusListener)
+			mStatusListener.onStateChanged(published);
 	}
 
 	public void pauseAudioBook() {
@@ -1596,8 +1565,10 @@ public class TTSControlService extends BaseService {
 		mMediaSession.setPlaybackState(
 			mPlaybackStateBuilder.setState(PlaybackState.STATE_PAUSED,
 					PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0).build());
-		mState = State.PAUSED;
-		mStatusListener.onStateChanged(mState);
+		State published = State.PAUSED;
+		playbackState.transitionTo(TtsPlaybackState.Status.PAUSED);
+		if (null != mStatusListener)
+			mStatusListener.onStateChanged(published);
 	}
 
 	// ======================================
@@ -1669,7 +1640,7 @@ public class TTSControlService extends BaseService {
 							this, REQUEST_PLAY_PAUSE,
 							createControlIntent(TTS_CONTROL_ACTION_PLAY_PAUSE),
 							PENDING_INTENT_FLAGS);
-					Notification.Action.Builder actionBld = new Notification.Action.Builder(mState == State.PAUSED ? R.drawable.ic_media_play : R.drawable.ic_media_pause, "", playPauseIntent);
+					Notification.Action.Builder actionBld = new Notification.Action.Builder(playbackState.isPaused() ? R.drawable.ic_media_play : R.drawable.ic_media_pause, "", playPauseIntent);
 					Notification.Action actionPlayPause = actionBld.build();
 					builder = builder.addAction(actionPlayPause);
 					// prev
@@ -1763,14 +1734,13 @@ public class TTSControlService extends BaseService {
 								mMediaPlayer = null;
 							}
 						}
-						mContinuousErrors = 0;
+						playbackState.recordSuccess();
 					}
 
 					@Override
 					public void onError(String utteranceId) {
 						log.e("TTS error");
-						mContinuousErrors++;
-						if (mContinuousErrors >= MAX_CONTINUOUS_ERRORS) {
+						if (playbackState.recordError() >= MAX_CONTINUOUS_ERRORS) {
 							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 								mMediaSessionCallback.onStop();
 							else
@@ -1801,8 +1771,7 @@ public class TTSControlService extends BaseService {
 					@Override
 					public void onError(String utteranceId, int errorCode) {
 						log.e("TTS error, code=" + errorCode);
-						mContinuousErrors++;
-						if (mContinuousErrors >= MAX_CONTINUOUS_ERRORS) {
+						if (playbackState.recordError() >= MAX_CONTINUOUS_ERRORS) {
 							if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
 								mMediaSessionCallback.onStop();
 							else
@@ -1869,37 +1838,29 @@ public class TTSControlService extends BaseService {
 					int res = mAudioManager.requestAudioFocus(mAudioFocusRequest);
 					switch (res) {
 						case AudioManager.AUDIOFOCUS_REQUEST_GRANTED:
-							mPlaybackNowAuthorized = true;
-							mPlaybackDelayed = false;
-							mResumeOnFocusGain = false;
+							audioFocusState.onGranted();
 							break;
 						case AudioManager.AUDIOFOCUS_REQUEST_DELAYED:
 							// Now this is dead code since we call
 							//  builder.setAcceptsDelayedFocusGain(false);
-							mPlaybackNowAuthorized = false;
-							mPlaybackDelayed = true;
-							mResumeOnFocusGain = false;
+							audioFocusState.onDelayed();
 							break;
 						case AudioManager.AUDIOFOCUS_REQUEST_FAILED:
 						default:
-							mPlaybackNowAuthorized = false;
-							mPlaybackDelayed = false;
-							mResumeOnFocusGain = false;
+							audioFocusState.onFailed();
 							break;
 					}
 				}
 			} else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.FROYO) {
 				int res = mAudioManager.requestAudioFocus(mAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
-				mPlaybackNowAuthorized = AudioManager.AUDIOFOCUS_REQUEST_GRANTED == res;
-				mPlaybackDelayed = false;
-				mResumeOnFocusGain = false;
+				audioFocusState.onGrantedWithResult(AudioManager.AUDIOFOCUS_REQUEST_GRANTED == res);
 			} else {
-				mPlaybackNowAuthorized = true;
+				audioFocusState.forceAuthorized();
 			}
 		} else {
-			mPlaybackNowAuthorized = true;
+			audioFocusState.forceAuthorized();
 		}
-		return mPlaybackNowAuthorized;
+		return audioFocusState.isAuthorized();
 	}
 
 	private void abandonAudioFocusRequestWrapper() {

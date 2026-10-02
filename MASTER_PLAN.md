@@ -907,8 +907,16 @@ DRM или ограничений доступа, подбор/получени�
   `BrowserProgressStateTest`, `BrowserListAdapterStateTest` + extended
   ownership policy markers. Remaining
   monolit residual is further CoolReader/ReaderView behavior
-  extraction (TTS service residual)
-  and native RAII.
+  extraction and native RAII.
+  TTS service playback status/error counter and audio-focus flags belong to
+  `TtsPlaybackState` (transitionTo/parkSilent/recordSuccess/recordError/
+  permanent close) and `TtsAudioFocusState` (onGain/onLoss/onTransientLoss/
+  armResumeOnGain/request outcomes/permanent close) with pure-JVM mapping to
+  the platform `State`; raw `mState`/`mPrevState`/`mContinuousErrors`/
+  `mPlaybackNowAuthorized`/`mPlaybackDelayed`/`mResumeOnFocusGain` removed,
+  media/audiobook/error paths publish through the owners and destroy closes
+  both. JVM: `TtsPlaybackStateTest`, `TtsAudioFocusStateTest`,
+  `TtsServiceOwnershipTest`.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование
