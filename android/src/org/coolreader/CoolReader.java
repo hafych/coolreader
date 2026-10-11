@@ -172,18 +172,9 @@ public class CoolReader extends BaseActivity {
 			new ExternalDocumentValidator();
 	//View startupView;
 	//CRDB mDB;
-	/*
-	  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-	private final SyncOptions mGoogleDriveSyncOpts = new SyncOptions();
-	private boolean mSyncGoogleDriveEnabledPrev = false;
-	private int mSyncGoogleDriveErrorsCount = 0;
-	private Synchronizer mGoogleDriveSync;
-	private OnSyncStatusListener mGoogleDriveSyncStatusListener;
-	private Timer mGoogleDriveAutoSaveTimer = null;
-	private SyncServiceAccessor syncServiceAccessor = null;
-	// can be add more synchronizers
-	private boolean mSuppressSettingsCopyToCloud;
-	 */
+	// NOTE: Google Drive sync is not implemented (requires a GPL-compatible
+	// free binding; proprietary Play Services cannot be used). Sync remains
+	// a post-release P2 task per MASTER_PLAN; no sync state lives here.
 
 	private final ToolbarAppearanceState toolbarAppearance =
 			new ToolbarAppearanceState();
@@ -426,14 +417,7 @@ public class CoolReader extends BaseActivity {
 			}
 		}
 
-		/*
-		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-		// Unbind from Cloud Sync service
-		if (null != syncServiceAccessor) {
-			syncServiceAccessor.unbind();
-			syncServiceAccessor = null;
-		}
-		 */
+		// NOTE: no Cloud Sync service binding (see field note above).
 
 		CRRootView homeFrame = homeUi.close();
 		if (homeFrame != null)
@@ -510,44 +494,8 @@ public class CoolReader extends BaseActivity {
 			if (browserUi.browser() != null)
 				browserUi.browser().setSimpleViewMode(flg);
 		}
-		/* See notes for buildGoogleDriveSynchronizer() function
-		else if (key.equals(PROP_APP_CLOUDSYNC_GOOGLEDRIVE_ENABLED)) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				mSyncGoogleDriveEnabledPrev = mGoogleDriveSyncOpts.Enabled;
-				mGoogleDriveSyncOpts.Enabled = flg;
-				updateGoogleDriveSynchronizer();
-			}
-		} else if (key.equals(PROP_APP_CLOUDSYNC_CONFIRMATIONS)) {
-			mGoogleDriveSyncOpts.AskConfirmations = flg;
-		} else if (key.equals(PROP_APP_CLOUDSYNC_GOOGLEDRIVE_SETTINGS)) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				mGoogleDriveSyncOpts.SyncSettings = flg;
-				updateGoogleDriveSynchronizer();
-			}
-		} else if (key.equals(PROP_APP_CLOUDSYNC_GOOGLEDRIVE_BOOKMARKS)) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				mGoogleDriveSyncOpts.SyncBookmarks = flg;
-				updateGoogleDriveSynchronizer();
-			}
-		} else if (key.equals(PROP_APP_CLOUDSYNC_GOOGLEDRIVE_CURRENTBOOK_INFO)) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				mGoogleDriveSyncOpts.SyncCurrentBookInfo = flg;
-				updateGoogleDriveSynchronizer();
-			}
-		} else if (key.equals(PROP_APP_CLOUDSYNC_GOOGLEDRIVE_CURRENTBOOK_BODY)) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				mGoogleDriveSyncOpts.SyncCurrentBookBody = flg;
-				updateGoogleDriveSynchronizer();
-			}
-		} else if (key.equals(PROP_APP_CLOUDSYNC_GOOGLEDRIVE_AUTOSAVEPERIOD)) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				mGoogleDriveSyncOpts.AutoSavePeriod = Utils.parseInt(value, 0, 0, 30);
-				updateGoogleDriveSynchronizer();
-			}
-		} else if (key.equals(PROP_APP_CLOUDSYNC_DATA_KEEPALIVE)) {
-			mGoogleDriveSyncOpts.DataKeepAlive = Utils.parseInt(value, 14, 0, 365);
-			updateGoogleDriveSynchronizer();
-		} */
+		// NOTE: CloudSync settings branches removed with the dead Google
+		// Drive synchronizer (see field note above); sync is a P2 task.
 		else if (key.equals(PROP_APP_FILE_BROWSER_HIDE_EMPTY_FOLDERS)) {
 			// already in super method:
 			// serviceGraph.scanner().setHideEmptyDirs(flg);
@@ -570,288 +518,9 @@ public class CoolReader extends BaseActivity {
 		//
 	}
 
-	/*
-	 * NOTE: Unfortunately, Services Google Play has a proprietary license,
-	 * so we cannot use it in the program under GPL license.
-	 * This code must be rewritten using free libraries compatible with
-	 * the GPL license or write its implementation from scratch.
-	private void buildGoogleDriveSynchronizer() {
-		if (null != syncServiceAccessor && null != mGoogleDriveSync) {
-			if (!syncServiceAccessor.isServiceBound()) {
-				// lost connection to service, nullify sync instance
-				mGoogleDriveSync = null;
-			}
-		}
-		if (null != mGoogleDriveSync)
-			return;
-		// build synchronizer instance
-		// DeviceInfo.getSDKLevel() not applicable here -> compile error about Android API compatibility
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-			GoogleDriveRemoteAccess googleDriveRemoteAccess = new GoogleDriveRemoteAccess(this, 30);
-			mGoogleDriveSync = new Synchronizer(this, serviceGraph.scanner(), googleDriveRemoteAccess, getString(R.string.app_name), REQUEST_CODE_GOOGLE_DRIVE_SIGN_IN);
-			mGoogleDriveSyncStatusListener = new OnSyncStatusListener() {
-				@Override
-				public void onSyncStarted(Synchronizer.SyncDirection direction, boolean showProgress, boolean interactively) {
-					if (Synchronizer.SyncDirection.SyncFrom == direction) {
-						log.d("Starting synchronization from Google Drive");
-					} else if (Synchronizer.SyncDirection.SyncTo == direction) {
-						log.d("Starting synchronization to Google Drive");
-					}
-					if (null != readerUi.view()) {
-						if (showProgress) {
-							readerUi.view().showCloudSyncProgress(100);
-						}
-					}
-				}
-
-				@Override
-				public void OnSyncProgress(Synchronizer.SyncDirection direction, boolean showProgress, int current, int total, boolean interactively) {
-					log.v("sync progress: current=" + current + "; total=" + total);
-					if (null != readerUi.view()) {
-						if (showProgress) {
-							int total_ = total;
-							if (current > total_)
-								total_ = current;
-							readerUi.view().showCloudSyncProgress(10000 * current / total_);
-						}
-					}
-				}
-
-				@Override
-				public void onSyncCompleted(Synchronizer.SyncDirection direction, boolean showProgress, boolean interactively) {
-					if (Synchronizer.SyncDirection.SyncFrom == direction) {
-						log.d("Google Drive SyncFrom successfully completed");
-					} else if (Synchronizer.SyncDirection.SyncTo == direction) {
-						log.d("Google Drive SyncTo successfully completed");
-					}
-					if (interactively)
-						showToast(R.string.googledrive_sync_completed);
-					if (showProgress) {
-						if (null != readerUi.view()) {
-							// Hide sync indicator
-							readerUi.view().hideCloudSyncProgress();
-						}
-					}
-					if (mGoogleDriveSyncOpts.Enabled)
-						mSyncGoogleDriveErrorsCount = 0;
-				}
-
-				@Override
-				public void onSyncError(Synchronizer.SyncDirection direction, String errorString) {
-					// Hide sync indicator
-					if (null != readerUi.view()) {
-						readerUi.view().hideCloudSyncProgress();
-					}
-					if (null != errorString)
-						showToast(R.string.googledrive_sync_failed_with, errorString);
-					else
-						showToast(R.string.googledrive_sync_failed);
-					if (mGoogleDriveSyncOpts.Enabled) {
-						mSyncGoogleDriveErrorsCount++;
-						if (mSyncGoogleDriveErrorsCount >= 3) {
-							showToast(R.string.googledrive_sync_failed_disabled);
-							log.e("More than 3 sync failures in a row, auto sync disabled.");
-							mGoogleDriveSyncOpts.Enabled = false;
-						}
-					}
-				}
-
-				@Override
-				public void onAborted(Synchronizer.SyncDirection direction) {
-					// Hide sync indicator
-					if (null != readerUi.view()) {
-						readerUi.view().hideCloudSyncProgress();
-					}
-					showToast(R.string.googledrive_sync_aborted);
-				}
-
-				@Override
-				public void onSettingsLoaded(Properties settings, boolean interactively) {
-					// Apply downloaded (filtered) settings
-					mSuppressSettingsCopyToCloud = true;
-					mergeSettings(settings, true);
-				}
-
-				@Override
-				public void onBookmarksLoaded(BookInfo bookInfo, boolean interactively) {
-					waitForCRDBService(() -> {
-						// TODO: ask the user whether to import new bookmarks.
-						BookInfo currentBook = null;
-						int currentPos = -1;
-						if (null != readerUi.view()) {
-							currentBook = readerUi.view().getBookInfo();
-							if (null != currentBook) {
-								Bookmark lastPos = currentBook.getLastPosition();
-								if (null != lastPos)
-									currentPos = lastPos.getPercent();
-							}
-						}
-						serviceGraph.history().updateBookInfo(bookInfo);
-						getDB().saveBookInfo(bookInfo);
-						if (null != currentBook) {
-							FileInfo currentFileInfo = currentBook.getFileInfo();
-							if (null != currentFileInfo) {
-								if (currentFileInfo.baseEquals((bookInfo.getFileInfo()))) {
-									// if the book indicated by the bookInfo is currently open.
-									Bookmark lastPos = bookInfo.getLastPosition();
-									if (null != lastPos) {
-										if (!interactively) {
-											readerUi.view().goToBookmark(lastPos);
-										} else {
-											if (Math.abs(currentPos - lastPos.getPercent()) > 10) {		// 0.1%
-												askQuestion(R.string.cloud_synchronization_from_, R.string.sync_confirmation_new_reading_position,
-														() -> readerUi.view().goToBookmark(lastPos), null);
-											}
-										}
-									}
-								}
-							}
-						}
-					});
-				}
-
-				@Override
-				public void onCurrentBookInfoLoaded(FileInfo fileInfo, boolean interactively) {
-					FileInfo current = null;
-					if (null != readerUi.view()) {
-						BookInfo bookInfo = readerUi.view().getBookInfo();
-						if (null != bookInfo)
-							current = bookInfo.getFileInfo();
-					}
-					if (!fileInfo.baseEquals(current)) {
-						if (!interactively) {
-							loadDocument(fileInfo, false);
-						} else {
-							String shortBookInfo = "";
-							if (null != fileInfo.authors && !fileInfo.authors.isEmpty())
-								shortBookInfo = "\"" + fileInfo.authors + ", ";
-							else
-								shortBookInfo = "\"";
-							shortBookInfo += fileInfo.title + "\"";
-							String question = getString(R.string.sync_confirmation_other_book, shortBookInfo);
-							askQuestion(getString(R.string.cloud_synchronization_from_), question, () -> loadDocument(fileInfo, false), null);
-						}
-					}
-				}
-
-				@Override
-				public void onFileNotFound(FileInfo fileInfo) {
-					if (null == fileInfo)
-						return;
-					String docInfo = "Unknown";
-					if (null != fileInfo.title && !fileInfo.authors.isEmpty())
-						docInfo = fileInfo.title;
-					if (null != fileInfo.authors && !fileInfo.authors.isEmpty())
-						docInfo = fileInfo.authors + ", " + docInfo;
-					if (null != fileInfo.filename && !fileInfo.filename.isEmpty())
-						docInfo += " (" + fileInfo.filename + ")";
-					showToast(R.string.sync_info_no_such_document, docInfo);
-				}
-			};
-			syncServiceAccessor = new SyncServiceAccessor(this);
-		}
-	}
-
-	private void updateGoogleDriveSynchronizer() {
-		// DeviceInfo.getSDKLevel() not applicable here -> lint error about Android API compatibility
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-			if (mGoogleDriveSyncOpts.Enabled) {
-				if (null == mGoogleDriveSync) {
-					log.d("Google Drive sync is enabled.");
-					buildGoogleDriveSynchronizer();
-				}
-				mGoogleDriveSync.setTarget(Synchronizer.SyncTarget.SETTINGS, mGoogleDriveSyncOpts.SyncSettings);
-				mGoogleDriveSync.setTarget(Synchronizer.SyncTarget.BOOKMARKS, mGoogleDriveSyncOpts.SyncBookmarks);
-				mGoogleDriveSync.setTarget(Synchronizer.SyncTarget.CURRENTBOOKINFO, mGoogleDriveSyncOpts.SyncCurrentBookInfo);
-				mGoogleDriveSync.setTarget(Synchronizer.SyncTarget.CURRENTBOOKBODY, mGoogleDriveSyncOpts.SyncCurrentBookBody);
-				mGoogleDriveSync.setBookmarksKeepAlive(mGoogleDriveSyncOpts.DataKeepAlive);
-				if (null != mGoogleDriveAutoSaveTimer) {
-					mGoogleDriveAutoSaveTimer.cancel();
-					mGoogleDriveAutoSaveTimer = null;
-				}
-				if (mGoogleDriveSyncOpts.AutoSavePeriod > 0) {
-					mGoogleDriveAutoSaveTimer = new Timer();
-					mGoogleDriveAutoSaveTimer.schedule(new TimerTask() {
-						@Override
-						public void run() {
-							if (activityLifecycle.isResumed()
-									&& null != mGoogleDriveSync) {
-								//mGoogleDriveSync.startSyncTo(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_QUIETLY);
-								syncServiceAccessor.bind(sync -> {
-									sync.setSynchronizer(mGoogleDriveSync);
-									sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-									sync.startSyncTo(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_QUIETLY);
-								});
-							}
-						}
-					}, mGoogleDriveSyncOpts.AutoSavePeriod * 60000L, mGoogleDriveSyncOpts.AutoSavePeriod * 60000L);
-				}
-			} else {
-				if (null != mGoogleDriveAutoSaveTimer) {
-					mGoogleDriveAutoSaveTimer.cancel();
-					mGoogleDriveAutoSaveTimer = null;
-				}
-				if (mSyncGoogleDriveEnabledPrev && null != mGoogleDriveSync) {
-					log.d("Google Drive autosync is disabled.");
-					if (false) {
-						// TODO: Don't remove authorization on Google Account here, move this into OptionsDialog
-						// ask user: cleanup & sign out
-						askConfirmation(R.string.googledrive_disabled_cleanup_question,
-								() -> {
-									if (null != mGoogleDriveSync) {
-										mGoogleDriveSync.abort(() -> {
-											if (null != mGoogleDriveSync) {
-												mGoogleDriveSync.cleanupAndSignOut();
-												mGoogleDriveSync = null;
-											}
-										});
-									}
-								},
-								() -> {
-									if (null != mGoogleDriveSync) {
-										mGoogleDriveSync.abort(() -> {
-											if (null != mGoogleDriveSync) {
-												mGoogleDriveSync.signOut();
-												mGoogleDriveSync = null;
-											}
-										});
-									}
-								}
-						);
-					}
-				}
-			}
-		}
-	}
-
-	public void forceSyncToGoogleDrive() {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-			if (null == mGoogleDriveSync)
-				buildGoogleDriveSynchronizer();
-			mGoogleDriveSync.setBookmarksKeepAlive(mGoogleDriveSyncOpts.DataKeepAlive);
-			//mGoogleDriveSync.startSyncTo(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_FORCE | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | Synchronizer.SYNC_FLAG_ASK_CHANGED);
-			syncServiceAccessor.bind(sync -> {
-				sync.setSynchronizer(mGoogleDriveSync);
-				sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-				sync.startSyncTo(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_FORCE | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | Synchronizer.SYNC_FLAG_ASK_CHANGED);
-			});
-		}
-	}
-
-	public void forceSyncFromGoogleDrive() {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-			if (null == mGoogleDriveSync)
-				buildGoogleDriveSynchronizer();
-			mGoogleDriveSync.setBookmarksKeepAlive(mGoogleDriveSyncOpts.DataKeepAlive);
-			//mGoogleDriveSync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_FORCE | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | Synchronizer.SYNC_FLAG_ASK_CHANGED);
-			syncServiceAccessor.bind(sync -> {
-				sync.setSynchronizer(mGoogleDriveSync);
-				sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-				sync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_FORCE | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | Synchronizer.SYNC_FLAG_ASK_CHANGED);
-			});
-		}
-	}
-	*/
+	// NOTE: Google Drive synchronizer removed (dead code, was entirely
+	// commented out). Sync needs a GPL-compatible free binding and remains
+	// a post-release P2 task per MASTER_PLAN.
 
 	private BookInfo getCurrentBookInfo() {
 		BookInfo bookInfo = null;
@@ -1046,24 +715,6 @@ public class CoolReader extends BaseActivity {
 		}
 		if (homeUi.frame() != null)
 			homeUi.frame().onPause();
-		/*
-		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-			if (mGoogleDriveSyncOpts.Enabled && mGoogleDriveSync != null) {
-				//mGoogleDriveSync.startSyncTo(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS);
-				syncServiceAccessor.bind(sync -> {
-					sync.setSynchronizer(mGoogleDriveSync);
-					sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-					sync.startSyncTo(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS);
-				});
-				try {
-					// start SyncService to prevent service destroying on unbinding in onDestroy()
-					Intent intent = new Intent(SyncService.SYNC_ACTION_NOOP, Uri.EMPTY, this, SyncService.class);
-					startService(intent);
-				} catch (Exception ignored) {}
-			}
-		}
-		 */
 		super.onPause();
 	}
 
@@ -1144,31 +795,6 @@ public class CoolReader extends BaseActivity {
 				}
 			}
 		}
-		/*
-		  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-			if (mGoogleDriveSyncOpts.Enabled && mGoogleDriveSync != null) {
-				// when the program starts, the local settings file is already updated, so the local file is always newer than the remote one
-				// Therefore, the synchronization mode is quiet, i.e. without comparing modification times and without prompting the user for action.
-				// If the file is opened from an external file manager, we must disable the "currently reading book" sync operation with google drive.
-				if (null == externalDocumentState.get()) {
-					//mGoogleDriveSync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0));
-					syncServiceAccessor.bind(sync -> {
-						sync.setSynchronizer(mGoogleDriveSync);
-						sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-						sync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0));
-					});
-				} else {
-					//mGoogleDriveSync.startSyncFromOnly(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0), Synchronizer.SyncTarget.SETTINGS, Synchronizer.SyncTarget.BOOKMARKS);
-					syncServiceAccessor.bind(sync -> {
-						sync.setSynchronizer(mGoogleDriveSync);
-						sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-						sync.startSyncFromOnly(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0), Synchronizer.SyncTarget.SETTINGS, Synchronizer.SyncTarget.BOOKMARKS);
-					});
-				}
-			}
-		}
-		 */
 		activityLifecycle.resume();
 	}
 
@@ -1388,43 +1014,6 @@ public class CoolReader extends BaseActivity {
 		applyFullscreen(getWindow());
 		if (startupState.shouldValidateSettings()) {
 			// Only after onStart()!
-			/*
-			  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				if (mGoogleDriveSyncOpts.Enabled && !mSyncGoogleDriveEnabledPrev && null != mGoogleDriveSync) {
-					// if cloud sync has just been enabled in options dialog
-					//mGoogleDriveSync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0) );
-					syncServiceAccessor.bind(sync -> {
-						sync.setSynchronizer(mGoogleDriveSync);
-						sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-						sync.startSyncFrom(Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS | (mGoogleDriveSyncOpts.AskConfirmations ? Synchronizer.SYNC_FLAG_ASK_CHANGED : 0) );
-					});
-					mSyncGoogleDriveEnabledPrev = mGoogleDriveSyncOpts.Enabled;
-					return;
-				}
-				if (changedProps.size() > 0) {
-					// After options dialog is closed, sync new settings to the cloud with delay
-					BackgroundThread.instance().postGUI(() -> {
-						if (mGoogleDriveSyncOpts.Enabled && mGoogleDriveSyncOpts.SyncSettings && null != mGoogleDriveSync) {
-							if (mSuppressSettingsCopyToCloud) {
-								// Immediately after downloading settings from Google Drive
-								// prevent uploading settings file
-								mSuppressSettingsCopyToCloud = false;
-							} else {
-								// After setting changed in OptionsDialog
-								log.d("Some settings is changed, uploading to cloud...");
-								//mGoogleDriveSync.startSyncToOnly(null, Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS, Synchronizer.SyncTarget.SETTINGS);
-								syncServiceAccessor.bind(sync -> {
-									sync.setSynchronizer(mGoogleDriveSync);
-									sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-									sync.startSyncToOnly(null, Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS, Synchronizer.SyncTarget.SETTINGS);
-								});
-							}
-						}
-					}, 500);
-				}
-			}
-			 */
 			validateSettings();
 		}
 	}
@@ -1503,22 +1092,7 @@ public class CoolReader extends BaseActivity {
 		if (null != browserUi.browser())
 			browserUi.browser().stopCurrentScan();
 		setCurrentFrame(homeUi.frame());
-		if (startupState.isInterfaceReady()) {
-			/*
-			  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				// Save bookmarks and current reading position on the cloud
-				if (mGoogleDriveSyncOpts.Enabled && null != mGoogleDriveSync) {
-					//mGoogleDriveSync.startSyncToOnly(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_QUIETLY, Synchronizer.SyncTarget.BOOKMARKS);
-					syncServiceAccessor.bind(sync -> {
-						sync.setSynchronizer(mGoogleDriveSync);
-						sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-						sync.startSyncToOnly(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_QUIETLY, Synchronizer.SyncTarget.BOOKMARKS);
-					});
-				}
-			}
-			 */
-		}
+		// NOTE: Cloud bookmark sync removed with the dead Google Drive block.
 	}
 
 	/**
@@ -1847,27 +1421,6 @@ public class CoolReader extends BaseActivity {
 				loadOwner, source, forceSync ? () -> {
 			if (null != doneCallback)
 				doneCallback.run();
-			/*
-			  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-				// Save last opened document on cloud
-				if (mGoogleDriveSyncOpts.Enabled && null != mGoogleDriveSync) {
-					ArrayList<Synchronizer.SyncTarget> targets = new ArrayList<Synchronizer.SyncTarget>();
-					if (mGoogleDriveSyncOpts.SyncCurrentBookInfo)
-						targets.add(Synchronizer.SyncTarget.CURRENTBOOKINFO);
-					if (mGoogleDriveSyncOpts.SyncCurrentBookBody)
-						targets.add(Synchronizer.SyncTarget.CURRENTBOOKBODY);
-					if (!targets.isEmpty()) {
-						//mGoogleDriveSync.startSyncToOnly(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS, targets.toArray(new Synchronizer.SyncTarget[0]));
-						syncServiceAccessor.bind(sync -> {
-							sync.setSynchronizer(mGoogleDriveSync);
-							sync.setOnSyncStatusListener(mGoogleDriveSyncStatusListener);
-							sync.startSyncToOnly(getCurrentBookInfo(), Synchronizer.SYNC_FLAG_SHOW_SIGN_IN | Synchronizer.SYNC_FLAG_QUIETLY | Synchronizer.SYNC_FLAG_SHOW_PROGRESS, targets.toArray(new Synchronizer.SyncTarget[0]));
-						});
-					}
-				}
-			}
-			 */
 		} : doneCallback, errorCallback);
 		});
 	}

@@ -3970,16 +3970,8 @@ public class ReaderView implements android.view.SurfaceHolder.Callback, Settings
 					}
 				}
 				break;
-			/*
-			  Commented until the appearance of free implementation of the binding to the Google Drive (R)
-			case DCMD_GOOGLEDRIVE_SYNC:
-				if (0 == param) {							// sync to
-					mActivity.forceSyncToGoogleDrive();
-				} else if (1 == param) {					// sync from
-					mActivity.forceSyncFromGoogleDrive();
-				}
-				break;
-			 */
+			// NOTE: GoogleDrive sync command removed with the dead
+			// synchronizer (see CoolReader field note); sync is a P2 task.
 			case DCMD_SAVE_LOGCAT:
 				mActivity.createLogcatFile();
 				break;

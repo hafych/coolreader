@@ -1131,6 +1131,13 @@ DRM или ограничений доступа, подбор/получени�
 - [ ] Покрыть sync contract tests с несовместимыми версиями, повторами, reorder,
   частичными ответами и потерей сети.
 
+Мёртвый закомментированный Google Drive sync удалён из `CoolReader` и
+`ReaderView` (поля, синхронизатор, accessor, autosave-таймер и
+settings/pause/resume/load-document ветки). Команды
+`DCMD_GOOGLEDRIVE_SYNC`/`GDRIVE_SYNCTO`/`GDRIVE_SYNCFROM` оставлены как
+заглушки до реализации P2 sync на GPL-совместимом binding. JVM regression
+без изменений (код был недостижим).
+
 ## Порядок исполнения
 
 1. Завершить и проверить текущий рабочий пакет.
