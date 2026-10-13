@@ -916,7 +916,10 @@ DRM или ограничений доступа, подбор/получени�
   `mPlaybackNowAuthorized`/`mPlaybackDelayed`/`mResumeOnFocusGain` removed,
   media/audiobook/error paths publish through the owners and destroy closes
   both. JVM: `TtsPlaybackStateTest`, `TtsAudioFocusStateTest`,
-  `TtsServiceOwnershipTest`.
+  `TtsServiceOwnershipTest`. TTS audiobook file/start/enabled belong to
+  `TtsAudiobookState` (atomic set reports file-identity change for player
+  stop, permanent close); raw `useAudioBook`/`audioFile`/`startTime`
+  removed. JVM: `TtsAudiobookStateTest` + extended ownership markers.
   Остальные обязанности монолитов выносятся отдельными bounded-пакетами.
 
 ### Библиотека и сканирование

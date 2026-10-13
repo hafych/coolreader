@@ -15,7 +15,8 @@ import org.junit.Test;
 public class TtsServiceOwnershipTest {
 	@Test
 	public void playbackAndFocusBelongToOwnedStates() throws Exception {
-		for (String name : new String[]{"playbackState", "audioFocusState"}) {
+		for (String name : new String[]{
+				"playbackState", "audioFocusState", "audiobookState"}) {
 			Field field = TTSControlService.class.getDeclaredField(name);
 			assertFalse(Modifier.isStatic(field.getModifiers()));
 			assertTrue(Modifier.isPrivate(field.getModifiers()));
@@ -27,8 +28,13 @@ public class TtsServiceOwnershipTest {
 		assertEquals(
 				TtsAudioFocusState.class,
 				TTSControlService.class.getDeclaredField("audioFocusState").getType());
+		assertEquals(
+				TtsAudiobookState.class,
+				TTSControlService.class.getDeclaredField("audiobookState").getType());
 		for (Class<?> owner : new Class<?>[]{
-				TtsPlaybackState.class, TtsAudioFocusState.class}) {
+				TtsPlaybackState.class,
+				TtsAudioFocusState.class,
+				TtsAudiobookState.class}) {
 			assertTrue(Modifier.isFinal(owner.getModifiers()));
 			for (Field field : owner.getDeclaredFields()) {
 				if (Modifier.isStatic(field.getModifiers())) {
@@ -44,7 +50,10 @@ public class TtsServiceOwnershipTest {
 				"mContinuousErrors",
 				"mPlaybackNowAuthorized",
 				"mPlaybackDelayed",
-				"mResumeOnFocusGain"}) {
+				"mResumeOnFocusGain",
+				"useAudioBook",
+				"audioFile",
+				"startTime"}) {
 			for (Field field : TTSControlService.class.getDeclaredFields()) {
 				assertFalse(
 						"TTSControlService retains raw residual field " + legacy,

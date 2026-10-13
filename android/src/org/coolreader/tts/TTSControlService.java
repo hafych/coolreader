@@ -134,9 +134,7 @@ public class TTSControlService extends BaseService {
 	public static final String TTS_CONTROL_ACTION_PREV = "org.coolreader.tts.tts_prev";
 	public static final String TTS_CONTROL_ACTION_STOP = "org.coolreader.tts.tts_stop";
 
-	private boolean useAudioBook = false;
-	private File audioFile = null;
-	private double startTime = 0;
+	private final TtsAudiobookState audiobookState = new TtsAudiobookState();
 
 	private boolean mChannelCreated = false;
 	private final TTSControlBinder mBinder = new TTSControlBinder(this);
@@ -213,7 +211,7 @@ public class TTSControlService extends BaseService {
 						}
 						break;
 					case TTSControlService.TTS_CONTROL_ACTION_NEXT:
-						if(useAudioBook){
+						if(audiobookState.isEnabled()){
 							if (null != mStatusListener){
 								if(mMediaPlayer != null){
 									mMediaPlayer.stop();
@@ -233,7 +231,7 @@ public class TTSControlService extends BaseService {
 						}
 						break;
 					case TTSControlService.TTS_CONTROL_ACTION_PREV:
-						if(useAudioBook){
+						if(audiobookState.isEnabled()){
 							if (null != mStatusListener){
 								if(mMediaPlayer != null){
 									mMediaPlayer.stop();
@@ -391,7 +389,7 @@ public class TTSControlService extends BaseService {
 
 				@Override
 				public void onPlay() {
-					if(useAudioBook){
+					if(audiobookState.isEnabled()){
 						ensureAudioBookPlaying();
 						return;
 					}
@@ -463,7 +461,7 @@ public class TTSControlService extends BaseService {
 
 				@Override
 				public void onPause() {
-					if(useAudioBook){
+					if(audiobookState.isEnabled()){
 						pauseAudioBook();
 						return;
 					}
@@ -606,6 +604,7 @@ public class TTSControlService extends BaseService {
 		log.d("onDestroy");
 		playbackState.close();
 		audioFocusState.close();
+		audiobookState.close();
 		synchronized (mTtsInitializationState) {
 			mTtsInitializationState.close();
 			TtsInitAttempt pending = mTtsInitAttempt;
@@ -983,7 +982,7 @@ public class TTSControlService extends BaseService {
 	}
 
 	private void playWrapper_api_less_than_21() {
-		if(useAudioBook){
+		if(audiobookState.isEnabled()){
 			return;
 		}
 		if (null != mCurrentUtterance) {
@@ -1017,7 +1016,7 @@ public class TTSControlService extends BaseService {
 	}
 
 	private void pauseWrapper_api_less_than_21() {
-		if(useAudioBook){
+		if(audiobookState.isEnabled()){
 			return;
 		}
 		stopUtterance_impl(null);
@@ -1451,7 +1450,7 @@ public class TTSControlService extends BaseService {
 				boolean isAfterSentence = false;
 				if(sentenceInfo != null && sentenceInfo.nextSentence != null){
 					SentenceInfo nextSentenceInfo = sentenceInfo.nextSentence;
-					if(sentenceInfo.sentenceTiming.audioFile == TTSControlService.this.audioFile){
+					if(sentenceInfo.sentenceTiming.audioFile == audiobookState.audioFile()){
 						if(nextSentenceInfo.sentenceTiming.isFirstSentenceInAudioFile){
 							if(playbackState.isPlaying() && (mMediaPlayer == null || !mMediaPlayer.isPlaying())){
 								//this is the last sentence in the file, and the media player ended
@@ -1509,15 +1508,8 @@ public class TTSControlService extends BaseService {
 
 
 	public void setAudioFile(File audioFile, double startTime) {
-		if(this.audioFile != null && !this.audioFile.equals(audioFile)){
-			if(mMediaPlayer != null){
-				mMediaPlayer.stop();
-			}
-		}
-
-		this.useAudioBook = audioFile == null ? false : true;
-		this.audioFile = audioFile;
-		this.startTime = startTime;
+		if (audiobookState.set(audioFile, startTime) && mMediaPlayer != null)
+			mMediaPlayer.stop();
 
 		if(playbackState.isPlaying()){
 			ensureAudioBookPlaying();
@@ -1528,7 +1520,7 @@ public class TTSControlService extends BaseService {
 		if(mMediaPlayer != null && mMediaPlayer.isPlaying()){
 			return;
 		}
-		File fileToPlay = Utils.getAlternativeAudioFile(audioFile);
+		File fileToPlay = Utils.getAlternativeAudioFile(audiobookState.audioFile());
 		if(fileToPlay == null || !fileToPlay.exists()){
 			return;
 		}
@@ -1545,7 +1537,7 @@ public class TTSControlService extends BaseService {
 			log.d("ERROR: " + e.getMessage());
 		}
 
-		int millis = (int) (startTime*1000.0 + 0.5);
+		int millis = (int) (audiobookState.startTime()*1000.0 + 0.5);
 		mMediaPlayer.seekTo(millis);
 
 		mMediaPlayer.start();
@@ -1696,7 +1688,7 @@ public class TTSControlService extends BaseService {
 	}
 
 	private void setupTTSHandlers() {
-		if(useAudioBook){
+		if(audiobookState.isEnabled()){
 			return;
 		}
 		if (null != mTTS) {
